@@ -22,19 +22,34 @@ import {
   Section,
 } from '#/components/planning/parametres/equipe/Champs.tsx'
 import { Segmente } from '#/components/planning/parametres/equipe/Segmente.tsx'
+import {
+  codesDeSesPostes,
+  codesMorts,
+  codesParPoste,
+  codesSemaineType,
+} from '#/components/planning/parametres/equipe/codesFiche.ts'
 import { ChoixCodes } from '#/components/planning/parametres/reglages/ChoixCodes.tsx'
+import { modificationPermise } from '#/components/planning/parametres/reglages/tousOuCertains.ts'
 import { TousOuCertains } from '#/components/planning/parametres/reglages/TousOuCertains.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
-import { NIVEAUX, postesDuGroupe } from '#/lib/planning/affichage.ts'
-import { codesDuPoste } from '#/lib/planning/eligibilite.ts'
+import {
+  grouperHoraires,
+  NIVEAUX,
+  postesDuGroupe,
+} from '#/lib/planning/affichage.ts'
 import { resume } from '#/lib/planning/regles.ts'
 import type { LigneRegle } from '#/lib/planning/regles.ts'
 import { estEcole } from '#/lib/planning/semaine.ts'
 import { heureAffichee } from '#/lib/planning/temps.ts'
 import { JOURS } from '#/lib/planning/types.ts'
-import type { ModeJour, Niveau, Referentiel } from '#/lib/planning/types.ts'
+import type {
+  Horaire,
+  ModeJour,
+  Niveau,
+  Referentiel,
+} from '#/lib/planning/types.ts'
 import { cn } from '#/lib/utils.ts'
 
 export interface PropsSection {
@@ -56,6 +71,11 @@ const MODES: ReadonlyArray<{ valeur: ModeJour; libelle: string }> = [
   { valeur: 'repos', libelle: 'Repos' },
   { valeur: 'absence', libelle: 'Absence' },
 ]
+
+const optionHoraire = (h: Horaire) => ({
+  valeur: String(h.id),
+  libelle: `${h.nom} (${heureAffichee(h.debut)}-${heureAffichee(h.fin)})`,
+})
 
 const pastille = (couleur: string) => (
   <span
@@ -177,31 +197,54 @@ export function SectionHoraires({
   referentiel,
   disabled,
 }: PropsSection) {
-  // Seulement les codes que ses postes permettent (décision utilisateur du
-  // 2026-10-28) : un hôtelier ne voit ni D ni SR. Un code déjà coché reste
-  // visible pour pouvoir le retirer.
-  const permis = new Set(
-    b.competences.flatMap((c) =>
-      codesDuPoste(
-        referentiel.postes.find((p) => p.id === c.poste_id),
-        referentiel.horaires,
-      ).map((h) => h.id),
-    ),
-  )
-  const proposes = referentiel.horaires.filter(
-    (h) =>
-      !b.competences.length ||
-      permis.has(h.id) ||
-      b.shifts_autorises.includes(h.id),
-  )
-  const ouverts = referentiel.horaires
-    .filter((h) => !b.competences.length || permis.has(h.id))
-    .map((h) => h.id)
+  // La fiche hérite des codes de ses postes et ne peut que les restreindre
+  // (D5). Une seule liste en base pour tous ses postes : elle se choisit
+  // parmi l'union, chaque poste dit ce qu'il en reste pour elle.
+  const { postes, horaires } = referentiel
+  const deSesPostes = codesDeSesPostes(b, postes, horaires)
+  const ouverts = deSesPostes.map((h) => h.id)
+  const parPoste = codesParPoste(b, postes, horaires)
+  const morts = codesMorts(b, postes, horaires)
+  const restreint = b.shifts_autorises.length > 0
+  const retirer = (id: number) =>
+    maj((x) => ({
+      ...x,
+      shifts_autorises: x.shifts_autorises.filter((c) => c !== id),
+    }))
   return (
     <Section
       titre="Horaires autorisés"
-      aide="Les horaires qu'elle fait, parmi ceux de ses postes : par exemple seulement le soir pour quelqu'un qui ne fait jamais le matin, ou la nuit seule pour un veilleur."
+      aide="Les horaires qu'elle fait, parmi ceux de ses postes : par exemple seulement le soir pour quelqu'un qui ne fait jamais le matin, ou la nuit seule pour un veilleur. Les codes d'un poste se règlent dans Postes."
     >
+      {parPoste.length > 0 && (
+        <ul
+          className="flex flex-col gap-1 text-sm"
+          aria-label="Codes par poste"
+        >
+          {parPoste.map(({ poste, codes, utilisables }) => (
+            <li key={poste.id} className="flex flex-col gap-0.5">
+              <span className="flex items-center gap-2">
+                {pastille(poste.couleur)}
+                <span>
+                  {poste.nom} : les {codes.length} code
+                  {codes.length > 1 ? 's' : ''} du poste
+                  {restreint && utilisables.length > 0 && (
+                    <span className="text-muted-foreground">
+                      , {utilisables.length} pour elle
+                    </span>
+                  )}
+                </span>
+              </span>
+              {!utilisables.length && (
+                <span className="ml-4.5 text-xs text-amber-600 dark:text-amber-400">
+                  Aucun de ses horaires n'est prévu sur ce poste : elle n'y sera
+                  pas planifiée.
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
       <TousOuCertains
         etiquette="Horaires autorisés"
         choisis={b.shifts_autorises}
@@ -210,18 +253,63 @@ export function SectionHoraires({
           maj((x) => ({ ...x, shifts_autorises }))
         }
         disabled={disabled}
-        texteTous={`Les ${ouverts.length} codes de ses postes.`}
+        texteTous={
+          b.competences.length
+            ? `Les ${ouverts.length} codes de ses postes.`
+            : `Les ${ouverts.length} codes.`
+        }
       >
         {(liste) => (
           <ChoixCodes
             etiquette="Horaires autorisés"
-            horaires={proposes}
+            horaires={deSesPostes}
             choisis={liste.choisis}
             onChange={liste.onChange}
             disabled={disabled}
           />
         )}
       </TousOuCertains>
+      {morts.length > 0 && (
+        <ul className="flex flex-col gap-1" aria-label="Codes plus prévus">
+          {morts.map((h) => {
+            const reste = b.shifts_autorises.filter((c) => c !== h.id)
+            const dernier = modificationPermise(reste, ouverts) === null
+            const bouton = (
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                disabled={disabled || dernier}
+                aria-label={`Retirer ${h.code}`}
+                onClick={() => retirer(h.id)}
+              >
+                Retirer
+              </Button>
+            )
+            return (
+              <li
+                key={h.id}
+                className="flex flex-wrap items-center gap-2 text-sm"
+              >
+                <span className="text-muted-foreground line-through">
+                  {h.code} {h.nom}
+                </span>
+                <span className="text-xs text-amber-600 dark:text-amber-400">
+                  Ce code n'est plus prévu pour ses postes.
+                </span>
+                {!disabled &&
+                  (dernier ? (
+                    <Tip label="Choisissez d'abord un autre code, ou Tous.">
+                      <span>{bouton}</span>
+                    </Tip>
+                  ) : (
+                    bouton
+                  ))}
+              </li>
+            )
+          })}
+        </ul>
+      )}
     </Section>
   )
 }
@@ -234,8 +322,11 @@ export function SectionSemaineType({
   referentiel,
   disabled,
 }: PropsSection) {
-  const { horaires, motifs } = referentiel
+  const { horaires, motifs, postes } = referentiel
   const etoile = etoilePossible(b)
+  // Seulement ce que la règle unique permet ce jour-là sur ses postes.
+  const possibles = (jour: number) =>
+    codesSemaineType(b, postes, horaires, jour)
   return (
     <Section
       titre="Semaine type"
@@ -250,6 +341,11 @@ export function SectionSemaineType({
           const e = b.semaine_type[j]
           const jour = nom.toLowerCase()
           const travaille = e.mode === 'auto' || e.mode === 'travail'
+          const fixe = horaires.find((h) => h.id === e.type_shift_id)
+          const fixeImpossible =
+            travaille && fixe && !possibles(j).some((h) => h.id === fixe.id)
+              ? fixe
+              : null
           return (
             <li
               key={nom}
@@ -275,26 +371,28 @@ export function SectionSemaineType({
                         ),
                       }))
                     }
-                    options={[
-                      {
-                        valeur: 'tous',
-                        libelle: b.shifts_autorises.length
-                          ? 'Ses horaires'
-                          : 'Tout horaire',
-                      },
-                      ...horaires
-                        .filter(
-                          (h) =>
-                            !b.shifts_autorises.length ||
-                            b.shifts_autorises.includes(h.id) ||
-                            h.id === e.type_shift_id,
-                        )
-                        .map((h) => ({
-                          valeur: String(h.id),
-                          libelle: `${h.nom} (${heureAffichee(h.debut)}-${heureAffichee(h.fin)})`,
-                        })),
+                    options={[{ valeur: 'tous', libelle: 'Ses horaires' }]}
+                    groupes={[
+                      ...grouperHoraires(possibles(j)).map((g) => ({
+                        titre: g.libelle,
+                        options: g.horaires.map(optionHoraire),
+                      })),
+                      ...(fixeImpossible
+                        ? [
+                            {
+                              titre: 'Plus possible',
+                              options: [optionHoraire(fixeImpossible)],
+                            },
+                          ]
+                        : []),
                     ]}
                   />
+                )}
+                {fixeImpossible && (
+                  <span className="order-last w-full text-right text-xs text-amber-600 dark:text-amber-400">
+                    {fixeImpossible.code} n'est plus possible pour elle ce
+                    jour-là. Choisissez un autre horaire.
+                  </span>
                 )}
                 {e.mode === 'absence' && (
                   <Liste

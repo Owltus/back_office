@@ -222,6 +222,94 @@ describe('FicheSalarie', () => {
     })
   })
 
+  describe('la fiche hérite des codes de ses postes', () => {
+    // M=1, MI=2, AM=3, N=4, D=5, T=6 ; Réception=2, Club=3.
+    let avant: typeof demo.referentiel
+    beforeEach(() => {
+      avant = structuredClone(demo.referentiel)
+    })
+    afterEach(() => {
+      demo.referentiel = avant
+    })
+    const lucas = () => demo.referentiel.salaries.find((s) => s.id === LUCAS)!
+
+    it('poste restreint à 2 codes : la semaine type ne propose que ces 2 codes', async () => {
+      for (const p of demo.referentiel.postes)
+        if (p.id === 2 || p.id === 3) p.horaires_autorises = [1, 3]
+      ouvrir(LUCAS)
+      const lignes = await screen.findByRole('list', {
+        name: 'Codes par poste',
+      })
+      expect(lignes.textContent).toContain('Réception : les 2 codes du poste')
+      expect(lignes.textContent).toContain('Club : les 2 codes du poste')
+      fireEvent.keyDown(screen.getByLabelText('Horaire du lundi'), {
+        key: 'Enter',
+      })
+      expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
+        'Ses horaires',
+        'Matin (07:00-15:45)',
+        'Après-midi (15:00-23:45)',
+      ])
+    })
+
+    it('code mort : barré, retiré en un clic', async () => {
+      lucas().shifts_autorises = [1, 6]
+      ouvrir(LUCAS)
+      const morts = await screen.findByRole('list', {
+        name: 'Codes plus prévus',
+      })
+      expect(morts.textContent).toContain(
+        "Ce code n'est plus prévu pour ses postes.",
+      )
+      fireEvent.click(within(morts).getByRole('button', { name: 'Retirer T' }))
+      expect(
+        screen.queryByRole('list', { name: 'Codes plus prévus' }),
+      ).toBeNull()
+      await enregistrerEtAttendre()
+      expect(service.enregistrerSalarie.mock.calls[0][0]).toMatchObject({
+        shifts_autorises: [1],
+      })
+    })
+
+    it('aucun code utilisable sur un poste : la fiche le dit, le dernier code mort reste', async () => {
+      lucas().shifts_autorises = [6]
+      ouvrir(LUCAS)
+      const lignes = await screen.findByRole('list', {
+        name: 'Codes par poste',
+      })
+      expect(
+        within(lignes).getAllByText(
+          "Aucun de ses horaires n'est prévu sur ce poste : elle n'y sera pas planifiée.",
+        ),
+      ).toHaveLength(2)
+      expect(
+        screen
+          .getByRole('button', { name: 'Retirer T' })
+          .hasAttribute('disabled'),
+      ).toBe(true)
+      // L'enregistrement reste permis (D4).
+      await enregistrerEtAttendre()
+      expect(service.enregistrerSalarie).toHaveBeenCalledTimes(1)
+    })
+
+    it('un horaire fixé devenu impossible est signalé dans la case', async () => {
+      lucas().semaine_type[0] = {
+        mode: 'travail',
+        type_shift_id: 4,
+        type_absence_id: null,
+      }
+      ouvrir(LUCAS)
+      expect(
+        await screen.findByText(
+          "N n'est plus possible pour elle ce jour-là. Choisissez un autre horaire.",
+        ),
+      ).toBeTruthy()
+      expect(
+        screen.queryAllByText(/n'est plus possible pour elle/),
+      ).toHaveLength(1)
+    })
+  })
+
   it("une période d'absence pose chacun de ses jours, week-end compris", async () => {
     ouvrir(LUCAS)
     fireEvent.click(
