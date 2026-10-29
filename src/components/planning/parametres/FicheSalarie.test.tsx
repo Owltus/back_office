@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react'
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -194,6 +195,31 @@ describe('FicheSalarie', () => {
     expect(service.poserAbsences).not.toHaveBeenCalled()
     await waitFor(() => expect(onFermer).toHaveBeenCalled())
     expect(await screen.findByText('Fiche enregistrée')).toBeTruthy()
+  })
+
+  it('horaires : Tous dit combien, Seulement démarre tout coché et garde un code', async () => {
+    ouvrir(LUCAS)
+    const choix = await screen.findByRole('radiogroup', {
+      name: 'Horaires autorisés',
+    })
+    expect(screen.getByText('Les 3 codes de ses postes.')).toBeTruthy()
+    fireEvent.click(
+      within(choix).getByRole('radio', { name: 'Seulement ceux-ci' }),
+    )
+    const code = (nom: string) => screen.getByRole('button', { name: nom })
+    for (const c of ['M Matin', 'MI Middle', 'AM Après-midi'])
+      expect(code(c).getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(code('AM Après-midi'))
+    fireEvent.click(code('MI Middle'))
+    fireEvent.click(code('M Matin'))
+    expect(code('M Matin').getAttribute('aria-pressed')).toBe('true')
+    expect(
+      screen.getByText('Gardez au moins un code, ou choisissez Tous.'),
+    ).toBeTruthy()
+    await enregistrerEtAttendre()
+    expect(service.enregistrerSalarie.mock.calls[0][0]).toMatchObject({
+      shifts_autorises: [1],
+    })
   })
 
   it("une période d'absence pose chacun de ses jours, week-end compris", async () => {

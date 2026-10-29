@@ -2,7 +2,7 @@
  * Paramètres du Planning : les postes (prototype `PostesPage.tsx`, spec §5.1).
  * Une carte par poste : nom, catégorie HCR (qui fixe la durée maximale
  * d'un service, convention HCR), couleur, rangement à part, codes
- * horaires possibles (aucun = tous). Enregistrement explicite par carte ;
+ * horaires possibles (Tous ou Seulement ceux-ci). Enregistrement explicite par carte ;
  * un nouveau poste est une carte brouillon, créée en base à Enregistrer.
  * Seule la gestion modifie ; lecture et écriture voient les réglages.
  */
@@ -35,6 +35,7 @@ import {
 import type { SaisiePoste } from '#/components/planning/parametres/reglages/validation.ts'
 import { ConfirmDialog } from '#/components/shared/ConfirmDialog.tsx'
 import { ChoixCodes } from '#/components/planning/parametres/reglages/ChoixCodes.tsx'
+import { TousOuCertains } from '#/components/planning/parametres/reglages/TousOuCertains.tsx'
 import { LigneCompacte } from '#/components/planning/parametres/reglages/ListeCompacte.tsx'
 import {
   Sheet,
@@ -386,23 +387,29 @@ function CartePoste({
 
       <div className="flex flex-col gap-1.5">
         <span className="text-sm font-medium">Horaires possibles</span>
-        <ChoixCodes
+        <TousOuCertains
           etiquette="Horaires possibles"
-          horaires={referentiel.horaires}
           choisis={p.horaires_autorises}
+          proposes={referentiel.horaires.map((h) => h.id)}
           onChange={(horaires_autorises) => changer({ horaires_autorises })}
           disabled={!modifiable}
-        />
-        {p.horaires_autorises.length ? (
-          <span className="text-xs text-muted-foreground">
-            Seuls ces horaires sont proposés et placés sur ce poste.
-          </span>
-        ) : (
-          <span className="text-xs text-amber-600 dark:text-amber-400">
-            Aucun horaire coché : ce poste accepte tous les codes. Cochez les
-            siens pour éviter qu'un mauvais code lui soit attribué.
-          </span>
-        )}
+          texteTous={`Les ${referentiel.horaires.length} codes, y compris ceux créés plus tard.`}
+        >
+          {(liste) => (
+            <>
+              <ChoixCodes
+                etiquette="Horaires possibles"
+                horaires={referentiel.horaires}
+                choisis={liste.choisis}
+                onChange={liste.onChange}
+                disabled={!modifiable}
+              />
+              <span className="text-xs text-muted-foreground">
+                Seuls ces horaires sont proposés et placés sur ce poste.
+              </span>
+            </>
+          )}
+        </TousOuCertains>
       </div>
 
       {!neuf && (

@@ -23,6 +23,7 @@ import {
 } from '#/components/planning/parametres/equipe/Champs.tsx'
 import { Segmente } from '#/components/planning/parametres/equipe/Segmente.tsx'
 import { ChoixCodes } from '#/components/planning/parametres/reglages/ChoixCodes.tsx'
+import { TousOuCertains } from '#/components/planning/parametres/reglages/TousOuCertains.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
@@ -193,24 +194,34 @@ export function SectionHoraires({
       permis.has(h.id) ||
       b.shifts_autorises.includes(h.id),
   )
+  const ouverts = referentiel.horaires
+    .filter((h) => !b.competences.length || permis.has(h.id))
+    .map((h) => h.id)
   return (
     <Section
       titre="Horaires autorisés"
-      aide={`Les horaires qu'elle fait, parmi ceux de ses postes : par exemple seulement le soir pour quelqu'un qui ne fait jamais le matin, ou la nuit seule pour un veilleur. ${
-        b.shifts_autorises.length
-          ? 'Seuls les horaires cochés lui seront proposés.'
-          : 'Aucun coché : tous les horaires de ses postes sont possibles.'
-      }`}
+      aide="Les horaires qu'elle fait, parmi ceux de ses postes : par exemple seulement le soir pour quelqu'un qui ne fait jamais le matin, ou la nuit seule pour un veilleur."
     >
-      <ChoixCodes
+      <TousOuCertains
         etiquette="Horaires autorisés"
-        horaires={proposes}
         choisis={b.shifts_autorises}
+        proposes={ouverts}
         onChange={(shifts_autorises) =>
           maj((x) => ({ ...x, shifts_autorises }))
         }
         disabled={disabled}
-      />
+        texteTous={`Les ${ouverts.length} codes de ses postes.`}
+      >
+        {(liste) => (
+          <ChoixCodes
+            etiquette="Horaires autorisés"
+            horaires={proposes}
+            choisis={liste.choisis}
+            onChange={liste.onChange}
+            disabled={disabled}
+          />
+        )}
+      </TousOuCertains>
     </Section>
   )
 }

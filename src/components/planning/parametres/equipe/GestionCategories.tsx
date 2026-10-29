@@ -16,6 +16,7 @@ import {
   useEcriture,
 } from '#/components/planning/hooks/usePlanning.ts'
 import { useNotifier } from '#/components/planning/Messages.tsx'
+import { TousOuCertains } from '#/components/planning/parametres/reglages/TousOuCertains.tsx'
 import { useConfirm } from '#/components/shared/ConfirmDialog.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
@@ -36,7 +37,10 @@ import {
 import type { Groupe, Poste, Salarie } from '#/lib/planning/types.ts'
 import { cn } from '#/lib/utils.ts'
 
-/** Compétences que perdraient les membres si la catégorie ne permettait que `permis`. */
+/** Compétences que perdraient les membres si la catégorie ne permettait que
+ * `permis`. Liste vide = Tous : rien n'est perdu. Revenir de Tous à
+ * Seulement ceux-ci passe aussi par ici : la sélection reprise de la séance
+ * peut retirer des postes tenus entre-temps. */
 export function competencesPerdues(
   groupeId: number,
   permis: number[],
@@ -114,11 +118,9 @@ export function GestionCategories({
     void action(() => ordonnerGroupes(ids), 'Ordre des groupes non enregistré')
   }
 
-  const basculerPoste = async (g: Groupe, p: Poste) => {
-    const choisi = g.postes_autorises.includes(p.id)
-    const permis = choisi
-      ? g.postes_autorises.filter((x) => x !== p.id)
-      : [...g.postes_autorises, p.id]
+  /** Toute modification des postes d'un groupe, choix Tous compris : une
+   * restriction qui retire des compétences est confirmée d'abord. */
+  const changerPostes = async (g: Groupe, permis: number[]) => {
     const perte = competencesPerdues(g.id, permis, salaries)
     if (perte.competences > 0) {
       const ok = await confirm({
@@ -198,9 +200,9 @@ export function GestionCategories({
           <p className="text-xs text-muted-foreground">
             Un groupe range les personnes et dit quels postes elles peuvent
             tenir : la fiche ne propose que ceux-là (un hôtelier ne tient pas la
-            direction). Aucun poste choisi : tous sont possibles. Le groupe de
-            chacun se choisit dans sa fiche. Retirer un poste à un groupe le
-            retire aussi de la fiche de ses membres.
+            direction). Tous : ses membres peuvent tenir tous les postes. Le
+            groupe de chacun se choisit dans sa fiche. Retirer un poste à un
+            groupe le retire aussi de la fiche de ses membres.
           </p>
           {liste.length === 0 && (
             <p className="text-sm text-muted-foreground">
@@ -272,38 +274,57 @@ export function GestionCategories({
                       </>
                     )}
                   </div>
-                  <div
-                    className="flex flex-wrap gap-1.5"
-                    aria-label={`Postes autorisés pour ${g.nom}`}
+                  <TousOuCertains
+                    etiquette={`Postes du groupe ${g.nom}`}
+                    quoi="poste"
+                    choisis={g.postes_autorises}
+                    proposes={postes.map((p) => p.id)}
+                    disabled={!gerer || enCours}
+                    onChange={(permis) => void changerPostes(g, permis)}
+                    texteTous={`Les ${postes.length} postes, y compris ceux créés plus tard.`}
                   >
-                    {postes.map((p) => {
-                      const choisi = g.postes_autorises.includes(p.id)
-                      return (
-                        <button
-                          key={p.id}
-                          type="button"
-                          aria-pressed={choisi}
-                          disabled={!gerer || enCours}
-                          onClick={() => void basculerPoste(g, p)}
-                          className={cn(
-                            'flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors disabled:opacity-60',
-                            choisi
-                              ? 'border-2 bg-accent text-foreground'
-                              : 'border-border text-muted-foreground hover:text-foreground',
-                          )}
-                          style={
-                            choisi ? { borderColor: p.couleur } : undefined
-                          }
-                        >
-                          <span
-                            className="inline-block size-2.5 rounded-full"
-                            style={{ background: p.couleur }}
-                          />
-                          {p.nom}
-                        </button>
-                      )
-                    })}
-                  </div>
+                    {(liste) => (
+                      <div
+                        role="group"
+                        className="flex flex-wrap gap-1.5"
+                        aria-label={`Postes autorisés pour ${g.nom}`}
+                      >
+                        {postes.map((p) => {
+                          const choisi = liste.choisis.includes(p.id)
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              aria-pressed={choisi}
+                              disabled={!gerer || enCours}
+                              onClick={() =>
+                                liste.onChange(
+                                  choisi
+                                    ? liste.choisis.filter((x) => x !== p.id)
+                                    : [...liste.choisis, p.id],
+                                )
+                              }
+                              className={cn(
+                                'flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors disabled:opacity-60',
+                                choisi
+                                  ? 'border-2 bg-accent text-foreground'
+                                  : 'border-border text-muted-foreground hover:text-foreground',
+                              )}
+                              style={
+                                choisi ? { borderColor: p.couleur } : undefined
+                              }
+                            >
+                              <span
+                                className="inline-block size-2.5 rounded-full"
+                                style={{ background: p.couleur }}
+                              />
+                              {p.nom}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </TousOuCertains>
                 </li>
               )
             })}

@@ -137,6 +137,77 @@ describe('Postes', () => {
     )
   })
 
+  it('Tous masque la liste, Seulement la rend, la sélection est gardée', async () => {
+    monter(<PostesPage />)
+    const r = carte('Réception')
+    const tous = r.getByRole('radio', { name: 'Tous' })
+    expect(
+      r
+        .getByRole('radio', { name: 'Seulement ceux-ci' })
+        .getAttribute('aria-checked'),
+    ).toBe('true')
+    fireEvent.click(tous)
+    expect(tous.getAttribute('aria-checked')).toBe('true')
+    expect(r.queryByRole('button', { name: 'M Matin' })).toBeNull()
+    expect(
+      r.getByText('Les 7 codes, y compris ceux créés plus tard.'),
+    ).toBeTruthy()
+    // Retour à Seulement : la sélection d'avant revient.
+    fireEvent.click(r.getByRole('radio', { name: 'Seulement ceux-ci' }))
+    expect(
+      r.getByRole('button', { name: 'M Matin' }).getAttribute('aria-pressed'),
+    ).toBe('true')
+    expect(
+      r.getByRole('button', { name: 'N Nuit' }).getAttribute('aria-pressed'),
+    ).toBe('false')
+    // Tous s'enregistre comme une liste vide.
+    fireEvent.click(r.getByRole('radio', { name: 'Tous' }))
+    fireEvent.click(r.getByRole('button', { name: 'Enregistrer' }))
+    await waitFor(() =>
+      expect(service.enregistrerPoste).toHaveBeenCalledWith(
+        expect.objectContaining({ horaires_autorises: [] }),
+        2,
+      ),
+    )
+  })
+
+  it('Seulement : le dernier code ne se décoche pas', () => {
+    monter(<PostesPage />)
+    const r = carte('Veille de nuit')
+    const nuit = r.getByRole('button', { name: 'N Nuit' })
+    fireEvent.click(nuit)
+    expect(nuit.getAttribute('aria-pressed')).toBe('true')
+    expect(
+      r.getByText('Gardez au moins un code, ou choisissez Tous.'),
+    ).toBeTruthy()
+    expect(r.queryByText('Non enregistré')).toBeNull()
+    // La famille entière non plus.
+    fireEvent.click(r.getByRole('button', { name: 'tout cocher' }))
+    fireEvent.click(r.getByRole('button', { name: 'tout décocher' }))
+    expect(nuit.getAttribute('aria-pressed')).toBe('true')
+    expect(
+      r.getByRole('button', { name: 'M Matin' }).getAttribute('aria-pressed'),
+    ).toBe('true')
+  })
+
+  it('un poste sur Tous passe à Seulement avec tous les codes cochés', () => {
+    etat.referentiel = {
+      ...referentielDemo(),
+      postes: referentielDemo().postes.map((p) =>
+        p.nom === 'Club' ? { ...p, horaires_autorises: [] } : p,
+      ),
+    }
+    monter(<PostesPage />)
+    const r = carte('Club')
+    expect(r.getByText(/^Les 7 codes/)).toBeTruthy()
+    fireEvent.click(r.getByRole('radio', { name: 'Seulement ceux-ci' }))
+    const boutons = within(r.getByRole('group', { name: 'Horaires possibles' }))
+      .getAllByRole('button')
+      .filter((b) => b.hasAttribute('aria-pressed'))
+    expect(boutons).toHaveLength(7)
+    for (const b of boutons) expect(b.getAttribute('aria-pressed')).toBe('true')
+  })
+
   it('refuse un nom vide', () => {
     monter(<PostesPage />)
     const r = carte('Club')

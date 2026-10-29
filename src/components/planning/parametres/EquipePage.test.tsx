@@ -203,6 +203,74 @@ describe('EquipePage', () => {
     )
   })
 
+  it('gestion : un groupe passe à Tous puis revient à sa sélection', async () => {
+    const avant = structuredClone(demo.referentiel.groupes)
+    // La base garde ce qui est écrit : l'écran relit le groupe.
+    service.enregistrerGroupe.mockImplementation((async (
+      v: { postes_autorises: number[] },
+      id: number,
+    ) => {
+      const g = demo.referentiel.groupes.find((x) => x.id === id)!
+      g.postes_autorises = v.postes_autorises
+      return id
+    }) as never)
+    try {
+      rendre()
+      await ouvrirCategories()
+      const choix = await screen.findByRole('radiogroup', {
+        name: 'Postes du groupe Hôteliers',
+      })
+      fireEvent.click(within(choix).getByRole('radio', { name: 'Tous' }))
+      await waitFor(() =>
+        expect(service.enregistrerGroupe).toHaveBeenLastCalledWith(
+          { nom: 'Hôteliers', ordre: 1, postes_autorises: [] },
+          2,
+        ),
+      )
+      expect(
+        await screen.findByText(
+          'Les 5 postes, y compris ceux créés plus tard.',
+        ),
+      ).toBeTruthy()
+      fireEvent.click(
+        within(choix).getByRole('radio', { name: 'Seulement ceux-ci' }),
+      )
+      await waitFor(() =>
+        expect(service.enregistrerGroupe).toHaveBeenLastCalledWith(
+          { nom: 'Hôteliers', ordre: 1, postes_autorises: [2, 3, 4] },
+          2,
+        ),
+      )
+      expect(service.enregistrerGroupe).toHaveBeenCalledTimes(2)
+    } finally {
+      demo.referentiel.groupes = avant
+      service.enregistrerGroupe.mockImplementation(async () => 1)
+    }
+  })
+
+  it('gestion : le dernier poste d un groupe ne se retire pas', async () => {
+    const avant = structuredClone(demo.referentiel.groupes)
+    demo.referentiel.groupes.find(
+      (g) => g.nom === 'Apprentis',
+    )!.postes_autorises = [2]
+    try {
+      rendre()
+      await ouvrirCategories()
+      const postes = await screen.findByLabelText(
+        'Postes autorisés pour Apprentis',
+      )
+      fireEvent.click(within(postes).getByRole('button', { name: /Réception/ }))
+      expect(
+        await screen.findByText(
+          'Gardez au moins un poste, ou choisissez Tous.',
+        ),
+      ).toBeTruthy()
+      expect(service.enregistrerGroupe).not.toHaveBeenCalled()
+    } finally {
+      demo.referentiel.groupes = avant
+    }
+  })
+
   it('gestion : ajouter une catégorie la crée en dernier', async () => {
     rendre()
     await ouvrirCategories()
