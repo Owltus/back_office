@@ -170,6 +170,11 @@ export interface DonneesSemaine {
    * repos sur deux semaines). */
   avant: Affectation[]
   apres: Affectation[]
+  /** Shifts de la semaine d'avant-avant : la fin du dernier service y borne
+   * le repos de 35 h de la semaine d'avant (`debutApresReposHebdo`). Absent :
+   * non lue, la semaine d'avant est supposée précédée d'un service fini le
+   * lundi à 0 h (prudent : un lundi libre ne fait pas à lui seul 35 h). */
+  avantAvant?: Affectation[]
 }
 
 export interface Contexte {
@@ -621,6 +626,14 @@ export function avecSemainesVoisines(
       }),
     ])
   }
+  // Fin du dernier service de la semaine d'avant-avant, par personne.
+  const finsAvantAvant = new Map<number | string, number>()
+  for (const a of d.avantAvant ?? []) {
+    const fin = bornes(ctx.lundi, a.jour - 14, a.debut, a.fin)[1]
+    const key = k(a.salarie_id)
+    finsAvantAvant.set(key, Math.max(finsAvantAvant.get(key) ?? fin, fin))
+  }
+  const prudent = bornes(ctx.lundi, -7, '00:00', '00:00')[0]
   for (const a of d.apres) {
     const debut = bornes(ctx.lundi, a.jour + 7, a.debut, a.fin)[0]
     const key = k(a.salarie_id)
@@ -664,6 +677,7 @@ export function avecSemainesVoisines(
         x,
         servicesAvant.get(key) ?? [],
         joursAvant.get(key) ?? new Set(),
+        d.avantAvant ? (finsAvantAvant.get(key) ?? null) : prudent,
       ),
     })
   }
@@ -675,18 +689,22 @@ export function avecSemainesVoisines(
  * après son dernier service, aucun autre repos assez long), le premier
  * service d'ici ne commence pas avant sa fin + 35 h. Sans cette borne, la
  * génération du mois, semaine après semaine, cassait le repos de la semaine
- * qu'elle venait de faire (mesuré le 2026-10-29). La semaine d'avant-avant
- * n'est pas lue : un jour libre en tête de semaine compte comme repos. */
+ * qu'elle venait de faire (mesuré le 2026-10-29). `finAvantAvant` = fin du
+ * dernier service de la semaine d'avant-avant (null : aucun service, donc
+ * une semaine entière de repos) : la semaine d'avant est relue comme le
+ * vérificateur la relit avec ses voisines. Sans elle, un lundi libre en
+ * tête comptait seul comme repos (relecture adverse du 2026-10-29). */
 export function debutApresReposHebdo(
   s: SalarieSolveur,
   services: Creneau[],
   joursTravailles: ReadonlySet<number>,
+  finAvantAvant: number | null,
 ): number | null {
   if (!s.reposHebdoMin || !services.length || joursTravailles.has(6))
     return null
   const fin = Math.max(...services.map((c) => c.fin))
   const seule = reposHebdoTrouve(
-    { ...s, finServicePrecedent: null, debutServiceSuivant: fin },
+    { ...s, finServicePrecedent: finAvantAvant, debutServiceSuivant: fin },
     services,
     [-7, -6, -5, -4, -3, -2, -1],
     new Set([...joursTravailles].map((j) => j - 7)),

@@ -100,6 +100,7 @@ export function donneesSemaine(
 ): DonneesSemaine {
   const avant = ajouterJours(lundi, -7)
   const apres = ajouterJours(lundi, 7)
+  const avantAvant = ajouterJours(lundi, -14)
   return {
     lundi,
     referentiel,
@@ -107,6 +108,7 @@ export function donneesSemaine(
     affectations: shifts.affectations.filter((a) => a.lundi === lundi),
     avant: shifts.affectations.filter((a) => a.lundi === avant),
     apres: shifts.affectations.filter((a) => a.lundi === apres),
+    avantAvant: shifts.affectations.filter((a) => a.lundi === avantAvant),
   }
 }
 

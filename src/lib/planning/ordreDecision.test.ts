@@ -3,10 +3,15 @@ import highsLoader from 'highs'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import {
+  BRUIT_MAX,
+  coutConsigne,
+  coutDepannage,
   coutPlaceVide,
   EQUITE_MAX_PAR_SHIFT,
   generer,
+  PART_FIXE_DEPANNAGE,
   pireCoutRemplir,
+  POIDS_DEJA_PROPOSE,
   POIDS_DEPANNAGE_MINUTE,
   POIDS_EQUITE,
   POIDS_JOUR_FIXE,
@@ -34,6 +39,7 @@ import {
   manquants,
   raisonsBlocage,
   violations,
+  violationsSalarie,
 } from '#/lib/planning/verificateur.ts'
 
 /*
@@ -128,14 +134,19 @@ describe('les poids sont des paliers dérivés', () => {
     expect(POIDS_SOUS_CONTRAT).toBeGreaterThan(POIDS_PRESENCE_MINUTE)
     // P3 > P4 : heures en plus et 6e jour avant le dépannage.
     expect(POIDS_SUR_CONTRAT).toBeGreaterThan(POIDS_DEPANNAGE_MINUTE)
-    expect(POIDS_SIXIEME_JOUR).toBeGreaterThan(POIDS_DEPANNAGE_MINUTE * 12 * H)
-    // P4 > P5 : un dépannage de 4 h coûte plus que le confort d'un jour.
-    for (const confort of [
-      POIDS_JOUR_FIXE,
-      POIDS_REPOS_SEPARES,
-      EQUITE_MAX_PAR_SHIFT,
-    ])
-      expect(POIDS_DEPANNAGE_MINUTE * 4 * H).toBeGreaterThan(confort)
+    // P4 > P5 : un dépannage, même d'une heure, coûte plus que TOUT le
+    // confort d'un shift additionné.
+    expect(coutDepannage(creneau('c', 0, 7, 8))).toBeGreaterThan(
+      POIDS_JOUR_FIXE + POIDS_REPOS_SEPARES + EQUITE_MAX_PAR_SHIFT,
+    )
+    // P3 > P4 : dès 2 h, un titulaire en heures en plus laisse la place ;
+    // le 6e jour, jusqu'à 17 h de shift.
+    expect(POIDS_SUR_CONTRAT * 2 * H).toBeGreaterThan(
+      coutDepannage(creneau('c', 0, 7, 9)),
+    )
+    expect(POIDS_SIXIEME_JOUR).toBeGreaterThan(
+      coutDepannage(creneau('c', 0, 6, 23)),
+    )
     // L'équité ne fait jamais faire une heure en plus.
     expect(POIDS_SUR_CONTRAT * H).toBeGreaterThan(EQUITE_MAX_PAR_SHIFT)
     expect(POIDS_EQUITE).toBeGreaterThan(0)
@@ -228,6 +239,46 @@ describe('P2 : le matin et le soir, sous les places nécessaires (D1 = A)', () =
     expect(pris(avec).has('lun')).toBe(true)
   })
 
+  // Relecture adverse du 2026-10-29 : le coût d'une consigne suivait le
+  // plus long créneau de la période (10 h = 60 000) et dépassait les heures
+  // dues d'une personne sur un créneau de 2 h (48 000).
+  it('une personne due reste placée, même si une consigne « au plus » est dépassée', () => {
+    for (const longue of [6, 10]) {
+      const p = probleme({
+        salaries: [personne('a', longue), personne('b', 2)],
+        creneaux: [
+          creneau('long', 0, 7, 7 + longue, { presence: 'matin' }),
+          creneau('court', 0, 7, 9, {
+            presence: 'matin',
+            effectif: 0,
+            facultatif: 1,
+          }),
+        ],
+        consignes: [{ jour: 0, periode: 'matin', minimum: 0, maximum: 1 }],
+      })
+      const r = gen(p)
+      expect(qui(r, 'long')).toEqual(['a'])
+      expect(qui(r, 'court')).toEqual(['b'])
+    }
+  })
+
+  it('le coût d’une consigne est plafonné sous les heures dues de chaque créneau qui y compte', () => {
+    const long = creneau('long', 0, 7, 17, { presence: 'matin' })
+    const court = creneau('court', 0, 7, 9, { presence: 'matin' })
+    // Un seul créneau long : proportionnel, comme avant.
+    expect(coutConsigne([long])).toBe(POIDS_PRESENCE_MINUTE * 10 * H)
+    // Avec un créneau de 2 h : sous ce que rapportent ses heures dues, une
+    // fois payés un dépannage et le confort.
+    expect(coutConsigne([long, court])).toBeLessThanOrEqual(
+      POIDS_SOUS_CONTRAT * 2 * H - coutDepannage(court),
+    )
+    expect(coutConsigne([long, court])).toBeLessThan(
+      POIDS_PRESENCE_MINUTE * 10 * H,
+    )
+    expect(coutConsigne([long, court])).toBeGreaterThan(0)
+    expect(coutConsigne([])).toBe(0)
+  })
+
   it('une place nécessaire passe avant la consigne', () => {
     // Une seule personne, deux créneaux le même jour : la place nécessaire
     // (hors consigne) contre le renfort qui compterait dans la consigne.
@@ -288,6 +339,83 @@ describe('P4 : titulaire avant dépannage (D13, D14)', () => {
       }),
     )
     expect(qui(r, 'c')).toEqual(['d'])
+  })
+
+  // Relecture adverse du 2026-10-29 : la prime de jour habituel d'un
+  // dépannage, ajoutée à l'équité qui pèse sur le titulaire, battait le coût
+  // du dépannage sur un shift de 3 h ou 4 h.
+  it('les coûts de confort ADDITIONNÉS ne font jamais passer un dépannage devant un titulaire libre', () => {
+    // Le confort, au pire, pour un shift : moins que la part fixe seule.
+    expect(PART_FIXE_DEPANNAGE).toBeGreaterThan(
+      POIDS_JOUR_FIXE +
+        POIDS_REPOS_SEPARES +
+        EQUITE_MAX_PAR_SHIFT +
+        POIDS_DEJA_PROPOSE +
+        BRUIT_MAX,
+    )
+    for (const heures of [1, 2, 3, 4, 5, 6]) {
+      for (const graine of graines) {
+        const c = creneau('c', 0, 18, 18 + heures, { soir: true })
+        // Le titulaire a fait 7 soirs de plus que son collègue (absent) ;
+        // le dépannage travaille ce jour-là d'habitude.
+        const titulaire = personne('t', 35, {
+          groupeEquite: 'g',
+          equiteAvant: { weekends: 0, soirs: 7, matinsTot: 0 },
+        })
+        const collegue = personne('t2', 35, {
+          groupeEquite: 'g',
+          equiteAvant: { weekends: 0, soirs: 0, matinsTot: 0 },
+          indisponibilites: new Set([0]),
+        })
+        const d = personne('d', 35, {
+          postesOccasionnels: new Set(['r']),
+          travailFixe: new Set([0]),
+        })
+        const r = gen(
+          probleme({
+            salaries: [titulaire, collegue, d],
+            creneaux: [c],
+            graine,
+          }),
+        )
+        expect(qui(r, 'c')).toEqual(['t'])
+      }
+    }
+  })
+
+  it('jour habituel seul : le titulaire libre passe devant, même sur 3 h', () => {
+    for (const heures of [3, 4]) {
+      const r = gen(
+        probleme({
+          salaries: [
+            personne('t', 35, { contratIndicatif: false }),
+            personne('d', 35, {
+              postesOccasionnels: new Set(['r']),
+              travailFixe: new Set([0]),
+            }),
+          ],
+          creneaux: [creneau('c', 0, 18, 18 + heures)],
+        }),
+      )
+      expect(qui(r, 'c')).toEqual(['t'])
+    }
+  })
+
+  it('le jour habituel garde sa prime quand la personne y est titulaire', () => {
+    // Deux titulaires, l'un travaille ce jour-là d'habitude : c'est lui.
+    for (const graine of graines) {
+      const r = gen(
+        probleme({
+          salaries: [
+            personne('a', 35),
+            personne('b', 35, { travailFixe: new Set([0]) }),
+          ],
+          creneaux: [creneau('c', 0, 18, 21)],
+          graine,
+        }),
+      )
+      expect(qui(r, 'c')).toEqual(['b'])
+    }
   })
 
   it('un dépannage avec un soutien tient la place ; un soutien seul, jamais', () => {
@@ -477,25 +605,87 @@ describe('la loi d’une semaine à l’autre : R-REPOS-HEBDO-35H', () => {
 
   it('repos seulement en fin de semaine : le lundi suivant ne commence pas avant samedi 22 h + 35 h', () => {
     const avant = avecJour(lundiAuSamedi)
-    const borne = debutApresReposHebdo(s, avant, jours(avant))
+    const borne = debutApresReposHebdo(s, avant, jours(avant), null)
     expect(borne).toBe(-2 * MINUTES_PAR_JOUR + 22 * H + 35 * H)
   })
 
   it('un repos de 35 h déjà pris dans la semaine : aucune borne', () => {
     // Le mercredi libre : mardi 22 h → jeudi 14 h = 40 h.
     const avant = avecJour(lundiAuSamedi.filter((c) => c.id !== 'p-5'))
-    expect(debutApresReposHebdo(s, avant, jours(avant))).toBeNull()
+    expect(debutApresReposHebdo(s, avant, jours(avant), null)).toBeNull()
     // Dimanche travaillé : la frontière n'y peut rien, aucune borne.
     const dimanche = avecJour([...lundiAuSamedi, creneau('p-1', -1, 7, 12)])
-    expect(debutApresReposHebdo(s, dimanche, jours(dimanche))).toBeNull()
+    expect(debutApresReposHebdo(s, dimanche, jours(dimanche), null)).toBeNull()
     // Un mineur n'a pas cette règle (deux jours consécutifs à la place).
     expect(
       debutApresReposHebdo(
         personne('m', 35),
         avecJour(lundiAuSamedi),
         jours(avecJour(lundiAuSamedi)),
+        null,
       ),
     ).toBeNull()
+  })
+
+  // Relecture adverse du 2026-10-29 : semaine d'avant lundi libre, du mardi
+  // au vendredi 7 h - 15 h, samedi 14 h - 22 h, dimanche libre. Son repos
+  // de 35 h dépend de la semaine d'avant-avant.
+  const mardiAuSamedi = avecJour([
+    ...[-6, -5, -4, -3].map((j) => creneau(`q${j}`, j, 7, 15)),
+    creneau('q-2', -2, 14, 22),
+  ])
+  const samedi22h35 = -2 * MINUTES_PAR_JOUR + 22 * H + 35 * H // lundi 9 h
+
+  it('avant-avant fini le dimanche à 23 h : le lundi libre ne fait pas 35 h, borne posée', () => {
+    const dimanche23h = -7 * MINUTES_PAR_JOUR - H
+    expect(
+      debutApresReposHebdo(s, mardiAuSamedi, jours(mardiAuSamedi), dimanche23h),
+    ).toBe(samedi22h35)
+    // Le vérificateur dit la même chose de la semaine d'avant, relue comme
+    // une semaine ordinaire avec ses vraies voisines (avant-avant, puis un
+    // lundi 7 h) : tout décalé d'une semaine.
+    const S = 7 * MINUTES_PAR_JOUR
+    const semaine = mardiAuSamedi.map((c) => ({
+      ...c,
+      debut: c.debut + S,
+      fin: c.fin + S,
+      jourPlanning: c.jourPlanning! + 7,
+    }))
+    const relue = { ...s, finServicePrecedent: dimanche23h + S }
+    const regles = (suivant: number) =>
+      violationsSalarie(
+        { ...relue, debutServiceSuivant: suivant + S },
+        semaine,
+        7,
+      ).map((v) => v.regle)
+    expect(regles(7 * H)).toContain('R-REPOS-HEBDO-35H')
+    // Commencer à la borne suffit : plus d'infraction.
+    expect(regles(samedi22h35)).not.toContain('R-REPOS-HEBDO-35H')
+  })
+
+  it('avant-avant fini le samedi à 22 h : 57 h de repos jusqu’au mardi, aucune borne', () => {
+    const samediAvantAvant = -9 * MINUTES_PAR_JOUR + 22 * H
+    expect(
+      debutApresReposHebdo(
+        s,
+        mardiAuSamedi,
+        jours(mardiAuSamedi),
+        samediAvantAvant,
+      ),
+    ).toBeNull()
+    // Avant-avant sans aucun service : le repos y est pris, aucune borne.
+    expect(
+      debutApresReposHebdo(s, mardiAuSamedi, jours(mardiAuSamedi), null),
+    ).toBeNull()
+    // Avant-avant non lue : valeur prudente (lundi 0 h), borne posée.
+    expect(
+      debutApresReposHebdo(
+        s,
+        mardiAuSamedi,
+        jours(mardiAuSamedi),
+        -7 * MINUTES_PAR_JOUR,
+      ),
+    ).toBe(samedi22h35)
   })
 
   it('le moteur respecte la borne, le vérificateur la contrôle', () => {

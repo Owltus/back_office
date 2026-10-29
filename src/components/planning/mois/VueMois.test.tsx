@@ -148,13 +148,14 @@ afterEach(() => {
 // Rendu d'un mois entier (~450 cases) dans jsdom : lent sous la charge de la
 // batterie complète, d'où un délai plus large que les 5 s par défaut.
 describe('VueMois', { timeout: 20_000 }, () => {
-  it('charge le mois en UNE lecture, semaines voisines comprises', async () => {
+  it('charge le mois en UNE lecture, semaines voisines comprises (et celle d’avant-avant, pour le repos de 35 h)', async () => {
     droits = { pret: true, lire: true, ecrire: false, gerer: false }
     monter()
     await charge()
     expect(service.fetchShifts).toHaveBeenCalledTimes(1)
     expect(service.fetchShifts).toHaveBeenCalledWith(
       [
+        '2026-10-12',
         '2026-10-19',
         '2026-10-26',
         '2026-11-02',

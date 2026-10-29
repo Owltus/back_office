@@ -39,7 +39,12 @@ export function useMois(mois: string) {
     queryKey: planningKeys.mois(premier, lundis.length),
     queryFn: () =>
       fetchShifts(
-        [ajouterJours(premier, -7), ...lundis, ajouterJours(dernier, 7)],
+        [
+          ajouterJours(premier, -14),
+          ajouterJours(premier, -7),
+          ...lundis,
+          ajouterJours(dernier, 7),
+        ],
         ajouterJours(premier, -7),
         ajouterJours(dernier, 13),
       ),

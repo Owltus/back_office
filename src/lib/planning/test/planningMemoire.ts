@@ -59,6 +59,7 @@ export class PlanningMemoire {
       affectations: this.shifts(l),
       avant: this.shifts(ajouterJours(l, -7)),
       apres: this.shifts(ajouterJours(l, 7)),
+      avantAvant: this.shifts(ajouterJours(l, -14)),
     }
   }
 

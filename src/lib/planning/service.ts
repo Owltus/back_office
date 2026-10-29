@@ -158,10 +158,16 @@ export async function fetchShifts(
   }
 }
 
-/** La semaine `lundi`, ses deux voisines, et les absences de S-1 à S+1. */
+/** La semaine `lundi`, ses deux voisines, celle d'avant-avant (repos de
+ * 35 h de la semaine d'avant), et les absences de S-1 à S+1. */
 export function fetchSemaine(lundi: string): Promise<DonneesShifts> {
   return fetchShifts(
-    [ajouterJours(lundi, -7), lundi, ajouterJours(lundi, 7)],
+    [
+      ajouterJours(lundi, -14),
+      ajouterJours(lundi, -7),
+      lundi,
+      ajouterJours(lundi, 7),
+    ],
     ajouterJours(lundi, -7),
     ajouterJours(lundi, 13),
   )

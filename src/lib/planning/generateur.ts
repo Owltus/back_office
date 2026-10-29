@@ -61,12 +61,14 @@ import type {
  *       personne et par minute de la période.
  *   P3  les contrats : heures dues (`POIDS_SOUS_CONTRAT`) > 6e jour > heures
  *       au-delà (`POIDS_SUR_CONTRAT`).
- *   P4  titulaire avant dépannage : `POIDS_DEPANNAGE_MINUTE`.
+ *   P4  titulaire avant dépannage : `POIDS_DEPANNAGE_MINUTE` par minute
+ *       plus `PART_FIXE_DEPANNAGE` par shift.
  *   P5  le confort : jours habituels, repos accolés, équité.
  *
  * P1 : ajouter UNE personne libre (rien d'autre ne bouge) sur un créneau `c`
  * coûte au pire, tous termes de l'objectif confondus :
  *     (POIDS_SUR_CONTRAT + POIDS_DEPANNAGE_MINUTE) × durée(c)   heures en plus, dépannage
+ *   + PART_FIXE_DEPANNAGE                                       dépannage, part fixe
  *   + POIDS_SIXIEME_JOUR                                        un jour de plus = au plus un 6e jour
  *   + POIDS_REPOS_SEPARES                                       la paire de repos accolés perdue
  *   + max des consignes (P2)                                    une personne au-delà d'un « au plus »
@@ -83,17 +85,27 @@ import type {
  * (100) > heures au-delà (50) : pour un shift de 8 h, une personne qui
  * manque le matin passe avant un 6e jour et 8 h en plus (39 000 < 48 000).
  * Mais P2 < heures dues (400 par minute) : une personne due reste placée,
- * au pire en trop sur un « au plus » (choix du 2026-10-27, gardé).
+ * au pire en trop sur un « au plus » (choix du 2026-10-27, gardé). Le coût
+ * d'une consigne est donc PLAFONNÉ sous les heures dues de chaque créneau
+ * qui y compte, dépannage et confort payés (`coutConsigne`) : sans ce
+ * plafond, une période dont
+ * le plus long créneau fait 10 h (60 000) laissait sans shift une personne
+ * due de 2 h (48 000) (relecture adverse du 2026-10-29).
  *
- * P4 sous P3 : dépannage 10 par minute < heures au-delà 50 par minute, et
- * < 6e jour pour tout shift de moins de 25 h : un titulaire qui ferait des
- * heures en plus ou un 6e jour laisse la place au dépannage ; un titulaire
- * libre passe devant. P4 sous P1 : une place tenue en dépannage vaut mieux
- * qu'une place vide (D13, D14).
+ * P4 sous P3 : dépannage 10 par minute < heures au-delà 50 par minute ; avec
+ * la part fixe (4 609), le dépannage reste sous les heures en plus dès 2 h
+ * de shift, et sous le 6e jour jusqu'à 17 h : un titulaire qui ferait des
+ * heures en plus ou un 6e jour laisse la place au dépannage. P4 sous P1 :
+ * une place tenue en dépannage vaut mieux qu'une place vide (D13, D14).
  *
- * P5 sous P4 : jour habituel 2 000, repos accolés 1 000, équité 100 par jour
- * d'écart, sous le dépannage d'un shift de 4 h (2 400) ; l'équité, la plus
- * faible, ne fait faire ni une heure en plus (3 000) ni un dépannage.
+ * P5 sous P4, pour TOUTE durée de shift : la part fixe du dépannage dépasse
+ * la somme de tout le confort qu'un shift peut faire gagner ou perdre (jour
+ * habituel, repos accolés, équité au pire, départage), et un dépannage ne
+ * reçoit jamais la prime de jour habituel. Avant (relecture adverse du
+ * 2026-10-29), seul le coût par minute séparait les deux : sur 3 h (1 800),
+ * la prime de jour habituel d'un dépannage (2 000) le faisait passer devant
+ * un titulaire libre. L'équité, la plus faible, ne fait faire ni une heure
+ * en plus (3 000) ni un dépannage.
  *
  * Les coefficients restent sous 1e6 (place vide de 12 h ~ 1,3e5) : sûr pour
  * HiGHS. ÉCART VOULU avec le prototype (`generateur.py`) : ses poids
@@ -129,10 +141,41 @@ export const EQUITE_RATTRAPAGE_MAX = 7
 export const EQUITE_MAX_PAR_SHIFT =
   2 * POIDS_EQUITE + 2 * EQUITE_RATTRAPAGE_MAX * POIDS_EQUITE
 
+/** P4 : part fixe d'un shift en dépannage, au-dessus de la somme de TOUT le
+ * confort (P5) qu'un shift peut faire gagner ou perdre, départage compris :
+ * un titulaire libre passe devant, quelle que soit la durée du shift (D13). */
+export const PART_FIXE_DEPANNAGE =
+  POIDS_JOUR_FIXE +
+  POIDS_REPOS_SEPARES +
+  EQUITE_MAX_PAR_SHIFT +
+  POIDS_DEJA_PROPOSE +
+  BRUIT_MAX +
+  1
+
+/** P4 : ce que coûte un shift `c` tenu en dépannage. */
+export function coutDepannage(c: Creneau) {
+  return POIDS_DEPANNAGE_MINUTE * duree(c) + PART_FIXE_DEPANNAGE
+}
+
+/** P2 : une personne de moins (ou de plus) qu'une consigne, sur une
+ * période dont `creneaux` sont les créneaux qui y comptent ce jour-là.
+ * Proportionnel au plus long, PLAFONNÉ sous ce que rapportent les heures
+ * dues de chacun, une fois payés un dépannage et tout le confort
+ * (voir P2 sous P1 : une personne due reste placée). */
+export function coutConsigne(creneaux: Creneau[]): number {
+  if (!creneaux.length) return 0
+  const long = Math.max(...creneaux.map(duree))
+  const plafond = Math.min(
+    ...creneaux.map((c) => POIDS_SOUS_CONTRAT * travail(c) - coutDepannage(c)),
+  )
+  return Math.max(0, Math.min(POIDS_PRESENCE_MINUTE * long, plafond))
+}
+
 /** Le pire que coûte l'ajout d'une personne libre sur `c` (voir P1). */
 export function pireCoutRemplir(c: Creneau, presenceLaPlusChere: number) {
   return (
     (POIDS_SUR_CONTRAT + POIDS_DEPANNAGE_MINUTE) * duree(c) +
+    PART_FIXE_DEPANNAGE +
     POIDS_SIXIEME_JOUR +
     POIDS_REPOS_SEPARES +
     presenceLaPlusChere +
@@ -392,17 +435,16 @@ export function construire(p: Probleme): Construit {
   const ecarts: Array<[string, string]> = []
   const manque = new Map<string, string>()
 
-  // P2 : coût d'une personne de moins (ou de plus) pour chaque consigne,
-  // proportionnel à la durée de la période (son plus long créneau ce jour).
-  const coutConsigne = p.consignes.map((k) => {
-    let periode = 0
-    for (const c of p.creneaux) {
-      if (c.presence === k.periode && jourDe(c) === k.jour)
-        periode = Math.max(periode, duree(c))
-    }
-    return POIDS_PRESENCE_MINUTE * periode
-  })
-  const presenceLaPlusChere = Math.max(0, ...coutConsigne)
+  // P2 : coût d'une personne de moins (ou de plus) pour chaque consigne
+  // (`coutConsigne` : le plus long créneau de la période, plafonné).
+  const coutsConsignes = p.consignes.map((k) =>
+    coutConsigne(
+      p.creneaux.filter(
+        (c) => c.presence === k.periode && jourDe(c) === k.jour,
+      ),
+    ),
+  )
+  const presenceLaPlusChere = Math.max(0, ...coutsConsignes)
 
   // Couverture.
   for (const c of p.creneaux) {
@@ -416,7 +458,7 @@ export function construire(p: Probleme): Construit {
       if (r === 'soutien') soutiens.push([s, v])
       else autonomes.push(v)
       // P4 : un dépannage coûte, un titulaire libre passe devant (D13).
-      if (r === 'occasionnel') m.cout(POIDS_DEPANNAGE_MINUTE * duree(c), v)
+      if (r === 'occasionnel') m.cout(coutDepannage(c), v)
     }
     const vm = m.entier(0, c.effectif)
     manque.set(c.id, vm)
@@ -452,7 +494,7 @@ export function construire(p: Probleme): Construit {
   // comptent, ce jour et à cette période. Souples des deux côtés (le modèle
   // reste toujours réalisable) : un manque ou un surplus se paie.
   p.consignes.forEach((k, i) => {
-    const cout = coutConsigne[i]
+    const cout = coutsConsignes[i]
     const termes: Terme[] = []
     for (const c of p.creneaux) {
       if (c.presence !== k.periode || jourDe(c) !== k.jour) continue
@@ -683,6 +725,17 @@ export function construire(p: Probleme): Construit {
       for (const j of s.travailFixe) {
         const t = travaille.get(j)
         if (dans(j) && t) m.cout(-POIDS_JOUR_FIXE, t)
+      }
+      // Pas de prime de jour habituel pour un shift en dépannage (D13) : la
+      // prime du jour est annulée sur ce shift (un shift par jour).
+      for (const c of siens) {
+        const j = jourDe(c)
+        if (
+          dans(j) &&
+          s.travailFixe.has(j) &&
+          role(s, c.poste) === 'occasionnel'
+        )
+          m.cout(POIDS_JOUR_FIXE, xv(c))
       }
 
       if (s.journeesCourtesMax !== null) {
