@@ -15,6 +15,9 @@ export const planningKeys = {
     ['planning', 'mois', premierLundi, nbSemaines] as const,
   /** Jours d'absence d'une personne (fiche). */
   absences: (salarieId: number) => ['planning', 'absences', salarieId] as const,
+  /** Shifts relus par le contrôle des données à ranger, depuis le lundi
+   * `depuis` (six mois en arrière, puis tout l'avenir posé). */
+  aRanger: (depuis: string) => ['planning', 'a-ranger', depuis] as const,
   /** Shifts à venir d'une personne (fiche). */
   shiftsSalarie: (salarieId: number) =>
     ['planning', 'shifts-salarie', salarieId] as const,

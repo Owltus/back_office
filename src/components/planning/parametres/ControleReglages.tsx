@@ -5,7 +5,9 @@
  * groupe puis « N de plus ». Chaque point a un bouton qui ouvre l'écran et
  * le réglage concerné (`?ouvrir=`). Ouvert depuis une pastille de l'en-tête
  * des paramètres. Rien n'empêche d'enregistrer : un point bloquant empêche
- * seulement de générer.
+ * seulement de générer. Sous les points des réglages, les shifts déjà posés
+ * qui les contredisent (« Données à ranger », étape 11), avec leur
+ * correction en un clic.
  */
 
 import { useMemo, useState } from 'react'
@@ -21,6 +23,10 @@ import {
   useAujourdhui,
   useReferentiel,
 } from '#/components/planning/hooks/usePlanning.ts'
+import {
+  SectionDonneesARanger,
+  useDonneesARanger,
+} from '#/components/planning/parametres/DonneesARanger.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import {
@@ -54,10 +60,13 @@ export function ControleReglages() {
   const ref = useReferentiel()
   const aujourdhui = useAujourdhui()
   const points = usePointsReglages(ref.data, aujourdhui)
+  const donnees = useDonneesARanger()
   const navigate = useNavigate()
   const [ouvert, setOuvert] = useState(false)
   if (!points) return null
   const bloquants = points.filter((p) => p.gravite === 'bloquant').length
+  // Les données à ranger comptent dans la pastille, jamais comme bloquant.
+  const total = points.length + (donnees.groupes?.length ?? 0)
   const aller = (lien: LienReglage) => {
     setOuvert(false)
     void navigate({
@@ -65,8 +74,8 @@ export function ControleReglages() {
       search: lien.cible ? { ouvrir: lien.cible } : {},
     })
   }
-  const etiquette = points.length
-    ? `À vérifier : ${points.length} point${points.length > 1 ? 's' : ''}`
+  const etiquette = total
+    ? `À vérifier : ${total} point${total > 1 ? 's' : ''}`
     : 'Réglages cohérents : rien à vérifier'
   return (
     <>
@@ -77,8 +86,8 @@ export function ControleReglages() {
           aria-label={etiquette}
           onClick={() => setOuvert(true)}
         >
-          {points.length ? <ListChecks /> : <CircleCheck />}
-          {points.length > 0 && (
+          {total ? <ListChecks /> : <CircleCheck />}
+          {total > 0 && (
             <span
               className={cn(
                 'min-w-5 rounded-full px-1.5 text-xs leading-5 font-semibold tabular-nums',
@@ -87,7 +96,7 @@ export function ControleReglages() {
                   : 'bg-amber-500/20 text-amber-700 dark:text-amber-300',
               )}
             >
-              {points.length}
+              {total}
             </span>
           )}
         </Button>
@@ -101,8 +110,18 @@ export function ControleReglages() {
               d'enregistrer ; un point bloquant empêche de générer le planning.
             </SheetDescription>
           </SheetHeader>
-          <div className="p-4">
+          <div className="flex flex-col gap-6 p-4">
             <PanneauControle points={points} onAller={aller} />
+            <SectionDonneesARanger
+              groupes={donnees.groupes}
+              depuis={donnees.depuis}
+              salaries={donnees.salaries}
+              isPending={donnees.isPending}
+              isError={donnees.isError}
+              peutCorriger={donnees.peutCorriger}
+              onAller={aller}
+              onCorriger={donnees.corriger}
+            />
           </div>
         </SheetContent>
       </Sheet>
