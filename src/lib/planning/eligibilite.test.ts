@@ -1,7 +1,11 @@
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 
-import { codesDeLaCase, voisinsDe } from '#/components/planning/codesCase.ts'
+import {
+  actuelNonPermis,
+  codesDeLaCase,
+  voisinsDe,
+} from '#/components/planning/codesCase.ts'
 import {
   codeDeLaFiche,
   codeImposeRespecte,
@@ -11,6 +15,7 @@ import {
   coupureRespectee,
   posteDeReference,
 } from '#/lib/planning/eligibilite.ts'
+import type { Voisin } from '#/lib/planning/eligibilite.ts'
 import {
   REPOS_QUOTIDIEN,
   MINEUR_REPOS_QUOTIDIEN,
@@ -324,8 +329,8 @@ describe('codesDeLaCase', () => {
     const v = voisinsDe(
       {
         semaine: sem([{ jour: 3 }, { jour: 2 }]),
-        avant: sem([{ jour: 6, debut: '15:00', fin: '23:00' }]),
-        apres: sem([{ jour: 0 }]),
+        avant: sem([{ jour: 6, debut: '15:00', fin: '23:00' }]).affectations,
+        apres: sem([{ jour: 0 }]).affectations,
       },
       1,
       2,
@@ -345,7 +350,7 @@ describe('codesDeLaCase', () => {
       jour: 0,
       source: {
         semaine: sem([]),
-        avant: sem([{ jour: 6, debut: '15:00', fin: '23:00' }]),
+        avant: sem([{ jour: 6, debut: '15:00', fin: '23:00' }]).affectations,
       },
     })
     expect(ids(r.ecartes.map((e) => e.horaire))).toEqual([1, 4])
@@ -503,6 +508,291 @@ describe('propriété : le menu et le moteur disent la même chose', () => {
         }
       }),
       { numRuns: 300 },
+    )
+  })
+})
+
+// ------------------------------------------------ correctifs (relecture)
+
+describe('bords de semaine et changement d’heure', () => {
+  const entree = (jour: number, voisins: Voisin[], lundi = LUNDI) => ({
+    horaires: TOUS,
+    personne: salarie(),
+    poste: poste(1),
+    jour,
+    lundi,
+    voisins,
+  })
+
+  it('lundi : le dimanche d’avant (jour -1) compte', () => {
+    const r = codesPermis(
+      entree(0, [{ jour: -1, debut: '15:00', fin: '23:00' }]),
+    )
+    expect(ids(r.ecartes.map((e) => e.horaire))).toEqual([1, 4])
+    expect(r.ecartes.every((e) => e.cote === 'veille')).toBe(true)
+  })
+
+  it('dimanche : le lundi d’après (jour 7) compte', () => {
+    // Lundi d'après à 07:00 : dimanche, le soir (fin 23:00) et la nuit
+    // (fin 07:00) ne laissent pas 11 h.
+    const r = codesPermis(
+      entree(6, [{ jour: 7, debut: '07:00', fin: '15:00' }]),
+    )
+    expect(ids(r.codes)).toEqual([1, 4])
+    expect(ids(r.ecartes.map((e) => e.horaire))).toEqual([2, 3])
+    expect(r.ecartes.every((e) => e.cote === 'lendemain')).toBe(true)
+  })
+
+  it('codesDeLaCase lit les shifts des semaines voisines (avant et après)', () => {
+    const ref = { horaires: TOUS, postes: [poste(1)], motifs: MOTIFS }
+    const vide = {
+      lundi: LUNDI,
+      affectations: [],
+      bilan: [],
+    } as unknown as SemaineOut
+    const lundiApres = (salarie_id: number) => [
+      { id: 50, salarie_id, jour: 0, debut: '07:00', fin: '15:00' },
+    ]
+    const dimanche = codesDeLaCase({
+      referentiel: ref,
+      personne: salarie(),
+      posteId: 1,
+      jour: 6,
+      source: { semaine: vide, apres: lundiApres(1) },
+    })
+    expect(ids(dimanche.ecartes.map((e) => e.horaire))).toEqual([2, 3])
+    // Le shift d'une autre personne ne compte pas.
+    const autre = codesDeLaCase({
+      referentiel: ref,
+      personne: salarie(),
+      posteId: 1,
+      jour: 6,
+      source: { semaine: vide, apres: lundiApres(2) },
+    })
+    expect(autre.ecartes).toEqual([])
+    // Dimanche d'avant, pour le lundi.
+    const lundi = codesDeLaCase({
+      referentiel: ref,
+      personne: salarie(),
+      posteId: 1,
+      jour: 0,
+      source: {
+        semaine: vide,
+        avant: [
+          { id: 51, salarie_id: 1, jour: 6, debut: '15:00', fin: '23:00' },
+        ],
+      },
+    })
+    expect(ids(lundi.ecartes.map((e) => e.horaire))).toEqual([1, 4])
+  })
+
+  it('fin octobre : l’heure rendue compte dans la coupure (minutes réelles)', () => {
+    // Semaine du 19/10/2026, on recule d'une heure dans la nuit du samedi
+    // 24 au dimanche 25. Samedi 15:00-23:00 puis dimanche 09:00 : 10 h à
+    // l'horloge, 11 h réelles, donc permis. Une semaine ordinaire le refuse.
+    const veille = [{ jour: 5, debut: '15:00', fin: '23:00' }]
+    expect(ids(codesPermis(entree(6, veille, '2026-10-19')).codes)).toContain(4)
+    expect(ids(codesPermis(entree(6, veille, LUNDI)).codes)).not.toContain(4)
+  })
+
+  it('fin mars : l’heure perdue compte dans la coupure', () => {
+    // Semaine du 22/03/2027, on avance d'une heure dans la nuit du samedi 27
+    // au dimanche 28. Samedi 14:00-22:00 puis dimanche 09:00 : 11 h à
+    // l'horloge, 10 h réelles, donc refusé. Une semaine ordinaire l'accepte.
+    const horaires = [...TOUS, horaire(5, '14:00', '22:00')]
+    const veille = [{ jour: 5, debut: '14:00', fin: '22:00' }]
+    const r = (lundi: string) =>
+      codesPermis({ ...entree(6, veille, lundi), horaires })
+    expect(ids(r('2027-03-22').codes)).not.toContain(4)
+    expect(r('2027-03-22').ecartes.some((e) => e.horaire.id === 4)).toBe(true)
+    expect(ids(r(LUNDI).codes)).toContain(4)
+  })
+
+  it('le moteur dit la même chose au changement d’heure', () => {
+    // Oracle : `analyser` sur la semaine du 22/03/2027.
+    const lundi = '2027-03-22'
+    const horaires = [...TOUS, horaire(5, '14:00', '22:00')]
+    const personne = salarie()
+    const referentiel: Referentiel = {
+      horaires,
+      motifs: MOTIFS,
+      postes: [poste(1)],
+      groupes: [],
+      salaries: [personne],
+      besoins: [],
+      consignes: [],
+      verrous: [],
+    }
+    const aff = (id: number, jour: number, h: Horaire): Affectation => ({
+      id,
+      lundi,
+      salarie_id: 1,
+      poste_id: 1,
+      jour,
+      horaire_id: h.id,
+      debut: h.debut,
+      fin: h.fin,
+      epinglee: true,
+      court: false,
+      pause: 0,
+    })
+    const alertesRepos = (h: Horaire) =>
+      analyser({
+        lundi,
+        referentiel,
+        absences: [],
+        affectations: [aff(1, 5, horaires[4]), aff(2, 6, h)],
+        avant: [],
+        apres: [],
+      })
+        .affectations.find((a) => a.id === 2)!
+        .alertes.filter((a) => a.regle === 'R-REPOS-QUOTIDIEN')
+    const permis = codesPermis({
+      horaires,
+      personne,
+      poste: poste(1),
+      jour: 6,
+      lundi,
+      voisins: [{ jour: 5, debut: '14:00', fin: '22:00' }],
+    })
+    for (const h of horaires) {
+      const propose = permis.codes.some((x) => x.id === h.id)
+      expect(alertesRepos(h).length === 0).toBe(propose)
+    }
+  })
+})
+
+describe('jour fermé : absence fixe avant école', () => {
+  const avecEcoleFixe = salarie({
+    semaine_type: Array.from({ length: 7 }, (_, j) =>
+      j === 2 ? { mode: 'absence', type_absence_id: 2 } : libre,
+    ),
+  })
+
+  it('une école fixée par la semaine type se change dans la fiche', () => {
+    const r = codesPermis({
+      horaires: TOUS,
+      jour: 2,
+      personne: avecEcoleFixe,
+      poste: poste(1),
+      // Le bilan la voit aussi comme un jour d'école.
+      journee: { ecole: true },
+    })
+    expect(r.raison).toBe('absence-fixe')
+    expect(r.texte).toMatch(/fiche/)
+  })
+
+  it('une école du calendrier se retire depuis la grille', () => {
+    const r = codesPermis({
+      horaires: TOUS,
+      jour: 2,
+      personne: salarie(),
+      poste: poste(1),
+      journee: { ecole: true },
+    })
+    expect(r.raison).toBe('ecole')
+    expect(r.texte).toBe("Jour d'école : retirez d'abord l'école de ce jour")
+  })
+})
+
+describe('code actuel qui n’est plus permis', () => {
+  it('rendu avec sa raison, jamais quand il est permis', () => {
+    const fermes = codesPermis({
+      horaires: TOUS,
+      jour: 2,
+      personne: salarie({
+        semaine_type: Array.from({ length: 7 }, (_, j) =>
+          j === 2 ? { mode: 'repos' } : libre,
+        ),
+      }),
+      poste: poste(1),
+    })
+    expect(actuelNonPermis(fermes, TOUS, 1)).toEqual({
+      horaire: MATIN,
+      texte: 'Repos fixé par sa semaine type',
+    })
+    const ouverts = codesPermis({
+      horaires: TOUS,
+      jour: 2,
+      personne: salarie(),
+      poste: poste(1, [2]),
+    })
+    expect(actuelNonPermis(ouverts, TOUS, 2)).toBeNull()
+    expect(actuelNonPermis(ouverts, TOUS, 1)?.texte).toBe(
+      "N'est plus permis ici",
+    )
+    expect(actuelNonPermis(ouverts, TOUS, null)).toBeNull()
+    // Écarté pour la coupure : la raison de la coupure.
+    const coupure = codesPermis({
+      horaires: TOUS,
+      jour: 2,
+      personne: salarie(),
+      poste: poste(1),
+      lundi: LUNDI,
+      voisins: [{ jour: 1, debut: '15:00', fin: '23:00' }],
+    })
+    expect(actuelNonPermis(coupure, TOUS, 1)?.texte).toBe(
+      'Coupure de 11 h non respectée avec la veille',
+    )
+  })
+})
+
+describe('oracle écrit à la main : poste ∩ fiche ∩ code imposé', () => {
+  it('codesPermis rend exactement les codes attendus, et la bonne raison', () => {
+    const tousIds = [1, 2, 3, 4]
+    fc.assert(
+      fc.property(
+        fc.subarray(tousIds),
+        fc.subarray(tousIds),
+        fc.option(fc.constantFrom(...tousIds)),
+        fc.constantFrom<'auto' | 'travail'>('auto', 'travail'),
+        fc.integer({ min: 0, max: 6 }),
+        (duPoste, deLaFiche, impose, mode, jour) => {
+          // Oracle : la règle dite en français, sur des tableaux, sans les
+          // prédicats de `eligibilite.ts`.
+          const dansPoste = (id: number) =>
+            duPoste.length === 0 || duPoste.indexOf(id) >= 0
+          const dansFiche = (id: number) =>
+            deLaFiche.length === 0 || deLaFiche.indexOf(id) >= 0
+          const communs = tousIds.filter((id) => dansPoste(id) && dansFiche(id))
+          const attendus = communs.filter(
+            (id) => impose === null || id === impose,
+          )
+          const raison =
+            attendus.length > 0
+              ? null
+              : communs.length === 0
+                ? 'aucun-commun'
+                : 'code-fixe-hors-poste'
+
+          const semaine_type: JourType[] = Array.from({ length: 7 }, (_, j) =>
+            j === jour && impose !== null
+              ? { mode, type_shift_id: impose }
+              : libre,
+          )
+          const personne = salarie({
+            shifts_autorises: deLaFiche,
+            semaine_type,
+          })
+          const r = codesPermis({
+            horaires: TOUS,
+            jour,
+            personne,
+            poste: poste(1, duPoste),
+          })
+          expect(ids(r.codes)).toEqual(attendus)
+          expect(r.raison).toBe(raison)
+          // Un code imposé un AUTRE jour ne change rien à celui-ci.
+          const ailleurs = codesPermis({
+            horaires: TOUS,
+            jour: (jour + 1) % 7,
+            personne,
+            poste: poste(1, duPoste),
+          })
+          expect(ids(ailleurs.codes)).toEqual(communs)
+        },
+      ),
+      { numRuns: 500 },
     )
   })
 })

@@ -40,7 +40,7 @@ import {
   texteSur,
 } from '#/lib/planning/affichage.ts'
 import { codesDuPoste, posteDeReference } from '#/lib/planning/eligibilite.ts'
-import type { CodesPermis } from '#/lib/planning/eligibilite.ts'
+import type { CodesPermis, RaisonCodes } from '#/lib/planning/eligibilite.ts'
 import { estEcole } from '#/lib/planning/semaine.ts'
 import type { ShiftOut } from '#/lib/planning/semaine.ts'
 import type { ShiftSaisi } from '#/lib/planning/service.ts'
@@ -75,6 +75,20 @@ const EN_LETTRES = new Intl.DateTimeFormat('fr-FR', {
 /** « mercredi 18 novembre 2026 ». */
 export const dateEnLettres = (iso: string) =>
   EN_LETTRES.format(new Date(`${iso}T12:00:00Z`))
+
+/** Raisons qui ferment le jour : l'horaire spécifique n'y est pas permis
+ * non plus (école, repos ou absence fixés, hors contrat, code fixé par la
+ * semaine type ailleurs). « Aucun commun » et la coupure de repos laissent
+ * l'horaire spécifique possible, jamais choisi d'office. */
+const JOUR_FERME: ReadonlySet<RaisonCodes> = new Set<RaisonCodes>([
+  'ecole',
+  'absence-fixe',
+  'repos-fixe',
+  'hors-contrat',
+  'code-fixe-hors-poste',
+])
+export const jourFerme = (p: Pick<CodesPermis<unknown>, 'raison'>) =>
+  p.raison !== null && JOUR_FERME.has(p.raison)
 
 /** Délai après lequel « Confirmer la suppression » se désarme. */
 export const DESARMEMENT_MS = 4000
@@ -175,9 +189,10 @@ export function EditeurShift({
     court: existant?.court ?? false,
     pause: existant?.pause ?? 0,
   }))
-  // Sans code horaire permis : horaire spécifique d'emblée.
+  // Sans code horaire permis, rien n'est choisi d'office : l'horaire
+  // spécifique contournerait la règle, la raison se lit dans la liste.
   const [libre, setLibre] = useState(
-    existant ? existant.type_shift_id === null : !horaireInitial,
+    existant ? existant.type_shift_id === null : false,
   )
   const [epinglee, setEpinglee] = useState(existant?.epinglee ?? true)
   const [motif, setMotif] = useState<number | null>(null)
@@ -207,32 +222,55 @@ export function EditeurShift({
   const ecoleActuelle = !!absenceActuelle && estEcole(absenceActuelle)
   const motifChoisi = motifs.find((m) => m.id === motif)
 
-  // Changer de poste ou de personne : un code qui n'y est plus permis cède la
-  // place au premier permis.
+  // Changer de poste, de personne ou de jour : le code choisi est revalidé.
+  // Revenir à la case d'origine du shift lui rend son code. Ailleurs, un code
+  // qui n'est plus permis cède la place au premier permis (poste, personne)
+  // ou est désélectionné (jour) ; l'horaire spécifique est retiré si le jour
+  // est fermé.
   const changerQui = (
-    champs: Partial<Pick<Brouillon, 'poste_id' | 'salarie_id'>>,
+    champs: Partial<Pick<Brouillon, 'poste_id' | 'salarie_id' | 'jour'>>,
   ) => {
     const suite = { ...b, ...champs }
-    const permis = permisPour(
-      suite.poste_id,
-      suite.salarie_id,
-      suite.jour,
-    ).codes
-    const garde = libre || permis.some((h) => h.id === suite.horaire_id)
-    if (garde) return maj(champs)
-    const premier = permis.at(0)
-    if (premier) {
+    if (
+      existant &&
+      suite.salarie_id === existant.salarie_id &&
+      suite.poste_id === existant.poste_id &&
+      suite.jour === existant.jour
+    ) {
       maj({
         ...champs,
-        horaire_id: premier.id,
-        debut: premier.debut,
-        fin: premier.fin,
-        court: false,
+        horaire_id: existant.type_shift_id,
+        debut: existant.debut,
+        fin: existant.fin,
+        court: existant.court,
+        pause: existant.pause,
       })
-    } else {
-      maj(champs)
-      setLibre(true)
+      setLibre(existant.type_shift_id === null)
+      return
     }
+    const p = permisPour(suite.poste_id, suite.salarie_id, suite.jour)
+    if (libre) {
+      if (!jourFerme(p)) return maj(champs)
+      setLibre(false)
+      return maj({ ...champs, horaire_id: null })
+    }
+    if (
+      suite.horaire_id !== null &&
+      p.codes.some((h) => h.id === suite.horaire_id)
+    )
+      return maj(champs)
+    const premier = 'jour' in champs ? undefined : p.codes.at(0)
+    maj(
+      premier
+        ? {
+            ...champs,
+            horaire_id: premier.id,
+            debut: premier.debut,
+            fin: premier.fin,
+            court: false,
+          }
+        : { ...champs, horaire_id: null, court: false },
+    )
   }
 
   const dateDuJour = (jour: number) => ajouterJours(lundi, jour)
@@ -257,9 +295,25 @@ export function EditeurShift({
           ? 'La pause doit être plus courte que le shift.'
           : null
       : null
+  // Même règle que le clic droit et que le moteur (`codesPermis`).
+  const permis = permisPour(b.poste_id, b.salarie_id, b.jour)
+  const surPlace =
+    !!existant &&
+    existant.salarie_id === b.salarie_id &&
+    existant.poste_id === b.poste_id &&
+    existant.jour === b.jour
+  // Jour fermé : l'horaire spécifique est grisé, sauf s'il est ce qui est
+  // déjà posé ici.
+  const libreInterdit =
+    jourFerme(permis) && !(surPlace && existant?.type_shift_id === null)
+  const rienChoisi = motif === null && !vider && !libre && !code
   const bloque = indisponible
     ? 'Pas sous contrat (ou désactivé) ce jour-là : voir sa fiche'
-    : erreurLibre
+    : motif === null && !vider && libre && libreInterdit
+      ? permis.texte
+      : rienChoisi
+        ? (permis.texte ?? 'Choisissez un horaire')
+        : erreurLibre
 
   const valeurs = (): ShiftSaisi => {
     if (libre) {
@@ -307,15 +361,8 @@ export function EditeurShift({
     }
   }
 
-  // Même règle que le clic droit et que le moteur (`codesPermis`). Le code
-  // actuel d'un shift reste visible tant que la case n'a pas changé : c'est
-  // ce qui est posé, pas une proposition.
-  const permis = permisPour(b.poste_id, b.salarie_id, b.jour)
-  const surPlace =
-    !!existant &&
-    existant.salarie_id === b.salarie_id &&
-    existant.poste_id === b.poste_id &&
-    existant.jour === b.jour
+  // Le code actuel d'un shift reste visible tant que la case n'a pas
+  // changé : c'est ce qui est posé, pas une proposition.
   const codes = permis.codes
     .concat(horaires.filter((h) => surPlace && h.id === existant.type_shift_id))
     .filter((h, i, l) => l.findIndex((x) => x.id === h.id) === i)
@@ -477,8 +524,13 @@ export function EditeurShift({
                 couleur={NEUTRE}
                 code="•"
                 titre="Horaire spécifique"
-                detail="heures libres"
+                detail={
+                  libreInterdit
+                    ? (permis.texte ?? 'heures libres')
+                    : 'heures libres'
+                }
                 choisi={!vider && motif === null && libre}
+                desactive={libreInterdit}
                 onClick={() => {
                   setVider(false)
                   setLibre(true)
@@ -675,7 +727,7 @@ export function EditeurShift({
                 <Label htmlFor="planning-jour">Jour</Label>
                 <Select
                   value={String(b.jour)}
-                  onValueChange={(v) => maj({ jour: Number(v) })}
+                  onValueChange={(v) => changerQui({ jour: Number(v) })}
                 >
                   <SelectTrigger id="planning-jour" className="w-full">
                     <SelectValue />

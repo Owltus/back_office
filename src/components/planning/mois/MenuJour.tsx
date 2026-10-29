@@ -24,7 +24,10 @@ import {
 } from '#/lib/planning/affichage.ts'
 import { posteDeReference } from '#/lib/planning/eligibilite.ts'
 import type { ShiftOut } from '#/lib/planning/semaine.ts'
-import { codesDeLaCase } from '#/components/planning/codesCase.ts'
+import {
+  actuelNonPermis,
+  codesDeLaCase,
+} from '#/components/planning/codesCase.ts'
 import type { SourceCase } from '#/components/planning/codesCase.ts'
 import { heureAffichee } from '#/lib/planning/temps.ts'
 import type { Horaire, Referentiel, Salarie } from '#/lib/planning/types.ts'
@@ -107,6 +110,14 @@ export function MenuJour({
     ? codesDeLaCase({ referentiel, personne, posteId, jour, source })
     : null
   const proposes = permis?.codes ?? []
+  // Le code actuel du shift qui n'est plus permis ici : sa propre ligne,
+  // grisée, pas de doublon parmi les codes écartés.
+  const horsPermis = permis
+    ? actuelNonPermis(permis, referentiel.horaires, shift?.type_shift_id)
+    : null
+  const ecartes = (permis?.ecartes ?? []).filter(
+    (e) => e.horaire.id !== horsPermis?.horaire.id,
+  )
   const choisir = (action: () => void) => () => {
     onFermer()
     action()
@@ -240,10 +251,23 @@ export function MenuJour({
             ))}
           </div>
         ))}
-        {permis && (permis.ecartes.length > 0 || permis.texte) && (
+        {permis && (ecartes.length > 0 || permis.texte || horsPermis) && (
           <div className="-mx-1 my-1 h-px bg-border" />
         )}
-        {permis?.texte && !permis.ecartes.length && (
+        {horsPermis && (
+          <div
+            role="menuitem"
+            aria-disabled="true"
+            aria-label={`${horsPermis.horaire.code}, actuel, ${horsPermis.texte}`}
+            className="flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground opacity-60"
+          >
+            <span className="min-w-12 shrink-0 rounded border px-1.5 py-0.5 text-center text-xs font-semibold">
+              {horsPermis.horaire.code}
+            </span>
+            <span className="flex-1 text-xs">actuel · {horsPermis.texte}</span>
+          </div>
+        )}
+        {permis?.texte && !permis.ecartes.length && !horsPermis && (
           <div
             role="menuitem"
             aria-disabled="true"
@@ -252,7 +276,7 @@ export function MenuJour({
             {permis.texte}
           </div>
         )}
-        {permis?.ecartes.map((e) => (
+        {ecartes.map((e) => (
           <div
             key={e.horaire.id}
             role="menuitem"

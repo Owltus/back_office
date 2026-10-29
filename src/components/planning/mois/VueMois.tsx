@@ -409,12 +409,14 @@ export function VueMois({
     semaines.get(lundi)?.bilan.find((b) => b.salarie_id === salarieId)
 
   const fermerMenu = useCallback(() => setMenu(null), [])
-  // La semaine d'une case et ses voisines chargées : coupure de repos avec
-  // le dimanche d'avant ou le lundi d'après.
+  // La semaine d'une case et les shifts des semaines voisines : coupure de
+  // repos avec le dimanche d'avant ou le lundi d'après. `useMois` lit
+  // toujours la semaine d'avant le mois et celle d'après : les bords du mois
+  // sont donc vérifiés comme le reste (`donnees.avant` / `donnees.apres`).
   const sourceDe = (lundi: string) => ({
     semaine: semaines.get(lundi),
-    avant: semaines.get(ajouterJours(lundi, -7)),
-    apres: semaines.get(ajouterJours(lundi, 7)),
+    avant: m.donnees.get(lundi)?.avant ?? null,
+    apres: m.donnees.get(lundi)?.apres ?? null,
   })
 
   const champs = (s: ShiftOut): ShiftSaisi => ({

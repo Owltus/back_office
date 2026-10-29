@@ -10,6 +10,8 @@ import {
   EditeurShift,
   dateEnLettres,
 } from '#/components/planning/semaine/EditeurShift.tsx'
+import type { Edition } from '#/components/planning/semaine/EditeurShift.tsx'
+import type { JourType, Referentiel, Salarie } from '#/lib/planning/types.ts'
 
 /*
  * Éditeur d'un shift, seul. Oracles : la suppression en deux temps se
@@ -159,5 +161,127 @@ describe('EditeurShift', () => {
     expect(screen.queryByText(/novembre/)).toBeNull()
     expect(screen.getByText(/· Mercredi/)).toBeTruthy()
     expect(dateEnLettres('2026-11-18')).toBe('mercredi 18 novembre 2026')
+  })
+})
+
+// ------------------------------------- règle des codes dans l'éditeur
+
+/** Le même hôtel, la personne 3 retouchée. */
+function referentielAvec(champs: Partial<Salarie>): Referentiel {
+  return {
+    ...referentiel,
+    salaries: referentiel.salaries.map((s) =>
+      s.id === 3 ? { ...s, ...champs } : s,
+    ),
+  }
+}
+const reposLe = (jour: number): JourType[] =>
+  Array.from({ length: 7 }, (_, j) =>
+    j === jour ? { mode: 'repos' } : { mode: 'auto' },
+  )
+const idCode = (code: string) =>
+  referentiel.horaires.find((h) => h.code === code)!.id
+
+function rendreAvec(
+  ref: Referentiel,
+  edition: Edition,
+): { onCreer: ReturnType<typeof vi.fn> } {
+  const onCreer = vi.fn()
+  render(
+    <TooltipProvider>
+      <EditeurShift
+        edition={edition}
+        lundi={LUNDI}
+        referentiel={ref}
+        absence={null}
+        source={{ semaine: null }}
+        onFermer={vi.fn()}
+        onCreer={onCreer}
+        onModifier={vi.fn()}
+        onSupprimer={vi.fn()}
+        onPoserAbsence={vi.fn()}
+        onRetirerAbsence={vi.fn()}
+      />
+    </TooltipProvider>,
+  )
+  return { onCreer }
+}
+
+const libreBouton = () =>
+  screen.getByRole('button', { name: /Horaire spécifique/ })
+const presse = () =>
+  screen
+    .queryAllByRole('button', { pressed: true })
+    .map((x) => x.textContent ?? '')
+const principal = (nom: string) =>
+  screen.getByRole('button', { name: nom }) as HTMLButtonElement
+
+function choisirJour(nom: string) {
+  const declencheur = screen.getByRole('combobox', { name: 'Jour' })
+  fireEvent.pointerDown(declencheur, {
+    button: 0,
+    ctrlKey: false,
+    pointerType: 'mouse',
+  })
+  fireEvent.click(screen.getByRole('option', { name: nom }))
+}
+
+describe('EditeurShift : règle des codes', () => {
+  it('jour fermé : rien de choisi, horaire spécifique grisé avec la raison', () => {
+    const { onCreer } = rendreAvec(
+      referentielAvec({ semaine_type: reposLe(4) }),
+      { mode: 'creation', salarie_id: 3, jour: 4 },
+    )
+    expect(
+      screen.getAllByText('Repos fixé par sa semaine type').length,
+    ).toBeGreaterThan(0)
+    expect(libreBouton().hasAttribute('disabled')).toBe(true)
+    expect(presse().filter((t) => /Horaire spécifique/.test(t))).toEqual([])
+    expect(principal('Ajouter le shift').disabled).toBe(true)
+    fireEvent.click(libreBouton())
+    fireEvent.click(principal('Ajouter le shift'))
+    expect(onCreer).not.toHaveBeenCalled()
+  })
+
+  it('aucun code commun : horaire spécifique possible, jamais choisi d’office', () => {
+    const { onCreer } = rendreAvec(
+      // Fiche réduite à la nuit, poste Réception : rien en commun.
+      referentielAvec({ shifts_autorises: [idCode('N')] }),
+      { mode: 'creation', salarie_id: 3, jour: 2 },
+    )
+    expect(
+      screen.getByText('Aucun horaire commun entre sa fiche et ce poste'),
+    ).toBeTruthy()
+    expect(libreBouton().hasAttribute('disabled')).toBe(false)
+    expect(libreBouton().getAttribute('aria-pressed')).toBe('false')
+    expect(principal('Ajouter le shift').disabled).toBe(true)
+    fireEvent.click(libreBouton())
+    expect(principal('Ajouter le shift').disabled).toBe(false)
+    fireEvent.click(principal('Ajouter le shift'))
+    expect(onCreer).toHaveBeenCalledWith(
+      expect.objectContaining({ horaire_id: null, jour: 2 }),
+    )
+  })
+
+  it('changer de jour revalide le code ; revenir rend le code d’origine', () => {
+    rendreAvec(referentielAvec({ semaine_type: reposLe(4) }), {
+      mode: 'modification',
+      shift: SHIFT,
+    })
+    const matin = () =>
+      screen
+        .getByRole('button', { name: /^M\s*Matin/ })
+        .getAttribute('aria-pressed')
+    expect(matin()).toBe('true')
+    choisirJour('Vendredi')
+    // Vendredi en repos fixe : le Matin n'est plus proposé, rien n'est choisi.
+    expect(screen.queryByRole('button', { name: /^M\s*Matin/ })).toBeNull()
+    expect(presse().filter((t) => /Matin|Horaire spécifique/.test(t))).toEqual(
+      [],
+    )
+    expect(principal('Enregistrer').disabled).toBe(true)
+    choisirJour('Mercredi')
+    expect(matin()).toBe('true')
+    expect(principal('Enregistrer').disabled).toBe(false)
   })
 })

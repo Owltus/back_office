@@ -73,7 +73,10 @@ import {
   porteeSemaine,
 } from '#/components/planning/attention.ts'
 import { PanneauAlertes } from '#/components/planning/semaine/PanneauAlertes.tsx'
-import { codesDeLaCase } from '#/components/planning/codesCase.ts'
+import {
+  actuelNonPermis,
+  codesDeLaCase,
+} from '#/components/planning/codesCase.ts'
 import { posteDeReference } from '#/lib/planning/eligibilite.ts'
 import {
   absenceDe,
@@ -221,6 +224,17 @@ export function VueSemaine({
   const affichee = useMemo(
     () => (semaine ? avecDeplacement(semaine, deplacement) : null),
     [semaine, deplacement],
+  )
+  // Ce que lisent les menus et l'éditeur : la semaine affichée et les shifts
+  // des semaines voisines (coupure de repos du lundi et du dimanche, comme
+  // le moteur).
+  const source = useMemo(
+    () => ({
+      semaine: affichee,
+      avant: donnees?.avant ?? null,
+      apres: donnees?.apres ?? null,
+    }),
+    [affichee, donnees],
   )
 
   // ---------------------------------------------------- données de la grille
@@ -581,17 +595,23 @@ export function VueSemaine({
     const st = shift ? null : statutDe(sid, j)
     const absenceRetirable =
       !!st && (st.genre === 'absence' || st.genre === 'ecole') && !st.fixe
+    const permis = codesDeLaCase({
+      referentiel,
+      personne: p,
+      posteId,
+      jour: j,
+      source,
+    })
     setMenu({
       ...o,
       nom: nomComplet(p),
       actuel: shift?.type_shift_id,
-      permis: codesDeLaCase({
-        referentiel,
-        personne: p,
-        posteId,
-        jour: j,
-        source: { semaine: affichee },
-      }),
+      permis,
+      actuelNonPermis: actuelNonPermis(
+        permis,
+        referentiel.horaires,
+        shift?.type_shift_id,
+      ),
       posteId,
       validation: shift
         ? {
@@ -784,7 +804,7 @@ export function VueSemaine({
               ? absenceDe(bilanDe(edition.salarie_id), edition.jour)
               : null
           }
-          source={{ semaine: affichee }}
+          source={source}
           onFermer={() => setEdition(null)}
           onCreer={(s) => {
             setEdition(null)

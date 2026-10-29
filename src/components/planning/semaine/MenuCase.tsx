@@ -34,6 +34,8 @@ export interface OuvertureMenu {
   actuel: number | null | undefined
   /** Codes permis (règle unique), et pourquoi s'il n'y en a pas. */
   permis: CodesPermis<Horaire>
+  /** Code actuel qui n'est plus permis ici : montré grisé, marqué actuel. */
+  actuelNonPermis?: { horaire: Horaire; texte: string } | null
   posteId: number | undefined
   validation?: { active: boolean; onBasculer: () => void }
   etoile?: { active: boolean; onBasculer: () => void }
@@ -51,6 +53,12 @@ export function MenuCase({
   if (!ouverture) return null
   const { permis, actuel, posteId, validation, etoile, vider } = ouverture
   const proposes = permis.codes
+  const horsPermis = ouverture.actuelNonPermis ?? null
+  // Le code actuel non permis a sa propre ligne : pas de doublon parmi les
+  // codes écartés pour la coupure.
+  const ecartes = permis.ecartes.filter(
+    (e) => e.horaire.id !== horsPermis?.horaire.id,
+  )
   return (
     <ContextMenuContent className="min-w-64">
       <ContextMenuLabel className="text-xs text-muted-foreground">
@@ -103,7 +111,20 @@ export function MenuCase({
         </>
       )}
       <ContextMenuSeparator />
-      {permis.texte && !permis.ecartes.length && (
+      {horsPermis && (
+        <ContextMenuItem
+          disabled
+          aria-label={`${horsPermis.horaire.code}, actuel, ${horsPermis.texte}`}
+        >
+          <span className="min-w-12 shrink-0 rounded border px-1.5 py-0.5 text-center text-xs font-semibold">
+            {horsPermis.horaire.code}
+          </span>
+          <span className="flex-1 pl-1 text-xs">
+            actuel · {horsPermis.texte}
+          </span>
+        </ContextMenuItem>
+      )}
+      {permis.texte && !permis.ecartes.length && !horsPermis && (
         <ContextMenuItem disabled>{permis.texte}</ContextMenuItem>
       )}
       {grouperHoraires(proposes).map((g, i) => (
@@ -146,10 +167,8 @@ export function MenuCase({
           ))}
         </ContextMenuGroup>
       ))}
-      {permis.ecartes.length > 0 && proposes.length > 0 && (
-        <ContextMenuSeparator />
-      )}
-      {permis.ecartes.map((e) => (
+      {ecartes.length > 0 && proposes.length > 0 && <ContextMenuSeparator />}
+      {ecartes.map((e) => (
         <ContextMenuItem
           key={e.horaire.id}
           disabled

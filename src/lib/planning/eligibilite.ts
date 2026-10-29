@@ -143,7 +143,7 @@ export const TEXTE_RAISON: Record<RaisonCodes, string> = {
   'code-fixe-hors-poste':
     "L'horaire fixé par sa semaine type n'est pas permis sur ce poste",
   ecole: "Jour d'école : retirez d'abord l'école de ce jour",
-  'absence-fixe': 'Absence fixée par sa semaine type',
+  'absence-fixe': 'Absence fixée par sa semaine type : à changer dans sa fiche',
   'repos-fixe': 'Repos fixé par sa semaine type',
   'hors-contrat': 'En dehors de son contrat',
   'coupure-11h': 'Coupure de repos non respectée',
@@ -222,8 +222,10 @@ export function codesPermis<
   const jourType = e.personne.semaine_type.at(e.jour)
   if (e.journee?.horsContrat) return ferme('hors-contrat')
   if (jourType?.mode === 'repos') return ferme('repos-fixe')
-  if (e.journee?.ecole) return ferme('ecole')
+  // Absence fixe AVANT l'école : une école posée par la semaine type ne se
+  // retire pas depuis la grille, seulement dans la fiche.
   if (jourType?.mode === 'absence') return ferme('absence-fixe')
+  if (e.journee?.ecole) return ferme('ecole')
 
   const fiche = {
     shiftsAutorises: codesDeLaFiche(e.personne),
