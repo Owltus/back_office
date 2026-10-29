@@ -7,7 +7,6 @@ import {
   render,
   screen,
   waitFor,
-  within,
 } from '@testing-library/react'
 
 import { TooltipProvider } from '#/components/ui/tooltip.tsx'
@@ -359,12 +358,7 @@ describe('VueMois', { timeout: 20_000 }, () => {
     fireEvent.contextMenu(
       screen.getByRole('button', { name: /^Lucas Petit, .*18.* : Congés/ }),
     )
-    fireEvent.click(
-      within(await screen.findByRole('group', { name: 'Réception' })).getByRole(
-        'menuitem',
-        { name: /Matin/ },
-      ),
-    )
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'M, Matin' }))
     await waitFor(() => expect(service.poserAbsences).toHaveBeenCalledTimes(2))
     expect(service.poserAbsences).toHaveBeenNthCalledWith(
       1,
@@ -408,25 +402,25 @@ describe('VueMois', { timeout: 20_000 }, () => {
     )
     // Décision utilisateur du 2026-10-30 : choisissable, l'alerte sur la
     // ligne ; le vérificateur signalera l'infraction sur le shift posé.
-    const club = await screen.findByRole('group', { name: 'Club' })
-    const matin = within(club).getByRole('menuitem', {
+    // Une seule liste : chaque code une fois, posé sur le métier habituel.
+    const matin = await screen.findByRole('menuitem', {
       name: 'M, Matin, Coupure de 11 h non respectée avec la veille',
     })
     expect(matin.getAttribute('aria-disabled')).toBeNull()
     expect(
-      within(club).getByRole('menuitem', {
+      screen.getByRole('menuitem', {
         name: 'MI, Middle, Coupure de 11 h non respectée avec la veille',
       }),
     ).toBeTruthy()
-    // L'après-midi reste proposé sans alerte.
+    // L'après-midi reste proposé sans alerte, une seule fois.
     expect(
-      within(club).getByRole('menuitem', { name: 'AM, Après-midi' }),
-    ).toBeTruthy()
+      screen.getAllByRole('menuitem', { name: 'AM, Après-midi' }),
+    ).toHaveLength(1)
     fireEvent.click(matin)
     await waitFor(() =>
       expect(service.ajouterShift).toHaveBeenCalledWith(
         '2026-11-16',
-        expect.objectContaining({ poste_id: 3, jour: 2, horaire_id: 1 }),
+        expect.objectContaining({ poste_id: 2, jour: 2, horaire_id: 1 }),
       ),
     )
   })

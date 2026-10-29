@@ -11,7 +11,7 @@
  */
 
 import { trierHoraires } from '#/lib/planning/affichage.ts'
-import { codesPermis } from '#/lib/planning/eligibilite.ts'
+import { codesPermis, posteDeReference } from '#/lib/planning/eligibilite.ts'
 import type { CodesPermis, Voisin } from '#/lib/planning/eligibilite.ts'
 import { estEcole } from '#/lib/planning/semaine.ts'
 import type { SemaineOut } from '#/lib/planning/semaine.ts'
@@ -250,4 +250,98 @@ export function ligneDe(
   const rubrique = r.rubriques.find((x) => x.poste.id === posteId)
   const ligne = rubrique?.lignes.find((l) => l.horaire.id === horaireId)
   return rubrique && ligne ? { rubrique, ligne } : null
+}
+
+// ------------------------------------- une liste, chaque code une fois
+
+/**
+ * Poste DÉDUIT pour un code (décision utilisateur du 2026-10-30, « je ne
+ * dois voir qu'une seule fois chaque code ») : le poste préféré (celui du
+ * shift existant, ou de la place à pourvoir) s'il permet ce code ; sinon le
+ * premier poste de la fiche qui le permet, dans l'ordre des rubriques
+ * (titulaire, dépannage, soutien, puis ordre des postes). undefined : aucun
+ * poste ne le permet.
+ */
+export function posteDeduit(
+  rubriques: readonly Rubrique[],
+  horaireId: number,
+  prefere?: number,
+): Poste | undefined {
+  const permet = (r: Rubrique) =>
+    r.lignes.some((l) => l.horaire.id === horaireId)
+  return (
+    rubriques.find((r) => r.poste.id === prefere && permet(r)) ??
+    rubriques.find(permet)
+  )?.poste
+}
+
+/** Un code de la liste unique. */
+export interface CodeUnique {
+  horaire: Horaire
+  /** Alerte sur la ligne (coupure de repos) ; null : aucune. */
+  alerte: string | null
+  /** Poste sur lequel le code sera posé. */
+  poste: Poste
+  /** Tous les postes de la fiche qui le permettent (ordre des rubriques). */
+  postes: Poste[]
+  /** Le poste déduit n'est pas le métier habituel : l'écran le dit. */
+  horsHabituel: boolean
+}
+
+export interface CodesUniquesCase {
+  /** Chaque code une seule fois, triés du matin au soir. */
+  codes: CodeUnique[]
+  texte: string | null
+  actuel: RubriquesCase['actuel']
+}
+
+/**
+ * La liste des codes de la case : l'UNION des rubriques (`rubriquesDeLaCase`,
+ * règle unique par poste), chaque code une fois, son poste déduit par
+ * `posteDeduit`. Choisissable si au moins un poste le permet ; l'alerte est
+ * celle du poste déduit (la coupure est la même pour tous les postes).
+ */
+export function codesUniques(
+  r: RubriquesCase,
+  personne: Pick<Salarie, 'competences'>,
+  postes: ReadonlyArray<{ id: number }>,
+  prefere?: number,
+): CodesUniquesCase {
+  const habituel = posteDeReference(personne, postes)
+  const vus = new Map<number, Horaire>()
+  for (const rub of r.rubriques)
+    for (const l of rub.lignes) vus.set(l.horaire.id, l.horaire)
+  const codes = trierHoraires([...vus.values()]).flatMap((h): CodeUnique[] => {
+    const poste = posteDeduit(r.rubriques, h.id, prefere)
+    if (!poste) return []
+    const ligne = ligneDe(r, poste.id, h.id)
+    return [
+      {
+        horaire: h,
+        alerte: ligne?.ligne.alerte ?? null,
+        poste,
+        postes: r.rubriques
+          .filter((x) => x.lignes.some((l) => l.horaire.id === h.id))
+          .map((x) => x.poste),
+        horsHabituel: poste.id !== habituel,
+      },
+    ]
+  })
+  return { codes, texte: r.texte, actuel: r.actuel }
+}
+
+/** Nom accessible d'une ligne de code : code, nom, poste s'il n'est pas le
+ * métier habituel, alerte. */
+export function nomLigneCode(c: {
+  horaire: { code: string; nom: string }
+  alerte: string | null
+  poste: { nom: string }
+  horsHabituel: boolean
+}): string {
+  return [
+    c.horaire.code,
+    c.horaire.nom,
+    ...(c.horsHabituel ? [c.poste.nom] : []),
+    ...(c.alerte ? [c.alerte] : []),
+  ].join(', ')
 }

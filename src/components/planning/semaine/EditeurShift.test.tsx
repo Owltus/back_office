@@ -191,13 +191,11 @@ describe('EditeurShift', () => {
     const tenus = referentiel.salaries
       .find((x) => x.id === 3)!
       .competences.map((c) => c.poste_id)
-    // Codes : une rubrique par poste de sa fiche, sans choisir de poste.
+    // Codes : une seule liste, chaque code une fois, sans choisir de poste.
     expect(screen.queryByRole('heading', { name: 'Poste' })).toBeNull()
-    for (const p of referentiel.postes) {
-      expect(!!screen.queryByRole('group', { name: p.nom })).toBe(
-        tenus.includes(p.id) || p.id === SHIFT.poste_id,
-      )
-    }
+    expect(screen.getAllByRole('button', { name: /^M\s*Matin/ })).toHaveLength(
+      1,
+    )
     // Horaire spécifique : le choix du poste revient, mêmes postes.
     fireEvent.click(screen.getByRole('button', { name: /Horaire spécifique/ }))
     expect(screen.getByRole('heading', { name: 'Poste' })).toBeTruthy()
@@ -349,14 +347,14 @@ describe('EditeurShift : règle des codes', () => {
 
   it('place à pourvoir : son poste et son code choisis d’office', () => {
     const pressees = () => presse().map((t) => t.trim())
-    const choisiDans = (poste: string) =>
-      within(screen.getByRole('group', { name: poste }))
-        .queryAllByRole('button', { pressed: true })
+    const posteChoisi = () =>
+      within(screen.getByRole('group', { name: 'Poste de cet horaire' }))
+        .getAllByRole('button', { pressed: true })
         .map((x) => x.textContent.trim())
     // Personne 3 : titulaire Réception (2) et Club (3), Réception d'office.
     rendreAvec(referentiel, { mode: 'creation', salarie_id: 3, jour: 2 })
-    expect(choisiDans('Réception').some((t) => /^M\s*Matin/.test(t))).toBe(true)
-    expect(choisiDans('Club')).toEqual([])
+    expect(pressees().some((t) => /^M\s*Matin/.test(t))).toBe(true)
+    expect(posteChoisi()).toEqual(['Réception'])
     cleanup()
     const { onCreer } = rendreAvec(referentiel, {
       mode: 'creation',
@@ -365,9 +363,8 @@ describe('EditeurShift : règle des codes', () => {
       poste_id: 3,
       horaire_id: idCode('AM'),
     })
-    expect(choisiDans('Club').some((t) => /^AM/.test(t))).toBe(true)
-    expect(choisiDans('Réception')).toEqual([])
     expect(pressees().filter((t) => /^AM/.test(t))).toHaveLength(1)
+    expect(posteChoisi()).toEqual(['Club'])
     fireEvent.click(principal('Ajouter le shift'))
     expect(onCreer).toHaveBeenCalledWith(
       expect.objectContaining({ poste_id: 3, horaire_id: idCode('AM') }),
@@ -375,7 +372,7 @@ describe('EditeurShift : règle des codes', () => {
   })
 
   it('place à pourvoir : un code qui n’est pas permis n’est pas forcé', () => {
-    rendreAvec(referentiel, {
+    const { onCreer } = rendreAvec(referentiel, {
       mode: 'creation',
       salarie_id: 3,
       jour: 2,
@@ -384,11 +381,11 @@ describe('EditeurShift : règle des codes', () => {
     })
     expect(presse().some((t) => /Nuit/.test(t))).toBe(false)
     // Le premier code permis, sur le poste de la place.
-    expect(
-      within(screen.getByRole('group', { name: 'Club' }))
-        .getAllByRole('button', { pressed: true })
-        .some((t) => /^M\s*Matin/.test(t.textContent.trim())),
-    ).toBe(true)
+    expect(presse().some((t) => /^M\s*Matin/.test(t.trim()))).toBe(true)
+    fireEvent.click(principal('Ajouter le shift'))
+    expect(onCreer).toHaveBeenCalledWith(
+      expect.objectContaining({ poste_id: 3, horaire_id: idCode('M') }),
+    )
   })
 
   it('changer de jour revalide le code ; revenir rend le code d’origine', () => {
@@ -397,7 +394,7 @@ describe('EditeurShift : règle des codes', () => {
       shift: SHIFT,
     })
     const matin = () =>
-      within(screen.getByRole('group', { name: 'Réception' }))
+      screen
         .getByRole('button', { name: /^M\s*Matin/ })
         .getAttribute('aria-pressed')
     expect(matin()).toBe('true')
@@ -413,21 +410,53 @@ describe('EditeurShift : règle des codes', () => {
     expect(principal('Enregistrer').disabled).toBe(false)
   })
 
-  it('un code d’une autre casquette change aussi le poste, sans choix de poste', () => {
+  it('code permis sur plusieurs postes : choix Réception | Club sous la liste', () => {
     const { onModifier } = rendreAvec(referentiel, {
       mode: 'modification',
       shift: SHIFT,
     })
-    fireEvent.click(
-      within(screen.getByRole('group', { name: 'Club' })).getByRole('button', {
-        name: /^M\s*Matin/,
-      }),
+    const choix = within(
+      screen.getByRole('group', { name: 'Poste de cet horaire' }),
     )
+    expect(
+      choix.getAllByRole('button').map((x) => x.textContent.trim()),
+    ).toEqual(['Réception', 'Club'])
+    // Présélectionné sur le poste du shift.
+    expect(
+      choix
+        .getByRole('button', { name: 'Réception' })
+        .getAttribute('aria-pressed'),
+    ).toBe('true')
+    fireEvent.click(choix.getByRole('button', { name: 'Club' }))
     fireEvent.click(principal('Enregistrer'))
     expect(onModifier).toHaveBeenCalledWith(
       7,
       expect.objectContaining({ poste_id: 3, horaire_id: idCode('M') }),
     )
+  })
+
+  it('code permis sur un seul poste : pas de choix de poste, étiquette hors métier habituel', () => {
+    // Fiche : Réception sans le Middle, Club avec. Le Middle va au Club.
+    rendreAvec(
+      {
+        ...referentiel,
+        postes: referentiel.postes.map((p) =>
+          p.id === 2
+            ? { ...p, horaires_autorises: [idCode('M'), idCode('AM')] }
+            : p,
+        ),
+      },
+      { mode: 'creation', salarie_id: 3, jour: 2 },
+    )
+    const middle = screen.getByRole('button', { name: /^MI\s*Middle/ })
+    expect(middle.textContent).toMatch(/Club/)
+    expect(
+      screen.getByRole('button', { name: /^M\s*Matin/ }).textContent,
+    ).not.toMatch(/Club|Réception/)
+    fireEvent.click(middle)
+    expect(
+      screen.queryByRole('group', { name: 'Poste de cet horaire' }),
+    ).toBeNull()
   })
 
   it('coupure de 11 h : choisissable avec son alerte, jamais choisie d’office', () => {
@@ -459,8 +488,7 @@ describe('EditeurShift : règle des codes', () => {
       { mode: 'creation', salarie_id: 3, jour: 2 },
       { semaine },
     )
-    const reception = within(screen.getByRole('group', { name: 'Réception' }))
-    const matin = reception.getByRole('button', { name: /^M\s*Matin/ })
+    const matin = screen.getByRole('button', { name: /^M\s*Matin/ })
     expect(matin.textContent).toMatch(
       /Coupure de 11 h non respectée avec la veille/,
     )
@@ -468,9 +496,7 @@ describe('EditeurShift : règle des codes', () => {
     // Rien d'office qui casse la coupure : l'après-midi est proposé.
     expect(matin.getAttribute('aria-pressed')).toBe('false')
     expect(
-      reception
-        .getByRole('button', { name: /^AM/ })
-        .getAttribute('aria-pressed'),
+      screen.getByRole('button', { name: /^AM/ }).getAttribute('aria-pressed'),
     ).toBe('true')
     fireEvent.click(matin)
     fireEvent.click(principal('Ajouter le shift'))

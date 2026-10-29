@@ -78,7 +78,10 @@ import {
   porteeSemaine,
 } from '#/components/planning/attention.ts'
 import { PanneauAlertes } from '#/components/planning/semaine/PanneauAlertes.tsx'
-import { rubriquesDeLaCase } from '#/components/planning/codesCase.ts'
+import {
+  codesUniques,
+  rubriquesDeLaCase,
+} from '#/components/planning/codesCase.ts'
 import {
   absenceDe,
   estEtoile,
@@ -617,13 +620,18 @@ export function VueSemaine({
       nom: nomComplet(p),
       actuel: shift?.type_shift_id,
       actuelPoste: shift?.poste_id,
-      rubriques: rubriquesDeLaCase({
-        referentiel,
-        personne: p,
-        jour: j,
-        source,
-        shift,
-      }),
+      codes: codesUniques(
+        rubriquesDeLaCase({
+          referentiel,
+          personne: p,
+          jour: j,
+          source,
+          shift,
+        }),
+        p,
+        referentiel.postes,
+        shift?.poste_id,
+      ),
       validation: shift
         ? {
             active: shift.epinglee,

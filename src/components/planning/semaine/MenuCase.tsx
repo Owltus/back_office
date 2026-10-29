@@ -1,7 +1,8 @@
 /*
  * Menu du clic droit sur une case (prototype `MenuCase.tsx`) : tous les
- * horaires que la personne peut faire, rangés par casquette (un poste de sa
- * fiche, métier habituel d'abord), pour changer d'un clic sur CE poste ;
+ * horaires que la personne peut faire sur ses postes, chacun une seule fois,
+ * rangés par moment, posés d'un clic sur le poste déduit (étiquette quand ce
+ * n'est pas son métier habituel) ;
  * valider le shift, la journée étoile. Le
  * positionnement au curseur et la fermeture (Échap, clic ailleurs) sont ceux
  * du `ContextMenu` de shadcn.
@@ -18,11 +19,13 @@ import {
 } from '#/components/ui/context-menu.tsx'
 import {
   heures,
-  NIVEAUX,
+  grouperHoraires,
   ROUGE_CODE,
   texteSur,
 } from '#/lib/planning/affichage.ts'
-import type { RubriquesCase } from '#/components/planning/codesCase.ts'
+import { nomLigneCode } from '#/components/planning/codesCase.ts'
+import type { CodesUniquesCase } from '#/components/planning/codesCase.ts'
+import { EtiquettePoste } from '#/components/planning/EtiquettePoste.tsx'
 import { heureAffichee } from '#/lib/planning/temps.ts'
 import { JOURS } from '#/lib/planning/types.ts'
 import type { Horaire } from '#/lib/planning/types.ts'
@@ -35,9 +38,10 @@ export interface OuvertureMenu {
   /** Code horaire actuel du shift de la case, et son poste. */
   actuel: number | null | undefined
   actuelPoste?: number
-  /** Codes permis par casquette (règle unique), et pourquoi s'il n'y en a
-   * pas ; le code actuel qui n'est plus permis est montré grisé. */
-  rubriques: RubriquesCase
+  /** Codes permis, chacun une fois avec son poste déduit (règle unique par
+   * poste), et pourquoi s'il n'y en a pas ; le code actuel qui n'est plus
+   * permis est montré grisé. */
+  codes: CodesUniquesCase
   validation?: { active: boolean; onBasculer: () => void }
   etoile?: { active: boolean; onBasculer: () => void }
   /** La case a un shift : la remettre à « Non attribué ». */
@@ -52,9 +56,9 @@ export function MenuCase({
   onHoraire: (h: Horaire, posteId: number) => void
 }) {
   if (!ouverture) return null
-  const { rubriques, actuel, actuelPoste, validation, etoile, vider } =
-    ouverture
-  const horsPermis = rubriques.actuel
+  const { codes, actuel, actuelPoste, validation, etoile, vider } = ouverture
+  const horsPermis = codes.actuel
+  const parId = new Map(codes.codes.map((c) => [c.horaire.id, c]))
   return (
     <ContextMenuContent className="min-w-64">
       <ContextMenuLabel className="text-xs text-muted-foreground">
@@ -107,27 +111,21 @@ export function MenuCase({
         </>
       )}
       <ContextMenuSeparator />
-      {rubriques.rubriques.map((r, i) => (
-        <ContextMenuGroup key={r.poste.id} aria-label={r.poste.nom}>
+      {grouperHoraires(codes.codes.map((c) => c.horaire)).map((g, i) => (
+        <ContextMenuGroup key={g.libelle} aria-label={g.libelle}>
           {i > 0 && <ContextMenuSeparator />}
-          <ContextMenuLabel className="flex items-center gap-1.5 pt-1 pb-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-            <span
-              className="size-2 shrink-0 rounded-full"
-              style={{ background: r.poste.couleur }}
-            />
-            <span className="flex-1">{r.poste.nom}</span>
-            <span className="pl-3 font-normal tracking-normal normal-case">
-              {r.niveau ? NIVEAUX[r.niveau].libelle : 'hors de sa fiche'}
-            </span>
+          <ContextMenuLabel className="pt-1 pb-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+            {g.libelle}
           </ContextMenuLabel>
-          {r.lignes.map(({ horaire: h, alerte }) => {
-            const estActuel = actuel === h.id && actuelPoste === r.poste.id
+          {g.horaires.map((h) => {
+            const c = parId.get(h.id)!
+            const estActuel = actuel === h.id && actuelPoste === c.poste.id
             return (
               <ContextMenuItem
                 key={h.id}
-                aria-label={`${h.code}, ${h.nom}${alerte ? `, ${alerte}` : ''}`}
+                aria-label={nomLigneCode(c)}
                 onSelect={() => {
-                  if (!estActuel) onHoraire(h, r.poste.id)
+                  if (!estActuel) onHoraire(h, c.poste.id)
                 }}
               >
                 <span
@@ -144,12 +142,13 @@ export function MenuCase({
                     {heureAffichee(h.debut)}-{heureAffichee(h.fin)} ·{' '}
                     {heures(travailCode(h))}
                   </span>
-                  {alerte && (
+                  {c.alerte && (
                     <span className="text-xs text-amber-600 dark:text-amber-400">
-                      {alerte}
+                      {c.alerte}
                     </span>
                   )}
                 </span>
+                {c.horsHabituel && <EtiquettePoste poste={c.poste} />}
                 {estActuel ? (
                   <Check
                     className="size-3.5 text-primary"
@@ -163,7 +162,7 @@ export function MenuCase({
           })}
         </ContextMenuGroup>
       ))}
-      {(horsPermis || rubriques.texte) && rubriques.rubriques.length > 0 && (
+      {(horsPermis || codes.texte) && codes.codes.length > 0 && (
         <ContextMenuSeparator />
       )}
       {horsPermis && (
@@ -179,8 +178,8 @@ export function MenuCase({
           </span>
         </ContextMenuItem>
       )}
-      {rubriques.texte && !horsPermis && (
-        <ContextMenuItem disabled>{rubriques.texte}</ContextMenuItem>
+      {codes.texte && !horsPermis && (
+        <ContextMenuItem disabled>{codes.texte}</ContextMenuItem>
       )}
     </ContextMenuContent>
   )

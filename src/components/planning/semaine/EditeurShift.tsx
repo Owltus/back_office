@@ -36,6 +36,7 @@ import { Switch } from '#/components/ui/switch.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import {
   disponibleLe,
+  grouperHoraires,
   heures,
   NIVEAUX,
   texteSur,
@@ -53,17 +54,18 @@ import {
   presence,
 } from '#/lib/planning/temps.ts'
 import { JOURS } from '#/lib/planning/types.ts'
-import type { Horaire, Referentiel } from '#/lib/planning/types.ts'
+import type { Horaire, Poste, Referentiel } from '#/lib/planning/types.ts'
+import { EtiquettePoste } from '#/components/planning/EtiquettePoste.tsx'
 import { cn } from '#/lib/utils.ts'
 import { titreRegle } from '#/components/planning/semaine/PanneauAlertes.tsx'
 import { NEUTRE, travailCode } from '#/components/planning/semaine/edition.ts'
 import {
   codesDeLaCase,
+  codesUniques,
   ligneDe,
   rubriquesDeLaCase,
 } from '#/components/planning/codesCase.ts'
 import type {
-  LigneCode,
   RubriquesCase,
   SourceCase,
 } from '#/components/planning/codesCase.ts'
@@ -370,7 +372,19 @@ export function EditeurShift({
       : null
   // Même règle que le clic droit et que le moteur (`codesPermis`) : les
   // codes par casquette, et pour l'horaire spécifique celle du poste choisi.
+  // Chaque code une seule fois, son poste déduit (celui choisi s'il le
+  // permet, sinon le premier de la fiche) ; s'il en a plusieurs, un petit
+  // choix de poste apparaît sous la liste.
   const rubriques = rubriquesPour(b.salarie_id, b.jour)
+  const uniques = codesUniques(
+    rubriques,
+    salaries.find((s) => s.id === b.salarie_id) ?? { competences: [] },
+    postes,
+    b.poste_id,
+  )
+  const parId = new Map(uniques.codes.map((c) => [c.horaire.id, c]))
+  const enCours = !vider && motif === null && !libre
+  const choisiUnique = parId.get(b.horaire_id ?? -1)
   const permis = permisPour(b.poste_id, b.salarie_id, b.jour)
   const surPlace =
     !!existant &&
@@ -391,7 +405,7 @@ export function EditeurShift({
     : motif === null && !vider && libre && libreInterdit
       ? permis.texte
       : rienChoisi
-        ? (rubriques.texte ?? 'Choisissez un horaire')
+        ? (uniques.texte ?? 'Choisissez un horaire')
         : erreurLibre
 
   const valeurs = (): ShiftSaisi => {
@@ -553,63 +567,76 @@ export function EditeurShift({
                   }}
                 />
               )}
-              {rubriques.rubriques.map((r) => {
-                const enCours =
-                  !vider &&
-                  motif === null &&
-                  !libre &&
-                  b.poste_id === r.poste.id
-                return (
+              {grouperHoraires(uniques.codes.map((c) => c.horaire)).map((g) => [
+                <span
+                  key={`titre-${g.libelle}`}
+                  className="col-span-2 pt-1.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase"
+                >
+                  {g.libelle}
+                </span>,
+                ...g.horaires.map((h) => {
+                  const c = parId.get(h.id)!
+                  return (
+                    <Choix
+                      key={h.id}
+                      couleur={h.couleur}
+                      code={h.code}
+                      titre={h.nom}
+                      detail={`${heureAffichee(h.debut)}-${heureAffichee(h.fin)}${h.pause > 0 ? ` · ${heures(travailCode(h))} de travail` : ''}`}
+                      alerte={c.alerte}
+                      etiquette={c.horsHabituel ? c.poste : undefined}
+                      choisi={enCours && b.horaire_id === h.id}
+                      onClick={() => {
+                        setVider(false)
+                        setLibre(false)
+                        setMotif(null)
+                        maj({
+                          poste_id: c.poste.id,
+                          horaire_id: h.id,
+                          debut: h.debut,
+                          fin: h.fin,
+                          pause: h.pause,
+                        })
+                      }}
+                    />
+                  )
+                }),
+              ])}
+              {enCours && choisiUnique && choisiUnique.postes.length > 1 && (
+                <div className="col-span-2 flex flex-wrap items-center gap-2 pt-1">
+                  <span className="text-xs text-muted-foreground">
+                    Sur le poste
+                  </span>
                   <div
-                    key={r.poste.id}
                     role="group"
-                    aria-label={r.poste.nom}
-                    className={cn(
-                      'col-span-2 grid grid-cols-2 gap-1.5 rounded-lg border border-transparent p-1.5',
-                      enCours && 'border-primary/40 bg-primary/5',
-                    )}
+                    aria-label="Poste de cet horaire"
+                    className="inline-flex overflow-hidden rounded-md border"
                   >
-                    <span className="col-span-2 flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                      <span
-                        className="size-2 shrink-0 rounded-full"
-                        style={{ background: r.poste.couleur }}
-                      />
-                      <span className="flex-1">{r.poste.nom}</span>
-                      <span className="font-normal tracking-normal normal-case">
-                        {r.niveau
-                          ? NIVEAUX[r.niveau].libelle
-                          : 'hors de sa fiche'}
-                      </span>
-                    </span>
-                    {r.lignes.map(({ horaire: h, alerte }: LigneCode) => (
-                      <Choix
-                        key={h.id}
-                        couleur={h.couleur}
-                        code={h.code}
-                        titre={h.nom}
-                        detail={`${heureAffichee(h.debut)}-${heureAffichee(h.fin)}${h.pause > 0 ? ` · ${heures(travailCode(h))} de travail` : ''}`}
-                        alerte={alerte}
-                        choisi={enCours && b.horaire_id === h.id}
-                        onClick={() => {
-                          setVider(false)
-                          setLibre(false)
-                          setMotif(null)
-                          maj({
-                            poste_id: r.poste.id,
-                            horaire_id: h.id,
-                            debut: h.debut,
-                            fin: h.fin,
-                            pause: h.pause,
-                          })
-                        }}
-                      />
+                    {choisiUnique.postes.map((p, i) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        aria-pressed={b.poste_id === p.id}
+                        onClick={() => maj({ poste_id: p.id })}
+                        className={cn(
+                          'inline-flex items-center gap-1.5 px-2.5 py-1 text-sm transition-colors hover:bg-muted',
+                          i > 0 && 'border-l',
+                          b.poste_id === p.id && 'bg-primary/10 font-medium',
+                        )}
+                      >
+                        <span
+                          className="size-2 rounded-full"
+                          style={{ background: p.couleur }}
+                        />
+                        {p.nom}
+                      </button>
                     ))}
                   </div>
-                )
-              })}
-              {rubriques.texte && (
+                </div>
+              )}
+              {uniques.texte && (
                 <span className="col-span-2 rounded-md border border-dashed px-2 py-1.5 text-xs text-muted-foreground">
-                  {rubriques.texte}
+                  {uniques.texte}
                 </span>
               )}
               <span className="col-span-2 pt-1.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
@@ -919,6 +946,7 @@ function Choix({
   choisi,
   desactive = false,
   alerte = null,
+  etiquette,
   onClick,
 }: {
   couleur: string
@@ -927,6 +955,8 @@ function Choix({
   detail: string
   /** Règle passée à la main (coupure de repos) : dite sur la ligne. */
   alerte?: string | null
+  /** Poste du code quand ce n'est pas le métier habituel. */
+  etiquette?: Pick<Poste, 'nom' | 'couleur'>
   choisi: boolean
   /** Montré grisé, avec sa raison en détail : non cliquable. */
   desactive?: boolean
@@ -962,6 +992,11 @@ function Choix({
           </small>
         )}
       </span>
+      {etiquette && (
+        <span className="ml-auto">
+          <EtiquettePoste poste={etiquette} />
+        </span>
+      )}
     </button>
   )
 }

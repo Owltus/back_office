@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest'
 
 import {
   codesDeLaCase,
+  codesUniques,
   ligneDe,
+  posteDeduit,
   rubriquesDeLaCase,
 } from '#/components/planning/codesCase.ts'
 import type { SourceCase } from '#/components/planning/codesCase.ts'
@@ -258,6 +260,124 @@ describe('rubriquesDeLaCase', () => {
     expect(editeur.actuel).toBeNull()
     expect(ligneDe(editeur, idP('Réception'), idH('M'))?.ligne.alerte).toBe(
       "N'est plus permis ici",
+    )
+  })
+})
+
+describe('codesUniques : chaque code une fois, poste déduit', () => {
+  const rubriquesDe = (
+    p: Salarie,
+    shift?: { poste_id: number; type_shift_id: number | null },
+  ) =>
+    rubriquesDeLaCase({
+      referentiel,
+      personne: p,
+      jour: 2,
+      source: vide,
+      shift,
+    })
+
+  it('propriété : aucun code en double, et c’est l’union des postes', () => {
+    fc.assert(
+      fc.property(
+        fc.subarray(['Réception', 'Club', 'Veille de nuit', 'Direction']),
+        fc.subarray(['M', 'MI', 'AM', 'N', 'D']),
+        fc.integer({ min: 0, max: 6 }),
+        fc.constantFrom(undefined, 1, 2, 3, 4),
+        (postes, codes, jour, prefere) => {
+          const p = personne({
+            competences: fiche(
+              ...postes.map((n, i): [string, Niveau] => [
+                n,
+                i === 0 ? 'titulaire' : 'occasionnel',
+              ]),
+            ),
+            shifts_autorises: codes.map(idH),
+          })
+          const r = rubriquesDeLaCase({
+            referentiel,
+            personne: p,
+            jour,
+            source: apresMidiMardi,
+          })
+          const u = codesUniques(r, p, referentiel.postes, prefere)
+          const ids = u.codes.map((c) => c.horaire.id)
+          expect(new Set(ids).size).toBe(ids.length)
+          const union = new Set(
+            r.rubriques.flatMap((x) => x.lignes.map((l) => l.horaire.id)),
+          )
+          expect([...ids].sort()).toEqual([...union].sort())
+          for (const c of u.codes) {
+            // Le poste déduit permet le code, et c'est le préféré s'il le
+            // permet.
+            expect(ligneDe(r, c.poste.id, c.horaire.id)).not.toBeNull()
+            if (ligneDe(r, prefere ?? -1, c.horaire.id))
+              expect(c.poste.id).toBe(prefere)
+          }
+        },
+      ),
+      { numRuns: 200 },
+    )
+  })
+
+  it('(a) le poste du shift existant s’il permet le code', () => {
+    const r = rubriquesDe(BASE, {
+      poste_id: idP('Club'),
+      type_shift_id: idH('M'),
+    })
+    expect(posteDeduit(r.rubriques, idH('AM'), idP('Club'))?.nom).toBe('Club')
+  })
+
+  it('(b) sinon le premier poste de la fiche qui le permet, titulaire d’abord', () => {
+    const p = personne({
+      competences: fiche(['Club', 'occasionnel'], ['Réception', 'titulaire']),
+    })
+    const r = rubriquesDe(p)
+    expect(posteDeduit(r.rubriques, idH('M'))?.nom).toBe('Réception')
+    // Préféré qui ne le permet pas : on retombe sur la règle (b).
+    expect(posteDeduit(r.rubriques, idH('M'), idP('Veille de nuit'))?.nom).toBe(
+      'Réception',
+    )
+    expect(posteDeduit(r.rubriques, idH('N'))).toBeUndefined()
+  })
+
+  it('place à pourvoir : son poste d’abord s’il permet le code', () => {
+    const r = rubriquesDe(BASE)
+    const u = codesUniques(r, BASE, referentiel.postes, idP('Club'))
+    expect(u.codes.find((c) => c.horaire.code === 'AM')?.poste.nom).toBe('Club')
+  })
+
+  it('étiquette seulement hors du métier habituel (poste titulaire de référence)', () => {
+    const p = personne({
+      competences: fiche(['Réception', 'titulaire'], ['Club', 'occasionnel']),
+    })
+    const surReception = codesUniques(rubriquesDe(p), p, referentiel.postes)
+    expect(surReception.codes.every((c) => !c.horsHabituel)).toBe(true)
+    const surClub = codesUniques(
+      rubriquesDe(p),
+      p,
+      referentiel.postes,
+      idP('Club'),
+    )
+    expect(surClub.codes.every((c) => c.horsHabituel)).toBe(true)
+    expect(surClub.codes.map((c) => c.postes.map((x) => x.nom))[0]).toEqual([
+      'Réception',
+      'Club',
+    ])
+  })
+
+  it('coupure de 11 h : une fois, choisissable, avec son alerte', () => {
+    const r = rubriquesDeLaCase({
+      referentiel,
+      personne: BASE,
+      jour: 2,
+      source: apresMidiMardi,
+    })
+    const u = codesUniques(r, BASE, referentiel.postes)
+    const matins = u.codes.filter((c) => c.horaire.code === 'M')
+    expect(matins).toHaveLength(1)
+    expect(matins[0].alerte).toBe(
+      'Coupure de 11 h non respectée avec la veille',
     )
   })
 })

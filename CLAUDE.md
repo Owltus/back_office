@@ -2067,15 +2067,22 @@ référence des règles (`docs/regles-hcr.md` là-bas).
     semaine d'avant-avant (`avantAvant`) ; non chargée = borne prudente
     (lundi 0 h de la semaine d'avant). Écart voulu avec le prototype : le
     différentiel ne tient plus sur l'école et les paliers.
-  - **Mode manuel (décision utilisateur du 2026-10-30, révise D16)** : clic
+  - **Mode manuel (décisions utilisateur du 2026-10-30, révise D16)** : clic
     droit (mois, semaine) et volet « Modifier le shift » montrent TOUS les
-    codes de la personne, une rubrique par poste de sa fiche (titulaire, puis
-    dépannage, puis soutien ; `rubriquesDeLaCase`, `codesCase.ts`, chaque
-    rubrique = `codesPermis` pour ce poste), et un code pose le shift sur le
-    poste de SA rubrique : plus de choix de poste préalable (le volet ne le
-    demande que pour un horaire spécifique). Jamais un poste hors fiche, sauf
-    celui du shift existant. La coupure de 11 h (12 h mineur) est permise à
-    la main AVEC son alerte sur la ligne, jamais choisie d'office ; jamais en
+    codes de la personne en UNE liste, chaque code une seule fois (« sinon
+    c'est confusant » : les rubriques par poste, essayées le même jour,
+    répétaient les mêmes codes ; ne pas y revenir), rangée par moment
+    (`grouperHoraires`). Liste = union des postes de la fiche
+    (`rubriquesDeLaCase` = `codesPermis` par poste, brique interne ;
+    `codesUniques`, `codesCase.ts`). Poste DÉDUIT par `posteDeduit` : celui du
+    shift (ou de la place à pourvoir) s'il permet le code, sinon le premier
+    de la fiche (titulaire, dépannage, soutien, ordre des postes) ; étiquette
+    (pastille + nom, `EtiquettePoste`) seulement hors du métier habituel
+    (`posteDeReference`). Volet : code permis sur plusieurs postes = choix
+    segmenté « Réception | Club » sous la liste ; section Poste pour
+    l'horaire spécifique seulement. Jamais un poste hors fiche, sauf celui du
+    shift existant. La coupure de 11 h (12 h mineur) est permise à la main
+    AVEC son alerte sur la ligne, jamais choisie d'office ; jamais en
     automatique (générateur inchangé, le vérificateur signale le shift posé).
     Les autres raisons restent bloquantes. La génération propose,
     l'utilisateur valide (D18).

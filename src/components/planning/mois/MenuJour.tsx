@@ -1,8 +1,9 @@
 /*
  * Menu d'un jour de la vue mois (prototype `MenuCase.tsx`), ouvert au clic
  * ou au clic droit sur une case, au curseur : tous les horaires que la
- * personne peut faire, rangés par casquette (un poste de sa fiche, métier
- * habituel d'abord), pour changer d'un clic ; valider ou remettre en
+ * personne peut faire sur ses postes, chacun une seule fois, rangés par
+ * moment, le poste déduit (étiquette s'il n'est pas son métier habituel),
+ * pour changer d'un clic ; valider ou remettre en
  * proposition, la journée étoile, et l'ouverture de la semaine pour tout
  * modifier (absence, école…).
  */
@@ -19,14 +20,19 @@ import {
 
 import {
   dureeHoraire,
+  grouperHoraires,
   heures,
-  NIVEAUX,
   ROUGE_CODE,
   texteSur,
 } from '#/lib/planning/affichage.ts'
 import type { ShiftOut } from '#/lib/planning/semaine.ts'
-import { ligneDe, rubriquesDeLaCase } from '#/components/planning/codesCase.ts'
-import type { LigneCode, SourceCase } from '#/components/planning/codesCase.ts'
+import {
+  codesUniques,
+  nomLigneCode,
+  rubriquesDeLaCase,
+} from '#/components/planning/codesCase.ts'
+import type { CodeUnique, SourceCase } from '#/components/planning/codesCase.ts'
+import { EtiquettePoste } from '#/components/planning/EtiquettePoste.tsx'
 import { heureAffichee } from '#/lib/planning/temps.ts'
 import type { Horaire, Referentiel, Salarie } from '#/lib/planning/types.ts'
 
@@ -110,33 +116,46 @@ export function MenuJour({
     }
   }, [onFermer])
 
-  // Tous les codes de la personne, une rubrique par poste de sa fiche
-  // (règle unique, coupure de repos choisissable avec son alerte).
-  const r = ecrire
-    ? rubriquesDeLaCase({ referentiel, personne, jour, source, shift })
+  // Tous les codes de la personne, chacun une fois (union de ses postes,
+  // règle unique par poste, coupure de repos choisissable avec son alerte),
+  // le poste déduit : celui du shift, ou de la place, s'il le permet.
+  const placePoste = shift ? undefined : ouverture.posteId
+  const u = ecrire
+    ? codesUniques(
+        rubriquesDeLaCase({ referentiel, personne, jour, source, shift }),
+        personne,
+        referentiel.postes,
+        shift?.poste_id ?? placePoste,
+      )
     : null
-  // Le code de la place à pourvoir, s'il est permis ici : en tête du menu,
-  // pour être posé d'un clic sur son poste (la vue semaine le choisit
-  // d'office). Il n'est pas répété dans sa rubrique.
+  // Le code de la place à pourvoir, s'il est permis sur son poste : en tête
+  // du menu, pour être posé d'un clic (la vue semaine le choisit d'office).
+  // Il n'est pas répété dans la liste.
   const place =
-    !shift && r && ouverture.posteId !== undefined
-      ? ligneDe(r, ouverture.posteId, ouverture.horaireId)
-      : null
+    placePoste !== undefined
+      ? u?.codes.find(
+          (c) =>
+            c.horaire.id === ouverture.horaireId && c.poste.id === placePoste,
+        )
+      : undefined
+  const liste = (u?.codes ?? []).filter((c) => c !== place)
+  const parId = new Map(liste.map((c) => [c.horaire.id, c]))
   const choisir = (action: () => void) => () => {
     onFermer()
     action()
   }
-  const boutonCode = ({ horaire: h, alerte }: LigneCode, posteId: number) => {
-    const actuel = shift?.type_shift_id === h.id && shift.poste_id === posteId
+  const boutonCode = (c: CodeUnique) => {
+    const { horaire: h, alerte, poste } = c
+    const actuel = shift?.type_shift_id === h.id && shift.poste_id === poste.id
     return (
       <button
         key={h.id}
         type="button"
         role="menuitem"
-        aria-label={`${h.code}, ${h.nom}${alerte ? `, ${alerte}` : ''}`}
+        aria-label={nomLigneCode(c)}
         className={ITEM}
         onClick={choisir(() => {
-          if (!actuel) onHoraire(h, posteId)
+          if (!actuel) onHoraire(h, poste.id)
         })}
       >
         <span
@@ -159,7 +178,12 @@ export function MenuJour({
             </span>
           )}
         </span>
-        {actuel && <Check className="size-4 text-primary" />}
+        {c.horsHabituel && <EtiquettePoste poste={poste} />}
+        {actuel ? (
+          <Check className="size-4 shrink-0 text-primary" />
+        ) : (
+          <span className="size-4 shrink-0" />
+        )}
       </button>
     )
   }
@@ -197,10 +221,10 @@ export function MenuJour({
             <div className="flex items-center gap-1.5 px-2 pt-1 pb-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
               Place à pourvoir
               <span className="font-normal tracking-normal normal-case">
-                · {place.rubrique.poste.nom}
+                · {place.poste.nom}
               </span>
             </div>
-            {boutonCode(place.ligne, place.rubrique.poste.id)}
+            {boutonCode(place)}
             <div className="-mx-1 my-1 h-px bg-border" />
           </div>
         )}
@@ -274,53 +298,38 @@ export function MenuJour({
             {ecrire ? 'poste, absence, école…' : 'voir le détail'}
           </span>
         </button>
-        {r?.rubriques.map((rub) => (
-          <div key={rub.poste.id} role="group" aria-label={rub.poste.nom}>
+        {grouperHoraires(liste.map((c) => c.horaire)).map((g) => (
+          <div key={g.libelle} role="group" aria-label={g.libelle}>
             <div className="-mx-1 my-1 h-px bg-border" />
-            <div className="flex items-center gap-1.5 px-2 pt-1 pb-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-              <span
-                className="size-2 shrink-0 rounded-full"
-                style={{ background: rub.poste.couleur }}
-              />
-              <span className="flex-1">{rub.poste.nom}</span>
-              <span className="font-normal tracking-normal normal-case">
-                {rub.niveau ? NIVEAUX[rub.niveau].libelle : 'hors de sa fiche'}
-              </span>
+            <div className="px-2 pt-1 pb-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+              {g.libelle}
             </div>
-            {rub.lignes
-              .filter(
-                (l) =>
-                  !(
-                    place?.rubrique.poste.id === rub.poste.id &&
-                    place.ligne.horaire.id === l.horaire.id
-                  ),
-              )
-              .map((l) => boutonCode(l, rub.poste.id))}
+            {g.horaires.map((h) => boutonCode(parId.get(h.id)!))}
           </div>
         ))}
-        {r && (r.actuel || r.texte) && (
+        {u && (u.actuel || u.texte) && (
           <div className="-mx-1 my-1 h-px bg-border" />
         )}
-        {r?.actuel && (
+        {u?.actuel && (
           <div
             role="menuitem"
             aria-disabled="true"
-            aria-label={`${r.actuel.horaire.code}, actuel, ${r.actuel.texte}`}
+            aria-label={`${u.actuel.horaire.code}, actuel, ${u.actuel.texte}`}
             className="flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground opacity-60"
           >
             <span className="min-w-12 shrink-0 rounded border px-1.5 py-0.5 text-center text-xs font-semibold">
-              {r.actuel.horaire.code}
+              {u.actuel.horaire.code}
             </span>
-            <span className="flex-1 text-xs">actuel · {r.actuel.texte}</span>
+            <span className="flex-1 text-xs">actuel · {u.actuel.texte}</span>
           </div>
         )}
-        {r?.texte && !r.actuel && (
+        {u?.texte && !u.actuel && (
           <div
             role="menuitem"
             aria-disabled="true"
             className="px-2 py-1.5 text-sm text-muted-foreground"
           >
-            {r.texte}
+            {u.texte}
           </div>
         )}
       </div>
