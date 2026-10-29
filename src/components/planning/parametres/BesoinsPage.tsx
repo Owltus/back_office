@@ -289,7 +289,8 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
               Dans quel ordre le planning automatique décide : la loi d'abord,
               puis les personnes nécessaires, puis le matin et le soir et les
               contrats, puis un titulaire avant un dépannage, puis le confort
-              (repos groupés, jours habituels, équité).
+              (repos groupés, jours habituels, partage des week-ends, des soirs
+              et des matins tôt sur les 4 dernières semaines).
             </p>
           </div>
 

@@ -133,7 +133,8 @@ export const POIDS_PRESENCE_MINUTE = 100
 export const POIDS_DEJA_PROPOSE = 5
 /** Bruit de la graine : 0 à 3 par affectation. */
 export const BRUIT_MAX = 3
-/** Soirs et matins tôt : rattrapage compté au plus sur une semaine. */
+/** Soirs et matins tôt : rattrapage compté au plus (écart à sa part sur
+ * les 4 semaines d'avant, plafonné : le palier P5 ne change pas). */
 export const EQUITE_RATTRAPAGE_MAX = 7
 /** Le pire que coûte l'équité pour UN shift ajouté : le week-end déplace la
  * somme des écarts d'au plus 2 (son écart de 1 - part, ceux des autres de
@@ -842,8 +843,8 @@ export function construire(p: Probleme): Construit {
  * Équité (D15), au mieux, jamais obligatoire, entre personnes d'un même
  * groupe (`groupeEquite`, le poste principal). Rien de dur.
  *
- * Week-ends travaillés (samedi ou dimanche), semaine d'avant comprise
- * (`equiteAvant`) : chacun doit suivre sa part (ses heures dues sur celles
+ * Week-ends travaillés (samedi ou dimanche), 4 semaines d'avant comprises
+ * (`equiteAvant`, `SEMAINES_EQUITE`) : chacun doit suivre sa part (ses heures dues sur celles
  * du groupe, un temps partiel en fait moins). Coût sur l'écart à cette part :
  *   total = Σ n_j ;  e_i >= n_i - part_i × total ;  e_i >= part_i × total - n_i
  * coût POIDS_EQUITE × e_i.
@@ -852,8 +853,9 @@ export function construire(p: Probleme): Construit {
  * la résolution dix fois plus longue (des milliers de plannings équivalents
  * à départager). Forme SIMPLIFIÉE, linéaire : chaque soir (matin tôt) coûte
  * POIDS_EQUITE × ce que la personne en a fait de plus que le moins chargé
- * du groupe la semaine d'avant (au plus `EQUITE_RATTRAPAGE_MAX`). La
- * rotation se fait d'une semaine à l'autre, pas dans la semaine.
+ * du groupe sur les 4 semaines d'avant, chacun ramené à sa part comme pour
+ * les week-ends (au plus `EQUITE_RATTRAPAGE_MAX`). La rotation se fait
+ * d'une semaine à l'autre, pas dans la semaine.
  */
 function equite(
   m: Modele,
@@ -877,9 +879,23 @@ function equite(
         (s: SalarieSolveur) => s.equiteAvant.matinsTot,
       ],
     ] as const) {
-      const moins = Math.min(...membres.map(avant))
+      // Écart à sa part (heures dues sur celles du groupe) : sur 4 semaines,
+      // un temps partiel en fait moins sans être en retard.
+      const heures = membres.reduce(
+        (t, s) => t + Math.max(0, s.minutesHebdoContrat),
+        0,
+      )
+      const fait = membres.reduce((t, s) => t + avant(s), 0)
+      const ecartPart = (s: SalarieSolveur) =>
+        heures > 0
+          ? avant(s) - (Math.max(0, s.minutesHebdoContrat) / heures) * fait
+          : avant(s)
+      const moins = Math.min(...membres.map(ecartPart))
       for (const s of membres) {
-        const ecart = Math.min(EQUITE_RATTRAPAGE_MAX, avant(s) - moins)
+        const ecart =
+          Math.round(
+            Math.min(EQUITE_RATTRAPAGE_MAX, ecartPart(s) - moins) * 1000,
+          ) / 1000
         if (ecart <= 0) continue
         for (const c of p.creneaux) {
           const v = x.get(cle(s.id, c.id))

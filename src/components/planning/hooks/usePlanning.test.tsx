@@ -20,6 +20,9 @@ const service = vi.hoisted(() => ({
   fetchSemaine: vi.fn(() =>
     Promise.resolve({ affectations: [], absences: [] }),
   ),
+  fetchSemainePourGeneration: vi.fn(() =>
+    Promise.resolve({ affectations: [], absences: [] }),
+  ),
   appliquerGeneration: vi.fn(() => Promise.resolve(1)),
 }))
 

@@ -2058,7 +2058,11 @@ référence des règles (`docs/regles-hcr.md` là-bas).
     plus) > titulaire avant dépannage (`coutDepannage` = par minute +
     `PART_FIXE_DEPANNAGE` au-dessus de tout le confort, aucune prime de jour
     habituel sur un dépannage) > confort (équité week-ends, soirs, matins
-    tôt ; repos accolés). Soutien jamais seul (D13-D14). Un poids changé :
+    tôt ; repos accolés). Équité sur les 4 dernières semaines à poids égal
+    (`SEMAINES_EQUITE`, `equitesAvant`, lues en une fois par
+    `fetchSemainePourGeneration` ; semaine hors contrat ou en congés = sa
+    part ; soirs et matins tôt ramenés à la part de contrat ; décision
+    utilisateur du 2026-10-29). Soutien jamais seul (D13-D14). Un poids changé :
     relire `coutPlaceVide` et les tests de paliers. Repos de 35 h lu avec la
     semaine d'avant-avant (`avantAvant`) ; non chargée = borne prudente
     (lundi 0 h de la semaine d'avant). Écart voulu avec le prototype : le

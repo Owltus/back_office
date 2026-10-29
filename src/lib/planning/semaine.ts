@@ -22,6 +22,7 @@ import {
   travail,
   cle,
   cleAEviter,
+  SEMAINES_EQUITE,
 } from '#/lib/planning/modele.ts'
 import type {
   AffectationSolveur,
@@ -175,6 +176,11 @@ export interface DonneesSemaine {
    * non lue, la semaine d'avant est supposée précédée d'un service fini le
    * lundi à 0 h (prudent : un lundi libre ne fait pas à lui seul 35 h). */
   avantAvant?: Affectation[]
+  /** Équité (D15) : shifts des `SEMAINES_EQUITE` semaines d'avant (chacun
+   * porte son `lundi`), lus pour une génération seulement
+   * (`fetchSemainePourGeneration`), avec les absences sur la même étendue.
+   * Absent : seule la semaine d'avant compte. */
+  historique?: Affectation[]
 }
 
 export interface Contexte {
@@ -719,21 +725,84 @@ export function posteEquite(x: Salarie): number | null {
   return x.competences.find((c) => c.niveau === 'titulaire')?.poste_id ?? null
 }
 
-/** Ce que chacun a déjà fait la semaine d'avant (week-end, soirs, matins
- * tôt) : compté avec la semaine générée. En génération du mois, chaque
- * semaine voit celle qu'on vient de faire, d'où la rotation. */
-export function equiteAvant(
+/** Jours de la semaine `lundi` où la personne est là : sous contrat et sans
+ * absence (jour posé ou absence de la semaine type). */
+function joursPresents(
+  x: Salarie,
+  lundi: string,
+  absences: Map<number, Map<string, number>>,
+): number {
+  const absents = joursAbsents(x, lundi, absences)
+  const hors = joursHorsContrat(x, lundi)
+  let n = 0
+  for (let j = 0; j < 7; j++) if (!absents.has(j) && !hors.has(j)) n++
+  return n
+}
+
+const arrondi = (v: number) => Math.round(v * 1000) / 1000
+
+/**
+ * Ce que chacun d'UN groupe d'équité a déjà fait (week-ends, soirs, matins
+ * tôt) sur les `SEMAINES_EQUITE` semaines d'avant, à poids égal : compté
+ * avec la semaine générée. En génération du mois, chaque semaine voit celles
+ * qu'on vient de faire, d'où la rotation.
+ *
+ * Poids égal plutôt que décroissant : la fenêtre de 4 semaines oublie déjà
+ * le passé lointain, un poids égal se dit en une phrase à l'écran (sur les
+ * 4 dernières semaines), et un week-end fait il y a 3 semaines pèse autant
+ * pour la personne qu'un week-end fait la semaine dernière.
+ *
+ * Une semaine où la personne n'était pas là (moins de 4 jours sous contrat
+ * et sans absence : arrivée récente, congés) ne la met pas en retard : elle
+ * compte pour SA PART de ce que le groupe a fait cette semaine-là, au
+ * prorata des heures de contrat (`minutes`), comme si elle avait été là,
+ * et au moins pour ce qu'elle a vraiment fait.
+ */
+export function equitesAvant(
   ctx: Contexte,
-  avant: Affectation[],
-  salarieId: number,
-): EquiteFaite {
-  const siens = avant.filter((a) => a.salarie_id === salarieId)
-  const r = { weekends: 0, soirs: 0, matinsTot: 0 }
-  if (siens.some((a) => a.jour >= 5)) r.weekends = 1
-  for (const a of siens) {
-    const e = equiteDe(ctx, a)
-    if (e.soir) r.soirs++
-    if (e.matinTot) r.matinsTot++
+  d: Pick<DonneesSemaine, 'avant' | 'historique'>,
+  membres: Array<{ x: Salarie; minutes: number }>,
+): Map<number, EquiteFaite> {
+  const r = new Map<number, EquiteFaite>(
+    membres.map(({ x }) => [x.id, { weekends: 0, soirs: 0, matinsTot: 0 }]),
+  )
+  const champs = ['weekends', 'soirs', 'matinsTot'] as const
+  const nb = d.historique ? SEMAINES_EQUITE : 1
+  for (let k = 1; k <= nb; k++) {
+    const lundi = ajouterJours(ctx.lundi, -7 * k)
+    const semaine = d.historique
+      ? d.historique.filter((a) => a.lundi === lundi)
+      : d.avant
+    const faits = membres.map(({ x }) => {
+      const siens = semaine.filter((a) => a.salarie_id === x.id)
+      const e = { weekends: 0, soirs: 0, matinsTot: 0 }
+      if (siens.some((a) => a.jour >= 5)) e.weekends = 1
+      for (const a of siens) {
+        const q = equiteDe(ctx, a)
+        if (q.soir) e.soirs++
+        if (q.matinTot) e.matinsTot++
+      }
+      return e
+    })
+    const la = membres.map(
+      ({ x }) => joursPresents(x, lundi, ctx.absences) >= 4,
+    )
+    const heures = membres.reduce(
+      (t, m, i) => t + (la[i] ? Math.max(0, m.minutes) : 0),
+      0,
+    )
+    membres.forEach((m, i) => {
+      const cumul = r.get(m.x.id)!
+      const sienne = Math.max(0, m.minutes)
+      for (const c of champs) {
+        let part = faits[i][c]
+        if (!la[i] && heures + sienne > 0) {
+          const total = faits.reduce((t, e, j) => t + (la[j] ? e[c] : 0), 0)
+          part = Math.max(part, (total * sienne) / (heures + sienne))
+        }
+        cumul[c] = arrondi(cumul[c] + part)
+      }
+    })
   }
   return r
 }
@@ -1124,14 +1193,23 @@ export function preparerGeneration(
     )
   }
   salaries = avecSemainesVoisines(d2, ctx, salaries)
+  const groupes = new Map<number, Array<{ x: Salarie; minutes: number }>>()
   for (const x of ctx.staff) {
     const sol = salaries.get(x.id)
     const groupe = posteEquite(x)
-    if (sol && groupe !== null)
+    if (!sol || groupe === null) continue
+    groupes.set(groupe, [
+      ...(groupes.get(groupe) ?? []),
+      { x, minutes: sol.minutesHebdoContrat },
+    ])
+  }
+  for (const [groupe, membres] of groupes) {
+    const faits = equitesAvant(ctx, d2, membres)
+    for (const { x } of membres)
       salaries.set(x.id, {
-        ...sol,
+        ...salaries.get(x.id)!,
         groupeEquite: String(groupe),
-        equiteAvant: equiteAvant(ctx, d2.avant, x.id),
+        equiteAvant: faits.get(x.id)!,
       })
   }
   const { lien, soutien: enSoutien } = correspondances(ctx, besoins, salaries)

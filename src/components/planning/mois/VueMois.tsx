@@ -118,6 +118,9 @@ const MSG_VERROU =
 const MSG_HORS =
   'Hors de son contrat ce jour-là (arrivée ou fin de contrat) : voir sa fiche.'
 const MSG_CALCUL = 'Calcul en cours : réessayez dans un instant.'
+/** Équité (D15) : sur quoi le moteur partage, dit après le résumé du mois. */
+const PARTAGE_4_SEMAINES =
+  'Le planning automatique partage les week-ends, les soirs et les matins tôt sur les 4 dernières semaines.'
 const MSG_DOUBLON =
   'Cette personne a déjà un shift ce jour-là : un seul par jour.'
 
@@ -334,7 +337,7 @@ export function VueMois({
       // qu'on le ferme.
       notifier(
         messageGeneration(trous, 'Mois', proposes) +
-          (equite ? ` ${equite}` : '') +
+          (equite ? ` ${equite} ${PARTAGE_4_SEMAINES}` : '') +
           noteNonTouchees,
         trous ? 'attention' : 'info',
         trous || equite ? GARDER : undefined,

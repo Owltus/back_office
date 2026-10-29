@@ -137,10 +137,16 @@ export interface SalarieSolveur {
   /** Équité (D15) : personnes comparées entre elles (poste principal) ;
    * null : hors équité (extra, forfait jours, sans poste tenu seul). */
   groupeEquite: string | null
-  /** Équité : ce qui est déjà fait avant la période générée (semaine
-   * d'avant), compté avec elle. */
+  /** Équité : ce qui est déjà fait sur les `SEMAINES_EQUITE` semaines avant
+   * la semaine générée, compté avec elle. Une semaine où la personne n'était
+   * pas là (hors contrat, absente) compte pour sa part (`equitesAvant`) :
+   * peut être fractionnaire. */
   equiteAvant: EquiteFaite
 }
+
+/** Équité (D15) : semaines d'avant comptées, à poids égal (mois glissant,
+ * décision utilisateur du 2026-10-29). */
+export const SEMAINES_EQUITE = 4
 
 export interface EquiteFaite {
   weekends: number

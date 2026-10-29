@@ -10,6 +10,7 @@
  */
 
 import { refusDroits } from '#/lib/planning/erreurs.ts'
+import { SEMAINES_EQUITE } from '#/lib/planning/modele.ts'
 import type { NouveauShift } from '#/lib/planning/semaine.ts'
 import { ajouterJours, lundiDe } from '#/lib/planning/temps.ts'
 import type {
@@ -169,6 +170,19 @@ export function fetchSemaine(lundi: string): Promise<DonneesShifts> {
     ajouterJours(lundi, -7),
     ajouterJours(lundi, 13),
   )
+}
+
+/** Pour une génération : comme `fetchSemaine`, plus les `SEMAINES_EQUITE`
+ * semaines d'avant (équité, mois glissant) et leurs absences, en UNE
+ * lecture. Pas mise en cache : la génération relit toujours la base. */
+export function fetchSemainePourGeneration(
+  lundi: string,
+): Promise<DonneesShifts> {
+  const premier = ajouterJours(lundi, -7 * Math.max(2, SEMAINES_EQUITE))
+  const lundis: string[] = []
+  for (let l = premier; l <= ajouterJours(lundi, 7); l = ajouterJours(l, 7))
+    lundis.push(l)
+  return fetchShifts(lundis, premier, ajouterJours(lundi, 13))
 }
 
 export async function fetchAbsencesSalarie(

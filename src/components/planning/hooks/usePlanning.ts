@@ -13,6 +13,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { codeErreur, messageErreur } from '#/lib/planning/erreurs.ts'
 import { planningKeys } from '#/lib/planning/keys.ts'
+import { SEMAINES_EQUITE } from '#/lib/planning/modele.ts'
 import {
   aJoursFixes,
   analyser,
@@ -29,6 +30,7 @@ import {
   fetchEtatSemaine,
   fetchReferentiel,
   fetchSemaine,
+  fetchSemainePourGeneration,
 } from '#/lib/planning/service.ts'
 import type { DonneesShifts } from '#/lib/planning/service.ts'
 import { resoudre } from '#/lib/planning/solveur.ts'
@@ -109,6 +111,24 @@ export function donneesSemaine(
     avant: shifts.affectations.filter((a) => a.lundi === avant),
     apres: shifts.affectations.filter((a) => a.lundi === apres),
     avantAvant: shifts.affectations.filter((a) => a.lundi === avantAvant),
+  }
+}
+
+/** Pour une génération : la semaine et l'historique d'équité (les
+ * `SEMAINES_EQUITE` semaines d'avant, lues par `fetchSemainePourGeneration`). */
+export function donneesGeneration(
+  lundi: string,
+  referentiel: Referentiel,
+  shifts: DonneesShifts,
+): DonneesSemaine {
+  const fenetre = new Set(
+    Array.from({ length: SEMAINES_EQUITE }, (_, k) =>
+      ajouterJours(lundi, -7 * (k + 1)),
+    ),
+  )
+  return {
+    ...donneesSemaine(lundi, referentiel, shifts),
+    historique: shifts.affectations.filter((a) => fenetre.has(a.lundi)),
   }
 }
 
@@ -212,9 +232,9 @@ export function useGenerer() {
           queryFn: fetchReferentiel,
           staleTime: 0,
         }),
-        fetchSemaine(lundi),
+        fetchSemainePourGeneration(lundi),
       ])
-      const d = donneesSemaine(lundi, referentiel, shifts)
+      const d = donneesGeneration(lundi, referentiel, shifts)
       const aujourdhui = options.aujourdhui ?? aujourdhuiParis()
       const g = preparerGeneration(d, {
         ...options,
