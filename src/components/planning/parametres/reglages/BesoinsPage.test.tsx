@@ -241,9 +241,7 @@ describe('Besoins', () => {
       for (const b of ref.besoins) if (b.poste_id === id) b.renfort = 0
       etat.referentiel = ref
       monter(<BesoinsPage />)
-      fireEvent.click(
-        screen.getByRole('radio', { name: 'Apprentis et stagiaires' }),
-      )
+      fireEvent.click(screen.getByRole('radio', { name: 'En soutien' }))
       return poste('Direction')
     }
     const totaux = (r: ReturnType<typeof poste>) =>
@@ -257,7 +255,7 @@ describe('Besoins', () => {
       expect(totaux(d)).toEqual(['0', '0', '0', '0', '0', '0', '0'])
       expect(
         d.getByRole('button', {
-          name: 'Apprentis et stagiaires Lundi, Direction : 1 sans personne à côté, retirer',
+          name: 'En soutien Lundi, Direction : 1 sans personne à côté, retirer',
         }),
       ).toBeTruthy()
       expect(d.getByText(/demandés 5 jours sans personne à côté/)).toBeTruthy()
@@ -267,7 +265,7 @@ describe('Besoins', () => {
       const d = orphelins()
       fireEvent.click(
         d.getByRole('button', {
-          name: 'Apprentis et stagiaires Mardi, Direction : 1 sans personne à côté, retirer',
+          name: 'En soutien Mardi, Direction : 1 sans personne à côté, retirer',
         }),
       )
       await waitFor(() => expect(service.reglerBesoin).toHaveBeenCalledTimes(1))
@@ -300,14 +298,12 @@ describe('Besoins', () => {
 
     it('avec une place en plus à côté : le compteur reste, et compte', () => {
       monter(<BesoinsPage />)
-      fireEvent.click(
-        screen.getByRole('radio', { name: 'Apprentis et stagiaires' }),
-      )
+      fireEvent.click(screen.getByRole('radio', { name: 'En soutien' }))
       const d = poste('Direction')
       expect(totaux(d)).toEqual(['1', '1', '1', '1', '1', '0', '0'])
       expect(
         d.getByRole('button', {
-          name: 'Apprentis et stagiaires Lundi, Direction : un de moins',
+          name: 'En soutien Lundi, Direction : un de moins',
         }),
       ).toBeTruthy()
       expect(d.queryByText(/sans personne à côté/)).toBeNull()

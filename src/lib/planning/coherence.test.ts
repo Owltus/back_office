@@ -977,7 +977,7 @@ describe('verifierReglages, points complets (test de mutation)', () => {
       point(
         'soutien:2',
         'besoins',
-        "Le poste Bar demande des apprentis ou stagiaires (mercredi), mais aucun apprenti ni stagiaire de l'équipe ne tient ce poste.",
+        "Le poste Bar demande des personnes en soutien (mercredi), mais personne de l'équipe n'a le niveau Soutien sur ce poste.",
         { page: '/planning/besoins', cible: 'soutien-2' },
       ),
     )
@@ -994,7 +994,7 @@ describe('verifierReglages, points complets (test de mutation)', () => {
       point(
         'soutien-seul:2',
         'besoins',
-        'Le poste Bar demande des apprentis ou stagiaires sans personne à côté (mercredi et vendredi). Ces places ne seront jamais pourvues : retirez-les ou ajoutez une personne nécessaire.',
+        'Le poste Bar demande des personnes en soutien sans personne à côté (mercredi et vendredi). Ces places ne seront jamais pourvues : retirez-les ou ajoutez une personne nécessaire.',
         { page: '/planning/besoins', cible: 'soutien-2' },
       ),
     )

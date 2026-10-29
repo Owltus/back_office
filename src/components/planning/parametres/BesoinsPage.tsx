@@ -96,8 +96,8 @@ const COUCHES: ReadonlyArray<{
   },
   {
     valeur: 'soutien',
-    libelle: 'Apprentis et stagiaires',
-    aide: 'Les places pour un apprenti ou un stagiaire. Ils ne comptent pas seuls : il faut au moins une personne nécessaire.',
+    libelle: 'En soutien',
+    aide: 'Les places pour une personne au niveau Soutien sur ce poste, souvent un apprenti ou un stagiaire qui apprend. Elle ne compte pas seule : il faut au moins une personne nécessaire. Un apprenti ou un stagiaire au niveau Titulaire compte comme une personne nécessaire.',
   },
   {
     valeur: 'renfort',

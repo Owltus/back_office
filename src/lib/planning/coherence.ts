@@ -616,7 +616,7 @@ export function verifierReglages(
     )
   }
 
-  // Apprentis et stagiaires demandés là où personne ne l'est. Seuls
+  // Soutien demandé là où personne n'a ce niveau. Seuls
   // comptent ceux qui ont une personne autonome possible à côté (nécessaire
   // ou en plus) : les autres ne sont jamais placés, ce que dit le point
   // suivant.
@@ -630,12 +630,12 @@ export function verifierReglages(
       `soutien:${p.id}`,
       'a-voir',
       'besoins',
-      `Le poste ${p.nom} demande des apprentis ou stagiaires (${listeJours(jours)}), mais aucun apprenti ni stagiaire de l'équipe ne tient ce poste.`,
+      `Le poste ${p.nom} demande des personnes en soutien (${listeJours(jours)}), mais personne de l'équipe n'a le niveau Soutien sur ce poste.`,
       `soutien-${p.id}`,
     )
   }
 
-  // Apprentis et stagiaires demandés sans personne nécessaire ni en plus :
+  // Soutien demandé sans personne nécessaire ni en plus :
   // jamais placés (un apprenti n'est jamais seul).
   for (const p of r.postes) {
     const jours = valides
@@ -646,7 +646,7 @@ export function verifierReglages(
       `soutien-seul:${p.id}`,
       'a-voir',
       'besoins',
-      `Le poste ${p.nom} demande des apprentis ou stagiaires sans personne à côté (${listeJours(jours)}). Ces places ne seront jamais pourvues : retirez-les ou ajoutez une personne nécessaire.`,
+      `Le poste ${p.nom} demande des personnes en soutien sans personne à côté (${listeJours(jours)}). Ces places ne seront jamais pourvues : retirez-les ou ajoutez une personne nécessaire.`,
       `soutien-${p.id}`,
     )
   }
