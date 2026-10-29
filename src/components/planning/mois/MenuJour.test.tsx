@@ -16,7 +16,10 @@ import { MenuJour } from '#/components/planning/mois/MenuJour.tsx'
 const LUNDI = '2026-11-02'
 const { referentiel, absences } = hotelDemo(LUNDI)
 
-function rendre(ref: Referentiel, place?: { posteId: number }) {
+function rendre(
+  ref: Referentiel,
+  place?: { posteId: number; horaireId?: number | null },
+) {
   const semaine = analyser({
     lundi: LUNDI,
     referentiel: ref,
@@ -94,6 +97,32 @@ describe('MenuJour : code actuel non permis', () => {
       expect.objectContaining({ code: 'AM' }),
       3,
     )
+  })
+
+  it('place à pourvoir : son code en tête, une seule fois, posé d’un clic', () => {
+    const am = referentiel.horaires.find((h) => h.code === 'AM')!
+    const { onHoraire } = rendre(referentiel, {
+      posteId: 3,
+      horaireId: am.id,
+    })
+    const groupe = screen.getByRole('group', { name: 'Place à pourvoir' })
+    const items = screen.getAllByRole('menuitem')
+    // Premier élément du menu : le code de la place, focalisé à l'ouverture.
+    expect(items[0].getAttribute('aria-label')).toBe('AM, Après-midi')
+    expect(groupe.contains(items[0])).toBe(true)
+    expect(
+      screen.getAllByRole('menuitem', { name: 'AM, Après-midi' }),
+    ).toHaveLength(1)
+    fireEvent.click(items[0])
+    expect(onHoraire).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'AM' }),
+      3,
+    )
+  })
+
+  it('sans place : pas de groupe « Place à pourvoir »', () => {
+    rendre(referentiel, { posteId: 3 })
+    expect(screen.queryByRole('group', { name: 'Place à pourvoir' })).toBeNull()
   })
 
   it('code encore permis : pas de ligne « actuel »', () => {

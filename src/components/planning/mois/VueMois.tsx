@@ -376,6 +376,7 @@ export function VueMois({
     y: number,
     clicDroit: boolean,
     posteId?: number,
+    horaireId?: number | null,
   ) => {
     const { lundi } = reperer(date)
     if (!droits.ecrire) {
@@ -391,7 +392,7 @@ export function VueMois({
       return notifier(MSG_HORS, 'attention')
     }
     if (pasMaintenant()) return
-    if (clicDroit) return setMenu({ salarieId, date, x, y, posteId })
+    if (clicDroit) return setMenu({ salarieId, date, x, y, posteId, horaireId })
     const { jour } = reperer(date)
     const shift = semaines
       .get(lundi)
@@ -983,7 +984,15 @@ export function VueMois({
           onPlacer={
             droits.ecrire
               ? (d) =>
-                  ouvrirJour(d.salarieId, d.date, d.x, d.y, true, d.posteId)
+                  ouvrirJour(
+                    d.salarieId,
+                    d.date,
+                    d.x,
+                    d.y,
+                    true,
+                    d.posteId,
+                    d.horaireId,
+                  )
               : undefined
           }
         />

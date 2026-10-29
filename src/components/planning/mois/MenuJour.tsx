@@ -39,6 +39,8 @@ export interface OuvertureMenu {
   y: number
   /** Place à pourvoir : le menu s'ouvre sur son poste (case sans shift). */
   posteId?: number
+  /** Et sur son code : proposé en tête, sous « Place à pourvoir ». */
+  horaireId?: number | null
 }
 
 const ITEM =
@@ -116,7 +118,13 @@ export function MenuJour({
   const permis = ecrire
     ? codesDeLaCase({ referentiel, personne, posteId, jour, source })
     : null
-  const proposes = permis?.codes ?? []
+  const tous = permis?.codes ?? []
+  // Le code de la place à pourvoir, s'il est permis ici : en tête du menu,
+  // pour être posé d'un clic (la vue semaine le choisit d'office).
+  const codePlace = shift
+    ? undefined
+    : tous.find((h) => h.id === ouverture.horaireId)
+  const proposes = tous.filter((h) => h.id !== codePlace?.id)
   // Le code actuel du shift qui n'est plus permis ici : sa propre ligne,
   // grisée, pas de doublon parmi les codes écartés.
   const horsPermis = permis
@@ -129,6 +137,36 @@ export function MenuJour({
     onFermer()
     action()
   }
+  const boutonCode = (h: Horaire) => (
+    <button
+      key={h.id}
+      type="button"
+      role="menuitem"
+      aria-label={`${h.code}, ${h.nom}`}
+      className={ITEM}
+      onClick={choisir(() => {
+        if (shift?.type_shift_id !== h.id && posteId !== undefined)
+          onHoraire(h, posteId)
+      })}
+    >
+      <span
+        className="min-w-12 shrink-0 rounded px-1.5 py-0.5 text-center text-xs font-semibold"
+        style={{
+          background: h.couleur,
+          color: h.code_rouge ? ROUGE_CODE : texteSur(h.couleur),
+        }}
+      >
+        {h.code}
+      </span>
+      <span className="flex-1 text-sm tabular-nums">
+        {heureAffichee(h.debut)}–{heureAffichee(h.fin)} ·{' '}
+        {heures(dureeHoraire(h.debut, h.fin) - h.pause)}
+      </span>
+      {shift?.type_shift_id === h.id && (
+        <Check className="size-4 text-primary" />
+      )}
+    </button>
+  )
 
   return (
     <>
@@ -150,6 +188,15 @@ export function MenuJour({
         <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
           {titre}
         </div>
+        {codePlace && (
+          <div role="group" aria-label="Place à pourvoir">
+            <div className="px-2 pt-1 pb-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+              Place à pourvoir
+            </div>
+            {boutonCode(codePlace)}
+            <div className="-mx-1 my-1 h-px bg-border" />
+          </div>
+        )}
         {ecrire && onVider && (
           <button
             type="button"
@@ -226,36 +273,7 @@ export function MenuJour({
             <div className="px-2 pt-1 pb-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
               {g.libelle}
             </div>
-            {g.horaires.map((h) => (
-              <button
-                key={h.id}
-                type="button"
-                role="menuitem"
-                aria-label={`${h.code}, ${h.nom}`}
-                className={ITEM}
-                onClick={choisir(() => {
-                  if (shift?.type_shift_id !== h.id && posteId !== undefined)
-                    onHoraire(h, posteId)
-                })}
-              >
-                <span
-                  className="min-w-12 shrink-0 rounded px-1.5 py-0.5 text-center text-xs font-semibold"
-                  style={{
-                    background: h.couleur,
-                    color: h.code_rouge ? ROUGE_CODE : texteSur(h.couleur),
-                  }}
-                >
-                  {h.code}
-                </span>
-                <span className="flex-1 text-sm tabular-nums">
-                  {heureAffichee(h.debut)}–{heureAffichee(h.fin)} ·{' '}
-                  {heures(dureeHoraire(h.debut, h.fin) - h.pause)}
-                </span>
-                {shift?.type_shift_id === h.id && (
-                  <Check className="size-4 text-primary" />
-                )}
-              </button>
-            ))}
+            {g.horaires.map(boutonCode)}
           </div>
         ))}
         {permis && (ecartes.length > 0 || permis.texte || horsPermis) && (
