@@ -26,11 +26,8 @@ import { ChoixCodes } from '#/components/planning/parametres/reglages/ChoixCodes
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
-import {
-  horairesDuPoste,
-  NIVEAUX,
-  postesDuGroupe,
-} from '#/lib/planning/affichage.ts'
+import { NIVEAUX, postesDuGroupe } from '#/lib/planning/affichage.ts'
+import { codesDuPoste } from '#/lib/planning/eligibilite.ts'
 import { resume } from '#/lib/planning/regles.ts'
 import type { LigneRegle } from '#/lib/planning/regles.ts'
 import { estEcole } from '#/lib/planning/semaine.ts'
@@ -184,9 +181,9 @@ export function SectionHoraires({
   // visible pour pouvoir le retirer.
   const permis = new Set(
     b.competences.flatMap((c) =>
-      horairesDuPoste(
-        referentiel.horaires,
+      codesDuPoste(
         referentiel.postes.find((p) => p.id === c.poste_id),
+        referentiel.horaires,
       ).map((h) => h.id),
     ),
   )

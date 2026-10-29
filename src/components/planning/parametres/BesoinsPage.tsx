@@ -51,7 +51,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '#/components/ui/popover.tsx'
-import { heures, horairesDuPoste, texteSur } from '#/lib/planning/affichage.ts'
+import { heures, texteSur } from '#/lib/planning/affichage.ts'
+import { codesDuPoste } from '#/lib/planning/eligibilite.ts'
 import { planningKeys } from '#/lib/planning/keys.ts'
 import { alerteBesoin } from '#/lib/planning/regles.ts'
 import { reglerBesoin } from '#/lib/planning/service.ts'
@@ -354,7 +355,7 @@ function CartePoste({
     () => referentiel.besoins.filter((b) => b.poste_id === poste.id),
     [referentiel.besoins, poste.id],
   )
-  const possibles = horairesDuPoste(referentiel.horaires, poste)
+  const possibles = codesDuPoste(poste, referentiel.horaires)
   const lignes = lignesDuPoste(siens, referentiel.horaires, gardees)
   const aAjouter = horairesAAjouter(possibles, lignes)
   const restreint = poste.horaires_autorises.length > 0

@@ -90,17 +90,6 @@ export function texteSur(couleur: string): string {
   return lum > 0.62 ? '#111827' : '#ffffff'
 }
 
-/** Codes horaires proposés pour un poste (tous s'il n'en restreint aucun). */
-export function horairesDuPoste<T extends { id: number }>(
-  horaires: T[],
-  poste?: Poste,
-): T[] {
-  const autorises = poste?.horaires_autorises ?? []
-  return autorises.length
-    ? horaires.filter((h) => autorises.includes(h.id))
-    : horaires
-}
-
 /** Familles de codes, dans l'ordre de la journée, puis « à part » (direction,
  * supervision). Ordre des menus, du volet et de la page Horaires
  * (demande utilisateur du 2026-10-28 : « bien carré, par couleur, par

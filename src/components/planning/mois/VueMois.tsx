@@ -409,6 +409,13 @@ export function VueMois({
     semaines.get(lundi)?.bilan.find((b) => b.salarie_id === salarieId)
 
   const fermerMenu = useCallback(() => setMenu(null), [])
+  // La semaine d'une case et ses voisines chargées : coupure de repos avec
+  // le dimanche d'avant ou le lundi d'après.
+  const sourceDe = (lundi: string) => ({
+    semaine: semaines.get(lundi),
+    avant: semaines.get(ajouterJours(lundi, -7)),
+    apres: semaines.get(ajouterJours(lundi, 7)),
+  })
 
   const champs = (s: ShiftOut): ShiftSaisi => ({
     salarie_id: s.salarie_id,
@@ -809,8 +816,9 @@ export function VueMois({
           ouverture={menu}
           titre={`${personneMenu.prenom} ${personneMenu.nom} · ${dateLongue(menu.date)}`}
           personne={personneMenu}
-          horaires={referentiel.horaires}
-          postes={referentiel.postes}
+          referentiel={referentiel}
+          jour={reperesMenu.jour}
+          source={sourceDe(reperesMenu.lundi)}
           shift={shiftMenu}
           ecrire={droits.ecrire}
           onHoraire={(h, posteId) =>
@@ -866,6 +874,7 @@ export function VueMois({
           edition={edition.edition}
           lundi={edition.lundi}
           referentiel={referentiel}
+          source={sourceDe(edition.lundi)}
           dateEnLettres
           absence={
             edition.edition.mode === 'creation'

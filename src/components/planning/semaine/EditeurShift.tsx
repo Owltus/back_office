@@ -39,6 +39,8 @@ import {
   NIVEAUX,
   texteSur,
 } from '#/lib/planning/affichage.ts'
+import { codesDuPoste, posteDeReference } from '#/lib/planning/eligibilite.ts'
+import type { CodesPermis } from '#/lib/planning/eligibilite.ts'
 import { estEcole } from '#/lib/planning/semaine.ts'
 import type { ShiftOut } from '#/lib/planning/semaine.ts'
 import type { ShiftSaisi } from '#/lib/planning/service.ts'
@@ -50,14 +52,12 @@ import {
   presence,
 } from '#/lib/planning/temps.ts'
 import { JOURS } from '#/lib/planning/types.ts'
-import type { Referentiel } from '#/lib/planning/types.ts'
+import type { Horaire, Referentiel } from '#/lib/planning/types.ts'
 import { cn } from '#/lib/utils.ts'
 import { CodeRegle } from '#/components/planning/semaine/PanneauAlertes.tsx'
-import {
-  horairesPermis,
-  NEUTRE,
-  travailCode,
-} from '#/components/planning/semaine/edition.ts'
+import { NEUTRE, travailCode } from '#/components/planning/semaine/edition.ts'
+import { codesDeLaCase } from '#/components/planning/codesCase.ts'
+import type { SourceCase } from '#/components/planning/codesCase.ts'
 
 export type Edition =
   | { mode: 'creation'; salarie_id: number; jour: number }
@@ -95,6 +95,7 @@ export function EditeurShift({
   lundi,
   referentiel,
   absence,
+  source,
   onFermer,
   onCreer,
   onModifier,
@@ -110,6 +111,8 @@ export function EditeurShift({
   referentiel: Referentiel
   /** Absence déjà posée sur le jour (création). */
   absence: { motif_id: number | null; fixe: boolean } | null
+  /** Ce que l'écran sait de la semaine (codes permis, coupure de repos). */
+  source: SourceCase
   onFermer: () => void
   onCreer: (s: ShiftSaisi) => void
   onModifier: (id: number, s: Partial<ShiftSaisi>) => void
@@ -126,14 +129,39 @@ export function EditeurShift({
   const jourInitial =
     existant?.jour ?? (edition.mode === 'creation' ? edition.jour : 0)
   const posteParDefaut =
-    existant?.poste_id ??
-    personne?.competences.find((c) => c.niveau === 'titulaire')?.poste_id ??
-    personne?.competences.at(0)?.poste_id ??
-    postes.at(0)?.id ??
-    0
+    (personne
+      ? posteDeReference(personne, postes, existant ?? undefined)
+      : (existant?.poste_id ?? postes.at(0)?.id)) ?? 0
+  // La règle unique des codes (`eligibilite.ts`), sans repli. Le shift
+  // modifié ne compte pas comme voisin de lui-même.
+  const permisPour = (
+    posteId: number,
+    salarieId: number,
+    jour: number,
+  ): CodesPermis<Horaire> => {
+    const s = salaries.find((x) => x.id === salarieId)
+    return s
+      ? codesDeLaCase({
+          referentiel,
+          personne: s,
+          posteId,
+          jour,
+          source,
+          sauf: existant?.id,
+        })
+      : {
+          codes: codesDuPoste(
+            postes.find((p) => p.id === posteId),
+            horaires,
+          ),
+          raison: null,
+          texte: null,
+          ecartes: [],
+        }
+  }
   const horaireInitial = existant
     ? undefined
-    : horairesPermis(posteParDefaut, personne, jourInitial, horaires, postes)[0]
+    : permisPour(posteParDefaut, salarieInitial, jourInitial).codes.at(0)
 
   const [b, setB] = useState<Brouillon>(() => ({
     salarie_id: salarieInitial,
@@ -180,22 +208,17 @@ export function EditeurShift({
   const motifChoisi = motifs.find((m) => m.id === motif)
 
   // Changer de poste ou de personne : un code qui n'y est plus permis cède la
-  // place au premier permis (le code d'origine d'un shift reste accepté).
+  // place au premier permis.
   const changerQui = (
     champs: Partial<Pick<Brouillon, 'poste_id' | 'salarie_id'>>,
   ) => {
     const suite = { ...b, ...champs }
-    const permis = horairesPermis(
+    const permis = permisPour(
       suite.poste_id,
-      salaries.find((s) => s.id === suite.salarie_id),
+      suite.salarie_id,
       suite.jour,
-      horaires,
-      postes,
-    )
-    const garde =
-      libre ||
-      permis.some((h) => h.id === suite.horaire_id) ||
-      suite.horaire_id === existant?.type_shift_id
+    ).codes
+    const garde = libre || permis.some((h) => h.id === suite.horaire_id)
     if (garde) return maj(champs)
     const premier = permis.at(0)
     if (premier) {
@@ -284,12 +307,17 @@ export function EditeurShift({
     }
   }
 
-  // Même règle que le clic droit (décision utilisateur du 2026-10-28 : « que
-  // tout soit bien attribué ») : les codes du poste, réduits à ceux de la
-  // fiche de la personne s'il y en a ; l'horaire actuel reste visible.
-  const qui = salaries.find((s) => s.id === b.salarie_id)
-  const codes = horairesPermis(b.poste_id, qui, b.jour, horaires, postes)
-    .concat(horaires.filter((h) => h.id === existant?.type_shift_id))
+  // Même règle que le clic droit et que le moteur (`codesPermis`). Le code
+  // actuel d'un shift reste visible tant que la case n'a pas changé : c'est
+  // ce qui est posé, pas une proposition.
+  const permis = permisPour(b.poste_id, b.salarie_id, b.jour)
+  const surPlace =
+    !!existant &&
+    existant.salarie_id === b.salarie_id &&
+    existant.poste_id === b.poste_id &&
+    existant.jour === b.jour
+  const codes = permis.codes
+    .concat(horaires.filter((h) => surPlace && h.id === existant.type_shift_id))
     .filter((h, i, l) => l.findIndex((x) => x.id === h.id) === i)
   // Seulement les postes qu'elle tient (et celui du shift, s'il n'en est
   // pas) : un hôtelier ne voit plus Supervision ni Direction.
@@ -425,6 +453,23 @@ export function EditeurShift({
                   />
                 )),
               ])}
+              {permis.texte && !permis.ecartes.length && (
+                <span className="col-span-2 rounded-md border border-dashed px-2 py-1.5 text-xs text-muted-foreground">
+                  {permis.texte}
+                </span>
+              )}
+              {permis.ecartes.map((e) => (
+                <Choix
+                  key={`ecarte-${e.horaire.id}`}
+                  couleur={NEUTRE}
+                  code={e.horaire.code}
+                  titre={e.horaire.nom}
+                  detail={e.texte}
+                  choisi={false}
+                  desactive
+                  onClick={() => undefined}
+                />
+              ))}
               <span className="col-span-2 pt-1.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
                 Autre
               </span>
@@ -724,6 +769,7 @@ function Choix({
   titre,
   detail,
   choisi,
+  desactive = false,
   onClick,
 }: {
   couleur: string
@@ -731,16 +777,20 @@ function Choix({
   titre: string
   detail: string
   choisi: boolean
+  /** Montré grisé, avec sa raison en détail : non cliquable. */
+  desactive?: boolean
   onClick: () => void
 }) {
   return (
     <button
       type="button"
       aria-pressed={choisi}
+      disabled={desactive}
       onClick={onClick}
       className={cn(
         'flex min-w-0 items-center gap-2 rounded-md border px-2 py-1.5 text-left transition-colors hover:bg-muted',
         choisi && 'border-primary bg-primary/10 ring-1 ring-primary',
+        desactive && 'cursor-not-allowed opacity-50 hover:bg-transparent',
       )}
       style={{ '--couleur': couleur } as CSSProperties}
     >

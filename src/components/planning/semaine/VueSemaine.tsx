@@ -73,13 +73,13 @@ import {
   porteeSemaine,
 } from '#/components/planning/attention.ts'
 import { PanneauAlertes } from '#/components/planning/semaine/PanneauAlertes.tsx'
+import { codesDeLaCase } from '#/components/planning/codesCase.ts'
+import { posteDeReference } from '#/lib/planning/eligibilite.ts'
 import {
   absenceDe,
   estEtoile,
   etoileProposee,
-  horairesProposes,
   indiceDe,
-  posteDeReference,
   poserHoraire,
   shiftDe,
   statutDuJour,
@@ -575,7 +575,7 @@ export function VueSemaine({
     }
     const o = { salarie_id: sid, jour: j }
     const shift = shiftDe(affichee, o)
-    const posteId = posteDeReference(p, shift, referentiel.postes)
+    const posteId = posteDeReference(p, referentiel.postes, shift)
     const etoile = etoileProposee(affichee, p, referentiel.horaires, o)
     // Absence ou école posée ici (pas celle de la semaine type) : se retire.
     const st = shift ? null : statutDe(sid, j)
@@ -585,13 +585,13 @@ export function VueSemaine({
       ...o,
       nom: nomComplet(p),
       actuel: shift?.type_shift_id,
-      proposes: horairesProposes(
-        p,
+      permis: codesDeLaCase({
+        referentiel,
+        personne: p,
         posteId,
-        shift,
-        referentiel.horaires,
-        referentiel.postes,
-      ),
+        jour: j,
+        source: { semaine: affichee },
+      }),
       posteId,
       validation: shift
         ? {
@@ -784,6 +784,7 @@ export function VueSemaine({
               ? absenceDe(bilanDe(edition.salarie_id), edition.jour)
               : null
           }
+          source={{ semaine: affichee }}
           onFermer={() => setEdition(null)}
           onCreer={(s) => {
             setEdition(null)

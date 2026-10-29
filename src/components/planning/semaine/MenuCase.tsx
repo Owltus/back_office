@@ -20,6 +20,7 @@ import {
   ROUGE_CODE,
   texteSur,
 } from '#/lib/planning/affichage.ts'
+import type { CodesPermis } from '#/lib/planning/eligibilite.ts'
 import { heureAffichee } from '#/lib/planning/temps.ts'
 import { JOURS } from '#/lib/planning/types.ts'
 import type { Horaire } from '#/lib/planning/types.ts'
@@ -31,7 +32,8 @@ export interface OuvertureMenu {
   nom: string
   /** Code horaire actuel du shift de la case. */
   actuel: number | null | undefined
-  proposes: Horaire[]
+  /** Codes permis (règle unique), et pourquoi s'il n'y en a pas. */
+  permis: CodesPermis<Horaire>
   posteId: number | undefined
   validation?: { active: boolean; onBasculer: () => void }
   etoile?: { active: boolean; onBasculer: () => void }
@@ -47,7 +49,8 @@ export function MenuCase({
   onHoraire: (h: Horaire, posteId: number) => void
 }) {
   if (!ouverture) return null
-  const { proposes, actuel, posteId, validation, etoile, vider } = ouverture
+  const { permis, actuel, posteId, validation, etoile, vider } = ouverture
+  const proposes = permis.codes
   return (
     <ContextMenuContent className="min-w-64">
       <ContextMenuLabel className="text-xs text-muted-foreground">
@@ -100,10 +103,8 @@ export function MenuCase({
         </>
       )}
       <ContextMenuSeparator />
-      {proposes.length === 0 && (
-        <ContextMenuItem disabled>
-          Aucun horaire prévu pour ce poste
-        </ContextMenuItem>
+      {permis.texte && !permis.ecartes.length && (
+        <ContextMenuItem disabled>{permis.texte}</ContextMenuItem>
       )}
       {grouperHoraires(proposes).map((g, i) => (
         <ContextMenuGroup key={g.libelle} aria-label={g.libelle}>
@@ -144,6 +145,21 @@ export function MenuCase({
             </ContextMenuItem>
           ))}
         </ContextMenuGroup>
+      ))}
+      {permis.ecartes.length > 0 && proposes.length > 0 && (
+        <ContextMenuSeparator />
+      )}
+      {permis.ecartes.map((e) => (
+        <ContextMenuItem
+          key={e.horaire.id}
+          disabled
+          aria-label={`${e.horaire.code}, ${e.texte}`}
+        >
+          <span className="min-w-12 shrink-0 rounded border px-1.5 py-0.5 text-center text-xs font-semibold">
+            {e.horaire.code}
+          </span>
+          <span className="flex-1 pl-1 text-xs">{e.texte}</span>
+        </ContextMenuItem>
       ))}
     </ContextMenuContent>
   )

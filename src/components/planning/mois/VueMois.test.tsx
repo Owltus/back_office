@@ -364,6 +364,47 @@ describe('VueMois', { timeout: 20_000 }, () => {
     )
   })
 
+  it('clic droit : les codes qui cassent la coupure de 11 h sont grisés avec la raison', async () => {
+    droits = { pret: true, lire: true, ecrire: true, gerer: false }
+    // Après-midi la veille (mardi 17, fin 23:45) : Matin et Middle le
+    // mercredi 18 laisseraient moins de 11 h de repos.
+    affectations = [
+      {
+        id: 1,
+        lundi: '2026-11-16',
+        salarie_id: 3,
+        poste_id: 2,
+        jour: 1,
+        horaire_id: 3,
+        debut: '15:00',
+        fin: '23:45',
+        epinglee: true,
+        court: false,
+        pause: 45,
+      },
+    ]
+    monter()
+    await charge()
+    fireEvent.contextMenu(
+      screen.getByRole('button', {
+        name: /^Lucas Petit, .*18.* · Non attribué/,
+      }),
+    )
+    const matin = await screen.findByRole('menuitem', {
+      name: 'M, Coupure de 11 h non respectée avec la veille',
+    })
+    expect(matin.getAttribute('aria-disabled')).toBe('true')
+    expect(
+      screen.getByRole('menuitem', {
+        name: 'MI, Coupure de 11 h non respectée avec la veille',
+      }),
+    ).toBeTruthy()
+    // L'après-midi reste proposé ; un code grisé ne pose rien.
+    expect(screen.getByRole('menuitem', { name: /^AM, / })).toBeTruthy()
+    fireEvent.click(matin)
+    expect(service.ajouterShift).not.toHaveBeenCalled()
+  })
+
   it('clic sur un jour : l’éditeur complet, date en toutes lettres, écrit dans la semaine du jour', async () => {
     droits = { pret: true, lire: true, ecrire: true, gerer: false }
     monter()

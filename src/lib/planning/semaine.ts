@@ -9,6 +9,11 @@
  */
 
 import {
+  codePrevuAuPoste,
+  codesDeLaFiche,
+  codesImposes,
+} from '#/lib/planning/eligibilite.ts'
+import {
   creneau,
   duree,
   jourDe,
@@ -311,13 +316,9 @@ export function fiche(
   // prototype retirée le 2026-10-27, décision utilisateur : ce repos « fixe
   // mais pas vraiment » paraissait arbitraire). Les règles HCR suffisent.
   const travailFixe = new Set<number>()
-  const shiftImpose: Array<readonly [number, string]> = []
   const etoile = new Set<number>()
   semaine.forEach((e, j) => {
     if (e.mode === 'travail') travailFixe.add(j)
-    if ((e.mode === 'auto' || e.mode === 'travail') && e.type_shift_id) {
-      shiftImpose.push([j, String(e.type_shift_id)])
-    }
     if (e.etoile) etoile.add(j)
   })
   return {
@@ -349,8 +350,8 @@ export function fiche(
         ),
     reposFixes,
     travailFixe,
-    shiftImpose,
-    shiftsAutorises: new Set(x.shifts_autorises.map(String)),
+    shiftImpose: codesImposes(semaine),
+    shiftsAutorises: codesDeLaFiche(x),
     etoileFixe: etoile,
     contratDebut: borneContrat(lundi, x.date_entree, 0),
     contratFin: borneContrat(lundi, x.date_sortie, 1),
@@ -358,13 +359,6 @@ export function fiche(
 }
 
 // --------------------------------------------------------------- créneaux
-
-export function horairePrevu(poste: Poste, horaireId: number | null): boolean {
-  const autorises = poste.horaires_autorises
-  return (
-    !autorises.length || horaireId === null || autorises.includes(horaireId)
-  )
-}
 
 /** Consigne de présence où compte un shift ou un besoin (`presence.ts`). */
 function presenceDe(
@@ -443,7 +437,7 @@ export function besoinsValides(ctx: Contexte): {
     let message = poste
       ? alerteBesoin(poste.categorie, presence)
       : 'poste supprimé'
-    if (poste && !message && !horairePrevu(poste, b.horaire_id)) {
+    if (poste && !message && !codePrevuAuPoste(poste, b.horaire_id)) {
       message = "cet horaire n'est pas prévu pour ce poste"
     }
     if (message) alertes.push({ besoin_id: b.id, message })
@@ -705,7 +699,7 @@ export function analyser(d: DonneesSemaine): SemaineOut {
     const c = creneaux.get(`a${a.id}`) as Creneau
     const alertes = [...(parCarte.get(`a${a.id}`) ?? [])]
     const poste = ctx.postes.get(a.poste_id)
-    if (poste && !horairePrevu(poste, a.horaire_id)) {
+    if (poste && !codePrevuAuPoste(poste, a.horaire_id)) {
       alertes.push({
         regle: 'HORAIRE-POSTE',
         nature: 'organisation',

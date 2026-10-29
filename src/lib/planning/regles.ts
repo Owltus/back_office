@@ -45,6 +45,11 @@ export const MINEUR_JOUR_MAX = 8 * H // R-MINEUR-JOUR-MAX
 export const MINEUR_SEMAINE_MAX = 35 * H // R-MINEUR-SEMAINE-MAX
 export const MINEUR_REPOS_QUOTIDIEN = 12 * H // R-REPOS-QUOTIDIEN-MINEUR
 
+/** Repos quotidien dû (R-REPOS-QUOTIDIEN, R-REPOS-QUOTIDIEN-MINEUR). */
+export function reposQuotidienMin(mineur: boolean | undefined): number {
+  return mineur ? MINEUR_REPOS_QUOTIDIEN : REPOS_QUOTIDIEN
+}
+
 /** Ce que la fiche d'un membre du staff dit de son contrat, pour une semaine. */
 export interface Fiche {
   id: string
@@ -162,7 +167,7 @@ export function versSolveur(f: Fiche): SalarieSolveur {
       : JOURS_TRAVAILLES_MAX,
     joursPreferesSemaine: JOURS_TRAVAILLES_PREFERES,
     reposDeuxSemaines: REPOS_DEUX_SEMAINES,
-    reposQuotidienMin: f.mineur ? MINEUR_REPOS_QUOTIDIEN : REPOS_QUOTIDIEN,
+    reposQuotidienMin: reposQuotidienMin(f.mineur),
     reposHebdoMin: f.mineur ? 0 : REPOS_HEBDO_MIN,
     jourMaxPoste: !f.forfaitJours, // R-CADRE-FJ
     contratDebut: f.contratDebut ?? null,

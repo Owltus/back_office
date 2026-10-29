@@ -5,18 +5,12 @@
  * déplacer la journée étoile) rendent une fonction qui appelle le service.
  */
 
-import {
-  dureeHoraire,
-  heures,
-  horairesDuPoste,
-  jourDeRepos,
-  trierHoraires,
-} from '#/lib/planning/affichage.ts'
+import { dureeHoraire, heures, jourDeRepos } from '#/lib/planning/affichage.ts'
 import { estEcole } from '#/lib/planning/semaine.ts'
 import type { BilanOut, SemaineOut, ShiftOut } from '#/lib/planning/semaine.ts'
 import * as service from '#/lib/planning/service.ts'
 import { ajouterJours, horaireDe } from '#/lib/planning/temps.ts'
-import type { Horaire, Motif, Poste, Salarie } from '#/lib/planning/types.ts'
+import type { Horaire, Motif, Salarie } from '#/lib/planning/types.ts'
 
 export const NEUTRE = '#94a3b8'
 
@@ -130,67 +124,6 @@ export function estEtoile(
 ): boolean {
   if (!s || s.forfait_jours || Number(s.heures_hebdo) <= 35) return false
   return a.court || a.duree === 7 * 60
-}
-
-/** Poste de référence d'une case : celui du shift, sinon le 1er titulaire,
- * la 1re compétence, le 1er poste. */
-export function posteDeReference(
-  personne: Salarie,
-  shift: ShiftOut | undefined,
-  postes: Poste[],
-): number | undefined {
-  return (
-    shift?.poste_id ??
-    personne.competences.find((c) => c.niveau === 'titulaire')?.poste_id ??
-    personne.competences.at(0)?.poste_id ??
-    postes.at(0)?.id
-  )
-}
-
-/** Codes du poste réduits à ceux de la fiche (s'il en reste), plus le code
- * actuel du shift, triés par heure de début (menu du clic droit). */
-export function horairesProposes(
-  personne: Salarie,
-  posteId: number | undefined,
-  shift: ShiftOut | undefined,
-  horaires: Horaire[],
-  postes: Poste[],
-): Horaire[] {
-  const duPoste = horairesDuPoste(
-    horaires,
-    postes.find((p) => p.id === posteId),
-  )
-  const deLaFiche = duPoste.filter((h) =>
-    personne.shifts_autorises.includes(h.id),
-  )
-  return trierHoraires(
-    (deLaFiche.length ? deLaFiche : duPoste)
-      .concat(horaires.filter((h) => h.id === shift?.type_shift_id))
-      .filter((h, i, l) => l.findIndex((x) => x.id === h.id) === i),
-  )
-}
-
-/** Codes permis pour une personne sur un poste, celui de sa semaine type ce
- * jour-là en tête (éditeur). */
-export function horairesPermis(
-  posteId: number,
-  s: Salarie | undefined,
-  jour: number,
-  horaires: Horaire[],
-  postes: Poste[],
-): Horaire[] {
-  const duPoste = horairesDuPoste(
-    horaires,
-    postes.find((p) => p.id === posteId),
-  )
-  const deLaFiche = s?.shifts_autorises.length
-    ? duPoste.filter((h) => s.shifts_autorises.includes(h.id))
-    : duPoste
-  const permis = deLaFiche.length ? deLaFiche : duPoste
-  const habituel = s?.semaine_type[jour]?.type_shift_id
-  return [...permis].sort(
-    (a, b) => Number(b.id === habituel) - Number(a.id === habituel),
-  )
 }
 
 /** Temps de travail d'un code (pause déduite). */

@@ -6,6 +6,10 @@
  */
 
 import {
+  codeDeLaFiche,
+  codeImposeRespecte,
+} from '#/lib/planning/eligibilite.ts'
+import {
   dansLeContrat,
   duree,
   jourDe,
@@ -84,7 +88,7 @@ export function violationsSalarie(
         'organisation',
       )
     }
-    if (s.shiftsAutorises.size && !s.shiftsAutorises.has(c.typeShift ?? '')) {
+    if (!codeDeLaFiche(s, c.typeShift)) {
       ajoute(
         'HORAIRE-PERSO',
         'cet horaire ne fait pas partie des siens',
@@ -92,10 +96,7 @@ export function violationsSalarie(
         'organisation',
       )
     }
-    const imposes = new Set(
-      s.shiftImpose.filter(([jour]) => jour === j).map(([, code]) => code),
-    )
-    if (imposes.size && !imposes.has(c.typeShift ?? '')) {
+    if (!codeImposeRespecte(s, j, c.typeShift)) {
       ajoute(
         'HORAIRE-PERSO',
         'un autre horaire est prévu ce jour-là',

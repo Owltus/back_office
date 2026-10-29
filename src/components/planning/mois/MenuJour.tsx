@@ -19,54 +19,21 @@ import {
   dureeHoraire,
   grouperHoraires,
   heures,
-  horairesDuPoste,
   ROUGE_CODE,
   texteSur,
-  trierHoraires,
 } from '#/lib/planning/affichage.ts'
+import { posteDeReference } from '#/lib/planning/eligibilite.ts'
 import type { ShiftOut } from '#/lib/planning/semaine.ts'
+import { codesDeLaCase } from '#/components/planning/codesCase.ts'
+import type { SourceCase } from '#/components/planning/codesCase.ts'
 import { heureAffichee } from '#/lib/planning/temps.ts'
-import type { Horaire, Poste, Salarie } from '#/lib/planning/types.ts'
+import type { Horaire, Referentiel, Salarie } from '#/lib/planning/types.ts'
 
 export interface OuvertureMenu {
   salarieId: number
   date: string
   x: number
   y: number
-}
-
-/** Poste de référence d'une case : celui du shift, sinon le 1er titulaire,
- * sinon la 1re compétence, sinon le 1er poste. */
-export function posteDeReference(
-  personne: Salarie,
-  postes: Poste[],
-  shift?: ShiftOut,
-): number | undefined {
-  return (
-    shift?.poste_id ??
-    personne.competences.find((c) => c.niveau === 'titulaire')?.poste_id ??
-    personne.competences.at(0)?.poste_id ??
-    postes.at(0)?.id
-  )
-}
-
-/** Codes proposés : ceux du poste, réduits à la fiche s'il en reste, plus le
- * code actuel du shift ; triés par heure de début. */
-export function horairesProposes(
-  personne: Salarie,
-  horaires: Horaire[],
-  poste: Poste | undefined,
-  shift?: ShiftOut,
-): Horaire[] {
-  const duPoste = horairesDuPoste(horaires, poste)
-  const deLaFiche = duPoste.filter((h) =>
-    personne.shifts_autorises.includes(h.id),
-  )
-  return trierHoraires(
-    (deLaFiche.length ? deLaFiche : duPoste)
-      .concat(horaires.filter((h) => h.id === shift?.type_shift_id))
-      .filter((h, i, l) => l.findIndex((x) => x.id === h.id) === i),
-  )
 }
 
 const ITEM =
@@ -76,8 +43,9 @@ export function MenuJour({
   ouverture,
   titre,
   personne,
-  horaires,
-  postes,
+  referentiel,
+  jour,
+  source,
   shift,
   ecrire,
   onHoraire,
@@ -90,8 +58,11 @@ export function MenuJour({
   ouverture: OuvertureMenu
   titre: string
   personne: Salarie
-  horaires: Horaire[]
-  postes: Poste[]
+  referentiel: Pick<Referentiel, 'horaires' | 'postes' | 'motifs'>
+  /** Jour de la case dans sa semaine (0 = lundi). */
+  jour: number
+  /** La semaine de la case et ses voisines (codes permis, coupure de repos). */
+  source: SourceCase
   shift?: ShiftOut
   ecrire: boolean
   onHoraire: (h: Horaire, posteId: number) => void
@@ -131,15 +102,11 @@ export function MenuJour({
     }
   }, [onFermer])
 
-  const posteId = posteDeReference(personne, postes, shift)
-  const proposes = ecrire
-    ? horairesProposes(
-        personne,
-        horaires,
-        postes.find((p) => p.id === posteId),
-        shift,
-      )
-    : []
+  const posteId = posteDeReference(personne, referentiel.postes, shift)
+  const permis = ecrire
+    ? codesDeLaCase({ referentiel, personne, posteId, jour, source })
+    : null
+  const proposes = permis?.codes ?? []
   const choisir = (action: () => void) => () => {
     onFermer()
     action()
@@ -271,6 +238,32 @@ export function MenuJour({
                 )}
               </button>
             ))}
+          </div>
+        ))}
+        {permis && (permis.ecartes.length > 0 || permis.texte) && (
+          <div className="-mx-1 my-1 h-px bg-border" />
+        )}
+        {permis?.texte && !permis.ecartes.length && (
+          <div
+            role="menuitem"
+            aria-disabled="true"
+            className="px-2 py-1.5 text-sm text-muted-foreground"
+          >
+            {permis.texte}
+          </div>
+        )}
+        {permis?.ecartes.map((e) => (
+          <div
+            key={e.horaire.id}
+            role="menuitem"
+            aria-disabled="true"
+            aria-label={`${e.horaire.code}, ${e.texte}`}
+            className="flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground opacity-60"
+          >
+            <span className="min-w-12 shrink-0 rounded border px-1.5 py-0.5 text-center text-xs font-semibold">
+              {e.horaire.code}
+            </span>
+            <span className="flex-1 text-xs">{e.texte}</span>
           </div>
         ))}
       </div>

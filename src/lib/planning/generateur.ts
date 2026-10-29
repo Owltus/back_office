@@ -22,6 +22,11 @@
  */
 
 import {
+  codeDeLaFiche,
+  codeImposeRespecte,
+  coupureRespectee,
+} from '#/lib/planning/eligibilite.ts'
+import {
   cle,
   cleAEviter,
   dansLeContrat,
@@ -70,19 +75,17 @@ export function courtOblige(s: SalarieSolveur, c: Creneau): boolean {
 }
 
 export function reposAvecVoisins(s: SalarieSolveur, c: Creneau): boolean {
-  const avant = s.finServicePrecedent
-  const apres = s.debutServiceSuivant
-  return (
-    (avant === null || c.debut - avant >= s.reposQuotidienMin) &&
-    (apres === null || apres - c.fin >= s.reposQuotidienMin)
+  return coupureRespectee(
+    s.finServicePrecedent,
+    s.debutServiceSuivant,
+    c.debut,
+    c.fin,
+    s.reposQuotidienMin,
   )
 }
 
 export function compatible(s: SalarieSolveur, c: Creneau): boolean {
   const j = jourDe(c)
-  const impose = new Set(
-    s.shiftImpose.filter(([jour]) => jour === j).map(([, code]) => code),
-  )
   const r = role(s, c.poste)
   return (
     !s.placementManuel &&
@@ -94,9 +97,8 @@ export function compatible(s: SalarieSolveur, c: Creneau): boolean {
     !s.reposFixes.has(j) &&
     duree(c) - (courtOblige(s, c) ? c.raccourci : 0) <= presenceMax(s, c) &&
     !(s.nuitInterdite && toucheLaNuit(c)) &&
-    (s.shiftsAutorises.size === 0 ||
-      s.shiftsAutorises.has(c.typeShift ?? '')) &&
-    (impose.size === 0 || impose.has(c.typeShift ?? '')) &&
+    codeDeLaFiche(s, c.typeShift) &&
+    codeImposeRespecte(s, j, c.typeShift) &&
     reposAvecVoisins(s, c)
   )
 }
