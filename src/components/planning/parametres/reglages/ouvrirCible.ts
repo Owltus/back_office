@@ -18,8 +18,13 @@ export function idCible(
   ouvrir: string | undefined,
   type: string,
 ): number | undefined {
-  const m = ouvrir?.match(/^([a-z]+)-(\d+)$/)
+  const m = ouvrir?.match(/^([a-z]+)-(\d+)(?:\.[a-z]+)?$/)
   return m && m[1] === type ? Number(m[2]) : undefined
+}
+
+/** La partie visée après l'id (`salarie-3.semaine` : `semaine`). */
+export function partieCible(ouvrir: string | undefined): string | undefined {
+  return ouvrir?.match(/^[a-z]+-\d+\.([a-z]+)$/)?.[1]
 }
 
 export function useOuvrirCible(

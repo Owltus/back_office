@@ -60,6 +60,18 @@ import {
 } from '#/components/planning/parametres/equipe/ecole.ts'
 import { SectionIdentite } from '#/components/planning/parametres/equipe/SectionIdentite.tsx'
 import { SommaireFiche } from '#/components/planning/parametres/equipe/SommaireFiche.tsx'
+import type { PartieFiche } from '#/lib/planning/coherence.ts'
+
+/** Partie d'un lien (`cibleFiche`) → attribut data-partie de sa section. */
+const PARTIES_FICHE: Record<PartieFiche, string> = {
+  identite: 'Identité et contrat',
+  ecole: 'École',
+  postes: 'Compétences',
+  horaires: 'Horaires autorisés',
+  semaine: 'Semaine type',
+  absences: 'Absences',
+  regles: 'Règles HCR appliquées',
+}
 import {
   SectionAbsences,
   SectionCompetences,
@@ -106,12 +118,15 @@ export function FicheSalarie({
   ouvert,
   onFermer,
   groupeId,
+  partie,
 }: {
   salarieId: number | null
   ouvert: boolean
   onFermer: () => void
   /** Groupe proposé à la création (ajout depuis une catégorie). */
   groupeId?: number | null
+  /** Partie où ouvrir la fiche (`PartieFiche` d'un lien), sinon le haut. */
+  partie?: string
 }) {
   const ref = useReferentiel()
   const absences = useQuery({
@@ -158,6 +173,7 @@ export function FicheSalarie({
             referentiel={ref.data}
             onFermer={onFermer}
             demandeFermeture={demandeFermeture}
+            partie={partie}
           />
         ) : (
           <EtatFiche
@@ -245,11 +261,13 @@ function CorpsFiche({
   referentiel,
   onFermer,
   demandeFermeture,
+  partie,
 }: {
   initial: Brouillon
   referentiel: Referentiel
   onFermer: () => void
   demandeFermeture: RefObject<() => void>
+  partie?: string
 }) {
   const droits = useDroitsPlanning()
   const gerer = droits.gerer
@@ -525,16 +543,17 @@ function CorpsFiche({
       >
         <SommaireFiche
           zone={zone}
+          depart={partie ? PARTIES_FICHE[partie as PartieFiche] : undefined}
           parties={[
-            { libelle: 'Identité', partie: 'Identité et contrat' },
+            { libelle: 'Identité', partie: PARTIES_FICHE.identite },
             ...(alternance && ecole
-              ? [{ libelle: 'École', partie: 'École' }]
+              ? [{ libelle: 'École', partie: PARTIES_FICHE.ecole }]
               : []),
-            { libelle: 'Postes', partie: 'Compétences' },
-            { libelle: 'Horaires', partie: 'Horaires autorisés' },
-            { libelle: 'Semaine type', partie: 'Semaine type' },
-            { libelle: 'Absences', partie: 'Absences' },
-            { libelle: 'Règles', partie: 'Règles HCR appliquées' },
+            { libelle: 'Postes', partie: PARTIES_FICHE.postes },
+            { libelle: 'Horaires', partie: PARTIES_FICHE.horaires },
+            { libelle: 'Semaine type', partie: PARTIES_FICHE.semaine },
+            { libelle: 'Absences', partie: PARTIES_FICHE.absences },
+            { libelle: 'Règles', partie: PARTIES_FICHE.regles },
           ]}
         />
         <SectionIdentite

@@ -19,13 +19,29 @@ export interface Partie {
 export function SommaireFiche({
   parties,
   zone,
+  depart,
 }: {
   parties: Partie[]
   /** La zone qui défile (la fiche). */
   zone: RefObject<HTMLDivElement | null>
+  /** Partie où ouvrir la fiche (lien d'un point à corriger), sinon le haut. */
+  depart?: string
 }) {
   const [active, setActive] = useState(parties[0]?.partie)
   const cible = useRef<string | null>(null)
+
+  // Ouverte par un lien : la fiche va d'emblée à la partie visée, une fois.
+  // Une partie absente (l'école d'un salarié) laisse la fiche en haut.
+  const departFait = useRef(false)
+  useEffect(() => {
+    if (departFait.current || !depart) return
+    departFait.current = true
+    const s = zone.current?.querySelector(`[data-partie="${depart}"]`)
+    if (!s) return
+    cible.current = depart
+    setActive(depart)
+    s.scrollIntoView({ block: 'start' })
+  }, [depart, zone])
 
   useEffect(() => {
     const el = zone.current

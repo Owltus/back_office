@@ -37,6 +37,8 @@ export interface OuvertureMenu {
   date: string
   x: number
   y: number
+  /** Place à pourvoir : le menu s'ouvre sur son poste (case sans shift). */
+  posteId?: number
 }
 
 const ITEM =
@@ -105,7 +107,12 @@ export function MenuJour({
     }
   }, [onFermer])
 
-  const posteId = posteDeReference(personne, referentiel.postes, shift)
+  const posteId =
+    !shift &&
+    ouverture.posteId !== undefined &&
+    referentiel.postes.some((p) => p.id === ouverture.posteId)
+      ? ouverture.posteId
+      : posteDeReference(personne, referentiel.postes, shift)
   const permis = ecrire
     ? codesDeLaCase({ referentiel, personne, posteId, jour, source })
     : null

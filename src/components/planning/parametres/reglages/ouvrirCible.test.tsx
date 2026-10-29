@@ -7,6 +7,7 @@ import { FilMessages } from '#/components/planning/Messages.tsx'
 import {
   MESSAGE_CIBLE_ABSENTE,
   idCible,
+  partieCible,
   useOuvrirCible,
 } from '#/components/planning/parametres/reglages/ouvrirCible.ts'
 
@@ -83,5 +84,13 @@ describe('idCible', () => {
     expect(idCible('poste-12', 'salarie')).toBeUndefined()
     expect(idCible('poste-x', 'poste')).toBeUndefined()
     expect(idCible(undefined, 'poste')).toBeUndefined()
+  })
+
+  it('une partie de la fiche après l id : id et partie lus à part', () => {
+    expect(idCible('salarie-3.semaine', 'salarie')).toBe(3)
+    expect(partieCible('salarie-3.semaine')).toBe('semaine')
+    expect(partieCible('salarie-3')).toBeUndefined()
+    expect(idCible('salarie-3.', 'salarie')).toBeUndefined()
+    expect(partieCible(undefined)).toBeUndefined()
   })
 })

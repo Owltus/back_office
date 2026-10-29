@@ -893,7 +893,16 @@ export function VueSemaine({
           // Étape 8 : « Placer quelqu'un » ouvre la case, comme un clic.
           onPlacer={
             droits.ecrire && pret && !verrou
-              ? (d) => rappelsRef.current?.ajouter(d.salarieId, d.jour)
+              ? (d) =>
+                  siSousContrat(d.salarieId, d.jour, () =>
+                    setEdition({
+                      mode: 'creation',
+                      salarie_id: d.salarieId,
+                      jour: d.jour,
+                      poste_id: d.posteId,
+                      horaire_id: d.horaireId,
+                    }),
+                  )
               : undefined
           }
         />

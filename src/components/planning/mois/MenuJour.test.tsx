@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 
 import { analyser } from '#/lib/planning/semaine.ts'
 import type { Referentiel } from '#/lib/planning/types.ts'
@@ -16,7 +16,7 @@ import { MenuJour } from '#/components/planning/mois/MenuJour.tsx'
 const LUNDI = '2026-11-02'
 const { referentiel, absences } = hotelDemo(LUNDI)
 
-function rendre(ref: Referentiel) {
+function rendre(ref: Referentiel, place?: { posteId: number }) {
   const semaine = analyser({
     lundi: LUNDI,
     referentiel: ref,
@@ -42,13 +42,13 @@ function rendre(ref: Referentiel) {
   const onHoraire = vi.fn()
   render(
     <MenuJour
-      ouverture={{ salarieId: 3, date: '2026-11-04', x: 0, y: 0 }}
+      ouverture={{ salarieId: 3, date: '2026-11-04', x: 0, y: 0, ...place }}
       titre="Essai"
       personne={ref.salaries.find((s) => s.id === 3)!}
       referentiel={ref}
       jour={2}
       source={{ semaine }}
-      shift={semaine.affectations[0]}
+      shift={place ? undefined : semaine.affectations[0]}
       ecrire
       onHoraire={onHoraire}
       onSemaine={vi.fn()}
@@ -83,6 +83,16 @@ describe('MenuJour : code actuel non permis', () => {
     // La raison n'est pas répétée sur une seconde ligne.
     expect(screen.getAllByText(/Repos fixé par sa semaine type/)).toHaveLength(
       1,
+    )
+  })
+
+  it('place à pourvoir : le code choisi est posé sur le poste de la place', () => {
+    // Personne 3 : titulaire Réception (2) et Club (3), Réception d'office.
+    const { onHoraire } = rendre(referentiel, { posteId: 3 })
+    fireEvent.click(screen.getByRole('menuitem', { name: 'AM, Après-midi' }))
+    expect(onHoraire).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'AM' }),
+      3,
     )
   })
 

@@ -100,7 +100,7 @@ describe('raisons des places à pourvoir', () => {
         expect(r.phrase).not.toMatch(/[«»—]/)
         if (r.issue.genre === 'lien') {
           expect(r.issue.lien.page).toBe('/planning/equipe')
-          expect(r.issue.lien.cible).toBe('salarie-7')
+          expect(r.issue.lien.cible).toMatch(/^salarie-7(\.[a-z]+)?$/)
           expect(r.issue.action.length).toBeGreaterThan(3)
         } else {
           expect(MENTIONS).toContain(r.issue.mention)
@@ -119,7 +119,7 @@ describe('raisons des places à pourvoir', () => {
       raisonClaire(regle, message, 3).issue
     expect(issue('REPOS-FIXE', MESSAGES['REPOS-FIXE'][0])).toEqual({
       genre: 'lien',
-      lien: { page: '/planning/equipe', cible: 'salarie-3' },
+      lien: { page: '/planning/equipe', cible: 'salarie-3.semaine' },
       action: 'Semaine type',
     })
     expect(issue('HORAIRE-PERSO', MESSAGES['HORAIRE-PERSO'][0])).toMatchObject({
@@ -140,6 +140,29 @@ describe('raisons des places à pourvoir', () => {
       genre: 'mention',
       mention: 'limite légale',
     })
+    // L'école compte dans la semaine : la phrase le dit.
+    expect(
+      raisonClaire(
+        'R-SEMAINE-MAX',
+        '36 h dans la semaine, école comprise (14 h), maximum 35 h',
+        3,
+      ).phrase,
+    ).toBe('35 h atteintes dans la semaine, école comprise')
+    // Chaque lien mène à la partie de la fiche qui débloque.
+    const cible = (regle: string, message: string) => {
+      const i = raisonClaire(regle, message, 3).issue
+      return i.genre === 'lien' ? i.lien.cible : null
+    }
+    expect(cible('POSTE', MESSAGES.POSTE[0])).toBe('salarie-3.postes')
+    expect(cible('HORS-CONTRAT', MESSAGES['HORS-CONTRAT'][0])).toBe(
+      'salarie-3.identite',
+    )
+    expect(cible('HORAIRE-PERSO', MESSAGES['HORAIRE-PERSO'][0])).toBe(
+      'salarie-3.horaires',
+    )
+    expect(cible('HORAIRE-PERSO', MESSAGES['HORAIRE-PERSO'][1])).toBe(
+      'salarie-3.semaine',
+    )
     expect(issue('SIXIEME-JOUR', MESSAGES['SIXIEME-JOUR'][0])).toEqual({
       genre: 'mention',
       mention: 'au-delà de son contrat',

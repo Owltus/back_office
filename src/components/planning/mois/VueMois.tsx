@@ -375,6 +375,7 @@ export function VueMois({
     x: number,
     y: number,
     clicDroit: boolean,
+    posteId?: number,
   ) => {
     const { lundi } = reperer(date)
     if (!droits.ecrire) {
@@ -390,7 +391,7 @@ export function VueMois({
       return notifier(MSG_HORS, 'attention')
     }
     if (pasMaintenant()) return
-    if (clicDroit) return setMenu({ salarieId, date, x, y })
+    if (clicDroit) return setMenu({ salarieId, date, x, y, posteId })
     const { jour } = reperer(date)
     const shift = semaines
       .get(lundi)
@@ -981,7 +982,8 @@ export function VueMois({
           // Étape 8 : « Placer quelqu'un » ouvre le menu du jour sur la case.
           onPlacer={
             droits.ecrire
-              ? (d) => ouvrirJour(d.salarieId, d.date, d.x, d.y, true)
+              ? (d) =>
+                  ouvrirJour(d.salarieId, d.date, d.x, d.y, true, d.posteId)
               : undefined
           }
         />

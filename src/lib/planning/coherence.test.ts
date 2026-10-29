@@ -240,7 +240,7 @@ describe('verifierReglages', () => {
     expect(seul(r)).toMatchObject({
       id: 'sans-code:10:2',
       ecran: 'equipe',
-      lien: { page: '/planning/equipe', cible: 'salarie-10' },
+      lien: { page: '/planning/equipe', cible: 'salarie-10.horaires' },
     })
   })
 
@@ -250,7 +250,7 @@ describe('verifierReglages', () => {
     r.salaries[1].shifts_autorises = [N]
     expect(seul(r)).toMatchObject({
       id: 'codes-morts:11',
-      lien: { page: '/planning/equipe', cible: 'salarie-11' },
+      lien: { page: '/planning/equipe', cible: 'salarie-11.horaires' },
     })
   })
 
@@ -261,7 +261,7 @@ describe('verifierReglages', () => {
     const p = seul(r)
     expect(p).toMatchObject({
       id: 'code-fixe:12:0',
-      lien: { page: '/planning/equipe', cible: 'salarie-12' },
+      lien: { page: '/planning/equipe', cible: 'salarie-12.semaine' },
     })
     expect(p.texte).toContain("n'est permis sur aucun de ses postes")
   })
@@ -484,7 +484,7 @@ describe('verifierReglages', () => {
     r.besoins.push(besoin(2, 2, null, { debut: '10:00', fin: '14:00' }))
     expect(seul(r)).toMatchObject({
       id: 'besoin-sans-personne:2:10:00-14:00',
-      lien: { page: '/planning/equipe', cible: 'salarie-13' },
+      lien: { page: '/planning/equipe', cible: 'salarie-13.horaires' },
     })
     r.salaries[3].shifts_autorises = []
     expect(verifierReglages(r)).toEqual([])
@@ -526,7 +526,7 @@ describe('verifierReglages', () => {
     const p = seul(r)
     expect(p).toMatchObject({
       id: 'sans-poste-code-fixe:13',
-      lien: { page: '/planning/equipe', cible: 'salarie-13' },
+      lien: { page: '/planning/equipe', cible: 'salarie-13.postes' },
     })
     expect(p.texte).toContain("n'a aucun poste")
     expect(p.texte).toContain('lundi et mercredi')

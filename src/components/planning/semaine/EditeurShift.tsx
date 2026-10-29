@@ -60,7 +60,14 @@ import { codesDeLaCase } from '#/components/planning/codesCase.ts'
 import type { SourceCase } from '#/components/planning/codesCase.ts'
 
 export type Edition =
-  | { mode: 'creation'; salarie_id: number; jour: number }
+  | {
+      mode: 'creation'
+      salarie_id: number
+      jour: number
+      /** Place à pourvoir : son poste et son code, choisis d'office. */
+      poste_id?: number
+      horaire_id?: number | null
+    }
   | { mode: 'modification'; shift: ShiftOut }
 
 const PAUSES = [0, 15, 20, 30, 45, 60, 90]
@@ -142,10 +149,18 @@ export function EditeurShift({
   const personne = salaries.find((s) => s.id === salarieInitial)
   const jourInitial =
     existant?.jour ?? (edition.mode === 'creation' ? edition.jour : 0)
+  const creation = edition.mode === 'creation' ? edition : null
+  const posteDemande =
+    creation?.poste_id !== undefined &&
+    postes.some((p) => p.id === creation.poste_id)
+      ? creation.poste_id
+      : undefined
   const posteParDefaut =
+    posteDemande ??
     (personne
       ? posteDeReference(personne, postes, existant ?? undefined)
-      : (existant?.poste_id ?? postes.at(0)?.id)) ?? 0
+      : (existant?.poste_id ?? postes.at(0)?.id)) ??
+    0
   // La règle unique des codes (`eligibilite.ts`), sans repli. Le shift
   // modifié ne compte pas comme voisin de lui-même.
   const permisPour = (
@@ -173,9 +188,15 @@ export function EditeurShift({
           ecartes: [],
         }
   }
+  // Le code de la place s'il est permis ici (règle unique, sans repli),
+  // sinon le premier permis.
+  const permisInitiaux = existant
+    ? []
+    : permisPour(posteParDefaut, salarieInitial, jourInitial).codes
   const horaireInitial = existant
     ? undefined
-    : permisPour(posteParDefaut, salarieInitial, jourInitial).codes.at(0)
+    : (permisInitiaux.find((h) => h.id === creation?.horaire_id) ??
+      permisInitiaux.at(0))
 
   const [b, setB] = useState<Brouillon>(() => ({
     salarie_id: salarieInitial,

@@ -142,7 +142,7 @@ describe('points d’attention', () => {
     ])
     expect(dimanche.personnes[0].raisons[0].issue).toEqual({
       genre: 'lien',
-      lien: { page: '/planning/equipe', cible: 'salarie-1' },
+      lien: { page: '/planning/equipe', cible: 'salarie-1.semaine' },
       action: 'Semaine type',
     })
     expect([dimanche.jour, dimanche.posteId, dimanche.horaireId]).toEqual([

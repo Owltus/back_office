@@ -263,6 +263,41 @@ describe('EditeurShift : règle des codes', () => {
     )
   })
 
+  it('place à pourvoir : son poste et son code choisis d’office', () => {
+    const pressees = () => presse().map((t) => t.trim())
+    // Personne 3 : titulaire Réception (2) et Club (3), Réception d'office.
+    rendreAvec(referentiel, { mode: 'creation', salarie_id: 3, jour: 2 })
+    expect(pressees().some((t) => t.startsWith('Réception'))).toBe(true)
+    expect(pressees().some((t) => /^M\s*Matin/.test(t))).toBe(true)
+    cleanup()
+    const { onCreer } = rendreAvec(referentiel, {
+      mode: 'creation',
+      salarie_id: 3,
+      jour: 2,
+      poste_id: 3,
+      horaire_id: idCode('AM'),
+    })
+    expect(pressees().some((t) => t.startsWith('Club'))).toBe(true)
+    expect(pressees().some((t) => t.startsWith('Réception'))).toBe(false)
+    expect(pressees().some((t) => /^AM/.test(t))).toBe(true)
+    fireEvent.click(principal('Ajouter le shift'))
+    expect(onCreer).toHaveBeenCalledWith(
+      expect.objectContaining({ poste_id: 3, horaire_id: idCode('AM') }),
+    )
+  })
+
+  it('place à pourvoir : un code qui n’est pas permis n’est pas forcé', () => {
+    rendreAvec(referentiel, {
+      mode: 'creation',
+      salarie_id: 3,
+      jour: 2,
+      poste_id: 3,
+      horaire_id: idCode('N'),
+    })
+    expect(presse().some((t) => /Nuit/.test(t))).toBe(false)
+    expect(presse().some((t) => /^M\s*Matin/.test(t.trim()))).toBe(true)
+  })
+
   it('changer de jour revalide le code ; revenir rend le code d’origine', () => {
     rendreAvec(referentielAvec({ semaine_type: reposLe(4) }), {
       mode: 'modification',

@@ -14,7 +14,8 @@
  * portent plusieurs sens).
  */
 
-import type { LienReglage } from '#/lib/planning/coherence.ts'
+import { cibleFiche } from '#/lib/planning/coherence.ts'
+import type { LienReglage, PartieFiche } from '#/lib/planning/coherence.ts'
 
 export type Mention =
   | 'limite légale'
@@ -63,9 +64,13 @@ export const REGLES_BLOCAGE = [
  * automatique ne l'a pas fait). */
 export const RAISON_LIBRE = 'LIBRE'
 
-const fiche = (salarieId: number, action: string): Issue => ({
+const fiche = (
+  salarieId: number,
+  action: string,
+  partie?: PartieFiche,
+): Issue => ({
   genre: 'lien',
-  lien: { page: '/planning/equipe', cible: `salarie-${salarieId}` },
+  lien: { page: '/planning/equipe', cible: cibleFiche(salarieId, partie) },
   action,
 })
 const mention = (m: Mention): Issue => ({ genre: 'mention', mention: m })
@@ -97,26 +102,32 @@ export function raisonClaire(
         mention('au-delà de son contrat'),
       )
     case 'POSTE':
-      return r('Ne tient pas ce poste', fiche(salarieId, 'Postes de la fiche'))
+      return r(
+        'Ne tient pas ce poste',
+        fiche(salarieId, 'Postes de la fiche', 'postes'),
+      )
     case 'HORS-CONTRAT':
       return r(
         'Hors des dates de son contrat',
-        fiche(salarieId, 'Dates du contrat'),
+        fiche(salarieId, 'Dates du contrat', 'identite'),
       )
     case 'ABSENCE':
       return r("Absent ou à l'école ce jour-là", mention('absence posée'))
     case 'REPOS-FIXE':
-      return r('En repos fixe ce jour-là', fiche(salarieId, 'Semaine type'))
+      return r(
+        'En repos fixe ce jour-là',
+        fiche(salarieId, 'Semaine type', 'semaine'),
+      )
     case 'HORAIRE-PERSO':
       return message.includes('autre horaire')
         ? r(
             'Un autre code est fixé ce jour-là',
-            fiche(salarieId, 'Semaine type'),
+            fiche(salarieId, 'Semaine type', 'semaine'),
             'HORAIRE-PERSO:impose',
           )
         : r(
             "Ce code n'est pas dans ses codes",
-            fiche(salarieId, 'Codes de la fiche'),
+            fiche(salarieId, 'Codes de la fiche', 'horaires'),
             'HORAIRE-PERSO:fiche',
           )
     case 'R-JOUR-MAX':
@@ -150,16 +161,18 @@ export function raisonClaire(
       return r('Ce serait un 6e jour', mention('au-delà de son contrat'))
     case 'R-SEMAINE-MAX':
       return r(
-        max
+        // L'école compte dans la semaine (R-ECOLE-HEURES) : le dire.
+        (max
           ? `${max} atteintes dans la semaine`
-          : 'Heures de la semaine atteintes',
+          : 'Heures de la semaine atteintes') +
+          (message.includes('école comprise') ? ', école comprise' : ''),
         mention('limite légale'),
       )
     case 'R-JOURNEE-ETOILE':
       return message.includes('fixée')
         ? r(
             'Sa journée courte est fixée ce jour-là',
-            fiche(salarieId, 'Semaine type'),
+            fiche(salarieId, 'Semaine type', 'semaine'),
             'R-JOURNEE-ETOILE:fixee',
           )
         : r(

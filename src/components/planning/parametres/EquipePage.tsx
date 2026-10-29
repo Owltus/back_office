@@ -25,6 +25,7 @@ import {
 import { GestionCategories } from '#/components/planning/parametres/equipe/GestionCategories.tsx'
 import {
   idCible,
+  partieCible,
   useOuvrirCible,
 } from '#/components/planning/parametres/reglages/ouvrirCible.ts'
 import type { PropsOuvrir } from '#/components/planning/parametres/reglages/ouvrirCible.ts'
@@ -60,7 +61,12 @@ function postePrincipal(
   return c && postes.find((p) => p.id === c.poste_id)
 }
 
-type Fiche = { id: number | null; groupeId: number | null } | null
+type Fiche = {
+  id: number | null
+  groupeId: number | null
+  /** Partie de la fiche visée par le lien (`salarie-3.semaine`). */
+  partie?: string
+} | null
 
 export function EquipePage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
   const ref = useReferentiel()
@@ -75,7 +81,12 @@ export function EquipePage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
     (cible) => {
       const id = idCible(cible, 'salarie')
       const s = ref.data?.salaries.find((x) => x.id === id)
-      if (s) setFiche({ id: s.id, groupeId: s.groupe_id })
+      if (s)
+        setFiche({
+          id: s.id,
+          groupeId: s.groupe_id,
+          partie: partieCible(cible),
+        })
       return !!s
     },
     onOuvert,
@@ -210,6 +221,7 @@ export function EquipePage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
       <FicheSalarie
         salarieId={fiche?.id ?? null}
         groupeId={fiche?.groupeId ?? null}
+        partie={fiche?.partie}
         ouvert={fiche !== null}
         onFermer={() => setFiche(null)}
       />

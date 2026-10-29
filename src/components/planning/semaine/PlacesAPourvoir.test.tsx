@@ -150,7 +150,7 @@ describe('PlacesAPourvoir', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Semaine type' })[0])
     expect(onAller).toHaveBeenCalledWith({
       page: '/planning/equipe',
-      cible: 'salarie-2',
+      cible: 'salarie-2.semaine',
     })
   })
 

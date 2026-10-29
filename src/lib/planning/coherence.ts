@@ -57,8 +57,25 @@ export type PageReglage =
   | '/planning/equipe'
   | '/planning/besoins'
 
+/** Partie de la fiche d'une personne visée par un lien (son sommaire). */
+export type PartieFiche =
+  | 'identite'
+  | 'ecole'
+  | 'postes'
+  | 'horaires'
+  | 'semaine'
+  | 'absences'
+  | 'regles'
+
+/** `salarie-<id>`, ou `salarie-<id>.<partie>` : la fiche s'ouvre sur cette
+ * partie. */
+export function cibleFiche(salarieId: number, partie?: PartieFiche): string {
+  return partie ? `salarie-${salarieId}.${partie}` : `salarie-${salarieId}`
+}
+
 /** Où corriger : l'écran, et ce qu'il doit ouvrir (`?ouvrir=`). Cibles :
- * `horaire-<id>`, `poste-<id>`, `salarie-<id>`, et sur Besoins
+ * `horaire-<id>`, `poste-<id>`, `salarie-<id>` (`.partie` en plus pour
+ * ouvrir la fiche sur une partie, `cibleFiche`), et sur Besoins
  * `poste-<id>`, `soutien-<id>` (le poste, réglage des apprentis) ou
  * `presence` (la vue matin et soir). */
 export interface LienReglage {
@@ -431,7 +448,7 @@ export function verifierReglages(
       'a-voir',
       'equipe',
       `Sur le poste ${g.poste.nom}, personne ne peut tenir ${libelle} demandé par les besoins (${listeJours(g.jours)}) : ${seule ? `la fiche de ${nomComplet(seule)} ne le permet pas (horaires autorisés ou semaine type)` : 'aucune fiche de ce poste ne le permet (horaires autorisés ou semaine type)'}.`,
-      seule ? `salarie-${seule.id}` : undefined,
+      seule ? cibleFiche(seule.id, 'horaires') : undefined,
     )
   }
 
@@ -460,7 +477,7 @@ export function verifierReglages(
         'a-voir',
         'equipe',
         `${nom} : aucun des horaires cochés dans sa fiche n'est permis sur ses postes. Le planning automatique ne peut pas placer cette personne.`,
-        `salarie-${s.id}`,
+        cibleFiche(s.id, 'horaires'),
       )
     } else if (r.horaires.length) {
       // Sans aucun code, le point bloquant des horaires suffit.
@@ -475,7 +492,7 @@ export function verifierReglages(
           'a-voir',
           'equipe',
           `${nom} : aucun horaire utilisable sur le poste ${poste.nom}, entre sa fiche et ce poste.`,
-          `salarie-${s.id}`,
+          cibleFiche(s.id, 'horaires'),
         )
       }
     }
@@ -489,7 +506,7 @@ export function verifierReglages(
         'a-voir',
         'equipe',
         `${nom} n'a aucun poste : sa semaine type fixe un horaire le ${listeJours(fixes.map(([j]) => j))}, que le planning automatique ne pourra pas poser. Indiquez ses postes dans sa fiche.`,
-        `salarie-${s.id}`,
+        cibleFiche(s.id, 'postes'),
       )
     }
     if (!tenus.length) continue
@@ -518,7 +535,7 @@ export function verifierReglages(
           'a-voir',
           'equipe',
           `${nom} : l'horaire ${code} fixé le ${jour(j)} par sa semaine type n'est permis sur aucun de ses postes.`,
-          `salarie-${s.id}`,
+          cibleFiche(s.id, 'semaine'),
         )
         return
       }
@@ -535,7 +552,7 @@ export function verifierReglages(
           'a-voir',
           'equipe',
           `${nom} : l'horaire ${code} est fixé le ${jour(j)} par sa semaine type, mais aucun besoin ne le demande ce jour-là sur ses postes. Le planning automatique ne pourra pas placer cette personne ce jour-là.`,
-          `salarie-${s.id}`,
+          cibleFiche(s.id, 'semaine'),
         )
       }
     })
