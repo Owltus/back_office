@@ -2067,8 +2067,18 @@ référence des règles (`docs/regles-hcr.md` là-bas).
     semaine d'avant-avant (`avantAvant`) ; non chargée = borne prudente
     (lundi 0 h de la semaine d'avant). Écart voulu avec le prototype : le
     différentiel ne tient plus sur l'école et les paliers.
-  - Une modification à la main qui casse les 11 h est REFUSÉE avec sa raison
-    (D16) ; la génération propose, l'utilisateur valide (D18).
+  - **Mode manuel (décision utilisateur du 2026-10-30, révise D16)** : clic
+    droit (mois, semaine) et volet « Modifier le shift » montrent TOUS les
+    codes de la personne, une rubrique par poste de sa fiche (titulaire, puis
+    dépannage, puis soutien ; `rubriquesDeLaCase`, `codesCase.ts`, chaque
+    rubrique = `codesPermis` pour ce poste), et un code pose le shift sur le
+    poste de SA rubrique : plus de choix de poste préalable (le volet ne le
+    demande que pour un horaire spécifique). Jamais un poste hors fiche, sauf
+    celui du shift existant. La coupure de 11 h (12 h mineur) est permise à
+    la main AVEC son alerte sur la ligne, jamais choisie d'office ; jamais en
+    automatique (générateur inchangé, le vérificateur signale le shift posé).
+    Les autres raisons restent bloquantes. La génération propose,
+    l'utilisateur valide (D18).
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), jours fériés (décision utilisateur relayée par le binôme), scénario
   « exclus » à l'écran (retiré du prototype aussi).

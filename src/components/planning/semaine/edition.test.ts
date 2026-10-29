@@ -257,6 +257,14 @@ describe('poserHoraire', () => {
       pause: 45,
     })
   })
+  it('un code d’une autre rubrique : le poste change avec le code', async () => {
+    const s = shift({ id: 7 })
+    await poserHoraire('2026-11-02', o, s, null, MATIN, s.poste_id + 1)()
+    expect(service.modifierShift).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ horaire_id: 5, poste_id: s.poste_id + 1 }),
+    )
+  })
   it('une absence non fixe : retirée, puis le shift posé', async () => {
     await poserHoraire('2026-11-02', o, undefined, { fixe: false }, MATIN, 10)()
     expect(service.poserAbsences).toHaveBeenCalledWith(1, ['2026-11-04'], null)

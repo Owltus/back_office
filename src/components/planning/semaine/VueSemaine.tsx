@@ -78,11 +78,7 @@ import {
   porteeSemaine,
 } from '#/components/planning/attention.ts'
 import { PanneauAlertes } from '#/components/planning/semaine/PanneauAlertes.tsx'
-import {
-  actuelNonPermis,
-  codesDeLaCase,
-} from '#/components/planning/codesCase.ts'
-import { posteDeReference } from '#/lib/planning/eligibilite.ts'
+import { rubriquesDeLaCase } from '#/components/planning/codesCase.ts'
 import {
   absenceDe,
   estEtoile,
@@ -611,30 +607,23 @@ export function VueSemaine({
     }
     const o = { salarie_id: sid, jour: j }
     const shift = shiftDe(affichee, o)
-    const posteId = posteDeReference(p, referentiel.postes, shift)
     const etoile = etoileProposee(affichee, p, referentiel.horaires, o)
     // Absence ou école posée ici (pas celle de la semaine type) : se retire.
     const st = shift ? null : statutDe(sid, j)
     const absenceRetirable =
       !!st && (st.genre === 'absence' || st.genre === 'ecole') && !st.fixe
-    const permis = codesDeLaCase({
-      referentiel,
-      personne: p,
-      posteId,
-      jour: j,
-      source,
-    })
     setMenu({
       ...o,
       nom: nomComplet(p),
       actuel: shift?.type_shift_id,
-      permis,
-      actuelNonPermis: actuelNonPermis(
-        permis,
-        referentiel.horaires,
-        shift?.type_shift_id,
-      ),
-      posteId,
+      actuelPoste: shift?.poste_id,
+      rubriques: rubriquesDeLaCase({
+        referentiel,
+        personne: p,
+        jour: j,
+        source,
+        shift,
+      }),
       validation: shift
         ? {
             active: shift.epinglee,

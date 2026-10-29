@@ -1,8 +1,10 @@
 /*
  * Menu d'un jour de la vue mois (prototype `MenuCase.tsx`), ouvert au clic
- * ou au clic droit sur une case, au curseur : les horaires possibles pour
- * changer d'un clic, valider ou remettre en proposition, la journée étoile,
- * et l'ouverture de la semaine pour tout modifier (poste, absence, école…).
+ * ou au clic droit sur une case, au curseur : tous les horaires que la
+ * personne peut faire, rangés par casquette (un poste de sa fiche, métier
+ * habituel d'abord), pour changer d'un clic ; valider ou remettre en
+ * proposition, la journée étoile, et l'ouverture de la semaine pour tout
+ * modifier (absence, école…).
  */
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -17,18 +19,14 @@ import {
 
 import {
   dureeHoraire,
-  grouperHoraires,
   heures,
+  NIVEAUX,
   ROUGE_CODE,
   texteSur,
 } from '#/lib/planning/affichage.ts'
-import { posteDeReference } from '#/lib/planning/eligibilite.ts'
 import type { ShiftOut } from '#/lib/planning/semaine.ts'
-import {
-  actuelNonPermis,
-  codesDeLaCase,
-} from '#/components/planning/codesCase.ts'
-import type { SourceCase } from '#/components/planning/codesCase.ts'
+import { ligneDe, rubriquesDeLaCase } from '#/components/planning/codesCase.ts'
+import type { LigneCode, SourceCase } from '#/components/planning/codesCase.ts'
 import { heureAffichee } from '#/lib/planning/temps.ts'
 import type { Horaire, Referentiel, Salarie } from '#/lib/planning/types.ts'
 
@@ -112,64 +110,59 @@ export function MenuJour({
     }
   }, [onFermer])
 
-  const posteId =
-    !shift &&
-    ouverture.posteId !== undefined &&
-    referentiel.postes.some((p) => p.id === ouverture.posteId)
-      ? ouverture.posteId
-      : posteDeReference(personne, referentiel.postes, shift)
-  const permis = ecrire
-    ? codesDeLaCase({ referentiel, personne, posteId, jour, source })
+  // Tous les codes de la personne, une rubrique par poste de sa fiche
+  // (règle unique, coupure de repos choisissable avec son alerte).
+  const r = ecrire
+    ? rubriquesDeLaCase({ referentiel, personne, jour, source, shift })
     : null
-  const tous = permis?.codes ?? []
   // Le code de la place à pourvoir, s'il est permis ici : en tête du menu,
-  // pour être posé d'un clic (la vue semaine le choisit d'office).
-  const codePlace = shift
-    ? undefined
-    : tous.find((h) => h.id === ouverture.horaireId)
-  const proposes = tous.filter((h) => h.id !== codePlace?.id)
-  // Le code actuel du shift qui n'est plus permis ici : sa propre ligne,
-  // grisée, pas de doublon parmi les codes écartés.
-  const horsPermis = permis
-    ? actuelNonPermis(permis, referentiel.horaires, shift?.type_shift_id)
-    : null
-  const ecartes = (permis?.ecartes ?? []).filter(
-    (e) => e.horaire.id !== horsPermis?.horaire.id,
-  )
+  // pour être posé d'un clic sur son poste (la vue semaine le choisit
+  // d'office). Il n'est pas répété dans sa rubrique.
+  const place =
+    !shift && r && ouverture.posteId !== undefined
+      ? ligneDe(r, ouverture.posteId, ouverture.horaireId)
+      : null
   const choisir = (action: () => void) => () => {
     onFermer()
     action()
   }
-  const boutonCode = (h: Horaire) => (
-    <button
-      key={h.id}
-      type="button"
-      role="menuitem"
-      aria-label={`${h.code}, ${h.nom}`}
-      className={ITEM}
-      onClick={choisir(() => {
-        if (shift?.type_shift_id !== h.id && posteId !== undefined)
-          onHoraire(h, posteId)
-      })}
-    >
-      <span
-        className="min-w-12 shrink-0 rounded px-1.5 py-0.5 text-center text-xs font-semibold"
-        style={{
-          background: h.couleur,
-          color: h.code_rouge ? ROUGE_CODE : texteSur(h.couleur),
-        }}
+  const boutonCode = ({ horaire: h, alerte }: LigneCode, posteId: number) => {
+    const actuel = shift?.type_shift_id === h.id && shift.poste_id === posteId
+    return (
+      <button
+        key={h.id}
+        type="button"
+        role="menuitem"
+        aria-label={`${h.code}, ${h.nom}${alerte ? `, ${alerte}` : ''}`}
+        className={ITEM}
+        onClick={choisir(() => {
+          if (!actuel) onHoraire(h, posteId)
+        })}
       >
-        {h.code}
-      </span>
-      <span className="flex-1 text-sm tabular-nums">
-        {heureAffichee(h.debut)}–{heureAffichee(h.fin)} ·{' '}
-        {heures(dureeHoraire(h.debut, h.fin) - h.pause)}
-      </span>
-      {shift?.type_shift_id === h.id && (
-        <Check className="size-4 text-primary" />
-      )}
-    </button>
-  )
+        <span
+          className="min-w-12 shrink-0 rounded px-1.5 py-0.5 text-center text-xs font-semibold"
+          style={{
+            background: h.couleur,
+            color: h.code_rouge ? ROUGE_CODE : texteSur(h.couleur),
+          }}
+        >
+          {h.code}
+        </span>
+        <span className="grid flex-1">
+          <span className="text-sm tabular-nums">
+            {heureAffichee(h.debut)}–{heureAffichee(h.fin)} ·{' '}
+            {heures(dureeHoraire(h.debut, h.fin) - h.pause)}
+          </span>
+          {alerte && (
+            <span className="text-xs text-amber-600 dark:text-amber-400">
+              {alerte}
+            </span>
+          )}
+        </span>
+        {actuel && <Check className="size-4 text-primary" />}
+      </button>
+    )
+  }
 
   return (
     <>
@@ -199,12 +192,15 @@ export function MenuJour({
               : ' : un horaire choisi ici le remplace.'}
           </div>
         )}
-        {codePlace && (
+        {place && (
           <div role="group" aria-label="Place à pourvoir">
-            <div className="px-2 pt-1 pb-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+            <div className="flex items-center gap-1.5 px-2 pt-1 pb-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
               Place à pourvoir
+              <span className="font-normal tracking-normal normal-case">
+                · {place.rubrique.poste.nom}
+              </span>
             </div>
-            {boutonCode(codePlace)}
+            {boutonCode(place.ligne, place.rubrique.poste.id)}
             <div className="-mx-1 my-1 h-px bg-border" />
           </div>
         )}
@@ -278,54 +274,55 @@ export function MenuJour({
             {ecrire ? 'poste, absence, école…' : 'voir le détail'}
           </span>
         </button>
-        {grouperHoraires(proposes).map((g) => (
-          <div key={g.libelle} role="group" aria-label={g.libelle}>
+        {r?.rubriques.map((rub) => (
+          <div key={rub.poste.id} role="group" aria-label={rub.poste.nom}>
             <div className="-mx-1 my-1 h-px bg-border" />
-            <div className="px-2 pt-1 pb-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-              {g.libelle}
+            <div className="flex items-center gap-1.5 px-2 pt-1 pb-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+              <span
+                className="size-2 shrink-0 rounded-full"
+                style={{ background: rub.poste.couleur }}
+              />
+              <span className="flex-1">{rub.poste.nom}</span>
+              <span className="font-normal tracking-normal normal-case">
+                {rub.niveau ? NIVEAUX[rub.niveau].libelle : 'hors de sa fiche'}
+              </span>
             </div>
-            {g.horaires.map(boutonCode)}
+            {rub.lignes
+              .filter(
+                (l) =>
+                  !(
+                    place?.rubrique.poste.id === rub.poste.id &&
+                    place.ligne.horaire.id === l.horaire.id
+                  ),
+              )
+              .map((l) => boutonCode(l, rub.poste.id))}
           </div>
         ))}
-        {permis && (ecartes.length > 0 || permis.texte || horsPermis) && (
+        {r && (r.actuel || r.texte) && (
           <div className="-mx-1 my-1 h-px bg-border" />
         )}
-        {horsPermis && (
+        {r?.actuel && (
           <div
             role="menuitem"
             aria-disabled="true"
-            aria-label={`${horsPermis.horaire.code}, actuel, ${horsPermis.texte}`}
+            aria-label={`${r.actuel.horaire.code}, actuel, ${r.actuel.texte}`}
             className="flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground opacity-60"
           >
             <span className="min-w-12 shrink-0 rounded border px-1.5 py-0.5 text-center text-xs font-semibold">
-              {horsPermis.horaire.code}
+              {r.actuel.horaire.code}
             </span>
-            <span className="flex-1 text-xs">actuel · {horsPermis.texte}</span>
+            <span className="flex-1 text-xs">actuel · {r.actuel.texte}</span>
           </div>
         )}
-        {permis?.texte && !permis.ecartes.length && !horsPermis && (
+        {r?.texte && !r.actuel && (
           <div
             role="menuitem"
             aria-disabled="true"
             className="px-2 py-1.5 text-sm text-muted-foreground"
           >
-            {permis.texte}
+            {r.texte}
           </div>
         )}
-        {ecartes.map((e) => (
-          <div
-            key={e.horaire.id}
-            role="menuitem"
-            aria-disabled="true"
-            aria-label={`${e.horaire.code}, ${e.texte}`}
-            className="flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground opacity-60"
-          >
-            <span className="min-w-12 shrink-0 rounded border px-1.5 py-0.5 text-center text-xs font-semibold">
-              {e.horaire.code}
-            </span>
-            <span className="flex-1 text-xs">{e.texte}</span>
-          </div>
-        ))}
       </div>
     </>
   )

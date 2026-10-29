@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react'
 
 import { TooltipProvider } from '#/components/ui/tooltip.tsx'
 import { analyser } from '#/lib/planning/semaine.ts'
@@ -11,6 +18,7 @@ import {
   dateEnLettres,
 } from '#/components/planning/semaine/EditeurShift.tsx'
 import type { Edition } from '#/components/planning/semaine/EditeurShift.tsx'
+import type { SourceCase } from '#/components/planning/codesCase.ts'
 import type { JourType, Referentiel, Salarie } from '#/lib/planning/types.ts'
 
 /*
@@ -180,10 +188,20 @@ describe('EditeurShift', () => {
 
   it('seulement les postes que la personne tient', () => {
     rendre()
-    expect(screen.queryByText('non tenu')).toBeNull()
     const tenus = referentiel.salaries
       .find((x) => x.id === 3)!
       .competences.map((c) => c.poste_id)
+    // Codes : une rubrique par poste de sa fiche, sans choisir de poste.
+    expect(screen.queryByRole('heading', { name: 'Poste' })).toBeNull()
+    for (const p of referentiel.postes) {
+      expect(!!screen.queryByRole('group', { name: p.nom })).toBe(
+        tenus.includes(p.id) || p.id === SHIFT.poste_id,
+      )
+    }
+    // Horaire spécifique : le choix du poste revient, mêmes postes.
+    fireEvent.click(screen.getByRole('button', { name: /Horaire spécifique/ }))
+    expect(screen.getByRole('heading', { name: 'Poste' })).toBeTruthy()
+    expect(screen.queryByText('non tenu')).toBeNull()
     for (const p of referentiel.postes) {
       const bouton = screen.queryByRole('button', {
         name: new RegExp(`^${p.nom}`),
@@ -248,8 +266,13 @@ const idCode = (code: string) =>
 function rendreAvec(
   ref: Referentiel,
   edition: Edition,
-): { onCreer: ReturnType<typeof vi.fn> } {
+  source: SourceCase = { semaine: null },
+): {
+  onCreer: ReturnType<typeof vi.fn>
+  onModifier: ReturnType<typeof vi.fn>
+} {
   const onCreer = vi.fn()
+  const onModifier = vi.fn()
   render(
     <TooltipProvider>
       <EditeurShift
@@ -257,17 +280,17 @@ function rendreAvec(
         lundi={LUNDI}
         referentiel={ref}
         absence={null}
-        source={{ semaine: null }}
+        source={source}
         onFermer={vi.fn()}
         onCreer={onCreer}
-        onModifier={vi.fn()}
+        onModifier={onModifier}
         onSupprimer={vi.fn()}
         onPoserAbsence={vi.fn()}
         onRetirerAbsence={vi.fn()}
       />
     </TooltipProvider>,
   )
-  return { onCreer }
+  return { onCreer, onModifier }
 }
 
 const libreBouton = () =>
@@ -311,7 +334,7 @@ describe('EditeurShift : règle des codes', () => {
       { mode: 'creation', salarie_id: 3, jour: 2 },
     )
     expect(
-      screen.getByText('Aucun horaire commun entre sa fiche et ce poste'),
+      screen.getByText('Aucun horaire commun entre sa fiche et ses postes'),
     ).toBeTruthy()
     expect(libreBouton().hasAttribute('disabled')).toBe(false)
     expect(libreBouton().getAttribute('aria-pressed')).toBe('false')
@@ -326,10 +349,14 @@ describe('EditeurShift : règle des codes', () => {
 
   it('place à pourvoir : son poste et son code choisis d’office', () => {
     const pressees = () => presse().map((t) => t.trim())
+    const choisiDans = (poste: string) =>
+      within(screen.getByRole('group', { name: poste }))
+        .queryAllByRole('button', { pressed: true })
+        .map((x) => x.textContent.trim())
     // Personne 3 : titulaire Réception (2) et Club (3), Réception d'office.
     rendreAvec(referentiel, { mode: 'creation', salarie_id: 3, jour: 2 })
-    expect(pressees().some((t) => t.startsWith('Réception'))).toBe(true)
-    expect(pressees().some((t) => /^M\s*Matin/.test(t))).toBe(true)
+    expect(choisiDans('Réception').some((t) => /^M\s*Matin/.test(t))).toBe(true)
+    expect(choisiDans('Club')).toEqual([])
     cleanup()
     const { onCreer } = rendreAvec(referentiel, {
       mode: 'creation',
@@ -338,9 +365,9 @@ describe('EditeurShift : règle des codes', () => {
       poste_id: 3,
       horaire_id: idCode('AM'),
     })
-    expect(pressees().some((t) => t.startsWith('Club'))).toBe(true)
-    expect(pressees().some((t) => t.startsWith('Réception'))).toBe(false)
-    expect(pressees().some((t) => /^AM/.test(t))).toBe(true)
+    expect(choisiDans('Club').some((t) => /^AM/.test(t))).toBe(true)
+    expect(choisiDans('Réception')).toEqual([])
+    expect(pressees().filter((t) => /^AM/.test(t))).toHaveLength(1)
     fireEvent.click(principal('Ajouter le shift'))
     expect(onCreer).toHaveBeenCalledWith(
       expect.objectContaining({ poste_id: 3, horaire_id: idCode('AM') }),
@@ -356,7 +383,12 @@ describe('EditeurShift : règle des codes', () => {
       horaire_id: idCode('N'),
     })
     expect(presse().some((t) => /Nuit/.test(t))).toBe(false)
-    expect(presse().some((t) => /^M\s*Matin/.test(t.trim()))).toBe(true)
+    // Le premier code permis, sur le poste de la place.
+    expect(
+      within(screen.getByRole('group', { name: 'Club' }))
+        .getAllByRole('button', { pressed: true })
+        .some((t) => /^M\s*Matin/.test(t.textContent.trim())),
+    ).toBe(true)
   })
 
   it('changer de jour revalide le code ; revenir rend le code d’origine', () => {
@@ -365,7 +397,7 @@ describe('EditeurShift : règle des codes', () => {
       shift: SHIFT,
     })
     const matin = () =>
-      screen
+      within(screen.getByRole('group', { name: 'Réception' }))
         .getByRole('button', { name: /^M\s*Matin/ })
         .getAttribute('aria-pressed')
     expect(matin()).toBe('true')
@@ -379,5 +411,71 @@ describe('EditeurShift : règle des codes', () => {
     choisirJour('Mercredi')
     expect(matin()).toBe('true')
     expect(principal('Enregistrer').disabled).toBe(false)
+  })
+
+  it('un code d’une autre casquette change aussi le poste, sans choix de poste', () => {
+    const { onModifier } = rendreAvec(referentiel, {
+      mode: 'modification',
+      shift: SHIFT,
+    })
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Club' })).getByRole('button', {
+        name: /^M\s*Matin/,
+      }),
+    )
+    fireEvent.click(principal('Enregistrer'))
+    expect(onModifier).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ poste_id: 3, horaire_id: idCode('M') }),
+    )
+  })
+
+  it('coupure de 11 h : choisissable avec son alerte, jamais choisie d’office', () => {
+    // Après-midi le mardi (fin 23:45) : le Matin du mercredi casse les 11 h.
+    const semaine = analyser({
+      lundi: LUNDI,
+      referentiel,
+      absences,
+      affectations: [
+        {
+          id: 8,
+          lundi: LUNDI,
+          salarie_id: 3,
+          poste_id: 2,
+          jour: 1,
+          horaire_id: idCode('AM'),
+          debut: '15:00',
+          fin: '23:45',
+          epinglee: true,
+          court: false,
+          pause: 45,
+        },
+      ],
+      avant: [],
+      apres: [],
+    })
+    const { onCreer } = rendreAvec(
+      referentiel,
+      { mode: 'creation', salarie_id: 3, jour: 2 },
+      { semaine },
+    )
+    const reception = within(screen.getByRole('group', { name: 'Réception' }))
+    const matin = reception.getByRole('button', { name: /^M\s*Matin/ })
+    expect(matin.textContent).toMatch(
+      /Coupure de 11 h non respectée avec la veille/,
+    )
+    expect(matin.hasAttribute('disabled')).toBe(false)
+    // Rien d'office qui casse la coupure : l'après-midi est proposé.
+    expect(matin.getAttribute('aria-pressed')).toBe('false')
+    expect(
+      reception
+        .getByRole('button', { name: /^AM/ })
+        .getAttribute('aria-pressed'),
+    ).toBe('true')
+    fireEvent.click(matin)
+    fireEvent.click(principal('Ajouter le shift'))
+    expect(onCreer).toHaveBeenCalledWith(
+      expect.objectContaining({ poste_id: 2, horaire_id: idCode('M') }),
+    )
   })
 })

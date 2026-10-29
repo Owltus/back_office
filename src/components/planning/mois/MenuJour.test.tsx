@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react'
 
 import { analyser } from '#/lib/planning/semaine.ts'
 import type { Referentiel } from '#/lib/planning/types.ts'
@@ -19,6 +25,7 @@ const { referentiel, absences } = hotelDemo(LUNDI)
 function rendre(
   ref: Referentiel,
   place?: { posteId: number; horaireId?: number | null },
+  salarieId = 3,
 ) {
   const semaine = analyser({
     lundi: LUNDI,
@@ -45,13 +52,19 @@ function rendre(
   const onHoraire = vi.fn()
   render(
     <MenuJour
-      ouverture={{ salarieId: 3, date: '2026-11-04', x: 0, y: 0, ...place }}
+      ouverture={{
+        salarieId,
+        date: '2026-11-04',
+        x: 0,
+        y: 0,
+        ...place,
+      }}
       titre="Essai"
-      personne={ref.salaries.find((s) => s.id === 3)!}
+      personne={ref.salaries.find((s) => s.id === salarieId)!}
       referentiel={ref}
       jour={2}
       source={{ semaine }}
-      shift={place ? undefined : semaine.affectations[0]}
+      shift={place || salarieId !== 3 ? undefined : semaine.affectations[0]}
       ecrire
       onHoraire={onHoraire}
       onSemaine={vi.fn()}
@@ -92,7 +105,12 @@ describe('MenuJour : code actuel non permis', () => {
   it('place à pourvoir : le code choisi est posé sur le poste de la place', () => {
     // Personne 3 : titulaire Réception (2) et Club (3), Réception d'office.
     const { onHoraire } = rendre(referentiel, { posteId: 3 })
-    fireEvent.click(screen.getByRole('menuitem', { name: 'AM, Après-midi' }))
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Club' })).getByRole(
+        'menuitem',
+        { name: 'AM, Après-midi' },
+      ),
+    )
     expect(onHoraire).toHaveBeenCalledWith(
       expect.objectContaining({ code: 'AM' }),
       3,
@@ -110,9 +128,20 @@ describe('MenuJour : code actuel non permis', () => {
     // Premier élément du menu : le code de la place, focalisé à l'ouverture.
     expect(items[0].getAttribute('aria-label')).toBe('AM, Après-midi')
     expect(groupe.contains(items[0])).toBe(true)
+    // Pas répété dans la rubrique de son poste ; les autres casquettes le
+    // gardent.
     expect(
-      screen.getAllByRole('menuitem', { name: 'AM, Après-midi' }),
-    ).toHaveLength(1)
+      within(screen.getByRole('group', { name: 'Club' })).queryByRole(
+        'menuitem',
+        { name: 'AM, Après-midi' },
+      ),
+    ).toBeNull()
+    expect(
+      within(screen.getByRole('group', { name: 'Réception' })).getByRole(
+        'menuitem',
+        { name: 'AM, Après-midi' },
+      ),
+    ).toBeTruthy()
     fireEvent.click(items[0])
     expect(onHoraire).toHaveBeenCalledWith(
       expect.objectContaining({ code: 'AM' }),
@@ -163,6 +192,61 @@ describe('MenuJour : code actuel non permis', () => {
   it('code encore permis : pas de ligne « actuel »', () => {
     rendre(referentiel)
     expect(screen.queryByRole('menuitem', { name: /actuel/ })).toBeNull()
-    expect(screen.getByRole('menuitem', { name: 'M, Matin' })).toBeTruthy()
+    expect(
+      within(screen.getByRole('group', { name: 'Réception' })).getByRole(
+        'menuitem',
+        { name: 'M, Matin' },
+      ),
+    ).toBeTruthy()
+  })
+})
+
+describe('MenuJour : une rubrique par casquette (mode manuel)', () => {
+  const rubriques = () =>
+    screen
+      .getAllByRole('group')
+      .map((g) => g.getAttribute('aria-label'))
+      .filter((n) => n !== 'Place à pourvoir')
+
+  it('titulaire avant dépannage, aucun poste hors de sa fiche', () => {
+    // Personne 2 : titulaire Réception, dépannage Club.
+    rendre(referentiel, undefined, 2)
+    expect(rubriques()).toEqual(['Réception', 'Club'])
+    expect(
+      within(screen.getByRole('group', { name: 'Club' })).getByText(
+        'Dépannage',
+      ),
+    ).toBeTruthy()
+    // Personne 6 : titulaire Club, dépannage Réception (l'ordre suit le
+    // niveau, pas l'ordre des postes).
+    cleanup()
+    rendre(referentiel, undefined, 6)
+    expect(rubriques()).toEqual(['Club', 'Réception'])
+  })
+
+  it('un code pose le shift sur le poste de SA rubrique, sans choisir de poste', () => {
+    // Shift actuel : Matin sur Réception. Le Matin du Club change de poste.
+    const { onHoraire } = rendre(referentiel)
+    const reception = screen.getByRole('group', { name: 'Réception' })
+    const club = screen.getByRole('group', { name: 'Club' })
+    expect(within(reception).getByLabelText('M, Matin').textContent).toMatch(
+      /07:00/,
+    )
+    fireEvent.click(within(club).getByRole('menuitem', { name: 'M, Matin' }))
+    expect(onHoraire).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'M' }),
+      3,
+    )
+    // Le même code sur le même poste : rien à poser.
+    onHoraire.mockClear()
+    cleanup()
+    const deux = rendre(referentiel)
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Réception' })).getByRole(
+        'menuitem',
+        { name: 'M, Matin' },
+      ),
+    )
+    expect(deux.onHoraire).not.toHaveBeenCalled()
   })
 })

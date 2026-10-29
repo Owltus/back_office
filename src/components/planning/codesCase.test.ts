@@ -1,0 +1,263 @@
+import fc from 'fast-check'
+import { describe, expect, it } from 'vitest'
+
+import {
+  codesDeLaCase,
+  ligneDe,
+  rubriquesDeLaCase,
+} from '#/components/planning/codesCase.ts'
+import type { SourceCase } from '#/components/planning/codesCase.ts'
+import { analyser } from '#/lib/planning/semaine.ts'
+import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
+import type { Competence, Niveau, Salarie } from '#/lib/planning/types.ts'
+
+/*
+ * Rubriques du mode manuel (décision utilisateur du 2026-10-30) : tous les
+ * codes de la personne, une rubrique par poste de sa FICHE, titulaire puis
+ * dépannage puis soutien ; chaque rubrique = la règle unique pour ce poste ;
+ * la coupure de repos quotidien choisissable avec son alerte, les autres
+ * raisons bloquantes. Hôtel fictif de démonstration.
+ */
+
+const LUNDI = '2026-11-02'
+const { referentiel, absences } = hotelDemo(LUNDI)
+const idP = (nom: string) => referentiel.postes.find((p) => p.nom === nom)!.id
+const idH = (code: string) =>
+  referentiel.horaires.find((h) => h.code === code)!.id
+const BASE = referentiel.salaries.find((s) => s.id === 3)!
+
+const personne = (champs: Partial<Salarie> = {}): Salarie => ({
+  ...BASE,
+  ...champs,
+})
+const fiche = (...c: Array<[string, Niveau]>): Competence[] =>
+  c.map(([nom, niveau]) => ({ poste_id: idP(nom), niveau }))
+const vide: SourceCase = { semaine: null }
+const nomsDe = (r: ReturnType<typeof rubriquesDeLaCase>) =>
+  r.rubriques.map((x) => x.poste.nom)
+
+/** Semaine où la personne 3 fait l'après-midi le mardi (fin 23:45). */
+const apresMidiMardi: SourceCase = {
+  semaine: analyser({
+    lundi: LUNDI,
+    referentiel,
+    absences,
+    affectations: [
+      {
+        id: 50,
+        lundi: LUNDI,
+        salarie_id: 3,
+        poste_id: idP('Réception'),
+        jour: 1,
+        horaire_id: idH('AM'),
+        debut: '15:00',
+        fin: '23:45',
+        epinglee: true,
+        court: false,
+        pause: 45,
+      },
+    ],
+    avant: [],
+    apres: [],
+  }),
+}
+
+describe('rubriquesDeLaCase', () => {
+  it('ordre : titulaire, puis dépannage, puis soutien, quel que soit l’ordre des postes', () => {
+    const r = rubriquesDeLaCase({
+      referentiel,
+      personne: personne({
+        competences: fiche(
+          ['Club', 'soutien'],
+          ['Veille de nuit', 'occasionnel'],
+          ['Réception', 'titulaire'],
+        ),
+        shifts_autorises: [],
+      }),
+      jour: 2,
+      source: vide,
+    })
+    expect(nomsDe(r)).toEqual(['Réception', 'Veille de nuit', 'Club'])
+    expect(r.rubriques.map((x) => x.niveau)).toEqual([
+      'titulaire',
+      'occasionnel',
+      'soutien',
+    ])
+  })
+
+  it('même niveau : l’ordre des postes', () => {
+    const r = rubriquesDeLaCase({
+      referentiel,
+      personne: personne({
+        competences: fiche(['Club', 'titulaire'], ['Réception', 'titulaire']),
+      }),
+      jour: 2,
+      source: vide,
+    })
+    expect(nomsDe(r)).toEqual(['Réception', 'Club'])
+  })
+
+  it('jamais un poste absent de sa fiche ; celui du shift reste montré en dernier', () => {
+    const p = personne({ competences: fiche(['Réception', 'titulaire']) })
+    expect(
+      nomsDe(
+        rubriquesDeLaCase({ referentiel, personne: p, jour: 2, source: vide }),
+      ),
+    ).toEqual(['Réception'])
+    const avecShift = rubriquesDeLaCase({
+      referentiel,
+      personne: p,
+      jour: 2,
+      source: vide,
+      shift: { poste_id: idP('Club'), type_shift_id: idH('M') },
+    })
+    expect(nomsDe(avecShift)).toEqual(['Réception', 'Club'])
+    expect(avecShift.rubriques[1].niveau).toBeNull()
+  })
+
+  it('chaque rubrique = la règle unique pour son poste (codes et coupure)', () => {
+    fc.assert(
+      fc.property(
+        fc.subarray(['Réception', 'Club', 'Veille de nuit', 'Direction']),
+        fc.subarray(['M', 'MI', 'AM', 'N', 'D']),
+        fc.integer({ min: 0, max: 6 }),
+        (postes, codes, jour) => {
+          const p = personne({
+            competences: fiche(
+              ...postes.map((n): [string, Niveau] => [n, 'titulaire']),
+            ),
+            shifts_autorises: codes.map(idH),
+          })
+          const r = rubriquesDeLaCase({
+            referentiel,
+            personne: p,
+            jour,
+            source: apresMidiMardi,
+          })
+          for (const rub of r.rubriques) {
+            const regle = codesDeLaCase({
+              referentiel,
+              personne: p,
+              posteId: rub.poste.id,
+              jour,
+              source: apresMidiMardi,
+            })
+            const attendus = [
+              ...regle.codes.map((h) => h.id),
+              ...regle.ecartes.map((e) => e.horaire.id),
+            ].sort((a, b) => a - b)
+            expect(
+              rub.lignes.map((l) => l.horaire.id).sort((a, b) => a - b),
+            ).toEqual(attendus)
+            expect(postes).toContain(rub.poste.nom)
+          }
+        },
+      ),
+      { numRuns: 200 },
+    )
+  })
+
+  it('coupure de 11 h : choisissable, avec son alerte sur la ligne', () => {
+    const r = rubriquesDeLaCase({
+      referentiel,
+      personne: BASE,
+      jour: 2,
+      source: apresMidiMardi,
+    })
+    const matin = ligneDe(r, idP('Réception'), idH('M'))
+    expect(matin?.ligne.alerte).toBe(
+      'Coupure de 11 h non respectée avec la veille',
+    )
+    expect(ligneDe(r, idP('Réception'), idH('AM'))?.ligne.alerte).toBeNull()
+    expect(ligneDe(r, idP('Club'), idH('M'))?.ligne.alerte).toMatch(/11 h/)
+  })
+
+  it('coupure de 12 h pour un mineur', () => {
+    const r = rubriquesDeLaCase({
+      referentiel,
+      personne: personne({ mineur: true }),
+      jour: 2,
+      source: apresMidiMardi,
+    })
+    expect(ligneDe(r, idP('Réception'), idH('M'))?.ligne.alerte).toBe(
+      'Coupure de 12 h non respectée avec la veille',
+    )
+  })
+
+  it('les autres raisons restent bloquantes : repos fixé, aucune rubrique', () => {
+    const r = rubriquesDeLaCase({
+      referentiel,
+      personne: personne({
+        semaine_type: BASE.semaine_type.map((j, i) =>
+          i === 2 ? { mode: 'repos' as const } : j,
+        ),
+      }),
+      jour: 2,
+      source: vide,
+    })
+    expect(r.rubriques).toEqual([])
+    expect(r.texte).toBe('Repos fixé par sa semaine type')
+  })
+
+  it('rubrique vide : non affichée ; toutes vides : la raison', () => {
+    // Fiche réduite à la nuit : seule la veille de nuit a des codes.
+    const p = personne({
+      competences: fiche(
+        ['Réception', 'titulaire'],
+        ['Veille de nuit', 'occasionnel'],
+      ),
+      shifts_autorises: [idH('N')],
+    })
+    const r = rubriquesDeLaCase({
+      referentiel,
+      personne: p,
+      jour: 2,
+      source: vide,
+    })
+    expect(nomsDe(r)).toEqual(['Veille de nuit'])
+    expect(r.texte).toBeNull()
+    const aucun = rubriquesDeLaCase({
+      referentiel,
+      personne: { ...p, competences: fiche(['Réception', 'titulaire']) },
+      jour: 2,
+      source: vide,
+    })
+    expect(aucun.texte).toBe(
+      'Aucun horaire commun entre sa fiche et ses postes',
+    )
+    expect(
+      rubriquesDeLaCase({
+        referentiel,
+        personne: personne({ competences: [] }),
+        jour: 2,
+        source: vide,
+      }).texte,
+    ).toBe('Aucun poste dans sa fiche')
+  })
+
+  it('code actuel qui n’est plus permis : à part, ou gardé avec sa raison (éditeur)', () => {
+    const p = personne({ shifts_autorises: [idH('AM')] })
+    const shift = { poste_id: idP('Réception'), type_shift_id: idH('M') }
+    const menu = rubriquesDeLaCase({
+      referentiel,
+      personne: p,
+      jour: 2,
+      source: vide,
+      shift,
+    })
+    expect(menu.actuel?.horaire.code).toBe('M')
+    expect(ligneDe(menu, idP('Réception'), idH('M'))).toBeNull()
+    const editeur = rubriquesDeLaCase({
+      referentiel,
+      personne: p,
+      jour: 2,
+      source: vide,
+      shift,
+      garderActuel: true,
+    })
+    expect(editeur.actuel).toBeNull()
+    expect(ligneDe(editeur, idP('Réception'), idH('M'))?.ligne.alerte).toBe(
+      "N'est plus permis ici",
+    )
+  })
+})

@@ -15,7 +15,10 @@
  * et ajoute ce qu'un menu doit dire : jour fermé (repos fixe, école, absence
  * fixe, hors contrat) et coupure de 11 h (12 h pour un mineur) avec les
  * shifts déjà posés la veille ou le lendemain (D16). Les chiffres de repos
- * viennent de `regles.ts`.
+ * viennent de `regles.ts`. D16 révisée le 2026-10-30 (décision utilisateur) :
+ * en mode manuel, un code `ecartes` pour la coupure reste CHOISISSABLE avec
+ * son alerte (`rubriquesDeLaCase`, `components/planning/codesCase.ts`) ; le
+ * générateur ne la passe jamais, le vérificateur signale le shift posé.
  */
 
 import { reposQuotidienMin } from '#/lib/planning/regles.ts'
@@ -189,7 +192,8 @@ export interface CodesPermis<T> {
   raison: RaisonCodes | null
   /** Phrase prête à afficher quand la liste est vide. */
   texte: string | null
-  /** Codes retirés pour la coupure de repos, avec la raison. */
+  /** Codes qui cassent la coupure de repos, avec la raison : hors de
+   * `codes` (le moteur ne les pose pas), proposés avec alerte à la main. */
   ecartes: Ecarte<T>[]
 }
 

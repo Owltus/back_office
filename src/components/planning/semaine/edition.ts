@@ -162,7 +162,15 @@ export function poserHoraire(
     court: false,
     pause: h.pause,
   }
-  if (shift) return () => service.modifierShift(shift.id, valeurs)
+  // Un code choisi dans une autre rubrique (casquette) change aussi le poste.
+  if (shift)
+    return () =>
+      service.modifierShift(
+        shift.id,
+        shift.poste_id === posteId
+          ? valeurs
+          : { ...valeurs, poste_id: posteId },
+      )
   return async () => {
     const date = ajouterJours(lundi, o.jour)
     const retiree = absence && !absence.fixe

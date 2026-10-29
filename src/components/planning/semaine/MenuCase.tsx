@@ -1,6 +1,8 @@
 /*
- * Menu du clic droit sur une case (prototype `MenuCase.tsx`) : les horaires
- * possibles pour changer d'un clic, valider le shift, la journée étoile. Le
+ * Menu du clic droit sur une case (prototype `MenuCase.tsx`) : tous les
+ * horaires que la personne peut faire, rangés par casquette (un poste de sa
+ * fiche, métier habituel d'abord), pour changer d'un clic sur CE poste ;
+ * valider le shift, la journée étoile. Le
  * positionnement au curseur et la fermeture (Échap, clic ailleurs) sont ceux
  * du `ContextMenu` de shadcn.
  */
@@ -15,12 +17,12 @@ import {
   ContextMenuSeparator,
 } from '#/components/ui/context-menu.tsx'
 import {
-  grouperHoraires,
   heures,
+  NIVEAUX,
   ROUGE_CODE,
   texteSur,
 } from '#/lib/planning/affichage.ts'
-import type { CodesPermis } from '#/lib/planning/eligibilite.ts'
+import type { RubriquesCase } from '#/components/planning/codesCase.ts'
 import { heureAffichee } from '#/lib/planning/temps.ts'
 import { JOURS } from '#/lib/planning/types.ts'
 import type { Horaire } from '#/lib/planning/types.ts'
@@ -30,13 +32,12 @@ export interface OuvertureMenu {
   salarie_id: number
   jour: number
   nom: string
-  /** Code horaire actuel du shift de la case. */
+  /** Code horaire actuel du shift de la case, et son poste. */
   actuel: number | null | undefined
-  /** Codes permis (règle unique), et pourquoi s'il n'y en a pas. */
-  permis: CodesPermis<Horaire>
-  /** Code actuel qui n'est plus permis ici : montré grisé, marqué actuel. */
-  actuelNonPermis?: { horaire: Horaire; texte: string } | null
-  posteId: number | undefined
+  actuelPoste?: number
+  /** Codes permis par casquette (règle unique), et pourquoi s'il n'y en a
+   * pas ; le code actuel qui n'est plus permis est montré grisé. */
+  rubriques: RubriquesCase
   validation?: { active: boolean; onBasculer: () => void }
   etoile?: { active: boolean; onBasculer: () => void }
   /** La case a un shift : la remettre à « Non attribué ». */
@@ -51,14 +52,9 @@ export function MenuCase({
   onHoraire: (h: Horaire, posteId: number) => void
 }) {
   if (!ouverture) return null
-  const { permis, actuel, posteId, validation, etoile, vider } = ouverture
-  const proposes = permis.codes
-  const horsPermis = ouverture.actuelNonPermis ?? null
-  // Le code actuel non permis a sa propre ligne : pas de doublon parmi les
-  // codes écartés pour la coupure.
-  const ecartes = permis.ecartes.filter(
-    (e) => e.horaire.id !== horsPermis?.horaire.id,
-  )
+  const { rubriques, actuel, actuelPoste, validation, etoile, vider } =
+    ouverture
+  const horsPermis = rubriques.actuel
   return (
     <ContextMenuContent className="min-w-64">
       <ContextMenuLabel className="text-xs text-muted-foreground">
@@ -111,6 +107,65 @@ export function MenuCase({
         </>
       )}
       <ContextMenuSeparator />
+      {rubriques.rubriques.map((r, i) => (
+        <ContextMenuGroup key={r.poste.id} aria-label={r.poste.nom}>
+          {i > 0 && <ContextMenuSeparator />}
+          <ContextMenuLabel className="flex items-center gap-1.5 pt-1 pb-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+            <span
+              className="size-2 shrink-0 rounded-full"
+              style={{ background: r.poste.couleur }}
+            />
+            <span className="flex-1">{r.poste.nom}</span>
+            <span className="pl-3 font-normal tracking-normal normal-case">
+              {r.niveau ? NIVEAUX[r.niveau].libelle : 'hors de sa fiche'}
+            </span>
+          </ContextMenuLabel>
+          {r.lignes.map(({ horaire: h, alerte }) => {
+            const estActuel = actuel === h.id && actuelPoste === r.poste.id
+            return (
+              <ContextMenuItem
+                key={h.id}
+                aria-label={`${h.code}, ${h.nom}${alerte ? `, ${alerte}` : ''}`}
+                onSelect={() => {
+                  if (!estActuel) onHoraire(h, r.poste.id)
+                }}
+              >
+                <span
+                  className="min-w-12 shrink-0 rounded px-1.5 py-0.5 text-center text-xs font-semibold"
+                  style={{
+                    background: h.couleur,
+                    color: h.code_rouge ? ROUGE_CODE : texteSur(h.couleur),
+                  }}
+                >
+                  {h.code}
+                </span>
+                <span className="grid flex-1 pl-1">
+                  <span className="text-sm tabular-nums">
+                    {heureAffichee(h.debut)}-{heureAffichee(h.fin)} ·{' '}
+                    {heures(travailCode(h))}
+                  </span>
+                  {alerte && (
+                    <span className="text-xs text-amber-600 dark:text-amber-400">
+                      {alerte}
+                    </span>
+                  )}
+                </span>
+                {estActuel ? (
+                  <Check
+                    className="size-3.5 text-primary"
+                    aria-label="Horaire actuel"
+                  />
+                ) : (
+                  <span className="size-3.5" />
+                )}
+              </ContextMenuItem>
+            )
+          })}
+        </ContextMenuGroup>
+      ))}
+      {(horsPermis || rubriques.texte) && rubriques.rubriques.length > 0 && (
+        <ContextMenuSeparator />
+      )}
       {horsPermis && (
         <ContextMenuItem
           disabled
@@ -124,62 +179,9 @@ export function MenuCase({
           </span>
         </ContextMenuItem>
       )}
-      {permis.texte && !permis.ecartes.length && !horsPermis && (
-        <ContextMenuItem disabled>{permis.texte}</ContextMenuItem>
+      {rubriques.texte && !horsPermis && (
+        <ContextMenuItem disabled>{rubriques.texte}</ContextMenuItem>
       )}
-      {grouperHoraires(proposes).map((g, i) => (
-        <ContextMenuGroup key={g.libelle} aria-label={g.libelle}>
-          {i > 0 && <ContextMenuSeparator />}
-          <ContextMenuLabel className="pt-1 pb-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-            {g.libelle}
-          </ContextMenuLabel>
-          {g.horaires.map((h) => (
-            <ContextMenuItem
-              key={h.id}
-              aria-label={`${h.code}, ${h.nom}`}
-              onSelect={() => {
-                if (actuel !== h.id && posteId !== undefined)
-                  onHoraire(h, posteId)
-              }}
-            >
-              <span
-                className="min-w-12 shrink-0 rounded px-1.5 py-0.5 text-center text-xs font-semibold"
-                style={{
-                  background: h.couleur,
-                  color: h.code_rouge ? ROUGE_CODE : texteSur(h.couleur),
-                }}
-              >
-                {h.code}
-              </span>
-              <span className="flex-1 pl-1 text-sm tabular-nums">
-                {heureAffichee(h.debut)}-{heureAffichee(h.fin)} ·{' '}
-                {heures(travailCode(h))}
-              </span>
-              {actuel === h.id ? (
-                <Check
-                  className="size-3.5 text-primary"
-                  aria-label="Horaire actuel"
-                />
-              ) : (
-                <span className="size-3.5" />
-              )}
-            </ContextMenuItem>
-          ))}
-        </ContextMenuGroup>
-      ))}
-      {ecartes.length > 0 && proposes.length > 0 && <ContextMenuSeparator />}
-      {ecartes.map((e) => (
-        <ContextMenuItem
-          key={e.horaire.id}
-          disabled
-          aria-label={`${e.horaire.code}, ${e.texte}`}
-        >
-          <span className="min-w-12 shrink-0 rounded border px-1.5 py-0.5 text-center text-xs font-semibold">
-            {e.horaire.code}
-          </span>
-          <span className="flex-1 pl-1 text-xs">{e.texte}</span>
-        </ContextMenuItem>
-      ))}
     </ContextMenuContent>
   )
 }

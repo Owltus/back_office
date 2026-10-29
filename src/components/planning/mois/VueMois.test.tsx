@@ -7,6 +7,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react'
 
 import { TooltipProvider } from '#/components/ui/tooltip.tsx'
@@ -358,7 +359,12 @@ describe('VueMois', { timeout: 20_000 }, () => {
     fireEvent.contextMenu(
       screen.getByRole('button', { name: /^Lucas Petit, .*18.* : Congés/ }),
     )
-    fireEvent.click(await screen.findByRole('menuitem', { name: /Matin/ }))
+    fireEvent.click(
+      within(await screen.findByRole('group', { name: 'Réception' })).getByRole(
+        'menuitem',
+        { name: /Matin/ },
+      ),
+    )
     await waitFor(() => expect(service.poserAbsences).toHaveBeenCalledTimes(2))
     expect(service.poserAbsences).toHaveBeenNthCalledWith(
       1,
@@ -374,7 +380,7 @@ describe('VueMois', { timeout: 20_000 }, () => {
     )
   })
 
-  it('clic droit : les codes qui cassent la coupure de 11 h sont grisés avec la raison', async () => {
+  it('clic droit : la coupure de 11 h se passe à la main, avec son alerte (mode manuel)', async () => {
     droits = { pret: true, lire: true, ecrire: true, gerer: false }
     // Après-midi la veille (mardi 17, fin 23:45) : Matin et Middle le
     // mercredi 18 laisseraient moins de 11 h de repos.
@@ -400,19 +406,29 @@ describe('VueMois', { timeout: 20_000 }, () => {
         name: /^Lucas Petit, .*18.* · Non attribué/,
       }),
     )
-    const matin = await screen.findByRole('menuitem', {
-      name: 'M, Coupure de 11 h non respectée avec la veille',
+    // Décision utilisateur du 2026-10-30 : choisissable, l'alerte sur la
+    // ligne ; le vérificateur signalera l'infraction sur le shift posé.
+    const club = await screen.findByRole('group', { name: 'Club' })
+    const matin = within(club).getByRole('menuitem', {
+      name: 'M, Matin, Coupure de 11 h non respectée avec la veille',
     })
-    expect(matin.getAttribute('aria-disabled')).toBe('true')
+    expect(matin.getAttribute('aria-disabled')).toBeNull()
     expect(
-      screen.getByRole('menuitem', {
-        name: 'MI, Coupure de 11 h non respectée avec la veille',
+      within(club).getByRole('menuitem', {
+        name: 'MI, Middle, Coupure de 11 h non respectée avec la veille',
       }),
     ).toBeTruthy()
-    // L'après-midi reste proposé ; un code grisé ne pose rien.
-    expect(screen.getByRole('menuitem', { name: /^AM, / })).toBeTruthy()
+    // L'après-midi reste proposé sans alerte.
+    expect(
+      within(club).getByRole('menuitem', { name: 'AM, Après-midi' }),
+    ).toBeTruthy()
     fireEvent.click(matin)
-    expect(service.ajouterShift).not.toHaveBeenCalled()
+    await waitFor(() =>
+      expect(service.ajouterShift).toHaveBeenCalledWith(
+        '2026-11-16',
+        expect.objectContaining({ poste_id: 3, jour: 2, horaire_id: 1 }),
+      ),
+    )
   })
 
   it('clic sur un jour : l’éditeur complet, date en toutes lettres, écrit dans la semaine du jour', async () => {

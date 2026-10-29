@@ -1,7 +1,9 @@
 /*
  * Éditeur d'un shift, en tiroir (prototype `EditeurShift.tsx`) : créer ou
- * modifier un shift (code horaire ou heures libres avec pause, journée
- * courte, poste, personne, jour, validé), ou poser une absence à la place,
+ * modifier un shift (code horaire choisi parmi TOUTES les casquettes de la
+ * personne, rangées par poste : le code choisi fixe aussi le poste ; ou
+ * heures libres avec pause et poste, journée courte, personne, jour,
+ * validé), ou poser une absence à la place,
  * ou supprimer le shift. Le tiroir se ferme aussitôt l'action lancée : le
  * résultat arrive par le fil de messages. Partagé par la vue semaine et la
  * vue mois (`dateEnLettres` : le jour s'y lit en toutes lettres, prototype
@@ -34,7 +36,6 @@ import { Switch } from '#/components/ui/switch.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import {
   disponibleLe,
-  grouperHoraires,
   heures,
   NIVEAUX,
   texteSur,
@@ -56,8 +57,16 @@ import type { Horaire, Referentiel } from '#/lib/planning/types.ts'
 import { cn } from '#/lib/utils.ts'
 import { titreRegle } from '#/components/planning/semaine/PanneauAlertes.tsx'
 import { NEUTRE, travailCode } from '#/components/planning/semaine/edition.ts'
-import { codesDeLaCase } from '#/components/planning/codesCase.ts'
-import type { SourceCase } from '#/components/planning/codesCase.ts'
+import {
+  codesDeLaCase,
+  ligneDe,
+  rubriquesDeLaCase,
+} from '#/components/planning/codesCase.ts'
+import type {
+  LigneCode,
+  RubriquesCase,
+  SourceCase,
+} from '#/components/planning/codesCase.ts'
 
 export type Edition =
   | {
@@ -191,19 +200,61 @@ export function EditeurShift({
           ecartes: [],
         }
   }
-  // Le code de la place s'il est permis ici (règle unique, sans repli),
-  // sinon le premier permis.
-  const permisInitiaux = existant
-    ? []
-    : permisPour(posteParDefaut, salarieInitial, jourInitial).codes
-  const horaireInitial = existant
-    ? undefined
-    : (permisInitiaux.find((h) => h.id === creation?.horaire_id) ??
-      permisInitiaux.at(0))
+  // Tous les codes de la personne ce jour-là, par casquette (mode manuel :
+  // la coupure de repos est choisissable avec son alerte). Le code actuel du
+  // shift reste choisissable sur son poste tant que la personne et le jour
+  // n'ont pas changé : c'est ce qui est posé, pas une proposition.
+  const rubriquesPour = (salarieId: number, jour: number): RubriquesCase => {
+    const s = salaries.find((x) => x.id === salarieId)
+    if (!s) return { rubriques: [], texte: null, actuel: null }
+    const memeCase =
+      !!existant && existant.salarie_id === salarieId && existant.jour === jour
+    return rubriquesDeLaCase({
+      referentiel,
+      personne: s,
+      jour,
+      source,
+      shift: memeCase
+        ? { poste_id: existant.poste_id, type_shift_id: existant.type_shift_id }
+        : null,
+      sauf: existant?.id,
+      garderActuel: true,
+    })
+  }
+  /** Premier code sans alerte : sur ce poste s'il est donné, sinon dans la
+   * première rubrique qui en a un (métier habituel d'abord). Jamais un code
+   * qui casse la coupure de repos d'office. */
+  const premierLibre = (
+    r: RubriquesCase,
+    posteId?: number,
+  ): { poste: number; horaire: Horaire } | undefined => {
+    for (const rub of r.rubriques) {
+      if (posteId !== undefined && rub.poste.id !== posteId) continue
+      const l = rub.lignes.find((x) => !x.alerte)
+      if (l) return { poste: rub.poste.id, horaire: l.horaire }
+    }
+    return undefined
+  }
+  // Le code de la place s'il est permis ici sur son poste (règle unique,
+  // sans repli), sinon le premier permis de ce poste ; sans place, le
+  // premier permis du métier habituel.
+  const rubriquesInitiales = existant
+    ? null
+    : rubriquesPour(salarieInitial, jourInitial)
+  const ligneDemandee =
+    rubriquesInitiales && posteDemande !== undefined
+      ? ligneDe(rubriquesInitiales, posteDemande, creation?.horaire_id)
+      : null
+  const initial = rubriquesInitiales
+    ? ligneDemandee && !ligneDemandee.ligne.alerte
+      ? { poste: posteDemande ?? 0, horaire: ligneDemandee.ligne.horaire }
+      : premierLibre(rubriquesInitiales, posteDemande)
+    : undefined
+  const horaireInitial = initial?.horaire
 
   const [b, setB] = useState<Brouillon>(() => ({
     salarie_id: salarieInitial,
-    poste_id: posteParDefaut,
+    poste_id: initial?.poste ?? posteParDefaut,
     jour: jourInitial,
     horaire_id: existant
       ? existant.type_shift_id
@@ -246,11 +297,11 @@ export function EditeurShift({
   const ecoleActuelle = !!absenceActuelle && estEcole(absenceActuelle)
   const motifChoisi = motifs.find((m) => m.id === motif)
 
-  // Changer de poste, de personne ou de jour : le code choisi est revalidé.
-  // Revenir à la case d'origine du shift lui rend son code. Ailleurs, un code
-  // qui n'est plus permis cède la place au premier permis (poste, personne)
-  // ou est désélectionné (jour) ; l'horaire spécifique est retiré si le jour
-  // est fermé.
+  // Changer de poste (horaire spécifique), de personne ou de jour : le code
+  // choisi est revalidé. Revenir à la case d'origine du shift lui rend son
+  // code. Ailleurs, un code qui n'est plus proposé cède la place au premier
+  // permis (personne) ou est désélectionné (jour) ; l'horaire spécifique est
+  // retiré si le jour est fermé.
   const changerQui = (
     champs: Partial<Pick<Brouillon, 'poste_id' | 'salarie_id' | 'jour'>>,
   ) => {
@@ -272,25 +323,23 @@ export function EditeurShift({
       setLibre(existant.type_shift_id === null)
       return
     }
-    const p = permisPour(suite.poste_id, suite.salarie_id, suite.jour)
     if (libre) {
+      const p = permisPour(suite.poste_id, suite.salarie_id, suite.jour)
       if (!jourFerme(p)) return maj(champs)
       setLibre(false)
       return maj({ ...champs, horaire_id: null })
     }
-    if (
-      suite.horaire_id !== null &&
-      p.codes.some((h) => h.id === suite.horaire_id)
-    )
-      return maj(champs)
-    const premier = 'jour' in champs ? undefined : p.codes.at(0)
+    const r = rubriquesPour(suite.salarie_id, suite.jour)
+    if (ligneDe(r, suite.poste_id, suite.horaire_id)) return maj(champs)
+    const premier = 'jour' in champs ? undefined : premierLibre(r)
     maj(
       premier
         ? {
             ...champs,
-            horaire_id: premier.id,
-            debut: premier.debut,
-            fin: premier.fin,
+            poste_id: premier.poste,
+            horaire_id: premier.horaire.id,
+            debut: premier.horaire.debut,
+            fin: premier.horaire.fin,
             court: false,
           }
         : { ...champs, horaire_id: null, court: false },
@@ -319,7 +368,9 @@ export function EditeurShift({
           ? 'La pause doit être plus courte que le shift.'
           : null
       : null
-  // Même règle que le clic droit et que le moteur (`codesPermis`).
+  // Même règle que le clic droit et que le moteur (`codesPermis`) : les
+  // codes par casquette, et pour l'horaire spécifique celle du poste choisi.
+  const rubriques = rubriquesPour(b.salarie_id, b.jour)
   const permis = permisPour(b.poste_id, b.salarie_id, b.jour)
   const surPlace =
     !!existant &&
@@ -330,13 +381,17 @@ export function EditeurShift({
   // déjà posé ici.
   const libreInterdit =
     jourFerme(permis) && !(surPlace && existant.type_shift_id === null)
-  const rienChoisi = motif === null && !vider && !libre && !code
+  const codeChoisi =
+    !libre && b.horaire_id !== null
+      ? ligneDe(rubriques, b.poste_id, b.horaire_id)
+      : null
+  const rienChoisi = motif === null && !vider && !libre && !codeChoisi
   const bloque = indisponible
     ? 'Pas sous contrat (ou désactivé) ce jour-là : voir sa fiche'
     : motif === null && !vider && libre && libreInterdit
       ? permis.texte
       : rienChoisi
-        ? (permis.texte ?? 'Choisissez un horaire')
+        ? (rubriques.texte ?? 'Choisissez un horaire')
         : erreurLibre
 
   const valeurs = (): ShiftSaisi => {
@@ -385,12 +440,7 @@ export function EditeurShift({
     }
   }
 
-  // Le code actuel d'un shift reste visible tant que la case n'a pas
-  // changé : c'est ce qui est posé, pas une proposition.
-  const codes = permis.codes
-    .concat(horaires.filter((h) => surPlace && h.id === existant.type_shift_id))
-    .filter((h, i, l) => l.findIndex((x) => x.id === h.id) === i)
-  // Seulement les postes qu'elle tient (et celui du shift, s'il n'en est
+  // Horaire spécifique : seulement les postes qu'elle tient (et celui du shift, s'il n'en est
   // pas) : un hôtelier ne voit plus Supervision ni Direction.
   const tenus = postes.filter(
     (p) =>
@@ -503,57 +553,65 @@ export function EditeurShift({
                   }}
                 />
               )}
-              {grouperHoraires(codes).map((g) => [
-                <span
-                  key={`titre-${g.libelle}`}
-                  className="col-span-2 pt-1.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase"
-                >
-                  {g.libelle}
-                </span>,
-                ...g.horaires.map((h) => (
-                  <Choix
-                    key={h.id}
-                    couleur={h.couleur}
-                    code={h.code}
-                    titre={h.nom}
-                    detail={`${heureAffichee(h.debut)}-${heureAffichee(h.fin)}${h.pause > 0 ? ` · ${heures(travailCode(h))} de travail` : ''}`}
-                    choisi={
-                      !vider &&
-                      motif === null &&
-                      !libre &&
-                      b.horaire_id === h.id
-                    }
-                    onClick={() => {
-                      setVider(false)
-                      setLibre(false)
-                      setMotif(null)
-                      maj({
-                        horaire_id: h.id,
-                        debut: h.debut,
-                        fin: h.fin,
-                        pause: h.pause,
-                      })
-                    }}
-                  />
-                )),
-              ])}
-              {permis.texte && !permis.ecartes.length && (
+              {rubriques.rubriques.map((r) => {
+                const enCours =
+                  !vider &&
+                  motif === null &&
+                  !libre &&
+                  b.poste_id === r.poste.id
+                return (
+                  <div
+                    key={r.poste.id}
+                    role="group"
+                    aria-label={r.poste.nom}
+                    className={cn(
+                      'col-span-2 grid grid-cols-2 gap-1.5 rounded-lg border border-transparent p-1.5',
+                      enCours && 'border-primary/40 bg-primary/5',
+                    )}
+                  >
+                    <span className="col-span-2 flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                      <span
+                        className="size-2 shrink-0 rounded-full"
+                        style={{ background: r.poste.couleur }}
+                      />
+                      <span className="flex-1">{r.poste.nom}</span>
+                      <span className="font-normal tracking-normal normal-case">
+                        {r.niveau
+                          ? NIVEAUX[r.niveau].libelle
+                          : 'hors de sa fiche'}
+                      </span>
+                    </span>
+                    {r.lignes.map(({ horaire: h, alerte }: LigneCode) => (
+                      <Choix
+                        key={h.id}
+                        couleur={h.couleur}
+                        code={h.code}
+                        titre={h.nom}
+                        detail={`${heureAffichee(h.debut)}-${heureAffichee(h.fin)}${h.pause > 0 ? ` · ${heures(travailCode(h))} de travail` : ''}`}
+                        alerte={alerte}
+                        choisi={enCours && b.horaire_id === h.id}
+                        onClick={() => {
+                          setVider(false)
+                          setLibre(false)
+                          setMotif(null)
+                          maj({
+                            poste_id: r.poste.id,
+                            horaire_id: h.id,
+                            debut: h.debut,
+                            fin: h.fin,
+                            pause: h.pause,
+                          })
+                        }}
+                      />
+                    ))}
+                  </div>
+                )
+              })}
+              {rubriques.texte && (
                 <span className="col-span-2 rounded-md border border-dashed px-2 py-1.5 text-xs text-muted-foreground">
-                  {permis.texte}
+                  {rubriques.texte}
                 </span>
               )}
-              {permis.ecartes.map((e) => (
-                <Choix
-                  key={`ecarte-${e.horaire.id}`}
-                  couleur={NEUTRE}
-                  code={e.horaire.code}
-                  titre={e.horaire.nom}
-                  detail={e.texte}
-                  choisi={false}
-                  desactive
-                  onClick={() => undefined}
-                />
-              ))}
               <span className="col-span-2 pt-1.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
                 Autre
               </span>
@@ -698,7 +756,7 @@ export function EditeurShift({
             )}
           </section>
 
-          {motif === null && (
+          {motif === null && libre && (
             <section className="space-y-2">
               <h3 className="text-sm font-semibold">Poste</h3>
               <div className="flex flex-wrap gap-1.5">
@@ -860,12 +918,15 @@ function Choix({
   detail,
   choisi,
   desactive = false,
+  alerte = null,
   onClick,
 }: {
   couleur: string
   code: string
   titre: string
   detail: string
+  /** Règle passée à la main (coupure de repos) : dite sur la ligne. */
+  alerte?: string | null
   choisi: boolean
   /** Montré grisé, avec sa raison en détail : non cliquable. */
   desactive?: boolean
@@ -895,6 +956,11 @@ function Choix({
         <small className="truncate text-xs text-muted-foreground">
           {detail}
         </small>
+        {alerte && (
+          <small className="text-xs text-amber-600 dark:text-amber-400">
+            {alerte}
+          </small>
+        )}
       </span>
     </button>
   )

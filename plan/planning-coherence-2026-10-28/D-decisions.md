@@ -35,7 +35,7 @@ Numérotées D1 à D11, elles ne seront pas renumérotées.
 | D13 | Ordre des personnes | Titulaire, puis dépannage ; un soutien jamais seul | Réponse utilisateur |
 | D14 | Dépannage + soutien sans titulaire | Accepté si aucun titulaire n'est libre, sans alerte | Réponse utilisateur |
 | D15 | Équité | Week-ends, soirs, matins tôt, au mieux, jamais obligatoire | Réponse utilisateur |
-| D16 | Coupure de 11 h à la main | Refusée, avec la raison dans le menu | Réponse utilisateur |
+| D16 | Coupure de 11 h à la main | Refusée, avec la raison dans le menu. Révisé le 2026-10-30 : permise en manuel avec son alerte sur la ligne, jamais en automatique | Réponse utilisateur |
 | D17 | Points « À vérifier » | Tous, groupés par écran, 5 visibles puis « N de plus », bloquants en tête | Réponse utilisateur |
 | D18 | Relecture après génération | Propositions à valider, comme aujourd'hui, résumé en tête | Réponse utilisateur |
 | D19 | Production | Rien ne part sans « push » | Réponse utilisateur |
@@ -59,3 +59,9 @@ Sur l'équité : « l'équité doit être réalisée au mieux, mais pas obligato
 Et surtout, c'est très important de bien respecter les 11 h de coupure. »
 → D15 (coût léger, sous les contrats), D16 ; les 11 h restent une contrainte
 dure du moteur, et deviennent un refus dans les menus.
+
+**2026-10-30, mode manuel.** D16 révisée par l'utilisateur : « La coupure de
+11 h : en manuel on doit pouvoir passer outre, avec le message d'alerte comme
+aujourd'hui ; en automatique, jamais. » Les menus et le volet d'un shift
+montrent tous les horaires de la personne, rangés par casquette (un poste de
+sa fiche, métier habituel d'abord), sans choisir de poste avant.
