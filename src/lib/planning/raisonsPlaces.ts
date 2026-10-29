@@ -23,6 +23,7 @@ export type Mention =
   | 'absence posée'
   | 'déjà placé'
   | 'à appeler'
+  | 'à placer'
 
 export type Issue =
   | { genre: 'lien'; lien: LienReglage; action: string }
@@ -59,9 +60,11 @@ export const REGLES_BLOCAGE = [
   'EXTRA',
 ] as const
 
-/** Sans aucune règle enfreinte : la personne pourrait prendre la place, au
- * prix d'heures au-delà de son contrat (c'est pour cela que le planning
- * automatique ne l'a pas fait). */
+/** Sans aucune règle enfreinte : la personne peut prendre la place. On ne
+ * dit rien de ses heures (rien ne les a comptées ici) : une place nécessaire
+ * vide passe avant les heures en plus (`coutPlaceVide`), donc le planning
+ * automatique l'aurait prise ; c'est une place laissée vide à la main ou
+ * pas encore générée. */
 export const RAISON_LIBRE = 'LIBRE'
 
 const fiche = (
@@ -97,10 +100,7 @@ export function raisonClaire(
   const max = maximum(message)
   switch (regle) {
     case RAISON_LIBRE:
-      return r(
-        'Libre, mais au-delà de ses heures',
-        mention('au-delà de son contrat'),
-      )
+      return r('Libre ce jour-là', mention('à placer'))
     case 'POSTE':
       return r(
         'Ne tient pas ce poste',
@@ -181,7 +181,15 @@ export function raisonClaire(
             'R-JOURNEE-ETOILE:nombre',
           )
     case 'R-REPOS-HEBDO-35H':
-      return r('Pas de repos de 35 h dans la semaine', mention('limite légale'))
+      // Deux sens : la semaine elle-même, ou la reprise qui couperait le
+      // repos de 35 h de la semaine d'avant.
+      return message.includes('semaine précédente')
+        ? r(
+            "Reprise trop tôt après le repos de 35 h de la semaine d'avant",
+            mention('limite légale'),
+            'R-REPOS-HEBDO-35H:avant',
+          )
+        : r('Pas de repos de 35 h dans la semaine', mention('limite légale'))
     case 'R-REPOS-HEBDO-MINEUR':
       return r(
         'Mineur : deux jours de repos de suite',
@@ -215,11 +223,12 @@ export function raisonsClaires(
 }
 
 /** La personne peut prendre la place : rien ne l'en empêche, sinon ses
- * heures ou un appel (extra). */
+ * heures (6e jour, journée courte) ou un appel (extra). */
 export const estPossible = (raisons: readonly RaisonClaire[]) =>
   raisons.every(
     (r) =>
       r.issue.genre === 'mention' &&
       (r.issue.mention === 'au-delà de son contrat' ||
-        r.issue.mention === 'à appeler'),
+        r.issue.mention === 'à appeler' ||
+        r.issue.mention === 'à placer'),
   )

@@ -110,7 +110,7 @@ export function SectionCompetences({
   return (
     <Section
       titre="Compétences"
-      aide="Les postes qu'elle tient, et comment. Titulaire : seule sur le poste. Dépannage : seule aussi, mais le moteur préfère un titulaire. Soutien (apprenti, stagiaire) : ne compte pas seule, toujours avec une personne autonome."
+      aide="Les postes qu'elle tient, et comment. Titulaire : seule sur le poste. Dépannage : seule aussi, mais le moteur préfère un titulaire, sauf si celui-ci ferait des heures en plus ou un 6e jour. Soutien (apprenti, stagiaire) : ne compte pas seule, toujours avec une personne autonome."
     >
       {tenus.length === 0 && (
         <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">

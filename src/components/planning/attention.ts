@@ -18,7 +18,7 @@ import { JOURS } from '#/lib/planning/types.ts'
 import type { Horaire, Poste, Salarie } from '#/lib/planning/types.ts'
 
 const RAISON_EXTRA = 'extra disponible'
-const SANS_RAISON = 'disponible, au détriment de ses heures'
+const SANS_RAISON = 'disponible ce jour-là'
 
 export interface Raison {
   message: string

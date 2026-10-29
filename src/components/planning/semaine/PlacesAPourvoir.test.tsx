@@ -173,7 +173,7 @@ describe('PlacesAPourvoir', () => {
     fireEvent.click(mardi)
     expect(screen.getByText("Personne n'est libre ce jour-là.")).toBeTruthy()
     fireEvent.click(lundi)
-    // Céleste (libre, au-delà de ses heures) puis l'extra ; jamais Alba
+    // Céleste (libre ce jour-là) puis l'extra ; jamais Alba
     // (limite légale) ni Bruno (repos fixe).
     const choix = screen
       .getAllByRole('button')

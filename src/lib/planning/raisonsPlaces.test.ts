@@ -25,6 +25,7 @@ const MENTIONS: readonly Mention[] = [
   'absence posée',
   'déjà placé',
   'à appeler',
+  'à placer',
 ]
 
 /** Chaque message que `violationsSalarie` et `raisonsBlocage` écrivent,
@@ -60,7 +61,10 @@ const MESSAGES: Record<(typeof REGLES_BLOCAGE)[number], string[]> = {
     'sa journée étoile (courte) est fixée ce jour-là',
     '2 journées courtes dans la semaine, une seule prévue au contrat',
   ],
-  'R-REPOS-HEBDO-35H': ['pas de repos de 35 h consécutives dans la semaine'],
+  'R-REPOS-HEBDO-35H': [
+    'pas de repos de 35 h consécutives dans la semaine',
+    'reprend trop tôt : la semaine précédente perdrait son repos de 35 h consécutives',
+  ],
   'R-REPOS-HEBDO-MINEUR': ['mineur : pas deux jours de repos consécutifs'],
   EXTRA: ['extra disponible : à appeler et poser à la main'],
 }
@@ -188,13 +192,24 @@ describe('raisons des places à pourvoir', () => {
     }
   })
 
-  it('sans règle enfreinte : libre, au-delà de ses heures', () => {
+  it('sans règle enfreinte : libre, sans rien affirmer de ses heures', () => {
     const [r] = raisonsClaires(4, [], [])
     expect(r.cle).toBe(RAISON_LIBRE)
-    expect(r.issue).toEqual({
-      genre: 'mention',
-      mention: 'au-delà de son contrat',
-    })
+    expect(r.phrase).toBe('Libre ce jour-là')
+    expect(r.phrase).not.toMatch(/heure|contrat/)
+    expect(r.issue).toEqual({ genre: 'mention', mention: 'à placer' })
+    expect(estPossible([r])).toBe(true)
+  })
+
+  it("repos de 35 h : la semaine elle-même ou la reprise après la semaine d'avant", () => {
+    const [dans, avant] = MESSAGES['R-REPOS-HEBDO-35H']
+    const a = raisonClaire('R-REPOS-HEBDO-35H', dans, 3)
+    const b = raisonClaire('R-REPOS-HEBDO-35H', avant, 3)
+    expect(a.phrase).toBe('Pas de repos de 35 h dans la semaine')
+    expect(b.phrase).toBe(
+      "Reprise trop tôt après le repos de 35 h de la semaine d'avant",
+    )
+    expect(a.cle).not.toBe(b.cle)
   })
 
   it('règle inconnue : le message, avec la fiche (jamais muet)', () => {

@@ -122,7 +122,7 @@ describe('points d’attention', () => {
         message: "c'est un de ses jours de repos fixes",
         noms: ['Léa', 'Paul'],
       },
-      { message: 'disponible, au détriment de ses heures', noms: ['Zoé'] },
+      { message: 'disponible ce jour-là', noms: ['Zoé'] },
     ])
     // D13 : titulaires, puis dépannage, puis extras ; chacun avec sa raison
     // en clair, et qui peut prendre la place.
@@ -135,7 +135,7 @@ describe('points d’attention', () => {
       ]),
     ).toEqual([
       ['Léa', 'titulaire', ['En repos fixe ce jour-là'], false],
-      ['Zoé', 'titulaire', ['Libre, mais au-delà de ses heures'], true],
+      ['Zoé', 'titulaire', ['Libre ce jour-là'], true],
       ['Paul', 'occasionnel', ['En repos fixe ce jour-là'], false],
       ['Max', 'extra', ['Extra libre'], true],
       ['Ana', 'extra', ['Extra libre'], true],
@@ -299,7 +299,7 @@ describe('places regroupées (même poste, même code, plusieurs jours)', () => 
         'Zoé',
         [
           ['En repos fixe ce jour-là', ['2026-11-02']],
-          ['Libre, mais au-delà de ses heures', ['2026-11-03', '2026-11-05']],
+          ['Libre ce jour-là', ['2026-11-03', '2026-11-05']],
         ],
       ],
     ])
