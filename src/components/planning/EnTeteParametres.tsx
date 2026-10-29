@@ -2,7 +2,9 @@
  * Navigation du Planning : le planning est l'écran par défaut ; les
  * paramètres (équipe, postes, horaires et absences, besoins) s'ouvrent par
  * l'engrenage (prototype `MenuParametres`), et chaque écran de paramètres a
- * sa flèche « Revenir au planning ».
+ * sa flèche « Revenir au planning ». Sur un écran de paramètres, la pastille
+ * « À vérifier » (`ControleReglages`, étape 5 du plan
+ * `planning-coherence-2026-10-28`) précède l'engrenage.
  */
 
 import { useState } from 'react'
@@ -17,6 +19,7 @@ import {
   Users,
 } from 'lucide-react'
 
+import { ControleReglages } from '#/components/planning/parametres/ControleReglages.tsx'
 import { ImportPrototypeDialog } from '#/components/planning/ImportPrototypeDialog.tsx'
 import { useDroitsPlanning } from '#/components/planning/hooks/usePlanning.ts'
 
@@ -39,13 +42,15 @@ export const PARAMETRES = [
 
 export type CheminParametre = (typeof PARAMETRES)[number]['to']
 
-/** L'engrenage et son menu. `actif` : l'écran de paramètres ouvert. */
+/** L'engrenage et son menu. `actif` : l'écran de paramètres ouvert (la
+ * pastille « À vérifier » est alors montrée avant lui). */
 export function MenuParametres({ actif }: { actif?: CheminParametre }) {
   const navigate = useNavigate()
   const { gerer } = useDroitsPlanning()
   const [importer, setImporter] = useState(false)
   return (
     <>
+      {actif && <ControleReglages />}
       <DropdownMenu>
         <Tip label="Paramètres : équipe, postes, horaires et absences, besoins">
           <DropdownMenuTrigger asChild>

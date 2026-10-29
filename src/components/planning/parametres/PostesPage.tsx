@@ -36,6 +36,11 @@ import type { SaisiePoste } from '#/components/planning/parametres/reglages/vali
 import { ConfirmDialog } from '#/components/shared/ConfirmDialog.tsx'
 import { ChoixCodes } from '#/components/planning/parametres/reglages/ChoixCodes.tsx'
 import { TousOuCertains } from '#/components/planning/parametres/reglages/TousOuCertains.tsx'
+import {
+  idCible,
+  useOuvrirCible,
+} from '#/components/planning/parametres/reglages/ouvrirCible.ts'
+import type { PropsOuvrir } from '#/components/planning/parametres/reglages/ouvrirCible.ts'
 import { LigneCompacte } from '#/components/planning/parametres/reglages/ListeCompacte.tsx'
 import {
   Sheet,
@@ -70,7 +75,7 @@ const saisieDe = (p: Poste): SaisiePoste => ({
   presence: p.presence,
 })
 
-export function PostesPage() {
+export function PostesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
   const droits = useDroitsPlanning()
   const ref = useReferentiel()
   const modifiable = droits.pret && droits.gerer
@@ -86,6 +91,18 @@ export function PostesPage() {
     setOuvert(undefined)
     setNouveau(null)
   }
+  useOuvrirCible(
+    lien,
+    !!ref.data,
+    (cible) => {
+      const id = idCible(cible, 'poste')
+      if (id !== undefined && ref.data?.postes.some((p) => p.id === id)) {
+        setNouveau(null)
+        setOuvert(id)
+      }
+    },
+    onOuvert,
+  )
 
   const creer = () => {
     if (!ref.data) return

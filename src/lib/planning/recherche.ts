@@ -35,3 +35,15 @@ export function lirePlanningSearch(s: Record<string, unknown>): PlanningSearch {
     r.mois = s.mois
   return r
 }
+
+/** Paramètres d'URL des écrans de réglages : `?ouvrir=poste-3` ouvre le
+ * réglage visé (lien d'un point « À vérifier », `coherence.ts`). */
+export interface ReglagesSearch {
+  ouvrir?: string
+}
+
+export function lireReglagesSearch(s: Record<string, unknown>): ReglagesSearch {
+  return typeof s.ouvrir === 'string' && /^[a-z]+(-\d+)?$/.test(s.ouvrir)
+    ? { ouvrir: s.ouvrir }
+    : {}
+}

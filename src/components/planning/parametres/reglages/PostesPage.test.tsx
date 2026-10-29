@@ -78,6 +78,18 @@ const carte = (nom: string) => {
 }
 
 describe('Postes', () => {
+  it('un lien ?ouvrir=poste-<id> ouvre le volet du poste (À vérifier)', async () => {
+    const reception = etat.referentiel?.postes.find(
+      (p) => p.nom === 'Réception',
+    )
+    const onOuvert = vi.fn()
+    monter(<PostesPage ouvrir={`poste-${reception?.id}`} onOuvert={onOuvert} />)
+    expect(
+      await screen.findByRole('region', { name: 'Poste Réception' }),
+    ).toBeTruthy()
+    expect(onOuvert).toHaveBeenCalledTimes(1)
+  })
+
   it('en lecture : tout se lit, rien ne se modifie', () => {
     etat.droits = { pret: true, lire: true, ecrire: false, gerer: false }
     monter(<PostesPage />)

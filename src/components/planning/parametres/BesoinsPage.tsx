@@ -29,6 +29,11 @@ import {
   useReferentiel,
 } from '#/components/planning/hooks/usePlanning.ts'
 import { useNotifier } from '#/components/planning/Messages.tsx'
+import {
+  idCible,
+  useOuvrirCible,
+} from '#/components/planning/parametres/reglages/ouvrirCible.ts'
+import type { PropsOuvrir } from '#/components/planning/parametres/reglages/ouvrirCible.ts'
 import { CadreReglages } from '#/components/planning/parametres/reglages/cadre.tsx'
 import { ConsignesPresence } from '#/components/planning/parametres/reglages/ConsignesPresence.tsx'
 import {
@@ -98,7 +103,7 @@ type Vue = 'postes' | 'presence'
 const cleCase = (posteId: number, ligne: LigneBesoin, jour: number) =>
   `${posteId}|${ligne.cle}|${jour}`
 
-export function BesoinsPage() {
+export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
   const droits = useDroitsPlanning()
   const ref = useReferentiel()
   const modifiable = droits.pret && droits.gerer
@@ -127,6 +132,26 @@ export function BesoinsPage() {
   }, [])
   const [vue, setVue] = useState<Vue>('postes')
   const [couche, setCouche] = useState<Couche>('effectif')
+  // Lien d'un point « À vérifier » : la vue matin et soir, ou un poste
+  // (réglage des apprentis et stagiaires pour `soutien-<id>`).
+  useOuvrirCible(
+    lien,
+    !!ref.data,
+    (cible) => {
+      if (cible === 'presence') {
+        setVue('presence')
+        return
+      }
+      const soutien = idCible(cible, 'soutien')
+      const id = soutien ?? idCible(cible, 'poste')
+      if (id === undefined) return
+      setVue('postes')
+      if (soutien !== undefined) setCouche('soutien')
+      // Après le rendu de la vue par poste.
+      window.setTimeout(() => allerAuPoste(id), 0)
+    },
+    onOuvert,
+  )
 
   /** Le besoin enregistré en base pour cette case, d'après la dernière lecture. */
   const enBase = useCallback(
@@ -272,7 +297,7 @@ export function BesoinsPage() {
                         key={poste.id}
                         type="button"
                         className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs transition-colors hover:bg-muted"
-                        onClick={(e) => allerAuPoste(e.currentTarget, poste.id)}
+                        onClick={() => allerAuPoste(poste.id)}
                       >
                         <span
                           className="size-2 rounded-full"
@@ -309,9 +334,9 @@ export function BesoinsPage() {
  * Défile la SEULE zone de contenu jusqu'au poste, sous la barre collée
  * (`scrollIntoView` faisait aussi défiler la fenêtre, en-tête compris).
  */
-function allerAuPoste(depuis: HTMLElement, posteId: number) {
+function allerAuPoste(posteId: number) {
   const cible = document.getElementById(`besoins-poste-${posteId}`)
-  const barre = depuis.closest<HTMLElement>('[data-barre-besoins]')
+  const barre = document.querySelector<HTMLElement>('[data-barre-besoins]')
   let zone = cible?.parentElement ?? null
   while (zone && !/(auto|scroll)/.test(getComputedStyle(zone).overflowY)) {
     zone = zone.parentElement

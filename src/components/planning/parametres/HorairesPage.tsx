@@ -31,6 +31,11 @@ import {
   PastilleCode,
 } from '#/components/planning/parametres/reglages/ListeCompacte.tsx'
 import {
+  idCible,
+  useOuvrirCible,
+} from '#/components/planning/parametres/reglages/ouvrirCible.ts'
+import type { PropsOuvrir } from '#/components/planning/parametres/reglages/ouvrirCible.ts'
+import {
   CadreReglages,
   EnTeteSection,
   useBrouillon,
@@ -167,7 +172,7 @@ const saisieMotif = (m: Motif): SaisieMotif => ({
   nature: m.nature,
 })
 
-export function HorairesPage() {
+export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
   const droits = useDroitsPlanning()
   const ref = useReferentiel()
   const modifiable = droits.pret && droits.gerer
@@ -200,6 +205,19 @@ export function HorairesPage() {
     setNouvelHoraire(null)
     setNouveauMotif(null)
   }
+  useOuvrirCible(
+    lien,
+    !!data,
+    (cible) => {
+      const id = idCible(cible, 'horaire')
+      if (id !== undefined && data?.horaires.some((h) => h.id === id)) {
+        setNouvelHoraire(null)
+        setNouveauMotif(null)
+        setOuvert({ type: 'horaire', id })
+      }
+    },
+    onOuvert,
+  )
 
   const creerHoraire = () => {
     if (!data) return

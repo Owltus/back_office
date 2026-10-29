@@ -23,6 +23,11 @@ import {
   heuresContrat,
 } from '#/components/planning/parametres/equipe/brouillon.ts'
 import { GestionCategories } from '#/components/planning/parametres/equipe/GestionCategories.tsx'
+import {
+  idCible,
+  useOuvrirCible,
+} from '#/components/planning/parametres/reglages/ouvrirCible.ts'
+import type { PropsOuvrir } from '#/components/planning/parametres/reglages/ouvrirCible.ts'
 import { FicheSalarie } from '#/components/planning/parametres/FicheSalarie.tsx'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { PageAvecEnTete } from '#/components/shared/PageAvecEnTete.tsx'
@@ -57,13 +62,23 @@ function postePrincipal(
 
 type Fiche = { id: number | null; groupeId: number | null } | null
 
-export function EquipePage() {
+export function EquipePage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
   const ref = useReferentiel()
   const { gerer } = useDroitsPlanning()
   const aujourdhui = useAujourdhui()
   const [fiche, setFiche] = useState<Fiche>(null)
   const [categories, setCategories] = useState(false)
   const salaries = ref.data?.salaries ?? []
+  useOuvrirCible(
+    lien,
+    !!ref.data,
+    (cible) => {
+      const id = idCible(cible, 'salarie')
+      const s = ref.data?.salaries.find((x) => x.id === id)
+      if (s) setFiche({ id: s.id, groupeId: s.groupe_id })
+    },
+    onOuvert,
+  )
 
   const ajouter = (
     <Button
