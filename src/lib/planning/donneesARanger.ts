@@ -125,7 +125,9 @@ const pluriel = (n: number, un: string, plusieurs: string) =>
 const heures = (h: Pick<Horaire, 'debut' | 'fin'>) => `${h.debut} - ${h.fin}`
 
 /** Les postes tenus par la personne, autres que `sauf`, qui permettent ce
- * code ; un seul retenu (titulaire d'abord), sinon aucun. */
+ * code ; un seul retenu (titulaire d'abord), sinon aucun. Un poste tenu en
+ * soutien n'est jamais proposé : on n'y compte pas comme une personne du
+ * poste, le shift y serait aussi faux qu'avant. */
 function posteAlternatif(
   s: Salarie | undefined,
   sauf: number,
@@ -134,7 +136,11 @@ function posteAlternatif(
 ): Poste | null {
   if (!s) return null
   const possibles = s.competences
-    .filter((c) => c.poste_id !== sauf)
+    .filter(
+      (c) =>
+        c.poste_id !== sauf &&
+        (c.niveau === 'titulaire' || c.niveau === 'occasionnel'),
+    )
     .map((c) => ({ c, poste: postes.get(c.poste_id) }))
     .filter(
       (x): x is { c: (typeof s.competences)[number]; poste: Poste } =>

@@ -318,9 +318,20 @@ export function fiche(
   const postes = [...niveaux]
     .filter(([, n]) => n === 'titulaire' || n === 'occasionnel')
     .map(([p]) => p)
+  // R-ECOLE-JOURS : les jours d'école sont des jours travaillés hors de l'hôtel.
+  const ecole: Set<number> = exclu
+    ? new Set()
+    : new Set(
+        [...absents]
+          .filter(([j, m]) => m !== null && ctx.ecole.has(m) && !hors.has(j))
+          .map(([j]) => j),
+      )
+  // Un jour d'école ne compte pas comme absence : il retire sa durée d'école
+  // des heures dues (R-ECOLE-HEURES, `heuresDues`).
   let decomptes = 0
   for (const [j, m] of absents) {
-    if ((m === null || !ctx.sansDecompte.has(m)) && !hors.has(j)) decomptes++
+    if (ecole.has(j) || hors.has(j)) continue
+    if (m === null || !ctx.sansDecompte.has(m)) decomptes++
   }
   const reposFixes = new Set<number>()
   semaine.forEach((e, j) => {
@@ -354,14 +365,7 @@ export function fiche(
     // Hors contrat : comme une absence, les heures dues baissent au prorata.
     joursAbsenceDecomptes: decomptes + hors.size,
     horsContrat: hors,
-    // R-ECOLE-JOURS : les jours d'école sont des jours travaillés hors de l'hôtel.
-    joursEcole: exclu
-      ? new Set()
-      : new Set(
-          [...absents]
-            .filter(([j, m]) => m !== null && ctx.ecole.has(m) && !hors.has(j))
-            .map(([j]) => j),
-        ),
+    joursEcole: ecole,
     // R-ECOLE-HEURES (L6222-24) : chaque jour d'école compte cette durée.
     minutesEcoleJour: x.heures_ecole_jour,
     reposFixes,

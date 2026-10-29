@@ -221,6 +221,22 @@ describe('donneesARanger : code que le poste ne permet pas', () => {
     expect(g[0].posteCible?.id).toBe(20)
   })
 
+  it('un poste tenu en soutien n’est jamais proposé', () => {
+    const seul = salarie(1, [
+      { poste_id: 10, niveau: 'titulaire' },
+      { poste_id: 20, niveau: 'soutien' },
+    ])
+    const d = { horaire_id: 5, debut: '08:00', fin: '18:00', pause: 60 }
+    expect(donneesARanger(ref([seul]), [shift(d)])[0].correction).toBeNull()
+    // Soutien à côté d'un occasionnel : l'occasionnel seul est retenu.
+    const deux = salarie(1, [
+      { poste_id: 10, niveau: 'titulaire' },
+      { poste_id: 20, niveau: 'occasionnel' },
+      { poste_id: 30, niveau: 'soutien' },
+    ])
+    expect(donneesARanger(ref([deux]), [shift(d)])[0].posteCible?.id).toBe(20)
+  })
+
   it('deux postes possibles au même niveau : aucune proposition', () => {
     const s = salarie(1, [
       { poste_id: 10, niveau: 'titulaire' },

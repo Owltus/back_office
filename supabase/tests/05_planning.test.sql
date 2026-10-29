@@ -108,6 +108,11 @@ select t_sem.f, t_ids.s2, t_ids.pa, 1, t_ids.h, '07:00', '15:45', false, 45 from
 union all
 select t_sem.l, t_ids.s1, t_ids.pa, 0, t_ids.h, '07:00', '15:45', true, 45 from t_sem, t_ids;
 insert into public.planning_semaines_verrouillees (lundi) select l from t_sem;
+-- P doit être passée mais OUVERTE : sur une base de dev (ou une copie de la
+-- prod), la semaine dernière est souvent verrouillée, et le verrou (PL423)
+-- passerait avant la règle du passé (PL409) qu'on éprouve ici. La
+-- transaction du test est annulée : le verrou revient tel quel.
+delete from public.planning_semaines_verrouillees where lundi = (select p from t_sem);
 
 create function pg_temp.q(p text) returns text language sql as $$
   select replace(replace(replace(replace(replace(replace(replace(replace(replace(p,

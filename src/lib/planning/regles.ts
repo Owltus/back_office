@@ -72,7 +72,8 @@ export interface Fiche {
   shiftsAutorises?: ReadonlySet<string>
   postesOccasionnels?: ReadonlySet<string>
   postesSoutien?: ReadonlySet<string>
-  /** Jours d'absence de la semaine comptés dans les heures. */
+  /** Jours d'absence de la semaine comptés dans les heures, HORS jours
+   * d'école (ceux-là retirent leur durée d'école, voir `heuresDues`). */
   joursAbsenceDecomptes?: number
   joursEcole?: ReadonlySet<number>
   /** Durée d'une journée d'école (R-ECOLE-HEURES), `MINUTES_ECOLE_JOUR` sinon. */
@@ -142,8 +143,25 @@ export function etoileTravaillable(f: Fiche): boolean {
  * Sans absence : le contrat. Sinon des journées pleines sur les jours qui
  * restent (39 h et un congé : 4 × 8 h) ; à 35 h ou moins, contrat / 5 par
  * jour. Journée étoile fixée sur un jour travaillable : comptée courte.
+ *
+ * R-ECOLE-HEURES (L6222-24) : un jour d'école retire SA durée d'école
+ * (`minutesEcoleJour`, 7 h par défaut), pas une journée de contrat. Ce sont
+ * les minutes que le plafond de la semaine lui réserve déjà : dues et
+ * plafond restent d'accord, sans « il manque » permanent. École et absences
+ * qui couvrent les cinq jours du contrat : rien de dû. Seule source des
+ * heures dues : générateur, vérificateur et affichage les lisent ici.
  */
 export function heuresDues(f: Fiche): number {
+  const jours = f.joursEcole?.size ?? 0
+  if (!jours) return heuresDuesHorsEcole(f)
+  // Les jours du contrat sont tous pris (école et absences) : rien à placer,
+  // le week-end reste un repos.
+  if (jours + (f.joursAbsenceDecomptes ?? 0) >= JOURS_CONTRAT) return 0
+  const ecole = jours * (f.minutesEcoleJour ?? MINUTES_ECOLE_JOUR)
+  return Math.max(0, heuresDuesHorsEcole(f) - ecole)
+}
+
+function heuresDuesHorsEcole(f: Fiche): number {
   const absents = Math.min(f.joursAbsenceDecomptes ?? 0, JOURS_CONTRAT)
   if (!absents) return f.minutesHebdo
   if (!journeeEtoile(f)) {
