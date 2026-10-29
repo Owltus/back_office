@@ -20,6 +20,21 @@ export interface Reglage {
   renfort: number
 }
 
+/** Une personne autonome peut être placée là (nécessaire ou en plus) : un
+ * apprenti ou un stagiaire n'est jamais seul, il lui en faut une
+ * (`generateur.ts` : soutiens <= autonomes, autonomes <= effectif + en plus). */
+export const aUneBase = (r: Reglage) => r.effectif + r.renfort > 0
+
+/** Des apprentis ou stagiaires demandés sans personne autonome possible à
+ * côté : le planning automatique ne les place jamais. La case le montre, avec
+ * de quoi le retirer, et le total ne le compte pas. */
+export const soutienSansBase = (r: Reglage) => r.soutien > 0 && !aUneBase(r)
+
+/** Ce qu'une case compte dans le total du jour : le chiffre visible et
+ * utile, jamais des apprentis qui ne seront jamais placés. */
+export const placesComptees = (r: Reglage, couche: keyof Reglage) =>
+  couche === 'soutien' && !aUneBase(r) ? 0 : r[couche]
+
 export function correspond(b: Besoin, ligne: LigneBesoin): boolean {
   return ligne.horaire_id !== null
     ? b.horaire_id === ligne.horaire_id

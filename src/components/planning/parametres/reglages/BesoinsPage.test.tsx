@@ -233,6 +233,103 @@ describe('Besoins', () => {
     ).toBeTruthy()
   })
 
+  describe('apprentis sans personne à côté', () => {
+    /** Direction : du lundi au vendredi, 1 apprenti, personne d'autre. */
+    function orphelins() {
+      const ref = referentielDemo()
+      const id = ref.postes.find((p) => p.nom === 'Direction')?.id
+      for (const b of ref.besoins) if (b.poste_id === id) b.renfort = 0
+      etat.referentiel = ref
+      monter(<BesoinsPage />)
+      fireEvent.click(
+        screen.getByRole('radio', { name: 'Apprentis et stagiaires' }),
+      )
+      return poste('Direction')
+    }
+    const totaux = (r: ReturnType<typeof poste>) =>
+      within(r.getByRole('row', { name: /Total du jour/ }))
+        .getAllByRole('cell')
+        .slice(0, 7)
+        .map((c) => c.textContent)
+
+    it('le total ne compte que ce qui sera placé, la case montre le chiffre', () => {
+      const d = orphelins()
+      expect(totaux(d)).toEqual(['0', '0', '0', '0', '0', '0', '0'])
+      expect(
+        d.getByRole('button', {
+          name: 'Apprentis et stagiaires Lundi, Direction : 1 sans personne à côté, retirer',
+        }),
+      ).toBeTruthy()
+      expect(d.getByText(/demandés 5 jours sans personne à côté/)).toBeTruthy()
+    })
+
+    it('un clic sur la case la remet à 0', async () => {
+      const d = orphelins()
+      fireEvent.click(
+        d.getByRole('button', {
+          name: 'Apprentis et stagiaires Mardi, Direction : 1 sans personne à côté, retirer',
+        }),
+      )
+      await waitFor(() => expect(service.reglerBesoin).toHaveBeenCalledTimes(1))
+      expect(service.reglerBesoin.mock.calls[0][0]).toMatchObject({
+        jour: 1,
+        effectif: 0,
+        soutien: 0,
+        renfort: 0,
+      })
+    })
+
+    it('Retirer sur la ligne : tous les jours concernés', async () => {
+      const d = orphelins()
+      fireEvent.click(
+        d.getByRole('button', {
+          name: 'Retirer les apprentis et stagiaires sans personne à côté, Direction',
+        }),
+      )
+      await waitFor(() => expect(service.reglerBesoin).toHaveBeenCalledTimes(5))
+      expect(
+        service.reglerBesoin.mock.calls.map(([v]) => [v.jour, v.soutien]),
+      ).toEqual([
+        [0, 0],
+        [1, 0],
+        [2, 0],
+        [3, 0],
+        [4, 0],
+      ])
+    })
+
+    it('avec une place en plus à côté : le compteur reste, et compte', () => {
+      monter(<BesoinsPage />)
+      fireEvent.click(
+        screen.getByRole('radio', { name: 'Apprentis et stagiaires' }),
+      )
+      const d = poste('Direction')
+      expect(totaux(d)).toEqual(['1', '1', '1', '1', '1', '0', '0'])
+      expect(
+        d.getByRole('button', {
+          name: 'Apprentis et stagiaires Lundi, Direction : un de moins',
+        }),
+      ).toBeTruthy()
+      expect(d.queryByText(/sans personne à côté/)).toBeNull()
+    })
+
+    it('retirer la dernière place en plus retire aussi l’apprenti', async () => {
+      monter(<BesoinsPage />)
+      fireEvent.click(screen.getByRole('radio', { name: 'En plus si besoin' }))
+      fireEvent.click(
+        poste('Direction').getByRole('button', {
+          name: 'En plus si besoin Lundi, Direction : un de moins',
+        }),
+      )
+      await waitFor(() => expect(service.reglerBesoin).toHaveBeenCalledTimes(1))
+      expect(service.reglerBesoin.mock.calls[0][0]).toMatchObject({
+        effectif: 0,
+        renfort: 0,
+        soutien: 0,
+      })
+    })
+  })
+
   it('consignes de présence : au moins et au plus, le plafond suit', async () => {
     const lundiSoir = {
       id: 7,

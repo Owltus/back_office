@@ -41,8 +41,11 @@ import {
   Segmente,
 } from '#/components/planning/parametres/reglages/controles.tsx'
 import {
+  aUneBase,
   horairesAAjouter,
   lignesDuPoste,
+  placesComptees,
+  soutienSansBase,
   trouverBesoin,
 } from '#/components/planning/parametres/reglages/besoins.ts'
 import type {
@@ -490,7 +493,7 @@ function CartePoste({
     let total = 0
     for (const l of lignes) {
       const r = affiche(poste.id, l, j)
-      total += r[couche]
+      total += placesComptees(r, couche)
       presenceSemaine += r.effectif * presence(l.debut, l.fin)
     }
     return total
@@ -700,8 +703,17 @@ function LigneTableau({
   const ailleurs = COUCHES.filter(
     (c) =>
       c.valeur !== couche &&
-      JOURS.some((_, j) => affiche(poste.id, ligne, j)[c.valeur] > 0),
+      JOURS.some(
+        (_, j) => placesComptees(affiche(poste.id, ligne, j), c.valeur) > 0,
+      ),
   ).map((c) => c.libelle.toLowerCase())
+  // Apprentis ou stagiaires sans personne nécessaire ni en plus : jamais
+  // placés. Dit sur la ligne, dans chaque choix, avec de quoi les retirer
+  // d'un clic.
+  const orphelins = JOURS.flatMap((_, j) => {
+    const r = affiche(poste.id, ligne, j)
+    return soutienSansBase(r) ? [{ jour: j, ...r }] : []
+  })
 
   return (
     <tr
@@ -738,6 +750,32 @@ function LigneTableau({
                 Ce code n'est pas dans les horaires possibles du poste.
               </p>
             )}
+            {orphelins.length > 0 && (
+              <div className="mt-1 flex flex-wrap items-start gap-x-2 gap-y-1 text-xs text-amber-500">
+                <p className="flex items-start gap-1">
+                  <TriangleAlert className="mt-px size-3 shrink-0" />
+                  {orphelins.length > 1
+                    ? `Apprentis ou stagiaires demandés ${orphelins.length} jours sans personne à côté : ils ne seront jamais placés.`
+                    : 'Apprenti ou stagiaire demandé un jour sans personne à côté : il ne sera jamais placé.'}
+                </p>
+                {modifiable && (
+                  <button
+                    type="button"
+                    className="font-medium text-primary underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none"
+                    aria-label={`Retirer les apprentis et stagiaires sans personne à côté, ${h?.nom ?? 'horaire spécifique'}`}
+                    onClick={() =>
+                      regler(
+                        poste,
+                        ligne,
+                        orphelins.map((o) => ({ ...o, soutien: 0 })),
+                      )
+                    }
+                  >
+                    Retirer
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </td>
@@ -746,8 +784,9 @@ function LigneTableau({
         const existe = r.effectif > 0 || r.soutien > 0 || r.renfort > 0
         const libelle = `${nom}, ${h?.nom ?? 'horaire spécifique'}`
         const valeur = r[couche]
-        // Un apprenti n'est jamais seul : pas de place sans personne nécessaire.
-        const sansBase = couche === 'soutien' && r.effectif === 0
+        // Un apprenti n'est jamais seul : pas de place sans personne
+        // nécessaire ou en plus à côté.
+        const sansBase = couche === 'soutien' && !aUneBase(r)
         return (
           <td
             key={nom}
@@ -759,8 +798,28 @@ function LigneTableau({
             )}
             data-jour-ajuste={(compte && j === evidence.jour) || undefined}
           >
-            {sansBase ? (
-              <Tip label="Mettez d'abord une personne nécessaire sur ce jour">
+            {sansBase && r.soutien > 0 ? (
+              <Tip
+                label={
+                  modifiable
+                    ? "Personne n'est prévu à côté : cette place ne sera jamais pourvue. Cliquez pour la retirer."
+                    : "Personne n'est prévu à côté : cette place ne sera jamais pourvue."
+                }
+              >
+                <button
+                  type="button"
+                  disabled={desactive}
+                  aria-label={`${LIBELLE_COUCHE[couche]} ${libelle} : ${r.soutien} sans personne à côté, retirer`}
+                  className="inline-block rounded px-1.5 py-0.5 font-semibold text-amber-500 tabular-nums line-through decoration-amber-500/60 hover:bg-amber-500/10 disabled:no-underline disabled:hover:bg-transparent"
+                  onClick={() =>
+                    regler(poste, ligne, [{ jour: j, ...r, soutien: 0 }])
+                  }
+                >
+                  {r.soutien}
+                </button>
+              </Tip>
+            ) : sansBase ? (
+              <Tip label="Mettez d'abord une personne nécessaire (ou en plus si besoin) sur ce jour">
                 <span
                   tabIndex={0}
                   className="inline-block py-0.5 text-muted-foreground/50"
@@ -782,11 +841,14 @@ function LigneTableau({
                           jour: j,
                           effectif: v,
                           // Un nouveau besoin ouvre par défaut une place de
-                          // soutien ; plus personne : plus de soutien.
-                          soutien: v === 0 ? 0 : existe ? r.soutien : 1,
+                          // soutien ; plus personne à côté : plus de soutien.
+                          soutien:
+                            v + r.renfort === 0 ? 0 : existe ? r.soutien : 1,
                           renfort: r.renfort,
                         }
-                      : { jour: j, ...r, [couche]: v },
+                      : couche === 'renfort' && v + r.effectif === 0
+                        ? { jour: j, ...r, renfort: 0, soutien: 0 }
+                        : { jour: j, ...r, [couche]: v },
                   ])
                 }
               />

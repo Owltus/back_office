@@ -616,17 +616,37 @@ export function verifierReglages(
     )
   }
 
-  // Apprentis et stagiaires demandés là où personne ne l'est.
+  // Apprentis et stagiaires demandés là où personne ne l'est. Seuls
+  // comptent ceux qui ont une personne autonome possible à côté (nécessaire
+  // ou en plus) : les autres ne sont jamais placés, ce que dit le point
+  // suivant.
+  const avecBase = (b: Besoin) => b.effectif + b.renfort > 0
   for (const p of r.postes) {
     const jours = valides
-      .filter((b) => b.poste_id === p.id && b.soutien > 0)
+      .filter((b) => b.poste_id === p.id && b.soutien > 0 && avecBase(b))
       .map((b) => b.jour)
     if (!jours.length || tenants(p.id, (n) => n === 'soutien').length) continue
     ajouter(
       `soutien:${p.id}`,
       'a-voir',
       'besoins',
-      `Le poste ${p.nom} demande des apprentis ou stagiaires (${listeJours(jours)}), mais personne n'y est inscrit à ce niveau.`,
+      `Le poste ${p.nom} demande des apprentis ou stagiaires (${listeJours(jours)}), mais aucun apprenti ni stagiaire de l'équipe ne tient ce poste.`,
+      `soutien-${p.id}`,
+    )
+  }
+
+  // Apprentis et stagiaires demandés sans personne nécessaire ni en plus :
+  // jamais placés (un apprenti n'est jamais seul).
+  for (const p of r.postes) {
+    const jours = valides
+      .filter((b) => b.poste_id === p.id && b.soutien > 0 && !avecBase(b))
+      .map((b) => b.jour)
+    if (!jours.length) continue
+    ajouter(
+      `soutien-seul:${p.id}`,
+      'a-voir',
+      'besoins',
+      `Le poste ${p.nom} demande des apprentis ou stagiaires sans personne à côté (${listeJours(jours)}). Ces places ne seront jamais pourvues : retirez-les ou ajoutez une personne nécessaire.`,
       `soutien-${p.id}`,
     )
   }

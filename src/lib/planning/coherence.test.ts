@@ -972,15 +972,36 @@ describe('verifierReglages, points complets (test de mutation)', () => {
     r.salaries[0].competences.push({ poste_id: 2, niveau: 'titulaire' })
     r.salaries[0].competences.push({ poste_id: 1, niveau: 'soutien' })
     r.besoins.push(besoin(2, 0, hM, { effectif: 0, renfort: 1 }))
-    r.besoins.push(besoin(2, 2, hM, { effectif: 0, soutien: 1 }))
-    expect(seul(r)).toEqual(
+    r.besoins.push(besoin(2, 2, hM, { renfort: 1, soutien: 1 }))
+    expect(verifierReglages(r).find((x) => x.id === 'soutien:2')).toEqual(
       point(
         'soutien:2',
         'besoins',
-        "Le poste Bar demande des apprentis ou stagiaires (mercredi), mais personne n'y est inscrit à ce niveau.",
+        "Le poste Bar demande des apprentis ou stagiaires (mercredi), mais aucun apprenti ni stagiaire de l'équipe ne tient ce poste.",
         { page: '/planning/besoins', cible: 'soutien-2' },
       ),
     )
+    expect(ids(verifierReglages(r))).not.toContain('soutien:1')
+  })
+
+  it('apprentis sans personne nécessaire : jamais placés, signalés à part', () => {
+    const r = propre()
+    r.postes.push(poste(2, 'Bar'))
+    r.salaries[0].competences.push({ poste_id: 2, niveau: 'soutien' })
+    r.besoins.push(besoin(2, 2, hM, { effectif: 0, soutien: 1 }))
+    r.besoins.push(besoin(2, 4, hM, { effectif: 0, soutien: 2 }))
+    expect(seul(r)).toEqual(
+      point(
+        'soutien-seul:2',
+        'besoins',
+        'Le poste Bar demande des apprentis ou stagiaires sans personne à côté (mercredi et vendredi). Ces places ne seront jamais pourvues : retirez-les ou ajoutez une personne nécessaire.',
+        { page: '/planning/besoins', cible: 'soutien-2' },
+      ),
+    )
+    // Avec une personne nécessaire à côté, plus rien à dire.
+    r.besoins = r.besoins.filter((b) => b.poste_id !== 2)
+    r.besoins.push(besoin(2, 2, hM, { renfort: 1, soutien: 1 }))
+    expect(ids(verifierReglages(r))).not.toContain('soutien-seul:2')
   })
 
   it('matin et soir : textes, pluriel, et ordre par jour puis matin avant soir', () => {
