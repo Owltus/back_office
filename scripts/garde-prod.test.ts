@@ -395,7 +395,13 @@ describe('verdict : propriétés', () => {
   test.prop([motLocal, fc.stringMatching(/^[a-z0-9 _.-]{0,30}$/)])(
     'une commande supabase --local sans motif prod est autorisée',
     (mot, args) => {
-      fc.pre(!/link|push|repair|deploy|secret|project-ref|db-url/.test(args))
+      // Les mots d'un autre outil de prod (`vc`, `gh`…) sont refusés partout,
+      // même en argument : prudent, donc hors de cette propriété.
+      fc.pre(
+        !/link|push|repair|deploy|secret|project-ref|db-url|\bv(?:ercel|c)\b|\bwrangler\b|\bgh\b/.test(
+          args,
+        ),
+      )
       expect(verdict(`supabase ${mot} --local ${args}`).autorise).toBe(true)
     },
   )
