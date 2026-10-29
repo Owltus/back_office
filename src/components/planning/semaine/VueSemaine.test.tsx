@@ -79,9 +79,9 @@ function donneesDemo(): DonneesSemaine {
 const DONNEES = donneesDemo()
 const SEMAINE = analyser(DONNEES)
 // Ce que lit la vue : la semaine de démo, sauf pour les tests de démarrage.
-const vue = vi.hoisted(() => ({
-  donnees: null as unknown,
-  semaine: null as unknown,
+const vue = vi.hoisted((): { donnees: unknown; semaine: unknown } => ({
+  donnees: null,
+  semaine: null,
 }))
 vue.donnees = DONNEES
 vue.semaine = SEMAINE
@@ -335,7 +335,7 @@ describe('VueSemaine', () => {
       expect(
         screen
           .getAllByRole('status')
-          .some((s) => /Aucun besoin/.test(s.textContent ?? '')),
+          .some((s) => /Aucun besoin/.test(s.textContent)),
       ).toBe(true)
       expect(
         (bouton('Compléter le planning') as HTMLButtonElement).disabled,

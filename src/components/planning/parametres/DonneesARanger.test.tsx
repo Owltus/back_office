@@ -130,11 +130,9 @@ describe('SectionDonneesARanger', () => {
   it('sans droit d’écriture, le bouton est grisé', () => {
     rendre([groupe({})], { peutCorriger: false })
     expect(
-      (
-        screen.getByRole('button', {
-          name: 'Rattacher au code M',
-        }) as HTMLButtonElement
-      ).disabled,
+      screen.getByRole<HTMLButtonElement>('button', {
+        name: 'Rattacher au code M',
+      }).disabled,
     ).toBe(true)
   })
 })

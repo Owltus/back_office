@@ -142,10 +142,10 @@ export function pointsAttention(
       const personnes: PersonnePlace[] = []
       for (const r of t.raisons) {
         const x = parId.get(r.salarie_id)
-        const niveau = x?.competences?.find(
+        const niveau = x?.competences.find(
           (c) => c.poste_id === t.poste_id,
         )?.niveau
-        const claires = raisonsClaires(r.salarie_id, r.regles ?? [], r.messages)
+        const claires = raisonsClaires(r.salarie_id, r.regles, r.messages)
         personnes.push({
           id: r.salarie_id,
           nom: nom(r.salarie_id),

@@ -7,6 +7,7 @@ import {
   renderHook,
   screen,
 } from '@testing-library/react'
+import type * as ModRouteur from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -19,7 +20,7 @@ import type { Referentiel, Salarie } from '#/lib/planning/types.ts'
 vi.mock('#/lib/supabase.ts', () => ({ supabase: {} }))
 const navigate = vi.fn()
 vi.mock('@tanstack/react-router', async (orig) => ({
-  ...(await orig<typeof import('@tanstack/react-router')>()),
+  ...(await orig<typeof ModRouteur>()),
   useNavigate: () => navigate,
 }))
 
@@ -126,7 +127,7 @@ function lignesReglees(): boolean[] {
   return LIGNES.map((ecran) => {
     const li = document.querySelector(`li[data-etape="${ecran}"]`)!
     expect(li.hasAttribute('aria-label')).toBe(false)
-    return li.textContent!.includes(', réglé.')
+    return li.textContent.includes(', réglé.')
   })
 }
 

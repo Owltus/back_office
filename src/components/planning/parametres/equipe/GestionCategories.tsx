@@ -283,14 +283,14 @@ export function GestionCategories({
                     onChange={(permis) => void changerPostes(g, permis)}
                     texteTous={`Les ${postes.length} postes, y compris ceux créés plus tard.`}
                   >
-                    {(liste) => (
+                    {(choix) => (
                       <div
                         role="group"
                         className="flex flex-wrap gap-1.5"
                         aria-label={`Postes autorisés pour ${g.nom}`}
                       >
                         {postes.map((p) => {
-                          const choisi = liste.choisis.includes(p.id)
+                          const choisi = choix.choisis.includes(p.id)
                           return (
                             <button
                               key={p.id}
@@ -298,10 +298,10 @@ export function GestionCategories({
                               aria-pressed={choisi}
                               disabled={!gerer || enCours}
                               onClick={() =>
-                                liste.onChange(
+                                choix.onChange(
                                   choisi
-                                    ? liste.choisis.filter((x) => x !== p.id)
-                                    : [...liste.choisis, p.id],
+                                    ? choix.choisis.filter((x) => x !== p.id)
+                                    : [...choix.choisis, p.id],
                                 )
                               }
                               className={cn(

@@ -210,11 +210,9 @@ function rendreAvec(
 const libreBouton = () =>
   screen.getByRole('button', { name: /Horaire spécifique/ })
 const presse = () =>
-  screen
-    .queryAllByRole('button', { pressed: true })
-    .map((x) => x.textContent ?? '')
+  screen.queryAllByRole('button', { pressed: true }).map((x) => x.textContent)
 const principal = (nom: string) =>
-  screen.getByRole('button', { name: nom }) as HTMLButtonElement
+  screen.getByRole<HTMLButtonElement>('button', { name: nom })
 
 function choisirJour(nom: string) {
   const declencheur = screen.getByRole('combobox', { name: 'Jour' })

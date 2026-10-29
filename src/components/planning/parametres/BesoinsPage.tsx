@@ -754,10 +754,10 @@ function LigneTableau({
             className={cn(
               'px-1 py-2 text-center',
               compte &&
-                j === evidence?.jour &&
+                j === evidence.jour &&
                 'rounded-md ring-2 ring-primary ring-inset',
             )}
-            data-jour-ajuste={(compte && j === evidence?.jour) || undefined}
+            data-jour-ajuste={(compte && j === evidence.jour) || undefined}
           >
             {sansBase ? (
               <Tip label="Mettez d'abord une personne nécessaire sur ce jour">

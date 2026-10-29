@@ -12,7 +12,7 @@ import type { Referentiel } from '#/lib/planning/types.ts'
  * Besoins, numéroté, coche sur un écran sans point bloquant.
  */
 
-const etat = vi.hoisted(() => ({ referentiel: null as unknown }))
+const etat = vi.hoisted((): { referentiel: unknown } => ({ referentiel: null }))
 
 vi.mock('#/lib/supabase.ts', () => ({ supabase: {} }))
 vi.mock('#/components/planning/ImportPrototypeDialog.tsx', () => ({

@@ -74,7 +74,7 @@ function salarie(
     date_sortie: null,
     actif: true,
     suite_de: null,
-  } as Salarie
+  }
 }
 
 // M 07:00-15:00 (pause 30), S 15:00-23:00, X et Y : mêmes heures 09:00-17:00.

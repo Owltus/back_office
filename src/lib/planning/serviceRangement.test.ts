@@ -11,7 +11,7 @@ import { SimulateurSupabase } from '#/lib/classeur/test/simulateurSupabase.ts'
 const etat = vi.hoisted(() => ({
   sim: null as unknown as SimulateurSupabase,
   /** Faux client à part (pagination : le simulateur n'a pas `range`). */
-  client: null as unknown,
+  client: null as object | null,
 }))
 
 vi.mock('#/lib/supabase.ts', () => ({

@@ -649,7 +649,7 @@ describe('la loi d’une semaine à l’autre : R-REPOS-HEBDO-35H', () => {
       ...c,
       debut: c.debut + S,
       fin: c.fin + S,
-      jourPlanning: c.jourPlanning! + 7,
+      jourPlanning: c.jourPlanning + 7,
     }))
     const relue = { ...s, finServicePrecedent: dimanche23h + S }
     const regles = (suivant: number) =>

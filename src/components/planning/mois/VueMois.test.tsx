@@ -558,7 +558,7 @@ describe('VueMois', { timeout: 20_000 }, () => {
     expect(
       screen
         .getAllByRole('status')
-        .some((s) => /Aucun besoin/.test(s.textContent ?? '')),
+        .some((s) => /Aucun besoin/.test(s.textContent)),
     ).toBe(true)
     expect(
       screen.getByRole<HTMLButtonElement>('button', {

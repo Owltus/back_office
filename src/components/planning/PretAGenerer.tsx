@@ -131,7 +131,7 @@ export interface Blocage {
 export function blocageGeneration(
   points: readonly PointReglage[],
 ): Blocage | null {
-  const p = ordonnerPoints(points.filter((x) => x.gravite === 'bloquant'))[0]
+  const p = ordonnerPoints(points.filter((x) => x.gravite === 'bloquant')).at(0)
   return p
     ? {
         texte: `Génération impossible, un réglage manque : ${p.texte}`,

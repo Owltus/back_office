@@ -312,9 +312,13 @@ describe('Besoins', () => {
         p.presence = p.nom === 'Réception' || p.nom === 'Club'
       }
       // M du matin, AM du soir, MI « middle » (moment lu sur l'heure).
-      const periodes = { M: 'matin', MI: 'middle', AM: 'soir' } as const
+      const periodes: Partial<Record<string, 'matin' | 'middle' | 'soir'>> = {
+        M: 'matin',
+        MI: 'middle',
+        AM: 'soir',
+      }
       for (const h of ref.horaires) {
-        h.periode = periodes[h.code as keyof typeof periodes] ?? null
+        h.periode = periodes[h.code] ?? null
       }
       ref.consignes = [
         { id: 1, jour: 5, periode: 'matin', minimum: 3, maximum: null },
@@ -421,7 +425,7 @@ describe('Besoins', () => {
         expect(momentAjuste()).toContain('les besoins donnent 3'),
       )
       fireEvent.click(screen.getByRole('radio', { name: 'Matin et soir' }))
-      expect(sommeAttendue(etat.referentiel as Referentiel, 5)).toBe(3)
+      expect(sommeAttendue(etat.referentiel, 5)).toBe(3)
       expect(caseBesoins('5:matin')?.textContent).toBe('Besoins : 3')
       expect(caseBesoins('5:matin')?.dataset.ecart).toBeUndefined()
       expect(

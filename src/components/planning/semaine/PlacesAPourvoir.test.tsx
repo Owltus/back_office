@@ -177,7 +177,7 @@ describe('PlacesAPourvoir', () => {
     // (limite légale) ni Bruno (repos fixe).
     const choix = screen
       .getAllByRole('button')
-      .filter((b) => /^(Alba|Bruno|Céleste|Dario)/.test(b.textContent ?? ''))
+      .filter((b) => /^(Alba|Bruno|Céleste|Dario)/.test(b.textContent))
     expect(choix.map((b) => b.textContent)).toEqual(['Céleste', 'Darioextra'])
     fireEvent.click(choix[0])
     expect(onPlacer).toHaveBeenCalledWith(

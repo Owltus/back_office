@@ -326,7 +326,7 @@ export function EditeurShift({
   // Jour fermé : l'horaire spécifique est grisé, sauf s'il est ce qui est
   // déjà posé ici.
   const libreInterdit =
-    jourFerme(permis) && !(surPlace && existant?.type_shift_id === null)
+    jourFerme(permis) && !(surPlace && existant.type_shift_id === null)
   const rienChoisi = motif === null && !vider && !libre && !code
   const bloque = indisponible
     ? 'Pas sous contrat (ou désactivé) ce jour-là : voir sa fiche'

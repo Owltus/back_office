@@ -23,16 +23,22 @@ const enveloppe = ({ children }: { children: ReactNode }) => (
   <FilMessages>{children}</FilMessages>
 )
 
+interface Props {
+  ouvrir?: string
+  pret: boolean
+}
+
 describe('useOuvrirCible', () => {
   it('attend les données, applique, puis rouvre par le même lien', () => {
     const appliquer = vi.fn(() => true)
     const onOuvert = vi.fn()
+    const depart: Props = { ouvrir: 'poste-3', pret: false }
     const { rerender } = renderHook(
-      ({ ouvrir, pret }: { ouvrir?: string; pret: boolean }) =>
+      ({ ouvrir, pret }: Props) =>
         useOuvrirCible(ouvrir, pret, appliquer, onOuvert),
       {
         wrapper: enveloppe,
-        initialProps: { ouvrir: 'poste-3' as string | undefined, pret: false },
+        initialProps: depart,
       },
     )
     expect(appliquer).not.toHaveBeenCalled()

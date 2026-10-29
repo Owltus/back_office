@@ -114,6 +114,8 @@ function PlacesNavigables({
       onPlacer={onPlacer}
       onAller={(lien) => {
         onFermer()
+        // Sans routeur (tests, aperçu) : `useRouter({ warn: false })` rend undefined.
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         void router?.navigate({
           to: lien.page,
           search: lien.cible ? { ouvrir: lien.cible } : {},
