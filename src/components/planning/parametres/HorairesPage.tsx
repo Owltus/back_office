@@ -455,7 +455,7 @@ function LigneCode({ h, onOuvrir }: { h: Horaire; onOuvrir: () => void }) {
         />
       }
       libelle={h.nom}
-      detail={`${heures(dureeHoraire(h.debut, h.fin) - h.pause)}${h.raccourci > 0 ? ' · étoile' : ''}`}
+      detail={`${heures(dureeHoraire(h.debut, h.fin) - h.pause)}${h.raccourci > 0 ? ' · journée étoile possible' : ''}`}
       onOuvrir={onOuvrir}
     />
   )

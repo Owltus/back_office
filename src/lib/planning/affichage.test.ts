@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  listeEt,
   messageGeneration,
   nomsCourts,
   parGroupe,
@@ -119,5 +120,14 @@ describe('nomsCourts', () => {
   })
   it('sans nom : le prénom', () => {
     expect(nomsCourts([p(1, 'Léa', ''), p(2, 'Léa', 'Roy')]).get(1)).toBe('Léa')
+  })
+})
+
+describe('listeEt', () => {
+  it('le dernier élément après « et »', () => {
+    expect(listeEt([])).toBe('')
+    expect(listeEt(['Réception'])).toBe('Réception')
+    expect(listeEt(['Réception', 'Club'])).toBe('Réception et Club')
+    expect(listeEt(['Bar', 'Réception', 'Club'])).toBe('Bar, Réception et Club')
   })
 })

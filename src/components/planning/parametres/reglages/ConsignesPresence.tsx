@@ -27,6 +27,7 @@ import {
   Compteur,
   Segmente,
 } from '#/components/planning/parametres/reglages/controles.tsx'
+import { listeEt } from '#/lib/planning/affichage.ts'
 import { planningKeys } from '#/lib/planning/keys.ts'
 import { besoinsPresence } from '#/lib/planning/coherence.ts'
 import { clePresence, libelleConsigne } from '#/lib/planning/presence.ts'
@@ -150,7 +151,7 @@ export function ConsignesPresence({
           </p>
           <p className="text-sm text-muted-foreground">
             {comptent.length
-              ? `Comptent les personnes autonomes en ${comptent.map((p) => p.nom).join(', ')}. Les apprentis viennent en plus.`
+              ? `Comptent les personnes placées en ${listeEt(comptent.map((p) => p.nom))}, sauf les apprentis et stagiaires, qui viennent en plus.`
               : 'Aucun poste ne compte encore dans la présence : cochez-les dans Postes.'}
           </p>
         </div>

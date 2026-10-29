@@ -171,7 +171,7 @@ export function EquipePage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
         <div className="flex flex-col gap-6">
           <p className="text-sm text-muted-foreground">
             Chaque fiche décrit le contrat, les postes tenus, la semaine type et
-            les absences : le moteur s'en sert pour générer le planning.
+            les absences : le planning automatique s'en sert.
           </p>
           {parGroupe(actifs, ref.data.groupes).map((g) => (
             <section

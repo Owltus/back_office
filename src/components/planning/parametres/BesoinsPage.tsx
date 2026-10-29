@@ -59,7 +59,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '#/components/ui/popover.tsx'
-import { heures, texteSur } from '#/lib/planning/affichage.ts'
+import { heures, listeEt, texteSur } from '#/lib/planning/affichage.ts'
 import { codesDuPoste } from '#/lib/planning/eligibilite.ts'
 import { planningKeys } from '#/lib/planning/keys.ts'
 import { besoinsPresence } from '#/lib/planning/coherence.ts'
@@ -92,7 +92,7 @@ const COUCHES: ReadonlyArray<{
   {
     valeur: 'effectif',
     libelle: 'Personnes nécessaires',
-    aide: 'Le minimum de personnes autonomes. Le planning automatique les place en priorité.',
+    aide: 'Le minimum de personnes qui tiennent le poste seules. Le planning automatique les place en priorité.',
   },
   {
     valeur: 'soutien',
@@ -741,7 +741,7 @@ function LigneTableau({
             )}
             {ailleurs.length > 0 && (
               <p className="mt-1 text-xs text-muted-foreground">
-                Réglé aussi : {ailleurs.join(', ')}.
+                Réglé aussi : {listeEt(ailleurs)}.
               </p>
             )}
             {!permise && (

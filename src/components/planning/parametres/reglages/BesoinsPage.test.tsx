@@ -330,6 +330,20 @@ describe('Besoins', () => {
     })
   })
 
+  it('matin et soir : les postes qui comptent, dits en français', () => {
+    const ref = referentielDemo()
+    for (const p of ref.postes)
+      if (p.nom === 'Réception' || p.nom === 'Club') p.presence = true
+    etat.referentiel = ref
+    monter(<BesoinsPage />)
+    fireEvent.click(screen.getByRole('radio', { name: 'Matin et soir' }))
+    expect(
+      screen.getByText(
+        'Comptent les personnes placées en Réception et Club, sauf les apprentis et stagiaires, qui viennent en plus.',
+      ),
+    ).toBeTruthy()
+  })
+
   it('consignes de présence : au moins et au plus, le plafond suit', async () => {
     const lundiSoir = {
       id: 7,

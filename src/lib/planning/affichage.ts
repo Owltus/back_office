@@ -30,6 +30,13 @@ export const NIVEAUX: Record<Niveau, { libelle: string; aide: string }> = {
   },
 }
 
+/** « Réception », « Réception et Club », « Bar, Réception et Club ». */
+export function listeEt(l: readonly string[]): string {
+  return l.length < 2
+    ? (l[0] ?? '')
+    : `${l.slice(0, -1).join(', ')} et ${l[l.length - 1]}`
+}
+
 /** « 7h45 », « 8h » (format court des cartes et du bilan). */
 export function heures(total: number): string {
   const h = Math.floor(total / 60)

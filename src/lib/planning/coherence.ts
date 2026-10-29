@@ -23,7 +23,7 @@
  * ou semaine type), personne sans poste avec un code fixé.
  */
 
-import { nomComplet } from '#/lib/planning/affichage.ts'
+import { listeEt, nomComplet } from '#/lib/planning/affichage.ts'
 import {
   codeDeLaFiche,
   codeImposeRespecte,
@@ -331,7 +331,7 @@ export function verifierReglages(
       `periode:${h.id}`,
       'a-voir',
       'horaires',
-      `L'horaire ${h.code} n'a pas de période (matin, soir ou nuit). Il ne compte pas dans le matin et le soir de ${concernes.map((p) => p.nom).join(', ')}.`,
+      `L'horaire ${h.code} n'a pas de période (matin, soir ou nuit). Il ne compte pas dans le matin et le soir de ${listeEt(concernes.map((p) => p.nom))}.`,
       `horaire-${h.id}`,
     )
   }
