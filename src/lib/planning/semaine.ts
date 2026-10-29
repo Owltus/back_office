@@ -331,8 +331,9 @@ export function fiche(
           .filter(([j, m]) => m !== null && ctx.ecole.has(m) && !hors.has(j))
           .map(([j]) => j),
       )
-  // Un jour d'école ne compte pas comme absence : il retire sa durée d'école
-  // des heures dues (R-ECOLE-HEURES, `heuresDues`).
+  // Les jours d'école sont comptés à part (`joursEcole`) : `heuresDues` les
+  // décompte comme une journée de contrat chacun, quel que soit le réglage
+  // du motif (R-ECOLE-HEURES, décision utilisateur du 2026-10-29).
   let decomptes = 0
   for (const [j, m] of absents) {
     if (ecole.has(j) || hors.has(j)) continue
@@ -371,8 +372,6 @@ export function fiche(
     joursAbsenceDecomptes: decomptes + hors.size,
     horsContrat: hors,
     joursEcole: ecole,
-    // R-ECOLE-HEURES (L6222-24) : chaque jour d'école compte cette durée.
-    minutesEcoleJour: x.heures_ecole_jour,
     reposFixes,
     travailFixe,
     shiftImpose: codesImposes(semaine),

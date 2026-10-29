@@ -320,7 +320,6 @@ export function signatureFixes(salaries: Salarie[]): string {
         x.mineur,
         x.competences,
         x.shifts_autorises,
-        x.heures_ecole_jour,
         x.date_entree,
         x.date_sortie,
       ]),

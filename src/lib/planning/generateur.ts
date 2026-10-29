@@ -634,7 +634,8 @@ export function construire(p: Probleme): Construit {
         const vc = court.get(cle(s.id, c.id))
         if (vc) minutes.push([-c.raccourci, vc])
       }
-      // R-ECOLE-HEURES (L6222-24) : les heures d'école de la semaine sont
+      // R-ECOLE-HEURES (L6222-24) : chaque jour d'école vaut une journée de
+      // contrat (`journeeContrat`) ; les heures d'école de la semaine sont
       // une constante de la somme ; des fixes déjà au-delà restent tenables.
       const minutesEcole = ecole.size * s.minutesEcoleJour
       m.ajoute(

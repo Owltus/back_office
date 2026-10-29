@@ -12,10 +12,6 @@ import {
   enPeriodes,
   postesDuGroupe,
 } from '#/lib/planning/affichage.ts'
-import {
-  MINUTES_ECOLE_JOUR,
-  MINUTES_ECOLE_JOUR_MAX,
-} from '#/lib/planning/regles.ts'
 import type { Fiche } from '#/lib/planning/regles.ts'
 import { estEcole } from '#/lib/planning/semaine.ts'
 import { ajouterJours, ecartJours, lundiDe } from '#/lib/planning/temps.ts'
@@ -88,7 +84,6 @@ export function brouillonVierge(groupeId: number | null = null): Brouillon {
     competences: [],
     semaine_type: semaineComplete(null),
     shifts_autorises: [],
-    heures_ecole_jour: MINUTES_ECOLE_JOUR,
     date_entree: null,
     date_sortie: null,
     actif: true,
@@ -140,7 +135,6 @@ export function valeursSalarie(b: Brouillon): ValeursSalarie {
     competences: b.competences,
     semaine_type: semaineComplete(b.semaine_type),
     shifts_autorises: b.shifts_autorises,
-    heures_ecole_jour: b.heures_ecole_jour ?? MINUTES_ECOLE_JOUR,
     date_entree: b.date_entree,
     date_sortie: b.date_sortie,
     actif: b.actif,
@@ -406,8 +400,7 @@ export function ficheApercu(
   b: Pick<
     Brouillon,
     'type_contrat' | 'heures_hebdo' | 'forfait_jours' | 'mineur'
-  > &
-    Partial<Pick<Brouillon, 'heures_ecole_jour'>>,
+  >,
 ): Fiche {
   return {
     id: 'apercu',
@@ -416,7 +409,6 @@ export function ficheApercu(
     minutesHebdo: Math.round((Number(b.heures_hebdo) || 0) * 60),
     forfaitJours: b.forfait_jours,
     mineur: b.mineur,
-    minutesEcoleJour: b.heures_ecole_jour,
   }
 }
 
@@ -425,10 +417,6 @@ export function erreurBrouillon(b: Brouillon): string | null {
   if (!b.prenom.trim()) return 'Indiquez le prénom.'
   if (!(b.heures_hebdo >= 0 && b.heures_hebdo <= 48)) {
     return 'Les heures par semaine vont de 0 à 48.'
-  }
-  const ecole = b.heures_ecole_jour ?? MINUTES_ECOLE_JOUR
-  if (!(ecole >= 0 && ecole <= MINUTES_ECOLE_JOUR_MAX) || ecole % 30 !== 0) {
-    return "Une journée d'école compte de 0 à 10 h, par demi-heure."
   }
   if (b.date_entree && !dateValide(b.date_entree))
     return "La date d'arrivée est incomplète."

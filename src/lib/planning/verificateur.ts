@@ -230,7 +230,8 @@ export function violationsSalarie(
         'organisation',
       )
     }
-    // R-ECOLE-HEURES (L6222-24) : les heures d'école comptent dans la semaine.
+    // R-ECOLE-HEURES (L6222-24) : chaque jour d'école compte une journée de
+    // contrat (`journeeContrat`) dans la semaine.
     const ecole =
       jours.filter((j) => s.joursHorsSite.has(j)).length * s.minutesEcoleJour
     const total = semaine.reduce((t, c) => t + travail(c), 0) + ecole

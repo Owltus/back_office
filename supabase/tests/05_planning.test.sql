@@ -127,7 +127,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':M', (select m from t_ids)::text);
 $$;
 
-select plan(50);
+select plan(48);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -308,18 +308,11 @@ select is(pg_temp.essai('gestion', array[
   'update public.planning_horaires set periode = ''midi'' where code = ''XM'' and nom = ''Matin test''']),
   'err=23514', 'familles : une famille inconnue est refusée');
 
--- ------------------------------- heures d'une journée d'école (2026-10-29) ---
--- L6222-24 : le temps de CFA est du temps de travail ; 7 h par défaut.
-select is(pg_temp.essai('lecture', array[
-  pg_temp.q('select heures_ecole_jour::text from public.planning_salaries where id = :S1')]),
-  '420', 'école : une journée compte 7 h par défaut');
-select is(pg_temp.essai('gestion', array[
-  pg_temp.q('update public.planning_salaries set heures_ecole_jour = 390 where id = :S1'),
-  pg_temp.q('select heures_ecole_jour::text from public.planning_salaries where id = :S1')]),
-  '390', 'école : la fiche règle sa durée (6 h 30)');
-select is(pg_temp.essai('gestion', array[
-  pg_temp.q('update public.planning_salaries set heures_ecole_jour = 700 where id = :S1')]),
-  'err=23514', 'école : plus de 10 h par journée est refusé');
+-- ------------------------------- journée d'école (révisé le 2026-10-29) ---
+-- Décision utilisateur : un jour d'école compte comme une journée de travail
+-- complète (calcul dans lib/planning/regles.ts). Plus aucune durée réglable.
+select hasnt_column('public', 'planning_salaries', 'heures_ecole_jour',
+  'école : pas de durée réglable par personne');
 
 select * from finish();
 rollback;

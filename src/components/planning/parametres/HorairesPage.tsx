@@ -113,9 +113,9 @@ const NATURES: ReadonlyArray<{
   {
     valeur: 'ecole',
     libelle: 'École',
-    aide: "École : jour hors de l'hôtel, compté comme du temps de travail",
+    aide: "École : jour hors de l'hôtel, compté comme une journée de travail complète",
     texte:
-      "Jour hors de l'hôtel, compté comme du temps de travail. Ce n'est pas une absence.",
+      "Jour hors de l'hôtel, compté comme une journée de travail complète. Ce n'est pas une absence.",
   },
 ]
 
@@ -309,7 +309,7 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
             <div id="titre-motifs">
               <EnTeteSection
                 titre="Absences et école"
-                texte="Chaque motif a sa couleur et se pose sur une case du planning comme un horaire. Pour les apprentis et les stagiaires, l'école est un jour hors de l'hôtel, compté comme du temps de travail. Ce n'est pas une absence."
+                texte="Chaque motif a sa couleur et se pose sur une case du planning comme un horaire. Pour les apprentis et les stagiaires, l'école est un jour hors de l'hôtel, compté comme une journée de travail complète. Ce n'est pas une absence."
                 actions={
                   modifiable && (
                     <Button

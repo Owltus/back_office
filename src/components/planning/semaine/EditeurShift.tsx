@@ -584,7 +584,7 @@ export function EditeurShift({
               },
               {
                 titre: "Ou l'école",
-                aide: "jour hors de l'hôtel, compté comme du temps de travail",
+                aide: "jour hors de l'hôtel, compté comme une journée de travail complète",
                 // Déjà un jour d'école : pas la peine de le reproposer.
                 liste: ecoleActuelle ? [] : motifs.filter(estEcole),
               },

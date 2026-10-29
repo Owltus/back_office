@@ -81,9 +81,6 @@ export interface Salarie {
   competences: Competence[]
   semaine_type: JourType[]
   shifts_autorises: number[] // vide = tous
-  /** Minutes comptées pour une journée d'école (L6222-24). Absent :
-   * `MINUTES_ECOLE_JOUR` (420, le défaut de la colonne). */
-  heures_ecole_jour?: number
   date_entree: string | null
   date_sortie: string | null
   actif: boolean

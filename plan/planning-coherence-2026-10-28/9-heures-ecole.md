@@ -42,3 +42,21 @@ Propriété : pour toute semaine générée, minutes de l'hôtel + école ≤ pl
 - Migration additive seule (pas de `drop`, pas de `rename`), défaut posé, CHECK borné.
 - Aucune régression sur le décompte des jours (6e jour, 3 repos sur deux semaines).
 - `copier-prod-plan.test.ts` : la nouvelle colonne n'est pas anonymisée et passe la copie.
+
+## Révisé le 2026-10-29, décision utilisateur
+
+« Les heures d'école sont considérées comme des journées de travail
+complètes, donc attention pour les 35 ou 39 heures, bien penser les choses. »
+
+- Un jour d'école vaut une journée de contrat : `journeeContrat` dans
+  `regles.ts` (8 h au-delà de 35 h, journée étoile ; contrat / 5 sinon ; au
+  moins 8 h pour un forfait jours ou un extra, la valeur prudente).
+- Heures dues : décompté comme un jour d'absence (comme le prototype).
+  39 h + 2 jours = 23 h avec l'étoile sur un jour qui reste (24 h sans
+  étoile fixée), 35 h + 2 jours = 21 h, 39 h + 1 jour = 31 h (32 h sans
+  étoile), école et absences sur 5 jours = 0.
+- Plafond de la semaine (vérificateur et générateur) : la même journée par
+  jour d'école. Dues et plafond restent d'accord.
+- La colonne `heures_ecole_jour`, sa migration (jamais livrée), le champ de
+  la fiche et `MINUTES_ECOLE_JOUR` sont retirés. La fiche dit : « Un jour
+  d'école compte comme une journée de travail complète. »

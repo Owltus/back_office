@@ -330,7 +330,7 @@ export function SectionSemaineType({
   return (
     <Section
       titre="Semaine type"
-      aide={`Libre : le moteur décide si elle travaille ; avec un horaire choisi, ce sera celui-là les jours où elle travaille (de nuit le week-end, par exemple). Travaille : elle travaille toujours ce jour-là. Repos et Absence : jamais planifiée ce jour-là. École : jour hors de l'hôtel, compté comme du temps de travail.${
+      aide={`Libre : le moteur décide si elle travaille ; avec un horaire choisi, ce sera celui-là les jours où elle travaille (de nuit le week-end, par exemple). Travaille : elle travaille toujours ce jour-là. Repos et Absence : jamais planifiée ce jour-là. École : jour hors de l'hôtel, compté comme une journée de travail complète.${
         etoile
           ? ' ★ : journée étoile (la journée courte) fixée ce jour-là ; sans étoile, le moteur la place selon les besoins.'
           : ''
@@ -613,7 +613,7 @@ export function SectionAbsences({
 // ----------------------------------------------------------- règles HCR
 
 export function SectionRegles({ b }: Pick<PropsSection, 'b'>) {
-  const cle = `${b.type_contrat}|${b.heures_hebdo}|${b.forfait_jours}|${b.mineur}|${b.heures_ecole_jour}`
+  const cle = `${b.type_contrat}|${b.heures_hebdo}|${b.forfait_jours}|${b.mineur}`
   const regles = useMemo<LigneRegle[]>(() => {
     try {
       return resume(ficheApercu(b))

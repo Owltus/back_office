@@ -101,7 +101,8 @@ export interface SalarieSolveur {
   /** R-ECOLE-JOURS : jours hors site (CFA), comptés comme travaillés. */
   joursHorsSite: ReadonlySet<number>
   /** R-ECOLE-HEURES : minutes comptées par jour d'école dans les plafonds de
-   * la semaine (`regles.ts`). 0 par défaut ici : sans fiche, rien n'est su. */
+   * la semaine, une journée de contrat (`journeeContrat`, `regles.ts`). 0 par
+   * défaut ici : sans fiche, rien n'est su. */
   minutesEcoleJour: number
   reposConsecutifs: boolean
   nuitInterdite: boolean

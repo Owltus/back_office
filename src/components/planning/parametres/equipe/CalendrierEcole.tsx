@@ -10,7 +10,7 @@
  * ici avant).
  */
 
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as EvenementPointeur } from 'react'
 
 import {
@@ -44,8 +44,6 @@ import {
 } from '#/components/planning/parametres/equipe/ecole.ts'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
-import { Input } from '#/components/ui/input.tsx'
-import { MINUTES_ECOLE_JOUR } from '#/lib/planning/regles.ts'
 import { numeroSemaine, texteSur } from '#/lib/planning/affichage.ts'
 import { lundiDe } from '#/lib/planning/temps.ts'
 import { JOURS } from '#/lib/planning/types.ts'
@@ -102,8 +100,6 @@ export function CalendrierEcole({
   joursAvant,
   shifts,
   postes,
-  minutesJour,
-  onMinutesJour,
 }: {
   ecole: Motif
   absences: PeriodeBrouillon[]
@@ -119,13 +115,7 @@ export function CalendrierEcole({
   /** Shifts déjà posés pour cette personne. */
   shifts: Affectation[]
   postes: Poste[]
-  /** Durée comptée pour une journée d'école, en minutes (L6222-24). */
-  minutesJour: number | undefined
-  /** NaN : champ vidé (refusé à l'enregistrement). */
-  onMinutesJour: (minutes: number) => void
 }) {
-  const idDuree = useId()
-  const duree = minutesJour ?? MINUTES_ECOLE_JOUR
   const [annee, setAnnee] = useState(() => anneeScolaire(aujourdhui).debut)
   const [cfa, setCfa] = useState(false)
   const { debut, fin } = anneeScolaire(annee)
@@ -266,27 +256,9 @@ export function CalendrierEcole({
         n'est pris que si vous le visez. Partir d'un jour d'école retire la
         plage. Le numéro de semaine prend du lundi au vendredi.
       </p>
-      <div className="flex flex-wrap items-center gap-2 text-xs">
-        <label htmlFor={idDuree}>Une journée d'école compte</label>
-        <Input
-          id={idDuree}
-          type="number"
-          min={0}
-          max={10}
-          step={0.5}
-          className="h-8 w-20"
-          disabled={disabled}
-          value={Number.isFinite(duree) ? duree / 60 : ''}
-          onChange={(e) =>
-            onMinutesJour(
-              e.target.value === ''
-                ? Number.NaN
-                : Math.round(Number(e.target.value) * 60),
-            )
-          }
-        />
-        <span>h de travail dans la semaine.</span>
-      </div>
+      <p className="text-xs">
+        Un jour d'école compte comme une journée de travail complète.
+      </p>
       <p className="text-xs">
         {prochaine ? (
           <>

@@ -107,18 +107,3 @@ describe('périodes d’absence', () => {
     expect(erreurBrouillon(avec([p('2026-11-02', '2026-11-05')]))).toBeNull()
   })
 })
-
-describe('durée d’une journée d’école', () => {
-  const fiche = (heures_ecole_jour: number) => ({
-    ...brouillonVierge(),
-    prenom: 'Apprenti',
-    type_contrat: 'apprenti' as const,
-    heures_ecole_jour,
-  })
-  it('7 h par défaut, de 0 à 10 h par demi-heure', () => {
-    expect(brouillonVierge().heures_ecole_jour).toBe(420)
-    for (const m of [0, 390, 600]) expect(erreurBrouillon(fiche(m))).toBeNull()
-    for (const m of [630, -30, 400, Number.NaN])
-      expect(erreurBrouillon(fiche(m))).toMatch(/journée d'école/)
-  })
-})

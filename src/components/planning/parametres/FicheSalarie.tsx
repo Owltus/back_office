@@ -577,10 +577,6 @@ function CorpsFiche({
             onSemaineType={(semaine_type) =>
               maj((x) => ({ ...x, semaine_type }))
             }
-            minutesJour={b.heures_ecole_jour}
-            onMinutesJour={(heures_ecole_jour) =>
-              maj((x) => ({ ...x, heures_ecole_jour }))
-            }
           />
         )}
         {alternance && !ecole && (

@@ -5,11 +5,13 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { generer } from '#/lib/planning/generateur.ts'
 import type { Highs } from '#/lib/planning/generateur.ts'
 import { creneau, jourDe, probleme, travail } from '#/lib/planning/modele.ts'
-import type { Creneau } from '#/lib/planning/modele.ts'
+import type { Creneau, SalarieSolveur } from '#/lib/planning/modele.ts'
 import {
+  JOURNEE_PLEINE,
   MINEUR_SEMAINE_MAX,
-  MINUTES_ECOLE_JOUR,
   SEMAINE_MAX,
+  heuresDues,
+  journeeContrat,
   versSolveur,
 } from '#/lib/planning/regles.ts'
 import type { Fiche } from '#/lib/planning/regles.ts'
@@ -19,14 +21,17 @@ import { MINUTES_PAR_JOUR } from '#/lib/planning/temps.ts'
 import { violations, violationsSalarie } from '#/lib/planning/verificateur.ts'
 
 /*
- * R-ECOLE-HEURES (étape 9 du plan planning-coherence-2026-10-28).
+ * R-ECOLE-HEURES (étape 9 du plan planning-coherence-2026-10-28, révisée le
+ * 2026-10-29 par décision utilisateur : « les heures d'école sont
+ * considérées comme des journées de travail complètes »).
  *
- * ÉCART VOULU AVEC LE PROTOTYPE : le prototype comptait le JOUR d'école comme
- * travaillé (R-ECOLE-JOURS) mais pas ses HEURES. Le Code du travail
- * (L6222-24) dit que le temps passé au CFA est compris dans l'horaire de
- * travail : il entre donc dans les plafonds de la semaine (48 h, et 35 h pour
- * un mineur, L3162-1). L'oracle différentiel contre le prototype ne tient
- * plus sur ce point.
+ * Un jour d'école vaut une journée de contrat (`journeeContrat`) :
+ * - dans les heures dues, il est décompté comme un jour d'absence (même
+ *   calcul que le prototype, journée étoile comprise) ;
+ * - dans le plafond de la semaine (R-SEMAINE-MAX), il compte cette même
+ *   journée, ce que le prototype ne faisait pas (L6222-24 : le temps de CFA
+ *   est du temps de travail). Écart voulu : l'oracle différentiel ne tient
+ *   plus sur le plafond d'une semaine avec école.
  */
 
 const H = 60
@@ -59,137 +64,108 @@ function cr(id: string, jour: number, debutH: number, finH: number): Creneau {
   })
 }
 
-const reglesDe = (f: Fiche, creneaux: Creneau[]) =>
-  violationsSalarie(versSolveur(f), creneaux, 7).map((v) => v.regle)
+const reglesDe = (s: SalarieSolveur, creneaux: Creneau[]) =>
+  violationsSalarie(s, creneaux, 7).map((v) => v.regle)
 
-describe('R-ECOLE-HEURES : la journée d’école compte dans la semaine', () => {
-  it('7 h par défaut', () => {
-    expect(MINUTES_ECOLE_JOUR).toBe(7 * H)
-    expect(versSolveur(fiche()).minutesEcoleJour).toBe(7 * H)
-    expect(
-      versSolveur(fiche({ minutesEcoleJour: 6 * H })).minutesEcoleJour,
-    ).toBe(6 * H)
+const dues = (kw: Partial<Fiche>) => heuresDues(fiche(kw))
+
+describe('journeeContrat : ce que vaut un jour d’école', () => {
+  it('contrat / 5 jusqu’à 35 h, journée pleine de 8 h au-delà', () => {
+    expect(journeeContrat(fiche())).toBe(7 * H)
+    expect(journeeContrat(fiche({ minutesHebdo: 20 * H }))).toBe(4 * H)
+    expect(journeeContrat(fiche({ minutesHebdo: 39 * H }))).toBe(8 * H)
+    expect(journeeContrat(fiche({ minutesHebdo: 42 * H }))).toBe(8 * H)
   })
 
-  it('mineur : 2 jours d’école de 7 h + 3 jours de 7 h = 35 h, accepté', () => {
-    const f = fiche({ mineur: true })
-    expect(versSolveur(f).minutesHebdoMax).toBe(MINEUR_SEMAINE_MAX)
-    const semaine = [cr('m', 2, 8, 15), cr('j', 3, 8, 15), cr('v', 4, 8, 15)]
-    expect(reglesDe(f, semaine)).toEqual([])
-  })
-
-  it('mineur : une heure de plus est refusée, école comprise', () => {
-    const f = fiche({ mineur: true })
-    const semaine = [cr('m', 2, 8, 15), cr('j', 3, 8, 15), cr('v', 4, 8, 16)]
-    const v = violationsSalarie(versSolveur(f), semaine, 7)
-    expect(v.map((x) => x.regle)).toEqual(['R-SEMAINE-MAX'])
-    expect(v[0].message).toBe(
-      '36 h dans la semaine, école comprise (14 h), maximum 35 h',
+  it('contrat sans durée horaire : au moins 8 h, la valeur prudente', () => {
+    const extra = { typeContrat: 'extra' as const }
+    expect(journeeContrat(fiche({ ...extra, minutesHebdo: 0 }))).toBe(
+      JOURNEE_PLEINE,
     )
-    // Avant cette règle (comme le prototype), la même semaine passait.
-    expect(reglesDe({ ...f, minutesEcoleJour: 0 }, semaine)).toEqual([])
-  })
-
-  it('majeur : 14 h d’école + 34 h = 48 h accepté, 49 h refusé', () => {
-    const f = fiche()
-    expect(versSolveur(f).minutesHebdoMax).toBe(SEMAINE_MAX)
-    const pile = [cr('m', 2, 7, 19), cr('j', 3, 7, 19), cr('v', 4, 8, 18)]
-    expect(reglesDe(f, pile)).toEqual([])
-    const plus = [cr('m', 2, 7, 19), cr('j', 3, 7, 19), cr('v', 4, 7, 18)]
-    expect(reglesDe(f, plus)).toEqual(['R-SEMAINE-MAX'])
-  })
-
-  it('la durée vient de la fiche : 5 h d’école laissent passer 36 h', () => {
-    const f = fiche({ mineur: true, minutesEcoleJour: 5 * H })
-    const semaine = [cr('m', 2, 8, 16), cr('j', 3, 8, 16), cr('v', 4, 8, 16)]
-    expect(reglesDe(f, semaine)).toEqual([]) // 10 h + 24 h = 34 h
-    expect(
-      reglesDe({ ...f, minutesEcoleJour: 6 * H }, semaine), // 12 + 24 = 36
-    ).toEqual(['R-SEMAINE-MAX'])
-  })
-
-  it('la durée de la fiche en base arrive au moteur', () => {
-    const lundi = '2026-11-02'
-    const x: Salarie = {
-      id: 1,
-      prenom: 'Apprenti',
-      nom: 'Un',
-      groupe_id: null,
-      type_contrat: 'apprenti',
-      heures_hebdo: 35,
-      forfait_jours: false,
-      mineur: true,
-      competences: [],
-      semaine_type: [],
-      shifts_autorises: [],
-      heures_ecole_jour: 6 * H,
-      date_entree: null,
-      date_sortie: null,
-      actif: true,
-      suite_de: null,
-    }
-    const ctx = {
-      sansDecompte: new Set<number>(),
-      ecole: new Set([9]),
-      absences: new Map([[1, new Map([['2026-11-02', 9]])]]),
-    }
-    const f = ficheSemaine(x, lundi, ctx)
-    expect([...(f.joursEcole ?? [])]).toEqual([0])
-    expect(versSolveur(f).minutesEcoleJour).toBe(6 * H)
-    // Colonne absente (ancienne lecture) : le défaut de la colonne, 7 h.
-    const { heures_ecole_jour: _, ...sans } = x
-    expect(versSolveur(ficheSemaine(sans, lundi, ctx)).minutesEcoleJour).toBe(
-      7 * H,
+    expect(journeeContrat(fiche({ ...extra, minutesHebdo: 45 * H }))).toBe(
+      9 * H,
     )
+    expect(
+      journeeContrat(fiche({ forfaitJours: true, minutesHebdo: 35 * H })),
+    ).toBe(JOURNEE_PLEINE)
   })
 
-  it('le décompte des jours ne change pas : l’école reste un jour travaillé', () => {
-    const f = fiche({ mineur: true, minutesEcoleJour: 0 })
-    // 2 jours d'école + 4 jours à l'hôtel = 6 jours, maximum 5 pour un mineur.
-    const semaine = [2, 3, 4, 5].map((j) => cr(`d${j}`, j, 8, 12))
-    expect(reglesDe(f, semaine)).toContain('R-REPOS-HEBDO-HCR')
+  it('le plafond de la semaine compte la même journée', () => {
+    for (const minutesHebdo of [20 * H, 35 * H, 39 * H]) {
+      const f = fiche({ minutesHebdo })
+      expect(versSolveur(f).minutesEcoleJour).toBe(journeeContrat(f))
+    }
   })
 })
 
 describe('R-ECOLE-HEURES dans les heures dues', () => {
-  const dues = (kw: Partial<Fiche>) =>
-    versSolveur(fiche(kw)).minutesHebdoContrat
-
-  it('un jour d’école retire sa durée d’école des heures dues', () => {
-    expect(dues({})).toBe(21 * H) // 35 h - 2 × 7 h
-    expect(dues({ minutesEcoleJour: 8 * H })).toBe(19 * H)
-    expect(dues({ minutesEcoleJour: 6 * H })).toBe(23 * H)
-    expect(dues({ minutesHebdo: 39 * H })).toBe(25 * H)
-    // Un congé en plus : sa journée de contrat, comme sans école.
-    expect(dues({ joursAbsenceDecomptes: 1 })).toBe(14 * H)
+  it('39 h et deux jours d’école : 3 × 8 h, moins 1 h pour la journée étoile', () => {
+    expect(dues({ minutesHebdo: 39 * H, etoileFixe: new Set([4]) })).toBe(
+      23 * H,
+    )
+    // Sans journée étoile fixée (comme le prototype) : 3 journées pleines.
+    expect(dues({ minutesHebdo: 39 * H })).toBe(24 * H)
+    // Étoile fixée sur un jour d'école : elle ne tombe pas sur un jour qui
+    // reste, les trois jours sont pleins.
+    expect(dues({ minutesHebdo: 39 * H, etoileFixe: new Set([0]) })).toBe(
+      24 * H,
+    )
   })
 
-  it('dues et plafond d’accord : la semaine pleine est acceptée sans manque', () => {
-    // Mineur, 8 h d'école par jour : 35 h - 16 h = 19 h à l'hôtel.
-    const f = fiche({ mineur: true, minutesEcoleJour: 8 * H })
-    const s = versSolveur(f)
-    expect(s.minutesHebdoContrat).toBe(19 * H)
-    expect(s.minutesHebdoContrat + 16 * H).toBe(s.minutesHebdoMax)
-    const semaine = [cr('m', 2, 8, 15), cr('j', 3, 8, 14), cr('v', 4, 8, 14)]
-    expect(reglesDe(f, semaine)).toEqual([])
+  it('35 h et deux jours d’école : 3 × 7 h', () => {
+    expect(dues({})).toBe(21 * H)
   })
 
-  it('les heures dues d’avant (21 h) ne tiennent plus : refusées', () => {
-    // Placer les 21 h que l'on devait avant dépasse le plafond école comprise.
-    const f = fiche({ mineur: true, minutesEcoleJour: 8 * H })
-    const semaine = [cr('m', 2, 8, 15), cr('j', 3, 8, 15), cr('v', 4, 8, 15)]
-    expect(reglesDe(f, semaine)).toEqual(['R-SEMAINE-MAX'])
+  it('39 h et un jour d’école : 4 jours restants, dont la journée courte', () => {
+    const f = { minutesHebdo: 39 * H, joursEcole: new Set([0]) }
+    expect(dues({ ...f, etoileFixe: new Set([4]) })).toBe(31 * H)
+    expect(dues(f)).toBe(32 * H)
   })
 
-  it('cinq jours d’école ou d’absence : rien de dû, le week-end reste libre', () => {
-    expect(dues({ joursEcole: new Set([0, 1, 2, 3, 4]) })).toBe(0)
-    expect(
-      dues({ minutesHebdo: 39 * H, joursEcole: new Set([0, 1, 2, 3, 4]) }),
-    ).toBe(0)
+  it('un jour d’école pèse exactement comme un jour d’absence décompté', () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom(0, 10 * H, 20 * H, 35 * H, 39 * H, 42 * H),
+        fc.integer({ min: 0, max: 5 }),
+        fc.integer({ min: 0, max: 5 }),
+        fc.boolean(),
+        fc.constantFrom('apprenti', 'cdi', 'extra') as fc.Arbitrary<
+          Fiche['typeContrat']
+        >,
+        (minutesHebdo, nEcole, nAbsences, etoile, typeContrat) => {
+          const jours = new Set([0, 1, 2, 3, 4].slice(0, nEcole))
+          const base = {
+            minutesHebdo,
+            typeContrat,
+            etoileFixe: etoile ? new Set([4]) : undefined,
+          }
+          const avecEcole = dues({
+            ...base,
+            joursEcole: jours,
+            joursAbsenceDecomptes: nAbsences,
+          })
+          const toutAbsence = dues({
+            ...base,
+            joursEcole: new Set(),
+            indisponibilites: jours,
+            joursAbsenceDecomptes: nAbsences + nEcole,
+          })
+          expect(avecEcole).toBe(toutAbsence)
+        },
+      ),
+      { numRuns: 300, seed: 20261029 },
+    )
+  })
+
+  it('école et absences qui couvrent les cinq jours : rien de dû', () => {
     expect(dues({ joursAbsenceDecomptes: 3 })).toBe(0)
+    expect(dues({ minutesHebdo: 39 * H, joursAbsenceDecomptes: 3 })).toBe(0)
+    expect(dues({ joursEcole: new Set([0, 1, 2, 3, 4]) })).toBe(0)
+    // Quatre jours pris : une journée reste.
+    expect(dues({ joursAbsenceDecomptes: 2 })).toBe(7 * H)
   })
 
-  it('depuis la base : le jour d’école n’est pas compté en plus comme absence', () => {
+  it('depuis la base : le jour d’école est décompté une seule fois', () => {
     const x: Salarie = {
       id: 1,
       prenom: 'Apprenti',
@@ -202,7 +178,6 @@ describe('R-ECOLE-HEURES dans les heures dues', () => {
       competences: [],
       semaine_type: [],
       shifts_autorises: [],
-      heures_ecole_jour: 8 * H,
       date_entree: null,
       date_sortie: null,
       actif: true,
@@ -219,14 +194,105 @@ describe('R-ECOLE-HEURES dans les heures dues', () => {
     ])
     // Motif d'école compté ou non dans les heures : même résultat.
     for (const sansDecompte of [new Set<number>(), new Set([9])]) {
-      const f = ficheSemaine(x, '2026-11-02', {
-        sansDecompte,
-        ecole: new Set([9]),
-        absences,
-      })
-      expect(f.joursAbsenceDecomptes).toBe(0)
-      expect(versSolveur(f).minutesHebdoContrat).toBe(19 * H)
+      for (const [heures, attendu] of [
+        [35, 21 * H],
+        [39, 24 * H],
+      ] as const) {
+        const f = ficheSemaine({ ...x, heures_hebdo: heures }, '2026-11-02', {
+          sansDecompte,
+          ecole: new Set([9]),
+          absences,
+        })
+        expect([...(f.joursEcole ?? [])]).toEqual([0, 1])
+        expect(f.joursAbsenceDecomptes).toBe(0)
+        expect(versSolveur(f).minutesHebdoContrat).toBe(attendu)
+      }
     }
+  })
+})
+
+describe('R-ECOLE-HEURES dans le plafond de la semaine (vérificateur)', () => {
+  it('mineur 35 h : 2 jours d’école (14 h) + 21 h = 35 h, accepté', () => {
+    const s = versSolveur(fiche({ mineur: true }))
+    expect(s.minutesHebdoMax).toBe(MINEUR_SEMAINE_MAX)
+    const semaine = [cr('m', 2, 8, 15), cr('j', 3, 8, 15), cr('v', 4, 8, 15)]
+    expect(reglesDe(s, semaine)).toEqual([])
+  })
+
+  it('mineur 35 h : une heure de plus est refusée, école comprise', () => {
+    const s = versSolveur(fiche({ mineur: true }))
+    const semaine = [cr('m', 2, 8, 15), cr('j', 3, 8, 15), cr('v', 4, 8, 16)]
+    const v = violationsSalarie(s, semaine, 7)
+    expect(v.map((x) => x.regle)).toEqual(['R-SEMAINE-MAX'])
+    expect(v[0].message).toBe(
+      '36 h dans la semaine, école comprise (14 h), maximum 35 h',
+    )
+    // Sans compter l'école (prototype), la même semaine passait.
+    expect(reglesDe({ ...s, minutesEcoleJour: 0 }, semaine)).toEqual([])
+  })
+
+  it('majeur 39 h : 2 jours d’école de 8 h + 32 h = 48 h accepté, 49 h refusé', () => {
+    const s = versSolveur(fiche({ minutesHebdo: 39 * H }))
+    expect(s.minutesHebdoMax).toBe(SEMAINE_MAX)
+    expect(s.minutesEcoleJour).toBe(8 * H)
+    const pile = [cr('m', 2, 7, 18), cr('j', 3, 7, 18), cr('v', 4, 8, 18)]
+    expect(reglesDe(s, pile)).toEqual([])
+    const plus = [cr('m', 2, 7, 18), cr('j', 3, 7, 18), cr('v', 4, 7, 18)]
+    const v = violationsSalarie(s, plus, 7)
+    expect(v.map((x) => x.regle)).toEqual(['R-SEMAINE-MAX'])
+    expect(v[0].message).toBe(
+      '49 h dans la semaine, école comprise (16 h), maximum 48 h',
+    )
+  })
+
+  it('temps partiel 20 h : 2 jours d’école de 4 h + 18 h accepté, 19 h refusé (plafond 26 h 40)', () => {
+    const s = versSolveur(fiche({ minutesHebdo: 20 * H }))
+    expect(s.minutesHebdoMax).toBe(26 * H + 40) // 20 h + 1/3
+    expect(s.minutesEcoleJour).toBe(4 * H)
+    const pile = [cr('m', 2, 8, 14), cr('j', 3, 8, 14), cr('v', 4, 8, 14)]
+    expect(reglesDe(s, pile)).toEqual([])
+    const plus = [cr('m', 2, 8, 14), cr('j', 3, 8, 14), cr('v', 4, 8, 15)]
+    expect(reglesDe(s, plus)).toEqual(['R-SEMAINE-MAX'])
+  })
+
+  it('dues et plafond d’accord : la semaine due tient toujours dans le plafond', () => {
+    for (const kw of [
+      { mineur: true },
+      { minutesHebdo: 20 * H },
+      { minutesHebdo: 39 * H },
+      { minutesHebdo: 39 * H, etoileFixe: new Set([4]) },
+      { mineur: true, joursEcole: new Set([0, 1, 2]) },
+    ] satisfies Array<Partial<Fiche>>) {
+      const f = fiche(kw)
+      const s = versSolveur(f)
+      const ecole = (f.joursEcole?.size ?? 0) * s.minutesEcoleJour
+      expect(s.minutesHebdoContrat + ecole).toBeLessThanOrEqual(
+        s.minutesHebdoMax,
+      )
+    }
+    // Mineur 35 h : exactement le plafond, sans heure en trop ni manque.
+    const s = versSolveur(fiche({ mineur: true }))
+    expect(s.minutesHebdoContrat + 2 * s.minutesEcoleJour).toBe(
+      s.minutesHebdoMax,
+    )
+  })
+
+  it('le décompte des jours ne change pas : l’école reste un jour travaillé', () => {
+    const s = versSolveur(fiche({ mineur: true }))
+    // 2 jours d'école + 4 jours à l'hôtel = 6 jours, maximum 5 pour un mineur.
+    const semaine = [2, 3, 4, 5].map((j) => cr(`d${j}`, j, 8, 12))
+    expect(reglesDe(s, semaine)).toContain('R-REPOS-HEBDO-HCR')
+  })
+
+  it('l’école seule ne fait jamais une infraction', () => {
+    const s = versSolveur(
+      fiche({
+        mineur: true,
+        minutesHebdo: 39 * H,
+        joursEcole: new Set([0, 1, 2, 3, 4]),
+      }),
+    )
+    expect(reglesDe(s, [])).toEqual([])
   })
 })
 
@@ -240,39 +306,38 @@ describe('R-ECOLE-HEURES dans le générateur', () => {
   it('mineur : jamais plus de 35 h école comprise', () => {
     // Trois services de 8 h : 24 h + 14 h d'école = 38 h, donc deux au plus.
     const creneaux = [2, 3, 4].map((j) => cr(`h${j}`, j, 8, 16))
-    const avec = probleme({
-      salaries: [versSolveur(fiche({ mineur: true }))],
-      creneaux,
-    })
+    const s = versSolveur(fiche({ mineur: true }))
+    const avec = probleme({ salaries: [s], creneaux })
     const r = generer(avec, highs)
     expect(r.affectations).toHaveLength(2)
     expect(violations(avec, r.affectations)).toEqual([])
     // Sans les heures d'école (prototype), il les prenait toutes les trois.
     const sans = probleme({
-      salaries: [versSolveur(fiche({ mineur: true, minutesEcoleJour: 0 }))],
+      salaries: [{ ...s, minutesEcoleJour: 0 }],
       creneaux,
     })
     expect(generer(sans, highs).affectations).toHaveLength(3)
   })
 
-  it('majeur : jamais plus de 48 h école comprise', () => {
-    // Trois services de 12 h : 36 h + 14 h d'école = 50 h, donc deux au plus.
-    const creneaux = [2, 3, 4].map((j) => cr(`h${j}`, j, 7, 19))
-    const p = probleme({ salaries: [versSolveur(fiche())], creneaux })
+  it('majeur 39 h : jamais plus de 48 h, deux jours d’école de 8 h compris', () => {
+    // Trois services de 11 h : 33 h + 16 h d'école = 49 h, donc deux au plus.
+    const creneaux = [2, 3, 4].map((j) => cr(`h${j}`, j, 7, 18))
+    const s = versSolveur(fiche({ minutesHebdo: 39 * H }))
+    const p = probleme({ salaries: [s], creneaux })
     const r = generer(p, highs)
     expect(r.affectations).toHaveLength(2)
     expect(violations(p, r.affectations)).toEqual([])
-    const sans = probleme({
-      salaries: [versSolveur(fiche({ minutesEcoleJour: 0 }))],
-      creneaux,
-    })
-    expect(generer(sans, highs).affectations).toHaveLength(3)
     expect(
       minutesDe(
         p,
         r.affectations.map((a) => a.creneauId),
       ),
-    ).toBe(24 * H)
+    ).toBe(22 * H)
+    const sans = probleme({
+      salaries: [{ ...s, minutesEcoleJour: 0 }],
+      creneaux,
+    })
+    expect(generer(sans, highs).affectations).toHaveLength(3)
   })
 
   it('propriété : minutes de l’hôtel + école ≤ plafond de la personne', () => {
@@ -280,7 +345,7 @@ describe('R-ECOLE-HEURES dans le générateur', () => {
       fc.property(
         fc.boolean(),
         fc.subarray([0, 1, 2, 3, 4, 5]),
-        fc.integer({ min: 0, max: 20 }),
+        fc.constantFrom(20 * H, 35 * H, 39 * H),
         fc.array(
           fc.record({
             jour: fc.integer({ min: 0, max: 6 }),
@@ -289,14 +354,11 @@ describe('R-ECOLE-HEURES dans le générateur', () => {
           }),
           { minLength: 1, maxLength: 9 },
         ),
-        (mineur, jours, demiHeures, services) => {
+        (mineur, jours, minutesHebdo, services) => {
           const ecole = new Set(jours)
-          const f = fiche({
-            mineur,
-            joursEcole: ecole,
-            minutesEcoleJour: demiHeures * 30,
-          })
-          const s = versSolveur(f)
+          const s = versSolveur(
+            fiche({ mineur, joursEcole: ecole, minutesHebdo }),
+          )
           const creneaux = services.map((x, i) =>
             cr(`c${i}`, x.jour, x.debut, x.debut + x.duree),
           )

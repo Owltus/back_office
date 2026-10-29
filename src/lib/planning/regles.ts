@@ -44,13 +44,6 @@ export const STAGE_JOUR_MAX = 10 * H // R-STAGE-TEMPS (prototype, À VÉRIFIER)
 export const MINEUR_JOUR_MAX = 8 * H // R-MINEUR-JOUR-MAX
 export const MINEUR_SEMAINE_MAX = 35 * H // R-MINEUR-SEMAINE-MAX
 export const MINEUR_REPOS_QUOTIDIEN = 12 * H // R-REPOS-QUOTIDIEN-MINEUR
-/** R-ECOLE-HEURES (Code du travail L6222-24) : le temps passé au CFA est du
- * temps de travail. Une journée d'école compte cette durée dans les plafonds
- * de la semaine (R-SEMAINE-MAX, R-MINEUR-SEMAINE-MAX). Réglable par personne
- * (`planning_salaries.heures_ecole_jour`), de 0 à 10 h. Écart voulu avec le
- * prototype, qui ne comptait que le JOUR d'école, pas ses heures. */
-export const MINUTES_ECOLE_JOUR = 7 * H
-export const MINUTES_ECOLE_JOUR_MAX = 10 * H
 
 /** Repos quotidien dû (R-REPOS-QUOTIDIEN, R-REPOS-QUOTIDIEN-MINEUR). */
 export function reposQuotidienMin(mineur: boolean | undefined): number {
@@ -73,11 +66,9 @@ export interface Fiche {
   postesOccasionnels?: ReadonlySet<string>
   postesSoutien?: ReadonlySet<string>
   /** Jours d'absence de la semaine comptés dans les heures, HORS jours
-   * d'école (ceux-là retirent leur durée d'école, voir `heuresDues`). */
+   * d'école (`heuresDues` les ajoute : une journée de contrat chacun). */
   joursAbsenceDecomptes?: number
   joursEcole?: ReadonlySet<number>
-  /** Durée d'une journée d'école (R-ECOLE-HEURES), `MINUTES_ECOLE_JOUR` sinon. */
-  minutesEcoleJour?: number
   horsContrat?: ReadonlySet<number>
   etoileFixe?: ReadonlySet<number>
   contratDebut?: number | null
@@ -132,6 +123,7 @@ export function journeeEtoile(f: Fiche): boolean {
 export function etoileTravaillable(f: Fiche): boolean {
   const bloques = new Set([
     ...(f.indisponibilites ?? vide),
+    ...(f.joursEcole ?? vide),
     ...(f.horsContrat ?? vide),
     ...(f.reposFixes ?? vide),
   ])
@@ -139,39 +131,48 @@ export function etoileTravaillable(f: Fiche): boolean {
 }
 
 /**
- * R-ABSENCE-HEURES : heures à planifier dans la semaine, absences déduites.
- * Sans absence : le contrat. Sinon des journées pleines sur les jours qui
- * restent (39 h et un congé : 4 × 8 h) ; à 35 h ou moins, contrat / 5 par
- * jour. Journée étoile fixée sur un jour travaillable : comptée courte.
- *
- * R-ECOLE-HEURES (L6222-24) : un jour d'école retire SA durée d'école
- * (`minutesEcoleJour`, 7 h par défaut), pas une journée de contrat. Ce sont
- * les minutes que le plafond de la semaine lui réserve déjà : dues et
- * plafond restent d'accord, sans « il manque » permanent. École et absences
- * qui couvrent les cinq jours du contrat : rien de dû. Seule source des
- * heures dues : générateur, vérificateur et affichage les lisent ici.
+ * Journée de contrat d'une personne : ce que vaut un jour d'absence décompté
+ * ou un jour d'école. Contrat à journée étoile (au-delà de 35 h) : une
+ * journée pleine de 8 h. Sinon le contrat divisé par 5 (35 h : 7 h). Contrat
+ * sans durée horaire (forfait jours, extra) : au moins 8 h, la valeur la plus
+ * prudente (plus de temps réservé dans le plafond de la semaine).
  */
-export function heuresDues(f: Fiche): number {
-  const jours = f.joursEcole?.size ?? 0
-  if (!jours) return heuresDuesHorsEcole(f)
-  // Les jours du contrat sont tous pris (école et absences) : rien à placer,
-  // le week-end reste un repos.
-  if (jours + (f.joursAbsenceDecomptes ?? 0) >= JOURS_CONTRAT) return 0
-  const ecole = jours * (f.minutesEcoleJour ?? MINUTES_ECOLE_JOUR)
-  return Math.max(0, heuresDuesHorsEcole(f) - ecole)
+export function journeeContrat(f: Fiche): number {
+  if (journeeEtoile(f)) return JOURNEE_PLEINE
+  const parJour = Math.floor(Math.max(0, f.minutesHebdo) / JOURS_CONTRAT)
+  if (f.forfaitJours || f.typeContrat === 'extra') {
+    return Math.max(JOURNEE_PLEINE, parJour)
+  }
+  return parJour
 }
 
-function heuresDuesHorsEcole(f: Fiche): number {
-  const absents = Math.min(f.joursAbsenceDecomptes ?? 0, JOURS_CONTRAT)
+/**
+ * R-ABSENCE-HEURES : heures à planifier dans la semaine, absences déduites.
+ * Sans absence : le contrat. Sinon une journée de contrat (`journeeContrat`)
+ * sur chaque jour qui reste (39 h et un congé : 4 × 8 h ; 35 h : 4 × 7 h).
+ * Journée étoile fixée sur un jour travaillable : comptée courte.
+ *
+ * R-ECOLE-HEURES (L6222-24, décision utilisateur du 2026-10-29) : un jour
+ * d'école est une journée de travail COMPLÈTE, décomptée comme un jour
+ * d'absence (39 h et deux jours d'école : 3 × 8 h, moins 1 h si la journée
+ * étoile tombe sur un jour qui reste). Le plafond de la semaine lui réserve
+ * la même journée (`versSolveur`) : dues et plafond restent d'accord. École
+ * et absences qui couvrent les cinq jours du contrat : rien de dû. Seule
+ * source des heures dues : générateur, vérificateur et affichage les lisent.
+ */
+export function heuresDues(f: Fiche): number {
+  const absents = Math.min(
+    (f.joursAbsenceDecomptes ?? 0) + (f.joursEcole?.size ?? 0),
+    JOURS_CONTRAT,
+  )
   if (!absents) return f.minutesHebdo
   if (!journeeEtoile(f)) {
-    const journee = Math.floor(f.minutesHebdo / JOURS_CONTRAT)
     return Math.max(
       0,
-      Math.min(f.minutesHebdo, (JOURS_CONTRAT - absents) * journee),
+      Math.min(f.minutesHebdo, (JOURS_CONTRAT - absents) * journeeContrat(f)),
     )
   }
-  let dues = (JOURS_CONTRAT - absents) * JOURNEE_PLEINE
+  let dues = (JOURS_CONTRAT - absents) * journeeContrat(f)
   if (dues && etoileTravaillable(f)) {
     const courte = f.minutesHebdo - (JOURS_CONTRAT - 1) * JOURNEE_PLEINE
     dues -= JOURNEE_PLEINE - Math.max(0, Math.min(JOURNEE_PLEINE, courte))
@@ -202,7 +203,8 @@ export function versSolveur(f: Fiche): SalarieSolveur {
     personne: f.personne ?? null,
     indisponibilites: new Set([...(f.indisponibilites ?? vide), ...ecole]),
     joursHorsSite: ecole,
-    minutesEcoleJour: f.minutesEcoleJour ?? MINUTES_ECOLE_JOUR,
+    // R-ECOLE-HEURES : un jour d'école compte une journée de contrat.
+    minutesEcoleJour: journeeContrat(f),
     reposConsecutifs: !!f.mineur,
     nuitInterdite: !!f.mineur, // R-NUIT-MINEUR
     reposFixes: f.reposFixes ?? vide,
@@ -291,7 +293,7 @@ export function resume(f: Fiche): LigneRegle[] {
   if (f.typeContrat === 'apprenti' || f.joursEcole?.size) {
     lignes.push([
       'R-ECOLE-HEURES',
-      `Une journée d'école compte ${heuresLisibles(s.minutesEcoleJour)} de travail dans la semaine`,
+      `Un jour d'école compte comme une journée de travail complète (${heuresLisibles(s.minutesEcoleJour)})`,
     ])
   }
   if (f.mineur) {

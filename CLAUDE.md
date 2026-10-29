@@ -2039,11 +2039,19 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   - **Données à ranger** : `donneesARanger.ts`, shifts qui contredisent les
     réglages (aperçu puis Confirmer, semaines verrouillées exclues, jamais un
     poste tenu en soutien).
-  - **École** : `planning_salaries.heures_ecole_jour` (7 h par défaut,
-    `MINUTES_ECOLE_JOUR`), comptée dans R-SEMAINE-MAX (vérificateur ET
-    générateur, L6222-24) ; `heuresDues` retire les heures d'école ; école +
-    absences sur les 5 jours du contrat = rien de dû. ⚠ Export / import du
-    prototype ne porte pas `heures_ecole_jour`.
+  - **École** (décision utilisateur du 2026-10-29 : « les heures d'école sont
+    considérées comme des journées de travail complètes ») : un jour d'école
+    vaut UNE JOURNÉE DE CONTRAT, `journeeContrat` (`regles.ts`, seule
+    source) = 8 h pour un contrat à journée étoile (> 35 h), contrat / 5
+    sinon (35 h : 7 h), au moins 8 h pour un forfait jours ou un extra
+    (valeur prudente). Dans `heuresDues`, il est décompté comme un jour
+    d'absence (même calcul que le prototype : 39 h + 2 jours = 3 × 8 h, moins
+    1 h si l'étoile tombe sur un jour qui reste ; 35 h + 2 jours = 21 h) ;
+    dans R-SEMAINE-MAX (vérificateur ET générateur, L6222-24), il compte la
+    même journée (écart voulu avec le prototype) : dues et plafond restent
+    d'accord. École + absences sur les 5 jours du contrat = rien de dû. Plus
+    AUCUNE durée réglable par personne : la colonne `heures_ecole_jour`
+    (migration jamais livrée) est retirée, ne pas la remettre.
   - **Ordre de décision du générateur** (en tête de `generateur.ts`, écrit à
     l'écran) : loi (dur) > place nécessaire (`coutPlaceVide`, DÉRIVÉ des
     autres poids) > matin / soir > contrats (heures dues > 6e jour > heures en

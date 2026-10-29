@@ -186,7 +186,6 @@ describe('FicheSalarie', () => {
         type_absence_id: null,
       })),
       shifts_autorises: [],
-      heures_ecole_jour: 420,
       date_entree: null,
       date_sortie: null,
       actif: true,
@@ -470,25 +469,22 @@ describe('FicheSalarie', () => {
     ])
   }, 20_000)
 
-  it('le bloc École : la durée d’une journée d’école part avec la fiche', async () => {
+  it('le bloc École dit qu’un jour d’école est une journée complète, sans durée à régler', async () => {
     ouvrir(11)
-    const champ = await screen.findByLabelText("Une journée d'école compte")
-    expect((champ as HTMLInputElement).value).toBe('7')
-    fireEvent.change(champ, { target: { value: '6.5' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
-    await waitFor(() =>
-      expect(service.enregistrerSalarie).toHaveBeenCalledTimes(1),
+    await screen.findByText(
+      "Un jour d'école compte comme une journée de travail complète.",
     )
-    const [valeurs] = service.enregistrerSalarie.mock.calls[0] as unknown as [
-      { heures_ecole_jour: number },
-    ]
-    expect(valeurs.heures_ecole_jour).toBe(390)
+    expect(screen.queryByLabelText(/journée d'école compte/)).toBeNull()
   })
 
-  it('pas de durée d’école sur la fiche d’un CDI', async () => {
+  it('pas de bloc École sur la fiche d’un CDI', async () => {
     ouvrir(LUCAS)
     await screen.findByLabelText('Nom')
-    expect(screen.queryByLabelText("Une journée d'école compte")).toBeNull()
+    expect(
+      screen.queryByText(
+        "Un jour d'école compte comme une journée de travail complète.",
+      ),
+    ).toBeNull()
   })
 
   it('le bloc École : appuyer sur un jour, relâcher sur un autre prend la plage ; Échap abandonne, Défaire revient en arrière', async () => {
