@@ -92,6 +92,7 @@ import { PanneauAlertes } from '#/components/planning/semaine/PanneauAlertes.tsx
 import {
   absenceDe,
   etoileProposee,
+  reposDe,
   poserHoraire as poserHoraireCase,
 } from '#/components/planning/semaine/edition.ts'
 import { EditeurShift } from '#/components/planning/semaine/EditeurShift.tsx'
@@ -161,6 +162,13 @@ export function VueMois({
   const [alertesOuvertes, setAlertesOuvertes] = useState(false)
   const [infractionsOuvertes, setInfractionsOuvertes] = useState(false)
   const [fiche, setFiche] = useState<number | null>(null)
+  // Un seul tiroir à la fois : l'éditeur d'un jour (ou son menu) ferme les
+  // panneaux d'alertes (« Placer quelqu'un » les laissait derrière lui).
+  useEffect(() => {
+    if (!edition && !menu) return
+    setAlertesOuvertes(false)
+    setInfractionsOuvertes(false)
+  }, [edition, menu])
   const [confirmation, setConfirmation] = useState<Confirmation>(null)
 
   const verrous = referentiel?.verrous ?? AUCUN_VERROU
@@ -914,6 +922,14 @@ export function VueMois({
           absence={
             edition.edition.mode === 'creation'
               ? absenceDe(
+                  bilanDe(edition.lundi, edition.edition.salarie_id),
+                  edition.edition.jour,
+                )
+              : null
+          }
+          repos={
+            edition.edition.mode === 'creation'
+              ? reposDe(
                   bilanDe(edition.lundi, edition.edition.salarie_id),
                   edition.edition.jour,
                 )

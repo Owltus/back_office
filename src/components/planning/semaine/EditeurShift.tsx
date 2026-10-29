@@ -116,6 +116,7 @@ export function EditeurShift({
   lundi,
   referentiel,
   absence,
+  repos = null,
   source,
   onFermer,
   onCreer,
@@ -132,6 +133,8 @@ export function EditeurShift({
   referentiel: Referentiel
   /** Absence déjà posée sur le jour (création). */
   absence: { motif_id: number | null; fixe: boolean } | null
+  /** Jour de repos (création) : fixé par la semaine type, ou déduit. */
+  repos?: { fixe: boolean } | null
   /** Ce que l'écran sait de la semaine (codes permis, coupure de repos). */
   source: SourceCase
   onFermer: () => void
@@ -402,7 +405,9 @@ export function EditeurShift({
       ? ecoleActuelle
         ? "Jour d'école"
         : "Jour d'absence"
-      : 'Planifier le jour'
+      : repos
+        ? 'Jour de repos'
+        : 'Planifier le jour'
   const libellePrincipal = vider
     ? 'Vider la case'
     : motif !== null
@@ -444,6 +449,17 @@ export function EditeurShift({
                   <CodeRegle regle={a.regle} />
                 </div>
               ))}
+            </div>
+          )}
+
+          {!absence && repos && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+              <strong>Repos</strong>
+              <span className="text-xs text-muted-foreground">
+                {repos.fixe
+                  ? 'vient de la semaine type : à changer dans sa fiche'
+                  : 'un shift posé ici remplace ce repos'}
+              </span>
             </div>
           )}
 
@@ -569,7 +585,8 @@ export function EditeurShift({
               {
                 titre: "Ou l'école",
                 aide: "jour hors de l'hôtel, compté comme du temps de travail",
-                liste: motifs.filter(estEcole),
+                // Déjà un jour d'école : pas la peine de le reproposer.
+                liste: ecoleActuelle ? [] : motifs.filter(estEcole),
               },
             ]
               .filter((g) => g.liste.length > 0)

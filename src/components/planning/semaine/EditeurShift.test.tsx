@@ -115,6 +115,69 @@ describe('EditeurShift', () => {
     expect(screen.queryByRole('button', { name: /Non attribué/ })).toBeNull()
   })
 
+  it('jour d’école : « Ou l’école » n’est pas reproposé', () => {
+    const ecole = referentiel.motifs.find((m) => m.nature === 'ecole')!
+    const rendreJour = (motif: number) =>
+      render(
+        <TooltipProvider>
+          <EditeurShift
+            edition={{ mode: 'creation', salarie_id: 3, jour: 2 }}
+            lundi={LUNDI}
+            referentiel={referentiel}
+            absence={{ motif_id: motif, fixe: false }}
+            source={{ semaine: null }}
+            onFermer={vi.fn()}
+            onCreer={vi.fn()}
+            onModifier={vi.fn()}
+            onSupprimer={vi.fn()}
+            onPoserAbsence={vi.fn()}
+            onRetirerAbsence={vi.fn()}
+          />
+        </TooltipProvider>,
+      )
+    rendreJour(ecole.id)
+    expect(screen.getByText("Jour d'école")).toBeTruthy()
+    expect(screen.queryByText("Ou l'école")).toBeNull()
+    cleanup()
+    const autre = referentiel.motifs.find((m) => m.nature !== 'ecole')!
+    rendreJour(autre.id)
+    expect(screen.getByText("Ou l'école")).toBeTruthy()
+  })
+
+  it('jour de repos : le titre et une ligne le disent', () => {
+    const rendreRepos = (repos: { fixe: boolean } | null) =>
+      render(
+        <TooltipProvider>
+          <EditeurShift
+            edition={{ mode: 'creation', salarie_id: 3, jour: 2 }}
+            lundi={LUNDI}
+            referentiel={referentiel}
+            absence={null}
+            repos={repos}
+            source={{ semaine: null }}
+            onFermer={vi.fn()}
+            onCreer={vi.fn()}
+            onModifier={vi.fn()}
+            onSupprimer={vi.fn()}
+            onPoserAbsence={vi.fn()}
+            onRetirerAbsence={vi.fn()}
+          />
+        </TooltipProvider>,
+      )
+    rendreRepos({ fixe: false })
+    expect(screen.getByText('Jour de repos')).toBeTruthy()
+    expect(screen.getByText('un shift posé ici remplace ce repos')).toBeTruthy()
+    cleanup()
+    rendreRepos({ fixe: true })
+    expect(
+      screen.getByText('vient de la semaine type : à changer dans sa fiche'),
+    ).toBeTruthy()
+    cleanup()
+    rendreRepos(null)
+    expect(screen.getByText('Planifier le jour')).toBeTruthy()
+    expect(screen.queryByText('Jour de repos')).toBeNull()
+  })
+
   it('seulement les postes que la personne tient', () => {
     rendre()
     expect(screen.queryByText('non tenu')).toBeNull()

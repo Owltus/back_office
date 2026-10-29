@@ -89,6 +89,7 @@ import {
   etoileProposee,
   indiceDe,
   poserHoraire,
+  reposDe,
   shiftDe,
   statutDuJour,
   trous,
@@ -209,6 +210,13 @@ export function VueSemaine({
   const [alertesOuvertes, setAlertesOuvertes] = useState(false)
   const [infractionsOuvertes, setInfractionsOuvertes] = useState(false)
   const [menu, setMenu] = useState<OuvertureMenu | null>(null)
+  // Un seul tiroir à la fois : l'éditeur d'un shift ferme les panneaux
+  // d'alertes (« Placer quelqu'un » les laissait derrière lui).
+  useEffect(() => {
+    if (!edition) return
+    setAlertesOuvertes(false)
+    setInfractionsOuvertes(false)
+  }, [edition])
   const [confirmation, setConfirmation] = useState<Confirmation>(null)
   const [enGeneration, setEnGeneration] = useState(false)
   const [aVerifier, setAVerifier] = useState<(CaseJour & { n: number }) | null>(
@@ -826,6 +834,11 @@ export function VueSemaine({
           absence={
             edition.mode === 'creation'
               ? absenceDe(bilanDe(edition.salarie_id), edition.jour)
+              : null
+          }
+          repos={
+            edition.mode === 'creation'
+              ? reposDe(bilanDe(edition.salarie_id), edition.jour)
               : null
           }
           source={source}

@@ -22,6 +22,7 @@ const {
   etoileProposee,
   indiceDe,
   poserHoraire,
+  reposDe,
   statutDuJour,
   titreHeures,
 } = await import('#/components/planning/semaine/edition.ts')
@@ -149,6 +150,21 @@ describe('statutDuJour', () => {
       genre: 'repos',
       fixe: true,
     })
+  })
+})
+
+describe('reposDe', () => {
+  it('repos fixé ou déduit ; ni une absence, ni hors contrat, ni rien', () => {
+    expect(reposDe(bilan({ repos_fixes: [3] }), 3)).toEqual({ fixe: true })
+    expect(reposDe(bilan({ repos_deduits: [3] }), 3)).toEqual({ fixe: false })
+    expect(
+      reposDe(bilan({ repos_fixes: [3], absences: { 3: 1 } }), 3),
+    ).toBeNull()
+    expect(
+      reposDe(bilan({ repos_fixes: [3], hors_contrat: [3] }), 3),
+    ).toBeNull()
+    expect(reposDe(bilan(), 3)).toBeNull()
+    expect(reposDe(undefined, 3)).toBeNull()
   })
 })
 

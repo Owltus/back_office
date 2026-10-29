@@ -251,6 +251,38 @@ describe('VueSemaine', () => {
     }
   })
 
+  it('Placer quelqu’un : l’éditeur s’ouvre seul, le panneau se ferme', async () => {
+    etat.droits = { pret: true, lire: true, ecrire: true, gerer: false }
+    rendre()
+    fireEvent.click(bouton(/Points d'attention/))
+    const panneau = await screen.findByRole('dialog', {
+      name: "Points d'attention",
+    })
+    fireEvent.click(within(panneau).getByText('Shifts à pourvoir'))
+    // Le premier groupe qui a quelqu'un de libre.
+    const placer = within(panneau).getAllByRole('button', {
+      name: /^Placer quelqu'un le /,
+    })
+    let personne: HTMLElement | undefined
+    for (const p of placer) {
+      fireEvent.click(p)
+      const ligne = p.closest('li') as HTMLElement
+      personne = within(ligne)
+        .queryAllByRole('button')
+        .find((b) => b !== p)
+      if (personne) break
+    }
+    expect(personne).toBeTruthy()
+    fireEvent.click(personne as HTMLElement)
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: "Points d'attention" }),
+      ).toBeNull(),
+    )
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
+    expect(screen.getByText('Planifier le jour')).toBeTruthy()
+  })
+
   it('écriture : le + ouvre l’éditeur, qui ajoute un shift validé', async () => {
     etat.droits = { pret: true, lire: true, ecrire: true, gerer: false }
     rendre()

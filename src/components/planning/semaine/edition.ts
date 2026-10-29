@@ -57,6 +57,16 @@ export function absenceDe(
   }
 }
 
+/** Le jour est un repos sûr (fixé par la semaine type, ou déduit d'une
+ * semaine remplie), comme l'affiche la grille ; sinon null. */
+export function reposDe(
+  bilan: BilanOut | undefined,
+  jour: number,
+): { fixe: boolean } | null {
+  const st = statutDuJour(bilan, jour, [])
+  return st?.genre === 'repos' ? { fixe: st.fixe } : null
+}
+
 /** Statut d'un jour sans shift (prototype `statutDe`), ou null : « Non attribué ». */
 export function statutDuJour(
   bilan: BilanOut | undefined,
