@@ -22,6 +22,7 @@ import {
   useReferentiel,
 } from '#/components/planning/hooks/usePlanning.ts'
 import { Button } from '#/components/ui/button.tsx'
+import { nomsCourts } from '#/lib/planning/affichage.ts'
 import type { LienReglage } from '#/lib/planning/coherence.ts'
 import {
   dateShift,
@@ -92,6 +93,9 @@ export function dateLisible(iso: string): string {
 
 const nShifts = (n: number) => `${n} shift${n > 1 ? 's' : ''}`
 
+/** Groupes montrés avant « N de plus » (comme les points du contrôle). */
+export const GROUPES_VISIBLES = 5
+
 export function SectionDonneesARanger({
   groupes,
   depuis,
@@ -104,7 +108,7 @@ export function SectionDonneesARanger({
 }: {
   groupes: GroupeARanger[] | null
   depuis: string
-  salaries: readonly Pick<Salarie, 'id' | 'prenom'>[]
+  salaries: readonly Pick<Salarie, 'id' | 'prenom' | 'nom'>[]
   isPending: boolean
   isError: boolean
   peutCorriger: boolean
@@ -112,12 +116,11 @@ export function SectionDonneesARanger({
   /** Écrit la correction ; rend un message d'échec, ou null. */
   onCorriger: (g: GroupeARanger) => Promise<string | null>
 }) {
-  const prenoms = useMemo(
-    () => new Map(salaries.map((s) => [s.id, s.prenom])),
-    [salaries],
-  )
+  // Prénom, avec l'initiale du nom quand deux personnes le partagent.
+  const prenoms = useMemo(() => nomsCourts(salaries), [salaries])
+  const [tout, setTout] = useState(false)
   const [a, m, j] = depuis.split('-')
-  const plage = `Shifts relus depuis le ${j}/${m}/${a}, et tout ce qui est déjà posé ensuite.`
+  const plage = `Les shifts déjà posés depuis le ${j}/${m}/${a} qui ne suivent plus les réglages.`
   let corps
   if (isError) {
     corps = (
@@ -139,19 +142,33 @@ export function SectionDonneesARanger({
       </p>
     )
   } else {
+    const visibles = tout ? groupes : groupes.slice(0, GROUPES_VISIBLES)
+    const reste = groupes.length - visibles.length
     corps = (
-      <ul className="divide-y overflow-hidden rounded-xl border bg-card">
-        {groupes.map((g) => (
-          <LigneGroupe
-            key={g.id}
-            groupe={g}
-            prenoms={prenoms}
-            peutCorriger={peutCorriger}
-            onAller={onAller}
-            onCorriger={onCorriger}
-          />
-        ))}
-      </ul>
+      <>
+        <ul className="divide-y overflow-hidden rounded-xl border bg-card">
+          {visibles.map((g) => (
+            <LigneGroupe
+              key={g.id}
+              groupe={g}
+              prenoms={prenoms}
+              peutCorriger={peutCorriger}
+              onAller={onAller}
+              onCorriger={onCorriger}
+            />
+          ))}
+        </ul>
+        {reste > 0 && (
+          <Button
+            variant="link"
+            size="sm"
+            className="self-start px-0"
+            onClick={() => setTout(true)}
+          >
+            {reste} de plus
+          </Button>
+        )}
+      </>
     )
   }
   return (

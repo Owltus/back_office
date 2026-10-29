@@ -60,7 +60,7 @@ function rendre(
   const props = {
     groupes,
     depuis: '2026-04-27',
-    salaries: [{ id: 7, prenom: 'Alpha' }],
+    salaries: [{ id: 7, prenom: 'Alpha', nom: 'Un' }],
     isPending: false,
     isError: false,
     peutCorriger: true,
@@ -73,6 +73,36 @@ function rendre(
 }
 
 describe('SectionDonneesARanger', () => {
+  it('dit simplement ce qui est montré', () => {
+    rendre([])
+    expect(
+      screen.getByText(
+        'Les shifts déjà posés depuis le 27/04/2026 qui ne suivent plus les réglages.',
+      ),
+    ).toBeTruthy()
+  })
+
+  it('cinq groupes, puis « N de plus » qui montre le reste', () => {
+    rendre(
+      Array.from({ length: 16 }, (_, i) =>
+        groupe({ id: `g${i}`, texte: `Groupe ${i}.` }),
+      ),
+    )
+    expect(screen.getAllByText(/^Groupe \d+\.$/)).toHaveLength(5)
+    fireEvent.click(screen.getByRole('button', { name: '11 de plus' }))
+    expect(screen.getAllByText(/^Groupe \d+\.$/)).toHaveLength(16)
+    expect(screen.queryByRole('button', { name: /de plus/ })).toBeNull()
+  })
+
+  it('cinq groupes ou moins : pas de bouton', () => {
+    rendre(
+      Array.from({ length: 5 }, (_, i) =>
+        groupe({ id: `g${i}`, texte: `Groupe ${i}.` }),
+      ),
+    )
+    expect(screen.queryByRole('button', { name: /de plus/ })).toBeNull()
+  })
+
   it('dit la plage relue, et rien pendant la lecture', () => {
     rendre(null, { isPending: true })
     expect(screen.getByText(/depuis le 27\/04\/2026/)).toBeTruthy()
