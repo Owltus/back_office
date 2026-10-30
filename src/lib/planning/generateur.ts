@@ -361,7 +361,12 @@ export interface Trou {
 }
 
 /** Le résultat du générateur, avec les trous entre équipes restés. */
-export type ResultatGeneration = Resultat & { trous: Trou[] }
+export type ResultatGeneration = Resultat & {
+  trous: Trou[]
+  /** Calcul qui a servi (mesure seulement, voir `generer`) : 1 = sans les
+   * remplaçants non imposés, 2 = problème complet. */
+  etapes: 1 | 2
+}
 
 /** Le solveur HiGHS tel que le rend `highs` (API historique). */
 export interface Highs {
@@ -552,6 +557,8 @@ interface Construit {
   ecarts: Array<[string, string]>
   /** Variables de trou (une par morceau de plage), voir `trousEntreEquipes`. */
   trous: Array<Trou & { v: string }>
+  /** Variables de manque aux minimums des consignes (une par consigne). */
+  minimums: string[]
 }
 
 /** Réglages internes de la construction (tests et mesures seulement). */
@@ -622,6 +629,7 @@ export function construire(
 
   const ecarts: Array<[string, string]> = []
   const manque = new Map<string, string>()
+  const minimums: string[] = []
 
   // Consignes de présence : les créneaux qui comptent, ce jour et à cette
   // période. Le maximum se paie en P2 (`coutConsigne`) ; le minimum est une
@@ -716,6 +724,7 @@ export function construire(
       const vm = m.entier(0, k.minimum)
       m.ajoute([...termes, [1, vm]], '>=', k.minimum)
       m.cout(coutsMinimum[i], vm)
+      minimums.push(vm)
     }
     if (k.maximum !== null && termes.length > k.maximum) {
       const vp = m.entier(0, termes.length)
@@ -1126,7 +1135,7 @@ export function construire(
     for (const v of x.values()) m.cout(Math.floor(hasard() * 4), v)
   }
 
-  return { modele: m, x, court, manque, ecarts, trous }
+  return { modele: m, x, court, manque, ecarts, trous, minimums }
 }
 
 /**
@@ -1478,18 +1487,29 @@ function scinder(k: string): [string, string] {
   return [k.slice(0, i), k.slice(i + 1)]
 }
 
-/** Résout le problème avec HiGHS (chargé par l'appelant : worker ou test). */
-export function generer(p: Probleme, highs: Highs): ResultatGeneration {
-  const { modele, x, court, manque, ecarts, trous } = construire(p)
-  if (modele.impossible) {
-    return {
-      statut: 'inconnu',
-      affectations: [],
-      manques: [],
-      ecartTotalMinutes: null,
-      trous: [],
-    }
-  }
+/** Une résolution, avec ce qu'il faut pour décider s'il faut la seconde. */
+type Resolution = Omit<ResultatGeneration, 'etapes'> & {
+  /** Personnes qui manquent aux minimums des consignes, toutes ensemble. */
+  manqueMinimum: number
+}
+
+const echec = (): Resolution => ({
+  statut: 'inconnu',
+  affectations: [],
+  manques: [],
+  ecartTotalMinutes: null,
+  trous: [],
+  manqueMinimum: 0,
+})
+
+/** Résout UNE fois le problème `p` avec HiGHS, en `tempsMax` secondes. */
+function resoudreUneFois(
+  p: Probleme,
+  highs: Highs,
+  tempsMax: number,
+): Resolution {
+  const { modele, x, court, manque, ecarts, trous, minimums } = construire(p)
+  if (modele.impossible) return echec()
   // Sans variable ni place : aucun besoin, donc aucune plage, aucun trou.
   if (x.size === 0 && manque.size === 0) {
     return {
@@ -1498,10 +1518,11 @@ export function generer(p: Probleme, highs: Highs): ResultatGeneration {
       manques: [],
       ecartTotalMinutes: 0,
       trous: [],
+      manqueMinimum: 0,
     }
   }
   const solution = highs.solve(modele.lp(), {
-    time_limit: p.tempsMaxSecondes,
+    time_limit: tempsMax,
     mip_rel_gap: 0,
     mip_abs_gap: 0.5,
     random_seed: Math.abs(p.graine) % 2_147_483_647,
@@ -1519,15 +1540,7 @@ export function generer(p: Probleme, highs: Highs): ResultatGeneration {
           /time limit|iteration limit|interrupt/i.test(solution.Status)
         ? 'realisable'
         : 'inconnu'
-  if (statut === 'inconnu') {
-    return {
-      statut,
-      affectations: [],
-      manques: [],
-      ecartTotalMinutes: null,
-      trous: [],
-    }
-  }
+  if (statut === 'inconnu') return echec()
   const affectations: AffectationSolveur[] = []
   for (const [k, v] of x) {
     if (valeur(v) !== 1) continue
@@ -1567,5 +1580,128 @@ export function generer(p: Probleme, highs: Highs): ResultatGeneration {
       0,
     ),
     trous: restes,
+    manqueMinimum: minimums.reduce((t, v) => t + valeur(v), 0),
   }
+}
+
+/** Ce qui reste à tenir : places vides, minimums, minutes de trou. */
+function aTenir(r: Resolution): [number, number] {
+  return [
+    r.manques.reduce((t, m) => t + m.manquant, 0) + r.manqueMinimum,
+    r.trous.reduce((t, k) => t + k.fin - k.debut, 0),
+  ]
+}
+
+const rendre = (
+  { manqueMinimum: _, ...r }: Resolution,
+  etapes: 1 | 2,
+): ResultatGeneration => ({ ...r, etapes })
+
+/*
+ * CALCUL EN DEUX TEMPS (D5, D13 : « jouer avec les codes » seulement quand
+ * le code imposé ne suffit pas). Les créneaux remplaçants (`place !== null`)
+ * multiplient les variables (~385 par semaine réelle) et le temps de calcul
+ * (mesuré sur 8 semaines : 3,3 s en moyenne contre 0,36 s sans), alors que
+ * le code exact suffit presque toujours.
+ *
+ * Temps 1 : le même problème SANS les remplaçants non imposés (un shift
+ * posé rattaché par cycle reste : c'est un fait). Puis :
+ *   - une place nécessaire vide, un manque à un minimum de consigne ou un
+ *     trou entre équipes : temps 2 sur le problème COMPLET ;
+ *   - sinon, des places qui ont des remplaçants tenues en DÉPANNAGE :
+ *     temps 2 avec les remplaçants de CES places seulement (D13 : un
+ *     titulaire sur un autre code du cycle passe devant un dépannage au
+ *     code imposé). Mesuré : sur les vraies semaines, ~8 places par semaine
+ *     sont tenues par une adjointe ou un superviseur, et le problème
+ *     complet n'y pose jamais de remplaçant ; ne garder que leurs ~50
+ *     remplaçants (sur ~385) suffit à en juger. Ce qui est laissé : une
+ *     chaîne où un titulaire passe sur l'autre code d'une place tenue au
+ *     code imposé pour libérer celui-ci à un autre : un changement de code
+ *     de plus (2 000) pour un gain d'heures ou de confort (voir plus bas) ;
+ *   - sinon, la solution du temps 1 est rendue.
+ *
+ * Pourquoi c'est sûr. La solution du temps 1 est une solution du problème
+ * complet (remplaçants à 0 : ils n'ont aucune contrainte propre). Un
+ * remplaçant coûte toujours POIDS_REMPLACANT (2 000) de plus, ne rapporte
+ * jamais plus d'heures dues que le besoin ni n'épargne d'heures en plus
+ * (`minutesDues`, `minutesEnPlus`), et ne sert qu'à tenir une place, un
+ * minimum, fermer un trou (P1, P2) ou éviter un dépannage (P4 : part fixe
+ * au-dessus du remplaçant). Les quatre sont regardés ci-dessus : s'il n'en
+ * reste aucun, ce que le problème complet gagnerait de plus vient de ce qui
+ * reste, contre au moins 2 000 par remplaçant :
+ *   - P3 (contrats) : une personne qui ne peut pas tenir le code imposé
+ *     (repos de 11 h…) prendrait le code voisin à la place d'une autre qui
+ *     le tient, pour lui donner ses heures dues, ou pour retirer des heures
+ *     en plus ou un 6e jour à l'autre (le même jour, la même place) ;
+ *   - P2 maximum d'une consigne (un code voisin d'une autre période) ;
+ *   - P5 confort (repos accolés, équité, jours habituels), plafonné par
+ *     shift sous la part fixe d'un dépannage, donc rarement plus de 2 000.
+ * Dans ces cas l'optimum du problème complet PEUT différer de celui rendu :
+ * c'est voulu, « le code exact tant qu'il suffit » ; chaque place reste
+ * tenue avec le code demandé, rien n'est vide ni hors la loi.
+ * Les poids dérivés (`coutPlaceVideGroupe`, `coutManqueMinimum`, maximum
+ * des consignes) sont calculés sur les créneaux de CHAQUE problème : les
+ * deux premiers ne jouent qu'en cas de manque (alors problème complet) ; le
+ * maximum garde son rang P2.
+ *
+ * Budget : `tempsMaxSecondes` couvre les deux temps. Si le temps 1 l'a
+ * tout pris, ou si le temps 2 ne trouve rien, le meilleur connu est rendu
+ * (moins de personnes manquantes, puis moins de minutes de trou ; à
+ * égalité, le temps 2).
+ */
+/** Résout le problème avec HiGHS (chargé par l'appelant : worker ou test). */
+export function generer(p: Probleme, highs: Highs): ResultatGeneration {
+  const imposes = new Set([...p.imposees].map((k) => scinder(k)[1]))
+  const garde = (places: ReadonlySet<string>) =>
+    p.creneaux.filter(
+      (c) => c.place === null || imposes.has(c.id) || places.has(c.place),
+    )
+  const creneaux1 = garde(new Set())
+  if (creneaux1.length === p.creneaux.length) {
+    return rendre(resoudreUneFois(p, highs, p.tempsMaxSecondes), 1)
+  }
+  const debut = Date.now()
+  const r1 = resoudreUneFois(
+    { ...p, creneaux: creneaux1 },
+    highs,
+    p.tempsMaxSecondes,
+  )
+  let creneaux2 = p.creneaux
+  if (r1.statut !== 'inconnu') {
+    const [manquants, trou] = aTenir(r1)
+    if (manquants === 0 && trou === 0) {
+      const places = placesEnDepannage(p, r1)
+      if (places.size === 0) return rendre(r1, 1)
+      creneaux2 = garde(places)
+    }
+  }
+  const reste = p.tempsMaxSecondes - (Date.now() - debut) / 1000
+  if (reste <= 0.05) return rendre(r1, 1)
+  const r2 = resoudreUneFois({ ...p, creneaux: creneaux2 }, highs, reste)
+  if (r2.statut === 'inconnu') return rendre(r1, 1)
+  if (r2.statut === 'realisable' && r1.statut !== 'inconnu') {
+    const [m1, t1] = aTenir(r1)
+    const [m2, t2] = aTenir(r2)
+    if (m1 < m2 || (m1 === m2 && t1 < t2)) return rendre(r1, 1)
+  }
+  return rendre(r2, 2)
+}
+
+/** Les places qui ont des remplaçants et que le temps 1 fait tenir en
+ * dépannage (hors shift posé). */
+function placesEnDepannage(p: Probleme, r: Resolution): Set<string> {
+  const avecRemplacants = new Set<string>()
+  for (const c of p.creneaux) if (c.place !== null) avecRemplacants.add(c.place)
+  const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
+  const salaries = new Map(p.salaries.map((s) => [s.id, s]))
+  const places = new Set<string>()
+  for (const a of r.affectations) {
+    const c = creneaux.get(a.creneauId)
+    const s = salaries.get(a.salarieId)
+    if (!c || !s || p.imposees.has(cle(a.salarieId, a.creneauId))) continue
+    const place = c.place ?? c.id
+    if (avecRemplacants.has(place) && role(s, c.poste) === 'occasionnel')
+      places.add(place)
+  }
+  return places
 }

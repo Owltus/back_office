@@ -1330,3 +1330,183 @@ describe('cycles : un remplaçant d’une autre durée, jamais pour des heures',
     expect(r.ecartTotalMinutes).toBe(4 * H)
   })
 })
+
+/*
+ * Calcul en deux temps (`generer`) : d'abord sans les remplaçants non
+ * imposés ; le problème avec remplaçants seulement s'il reste une place
+ * vide, un minimum manqué, un trou, ou une place à remplaçants tenue en
+ * dépannage. `etapes` dit lequel a servi.
+ */
+describe('cycles : le code exact d’abord, en deux temps', () => {
+  const besoin = creneau('b1', 0, 7, 14, { typeShift: 'M3' })
+  const r6 = creneau('r1-M6', 0, 10, 17, {
+    typeShift: 'M6',
+    place: 'b1',
+    effectif: 0,
+  })
+  const r9 = creneau('r1-M9', 0, 8, 15, {
+    typeShift: 'M9',
+    place: 'b1',
+    effectif: 0,
+  })
+  const remplacants = (r: Resultat, p: Probleme) => {
+    const places = new Map(p.creneaux.map((c) => [c.id, c.place]))
+    return r.affectations.filter((a) => places.get(a.creneauId) != null)
+  }
+
+  it('sans manque : un seul temps, aucun remplaçant, comme sans remplaçant', () => {
+    const semaine = [
+      ...[1, 2, 3, 4].map((j) => creneau(`m${j}`, j, 7, 14)),
+      besoin,
+    ]
+    const salaries = [personne('a', 35), personne('b', 7)]
+    for (const graine of graines) {
+      const p = probleme({
+        salaries,
+        creneaux: [...semaine, r6, r9],
+        graine,
+      })
+      const r = gen(p)
+      expect(r.etapes).toBe(1)
+      expect(remplacants(r, p)).toEqual([])
+      const sans = gen(probleme({ salaries, creneaux: semaine, graine }))
+      expect(sans.etapes).toBe(1)
+      expect(r.affectations).toEqual(sans.affectations)
+      expect(r.manques).toEqual([])
+    }
+  })
+
+  it('M3 impossible (repos de 11 h) : second temps, M6 posé', () => {
+    const a = personne('a', 7, {
+      finServicePrecedent: -2 * H,
+      shiftsAutorises: new Set(['M3', 'M6']),
+    })
+    for (const graine of graines) {
+      const r = gen(probleme({ salaries: [a], creneaux: [besoin, r6], graine }))
+      expect(r.etapes).toBe(2)
+      expect(qui(r, 'r1-M6')).toEqual(['a'])
+      expect(r.manques).toEqual([])
+    }
+  })
+
+  it('aucun code possible : second temps, place vide au nom du besoin', () => {
+    const a = personne('a', 7, { finServicePrecedent: 0 })
+    const r = gen(probleme({ salaries: [a], creneaux: [besoin, r6] }))
+    expect(r.etapes).toBe(2)
+    expect(r.affectations).toEqual([])
+    expect(r.manques).toEqual([{ creneauId: 'b1', manquant: 1 }])
+  })
+
+  it('un minimum manqué au premier temps, tenu par un remplaçant : second temps', () => {
+    // Place facultative (aucune place vide au premier temps), mais le
+    // minimum du matin n'est tenu que par le code voisin.
+    const facultatif = { ...besoin, effectif: 0, facultatif: 1 }
+    const voisin = { ...r6, presence: 'matin' as const }
+    const a = personne('a', 7, { finServicePrecedent: -2 * H })
+    const consignes = [
+      { jour: 0, periode: 'matin' as const, minimum: 1, maximum: null },
+    ]
+    for (const graine of graines) {
+      const p = probleme({
+        salaries: [a],
+        creneaux: [{ ...facultatif, presence: 'matin' }, voisin],
+        consignes,
+        graine,
+      })
+      const r = gen(p)
+      expect(r.etapes).toBe(2)
+      expect(qui(r, 'r1-M6')).toEqual(['a'])
+      // Le même problème sans le remplaçant laisse le minimum manqué.
+      const sans = gen({ ...p, creneaux: [p.creneaux[0]] })
+      expect(sans.affectations).toEqual([])
+    }
+  })
+
+  it('un trou au premier temps, fermé par un remplaçant : second temps', () => {
+    const matin = creneau('mat', 0, 7, 15, {
+      typeShift: 'M',
+      presence: 'matin',
+    })
+    const soir = creneau('soi', 0, 16, 23, {
+      typeShift: 'S1',
+      presence: 'soir',
+    })
+    const soirLong = creneau('soi-S2', 0, 15, 23, {
+      typeShift: 'S2',
+      presence: 'soir',
+      place: 'soi',
+      effectif: 0,
+    })
+    const equipe = [
+      personne('a', 8, { shiftsAutorises: new Set(['M']) }),
+      personne('b', 7, { shiftsAutorises: new Set(['S1', 'S2']) }),
+    ]
+    for (const graine of graines) {
+      const r = gen(
+        probleme({
+          salaries: equipe,
+          creneaux: [matin, soir, soirLong],
+          graine,
+        }),
+      )
+      expect(r.etapes).toBe(2)
+      expect(qui(r, 'soi-S2')).toEqual(['b'])
+      expect(r.trous).toEqual([])
+    }
+  })
+
+  it('un remplaçant imposé reste au premier temps, les autres sont retirés', () => {
+    for (const graine of graines) {
+      const r = gen(
+        probleme({
+          salaries: [personne('a', 7), personne('b', 7)],
+          creneaux: [besoin, r6, r9],
+          imposees: new Set(['a|r1-M6']),
+          graine,
+        }),
+      )
+      expect(r.etapes).toBe(1)
+      expect(r.statut).toBe('optimal')
+      expect(r.manques).toEqual([])
+      expect(qui(r, 'r1-M6')).toEqual(['a'])
+      expect(qui(r, 'b1')).toEqual([])
+      expect(qui(r, 'r1-M9')).toEqual([])
+    }
+  })
+
+  it('une place à remplaçants tenue en dépannage : second temps (D13)', () => {
+    const dE = personne('dE', 7, {
+      postesOccasionnels: new Set(['r']),
+      shiftsAutorises: new Set(['M3']),
+    })
+    const tR = personne('tR', 7, { shiftsAutorises: new Set(['M6']) })
+    for (const graine of graines) {
+      const r = gen(
+        probleme({ salaries: [dE, tR], creneaux: [besoin, r6, r9], graine }),
+      )
+      expect(r.etapes).toBe(2)
+      expect(qui(r, 'r1-M6')).toEqual(['tR'])
+      // Personne pour le code voisin : le dépannage au code imposé reste.
+      const seul = gen(
+        probleme({ salaries: [dE], creneaux: [besoin, r6, r9], graine }),
+      )
+      expect(seul.etapes).toBe(2)
+      expect(qui(seul, 'b1')).toEqual(['dE'])
+    }
+  })
+
+  it('un dépannage sur une place SANS remplaçant ne relance rien', () => {
+    const dE = personne('dE', 7, { postesOccasionnels: new Set(['r']) })
+    const autre = creneau('b2', 1, 7, 14, { typeShift: 'M3' })
+    const r = gen(
+      probleme({
+        // tR tient b1 (sur M3), dE tient b2 en dépannage : b2 n'a pas de
+        // remplaçant, le code exact suffit.
+        salaries: [personne('tR', 7, { indisponibilites: new Set([1]) }), dE],
+        creneaux: [besoin, r6, autre],
+      }),
+    )
+    expect(r.etapes).toBe(1)
+    expect(r.manques).toEqual([])
+  })
+})

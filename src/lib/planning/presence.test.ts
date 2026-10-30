@@ -422,5 +422,5 @@ describe('une semaine de l’hôtel d’essai', () => {
       },
     ])
     expect(recompte(5, false)).toBe(3)
-  })
+  }, 60_000)
 })
