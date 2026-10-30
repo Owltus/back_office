@@ -292,7 +292,7 @@ export function ecartNonCapture(sortie) {
   if (ligne) {
     try {
       const j = JSON.parse(ligne)
-      if (typeof j.diff === 'string') return j.diff.trim()
+      if (typeof j.diff === 'string') return sansObjetsPlateforme(j.diff)
     } catch {
       // repli texte ci-dessous
     }
@@ -301,6 +301,25 @@ export function ecartNonCapture(sortie) {
   throw new Error(
     'Comparaison de la structure locale illisible : vérification impossible.',
   )
+}
+
+/**
+ * Objets posés par Supabase lui-même (migrations internes de storage-api),
+ * présents dans la base locale mais pas dans la base fantôme d'une autre
+ * version d'image (constaté le 2026-10-30). Ils ne viennent d'aucune
+ * migration du dépôt et ne doivent jamais y être capturés. Liste FERMÉE,
+ * instruction entière : tout autre écart reste un refus.
+ */
+const OBJETS_PLATEFORME = [
+  /^CREATE TRIGGER enforce_versioning_status_transition BEFORE UPDATE OF versioning_status ON storage\.buckets FOR EACH ROW EXECUTE FUNCTION storage\.enforce_versioning_status_transition\(\);$/,
+]
+
+function sansObjetsPlateforme(diff) {
+  return diff
+    .split(/\r?\n/)
+    .filter((l) => !OBJETS_PLATEFORME.some((r) => r.test(l.trim())))
+    .join('\n')
+    .trim()
 }
 
 /**

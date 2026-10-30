@@ -49,6 +49,26 @@ describe('ecartNonCapture', () => {
     ).toBe('alter table t add column y int;')
   })
 
+  it('ignore le seul trigger interne de storage posé par Supabase', () => {
+    const trigger =
+      'CREATE TRIGGER enforce_versioning_status_transition BEFORE UPDATE OF versioning_status ON storage.buckets FOR EACH ROW EXECUTE FUNCTION storage.enforce_versioning_status_transition();'
+    expect(
+      ecartNonCapture(`{"diff":${JSON.stringify(`${trigger}\n\n\n`)}}`),
+    ).toBe('')
+    // Un vrai écart à côté reste signalé.
+    expect(
+      ecartNonCapture(
+        `{"diff":${JSON.stringify(`${trigger}\nalter table t add y int;\n`)}}`,
+      ),
+    ).toBe('alter table t add y int;')
+    // Un autre trigger sur storage n'est pas ignoré.
+    expect(
+      ecartNonCapture(
+        `{"diff":${JSON.stringify(trigger.replace('enforce_versioning_status_transition BEFORE', 'autre BEFORE'))}}`,
+      ),
+    ).not.toBe('')
+  })
+
   it('refuse une sortie illisible', () => {
     expect(() => ecartNonCapture('erreur de connexion')).toThrow(/illisible/)
   })
