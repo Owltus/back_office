@@ -1262,3 +1262,71 @@ describe('cycles : ce que le lot C pose et ce que l’oracle compte', () => {
     expect(trousVerifies(p, r.affectations)).toEqual(attendu)
   })
 })
+
+/*
+ * Relecture adverse du 2026-10-30 : un remplaçant d'une AUTRE DURÉE que son
+ * besoin ne doit jamais passer devant le code imposé pour des heures de
+ * contrat (D13). Avant le correctif, un M6 d'une heure plus long rapportait
+ * 60 × 400 = 24 000 d'heures dues contre 2 000 de changement de code : le
+ * moteur posait M6 partout, sans motif.
+ */
+describe('cycles : un remplaçant d’une autre durée, jamais pour des heures', () => {
+  /** Lundi à vendredi : besoin M3 (7 h - 14 h) et son remplaçant `code`. */
+  const semaine = (code: string, debutH: number, finH: number) =>
+    [0, 1, 2, 3, 4].flatMap((j) => [
+      creneau(`b${j}`, j, 7, 14, { typeShift: 'M3' }),
+      creneau(`r${j}-${code}`, j, debutH, finH, {
+        typeShift: code,
+        place: `b${j}`,
+        effectif: 0,
+        facultatif: 0,
+        soutien: 0,
+      }),
+    ])
+  const codes = (r: Resultat) => r.affectations.map((a) => a.creneauId).sort()
+
+  it('contrat de 39 h, M3 de 7 h, M6 de 8 h : M3 partout, aucun remplaçant', () => {
+    const m6 = semaine('M6', 7, 15)
+    for (const graine of graines) {
+      const r = gen(
+        probleme({ salaries: [personne('a', 39)], creneaux: m6, graine }),
+      )
+      expect(codes(r)).toEqual(['b0', 'b1', 'b2', 'b3', 'b4'])
+      expect(r.manques).toEqual([])
+    }
+  })
+
+  it('une heure au-dessus du contrat, remplaçant plus court : le code imposé reste', () => {
+    // 34 h de contrat, 5 × 7 h = 35 h : un M2 de 6 h ramènerait au contrat
+    // (3 000 d'heures en plus épargnés contre 2 000 de changement de code).
+    const m2 = semaine('M2', 8, 14)
+    for (const graine of graines) {
+      const r = gen(
+        probleme({ salaries: [personne('a', 34)], creneaux: m2, graine }),
+      )
+      expect(codes(r)).toEqual(['b0', 'b1', 'b2', 'b3', 'b4'])
+    }
+  })
+
+  it('M3 impossible le lundi : M6 reste posé, pas de place vide', () => {
+    // Fin la veille à 22 h : 9 h avant M3 (7 h), 11 h avant un M6 à 9 h.
+    const m6 = semaine('M6', 9, 17)
+    const a = personne('a', 39, { finServicePrecedent: -2 * H })
+    for (const graine of graines) {
+      const p = probleme({ salaries: [a], creneaux: m6, graine })
+      const r = gen(p)
+      expect(codes(r)).toEqual(['b1', 'b2', 'b3', 'b4', 'r0-M6'])
+      expect(r.manques).toEqual([])
+      expect(violations(p, r.affectations)).toEqual([])
+    }
+  })
+
+  it('le manque au contrat ne compte que les heures du besoin', () => {
+    // Même semaine, une seule personne : 4 × 7 h + 1 × 8 h. Le manque au
+    // contrat (39 h) compte 5 × 7 h = 35 h : 4 h dues, comme avec M3.
+    const m6 = semaine('M6', 9, 17)
+    const a = personne('a', 39, { finServicePrecedent: -2 * H })
+    const r = gen(probleme({ salaries: [a], creneaux: m6 }))
+    expect(r.ecartTotalMinutes).toBe(4 * H)
+  })
+})

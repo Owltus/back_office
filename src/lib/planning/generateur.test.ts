@@ -21,6 +21,7 @@ import { MINUTES_PAR_JOUR } from '#/lib/planning/temps.ts'
 import {
   manquants,
   raisonsBlocage,
+  trous as trousVerifies,
   violations,
 } from '#/lib/planning/verificateur.ts'
 
@@ -634,5 +635,267 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
       { numRuns: 80, seed: 20261030 },
     )
     expect(empreinte(textes.join('\n=====\n'))).toBe('c66ff0f1')
+  })
+})
+
+/*
+ * Optimisation B2 (plan planning-cycles-2026-10-30) : avec des créneaux
+ * remplaçants, les paires et triplets impliqués par « un shift par jour » ne
+ * sont plus écrits un à un (REDUCTION DES REMPLAÇANTS, `construire`). Preuve
+ * que l'espace des solutions ne change pas : sur des semaines tirées au
+ * hasard AVEC remplaçants (fabriqués comme le lot C), la valeur optimale est
+ * la même avec et sans réduction, et la solution réduite ne viole aucune
+ * règle de la loi.
+ */
+describe('réduction des remplaçants : même optimum', () => {
+  const resoudre = (lp: string) =>
+    highs.solve(lp, {
+      mip_rel_gap: 0,
+      mip_abs_gap: 0,
+      output_flag: false,
+    }) as ReturnType<Highs['solve']> & { ObjectiveValue: number }
+
+  /** Un besoin et ses remplaçants (r<besoin>-<code>, place b<besoin>). */
+  function place(
+    i: number,
+    jour: number,
+    debutH: number,
+    dureeH: number,
+    effectif: number,
+    decalages: number[],
+  ): Creneau[] {
+    const besoin: Creneau = {
+      ...creneau(`b${i}`, 'reception', jour, debutH, debutH + dureeH),
+      typeShift: `M${i}`,
+      effectif,
+      soir: debutH >= 13,
+    }
+    const remplacants = decalages.map((d, k): Creneau => ({
+      ...creneau(
+        `r${i}-H${i}${k}`,
+        'reception',
+        jour,
+        debutH + d,
+        debutH + d + dureeH,
+      ),
+      typeShift: `H${i}${k}`,
+      place: `b${i}`,
+      effectif: 0,
+      facultatif: 0,
+      soutien: 0,
+      soir: debutH + d >= 13,
+    }))
+    return [besoin, ...remplacants]
+  }
+
+  const affectations = (
+    c: ReturnType<typeof construire>,
+    lp: ReturnType<typeof resoudre>,
+  ) => {
+    const un = (v: string) => Math.round(lp.Columns[v]?.Primal ?? 0) === 1
+    const affs: AffectationSolveur[] = []
+    for (const [k, v] of c.x) {
+      if (!un(v)) continue
+      const i = k.indexOf('|')
+      const vc = c.court.get(k)
+      affs.push(aff(k.slice(0, i), k.slice(i + 1), vc ? un(vc) : false))
+    }
+    return affs
+  }
+
+  it('sur des semaines tirées au hasard avec remplaçants', () => {
+    const arbSalarie = fc.record({
+      contratH: fc.integer({ min: 0, max: 39 }),
+      absents: fc.subarray([0, 1, 2, 3, 4, 5, 6], { maxLength: 2 }),
+      reposHebdo: fc.boolean(),
+      // Fin du service d'avant / début du suivant : force les triplets.
+      bords: fc.boolean(),
+    })
+    const arbPlace = fc.record({
+      jour: fc.integer({ min: 0, max: 6 }),
+      // Jusqu'à 20 h : des soirs qui finissent tard, des matins tôt le
+      // lendemain, donc des paires du repos quotidien d'un jour à l'autre.
+      debutH: fc.integer({ min: 5, max: 20 }),
+      dureeH: fc.integer({ min: 3, max: 9 }),
+      effectif: fc.integer({ min: 1, max: 2 }),
+      decalages: fc.subarray([-3, -2, -1, 1, 2, 3, 6], { maxLength: 3 }),
+    })
+    let reduites = 0
+    let optimaux = 0
+    fc.assert(
+      fc.property(
+        // Peu de monde pour beaucoup de places : enfreindre une règle
+        // rapporterait, une contrainte oubliée se verrait.
+        fc.array(arbSalarie, { minLength: 1, maxLength: 2 }),
+        fc.array(arbPlace, { minLength: 2, maxLength: 10 }),
+        fc.subarray(range(12), { maxLength: 3 }),
+        fc.integer({ min: 0, max: 1000 }),
+        (gens, places, epingles, graine) => {
+          const salaries = gens.map((g, i) =>
+            receptionniste(`s${i}`, g.contratH, {
+              joursTravaillesMaxSemaine: 6,
+              joursPreferesSemaine: 5,
+              indisponibilites: new Set(g.absents),
+              reposHebdoMin: g.reposHebdo ? 35 * H : 0,
+              finServicePrecedent: g.bords ? -2 * H : null,
+              debutServiceSuivant: g.bords
+                ? 7 * MINUTES_PAR_JOUR + 6 * H
+                : null,
+            }),
+          )
+          const creneaux = places.flatMap((c, i) =>
+            place(i, c.jour, c.debutH, c.dureeH, c.effectif, c.decalages),
+          )
+          // Quelques épinglés (parfois deux le même jour : la paire reste).
+          const imposees = new Set<string>()
+          for (const k of epingles) {
+            const c = creneaux.at(k)
+            if (k < creneaux.length && c)
+              imposees.add(cle(salaries[k % salaries.length].id, c.id))
+          }
+          const p = probleme({ salaries, creneaux, imposees, graine })
+          const avec = construire(p)
+          const sans = construire(p, { reduire: false })
+          if (avec.modele.contraintes.length < sans.modele.contraintes.length)
+            reduites++
+          expect(avec.modele.impossible).toBe(sans.modele.impossible)
+          if (avec.modele.impossible || avec.x.size === 0) return
+          const ra = resoudre(avec.modele.lp())
+          const rs = resoudre(sans.modele.lp())
+          expect(ra.Status).toBe(rs.Status)
+          // Deux épinglés sur une place d'une seule personne : la couverture
+          // (Σ <= effectif + facultatif) rend le modèle impossible, avec ou
+          // sans réduction. Rien d'autre à comparer.
+          if (rs.Status === 'Infeasible' && imposees.size > 0) return
+          expect(ra.Status).toBe('Optimal')
+          optimaux++
+          expect(ra.ObjectiveValue).toBeCloseTo(rs.ObjectiveValue, 6)
+          // Les épinglés sont des faits, gardés même hors la loi : le
+          // vérificateur ne juge que les semaines sans épinglé.
+          if (imposees.size === 0) {
+            expect(
+              violations(p, affectations(avec, ra)).filter(
+                (v) => v.nature === 'loi',
+              ),
+            ).toEqual([])
+          }
+        },
+      ),
+      { numRuns: 40, seed: 20261030 },
+    )
+    // La propriété n'est pas vide : la réduction a bien servi.
+    expect(reduites).toBeGreaterThan(20)
+    expect(optimaux).toBeGreaterThan(30)
+  }, 120_000)
+
+  /*
+   * Le test « même texte LP » ne couvre ni la présence ni les consignes
+   * (relecture adverse du 2026-10-30). Ici, des semaines AVEC créneaux
+   * comptés au matin et au soir, consignes (au moins, au plus) et
+   * remplaçants : (a) la réduction garde le même optimum ; (b) les trous
+   * rendus par le générateur sont ceux que l'oracle (`verificateur.trous`,
+   * écrit sans rien reprendre du générateur) recompte sur la solution ;
+   * (c) aucune règle de la loi enfreinte.
+   */
+  it('présence, consignes et remplaçants : même optimum, trous du générateur = trous de l’oracle', () => {
+    const arbSalarie = fc.record({
+      contratH: fc.integer({ min: 0, max: 39 }),
+      absents: fc.subarray([0, 1, 2, 3, 4, 5, 6], { maxLength: 2 }),
+    })
+    const arbPlace = fc.record({
+      jour: fc.integer({ min: 0, max: 2 }),
+      debutH: fc.integer({ min: 5, max: 18 }),
+      dureeH: fc.integer({ min: 3, max: 9 }),
+      effectif: fc.integer({ min: 0, max: 2 }),
+      decalages: fc.subarray([-2, -1, 1, 2], { maxLength: 2 }),
+    })
+    const arbConsigne = fc.record({
+      jour: fc.integer({ min: 0, max: 2 }),
+      periode: fc.constantFrom('matin' as const, 'soir' as const),
+      minimum: fc.integer({ min: 0, max: 2 }),
+      maximum: fc.option(fc.integer({ min: 1, max: 2 }), { nil: null }),
+    })
+    let avecTrous = 0
+    fc.assert(
+      fc.property(
+        fc.array(arbSalarie, { minLength: 1, maxLength: 3 }),
+        fc.array(arbPlace, { minLength: 2, maxLength: 7 }),
+        fc.array(arbConsigne, { maxLength: 3 }),
+        fc.integer({ min: 0, max: 1000 }),
+        (gens, places, consignes, graine) => {
+          const salaries = gens.map((g, i) =>
+            receptionniste(`s${i}`, g.contratH, {
+              joursTravaillesMaxSemaine: 6,
+              joursPreferesSemaine: 5,
+              indisponibilites: new Set(g.absents),
+            }),
+          )
+          const creneaux = places
+            .flatMap((c, i) =>
+              place(i, c.jour, c.debutH, c.dureeH, c.effectif, c.decalages),
+            )
+            .map((c) => ({
+              ...c,
+              presence:
+                (c.debut % MINUTES_PAR_JOUR) / H < 12
+                  ? ('matin' as const)
+                  : ('soir' as const),
+            }))
+          const p = probleme({
+            salaries,
+            creneaux,
+            consignes: consignes.filter(
+              (k) => k.maximum === null || k.maximum >= k.minimum,
+            ),
+            graine,
+          })
+          const avec = construire(p)
+          const sans = construire(p, { reduire: false })
+          if (avec.modele.impossible || avec.x.size === 0) return
+          const ra = resoudre(avec.modele.lp())
+          const rs = resoudre(sans.modele.lp())
+          expect(ra.Status).toBe('Optimal')
+          expect(rs.Status).toBe('Optimal')
+          expect(ra.ObjectiveValue).toBeCloseTo(rs.ObjectiveValue, 6)
+          const r = gen(p)
+          expect(r.statut).toBe('optimal')
+          if (r.trous.length) avecTrous++
+          expect(r.trous).toEqual(trousVerifies(p, r.affectations))
+          expect(
+            violations(p, r.affectations).filter((v) => v.nature === 'loi'),
+          ).toEqual([])
+        },
+      ),
+      { numRuns: 40, seed: 20261030 },
+    )
+    // La propriété voit des trous, pas seulement des semaines sans.
+    expect(avecTrous).toBeGreaterThan(5)
+  }, 120_000)
+
+  it('une semaine chargée de remplaçants : paires et triplets réduits', () => {
+    const salaries = range(4).map((i) =>
+      receptionniste(`s${i}`, 35, {
+        joursTravaillesMaxSemaine: 6,
+        reposHebdoMin: 35 * H,
+        finServicePrecedent: -2 * H,
+        debutServiceSuivant: 7 * MINUTES_PAR_JOUR + 6 * H,
+      }),
+    )
+    const creneaux = range(7).flatMap((j) => [
+      ...place(2 * j, j, 7, 7, 1, [-1, 1, 2]),
+      ...place(2 * j + 1, j, 15, 8, 1, [-2, -1, 1]),
+    ])
+    const p = probleme({ salaries, creneaux })
+    const avec = construire(p)
+    const sans = construire(p, { reduire: false })
+    expect(avec.modele.contraintes.length).toBeLessThan(
+      sans.modele.contraintes.length / 2,
+    )
+    const ra = resoudre(avec.modele.lp())
+    const rs = resoudre(sans.modele.lp())
+    expect(ra.ObjectiveValue).toBeCloseTo(rs.ObjectiveValue, 6)
+    expect(
+      violations(p, affectations(avec, ra)).filter((v) => v.nature === 'loi'),
+    ).toEqual([])
   })
 })

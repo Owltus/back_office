@@ -65,7 +65,9 @@ import type {
  *       équipes : `POIDS_TROU_QUART` par quart d'heure (D10).
  *   P3  les contrats : heures dues (`POIDS_SOUS_CONTRAT`) > 6e jour > heures
  *       au-delà (`POIDS_SUR_CONTRAT`).
- *   P4  le métier d'abord (D13), à durée égale :
+ *   P4  le métier d'abord (D13), à heures de contrat égales (un
+ *       remplaçant ne compte jamais plus d'heures dues ni moins d'heures en
+ *       plus que son besoin, `minutesDues`, `minutesEnPlus`) :
  *         titulaire au code imposé              0
  *       < titulaire avec un autre code du cycle  POIDS_REMPLACANT (2 000)
  *       < dépannage au code imposé              `coutDepannage` (10 / min
@@ -79,6 +81,8 @@ import type {
  *     (POIDS_SUR_CONTRAT + POIDS_DEPANNAGE_MINUTE) × durée(c)   heures en plus, dépannage
  *   + PART_FIXE_DEPANNAGE                                       dépannage, part fixe
  *   + POIDS_REMPLACANT (si `c` est un remplaçant)               un autre code du cycle
+ *     (pour un remplaçant, durée(c) des heures en plus = la plus longue
+ *     de c et de son besoin, `minutesEnPlus`)
  *   + POIDS_SIXIEME_JOUR                                        un jour de plus = au plus un 6e jour
  *   + POIDS_REPOS_SEPARES                                       la paire de repos accolés perdue
  *   + max des consignes (P2)                                    une personne au-delà d'un « au plus »
@@ -118,10 +122,13 @@ import type {
  * Remplaçant (D16, option A) : POIDS_REMPLACANT < PART_FIXE_DEPANNAGE, donc
  * un titulaire change de code plutôt que de laisser la place à un
  * dépannage ; il est au niveau du confort (jour habituel 2 000), qui peut
- * rarement faire préférer un code voisin (accepté). Sous les heures (50 par
- * minute) : un remplaçant d'une heure plus long que le besoin coûte 3 000 de
- * plus, le code imposé reste devant. Sous un trou d'une demi-heure (3 000) :
- * changer de code pour fermer un trou vaut la peine.
+ * rarement faire préférer un code voisin (accepté). L'écart d'heures avec
+ * le besoin ne rapporte rien (`minutesDues`, `minutesEnPlus`) : sinon un
+ * remplaçant d'une heure plus long rapportait 24 000 d'heures dues et
+ * passait devant le code imposé partout (relecture adverse du 2026-10-30) ;
+ * ses minutes réelles au-delà du contrat se paient (50 par minute). Sous
+ * un trou d'une demi-heure (3 000) : changer de code pour fermer un trou
+ * vaut la peine, une heure en plus comprise (3 000 + 2 000 < 6 000).
  *
  * RELÈVE (chevauchement de l'équipe qui arrive et de celle qui part, D4) :
  * PAS de bonus dans le modèle. Le bonus devait être P5 ; or la part fixe du
@@ -160,6 +167,45 @@ export const POIDS_DEPANNAGE_MINUTE = 10
  * au niveau du confort : le confort peut rarement faire préférer un code
  * voisin (accepté, D16). */
 export const POIDS_REMPLACANT = 2_000
+
+/** P4 : ce que coûte un shift tenu sur le remplaçant `r` au lieu du besoin
+ * de sa place : POIDS_REMPLACANT, rien de plus. L'ÉCART D'HEURES entre les
+ * deux codes ne se paie pas ici mais dans la mesure du contrat
+ * (`minutesDues`, `minutesEnPlus`) : un remplaçant ne rapporte jamais plus
+ * d'heures dues que le besoin, et n'épargne jamais plus d'heures en plus
+ * (relecture adverse du 2026-10-30 : sans cela, un remplaçant d'une heure
+ * plus long rapportait 24 000 d'heures dues et passait devant le code
+ * imposé partout). Un créneau qui n'est pas un remplaçant ne coûte rien. */
+export function coutRemplacant(r: Creneau): number {
+  return r.place === null ? 0 : POIDS_REMPLACANT
+}
+
+/** Minutes d'un shift COMPTÉES dans les heures dues (contre le manque au
+ * contrat) : un remplaçant compte au plus les heures du besoin de sa place,
+ * jamais plus. Un remplaçant plus long ne rapporte donc rien de plus ; un
+ * plus court coûte ce qu'il ne fait pas. */
+export function minutesDues(c: Creneau, besoin?: Creneau): number {
+  return c.place !== null && besoin
+    ? Math.min(travail(c), travail(besoin))
+    : travail(c)
+}
+
+/** Minutes d'un shift COMPTÉES dans les heures en plus (au-delà du
+ * contrat) : un remplaçant compte au moins les heures du besoin. Un
+ * remplaçant plus court n'épargne donc rien ; un plus long paie ses minutes
+ * réelles. Avec `minutesDues` : à heures de contrat égales, le code imposé
+ * reste TOUJOURS devant, et un remplaçant n'est posé que si le code imposé
+ * ne se peut pas, ou pour une raison au-dessus des contrats (P1, P2 :
+ * consigne, trou). Les plafonds légaux (48 h, journée) lisent, eux, les
+ * minutes réelles. */
+export function minutesEnPlus(c: Creneau, besoin?: Creneau): number {
+  return c.place !== null && besoin
+    ? Math.max(travail(c), travail(besoin))
+    : travail(c)
+}
+
+/** Le besoin d'un créneau remplaçant, cherché par son id de place. */
+export type BesoinDe = (place: string) => Creneau | undefined
 // P3 — contrats.
 export const POIDS_SUR_CONTRAT = 50
 export const POIDS_SIXIEME_JOUR = 15_000
@@ -210,22 +256,41 @@ export function coutDepannage(c: Creneau) {
  * Proportionnel au plus long, PLAFONNÉ sous ce que rapportent les heures
  * dues de chacun, une fois payés un dépannage et tout le confort
  * (voir P2 sous P1 : une personne due reste placée). */
-export function coutConsigne(creneaux: Creneau[]): number {
+export function coutConsigne(
+  creneaux: Creneau[],
+  besoinDe: BesoinDe = () => undefined,
+): number {
   if (!creneaux.length) return 0
   const long = Math.max(...creneaux.map(duree))
+  // Un remplaçant ne rapporte que ses heures moins son coût de code.
   const plafond = Math.min(
-    ...creneaux.map((c) => POIDS_SOUS_CONTRAT * travail(c) - coutDepannage(c)),
+    ...creneaux.map(
+      (c) =>
+        POIDS_SOUS_CONTRAT *
+          minutesDues(c, c.place !== null ? besoinDe(c.place) : undefined) -
+        coutDepannage(c) -
+        coutRemplacant(c),
+    ),
   )
   return Math.max(0, Math.min(POIDS_PRESENCE_MINUTE * long, plafond))
 }
 
 /** Le pire que coûte l'ajout d'une personne libre sur `c` (voir P1), le
  * changement de code compris quand `c` est un remplaçant. */
-export function pireCoutRemplir(c: Creneau, presenceLaPlusChere: number) {
+export function pireCoutRemplir(
+  c: Creneau,
+  presenceLaPlusChere: number,
+  besoin?: Creneau,
+) {
+  // Heures en plus comptées pour un remplaçant : au moins celles du besoin
+  // (`minutesEnPlus`), donc au plus la plus longue des deux durées.
+  const enPlus =
+    c.place !== null && besoin ? Math.max(duree(c), duree(besoin)) : duree(c)
   return (
-    (POIDS_SUR_CONTRAT + POIDS_DEPANNAGE_MINUTE) * duree(c) +
+    POIDS_SUR_CONTRAT * enPlus +
+    POIDS_DEPANNAGE_MINUTE * duree(c) +
     PART_FIXE_DEPANNAGE +
-    (c.place !== null ? POIDS_REMPLACANT : 0) +
+    coutRemplacant(c) +
     POIDS_SIXIEME_JOUR +
     POIDS_REPOS_SEPARES +
     presenceLaPlusChere +
@@ -237,8 +302,12 @@ export function pireCoutRemplir(c: Creneau, presenceLaPlusChere: number) {
 
 /** P1 : une personne qui manque sur une place nécessaire, strictement plus
  * que tout ce qu'il faudrait payer pour la remplir. */
-export function coutPlaceVide(c: Creneau, presenceLaPlusChere: number) {
-  return pireCoutRemplir(c, presenceLaPlusChere) + 1
+export function coutPlaceVide(
+  c: Creneau,
+  presenceLaPlusChere: number,
+  besoin?: Creneau,
+) {
+  return pireCoutRemplir(c, presenceLaPlusChere, besoin) + 1
 }
 
 /** P1 : une personne qui manque sur une PLACE tenue par le besoin ou l'un
@@ -248,8 +317,17 @@ export function coutPlaceVide(c: Creneau, presenceLaPlusChere: number) {
 export function coutPlaceVideGroupe(
   membres: Creneau[],
   presenceLaPlusChere: number,
+  besoinDe: BesoinDe = (place) => membres.find((m) => m.id === place),
 ) {
-  return Math.max(...membres.map((c) => coutPlaceVide(c, presenceLaPlusChere)))
+  return Math.max(
+    ...membres.map((c) =>
+      coutPlaceVide(
+        c,
+        presenceLaPlusChere,
+        c.place !== null ? besoinDe(c.place) : undefined,
+      ),
+    ),
+  )
 }
 
 /** P1 (D7) : une personne de moins que le minimum d'une consigne, dont
@@ -264,9 +342,12 @@ export function coutPlaceVideGroupe(
 export function coutManqueMinimum(
   creneaux: Creneau[],
   presenceLaPlusChere: number,
+  besoinDe?: BesoinDe,
 ) {
   const ouverts = creneaux.filter((c) => !c.ferme)
-  return ouverts.length ? coutPlaceVideGroupe(ouverts, presenceLaPlusChere) : 0
+  return ouverts.length
+    ? coutPlaceVideGroupe(ouverts, presenceLaPlusChere, besoinDe)
+    : 0
 }
 
 /** Un moment sans personne autonome sur un poste compté dans la présence,
@@ -473,7 +554,21 @@ interface Construit {
   trous: Array<Trou & { v: string }>
 }
 
-export function construire(p: Probleme): Construit {
+/** Réglages internes de la construction (tests et mesures seulement). */
+export interface OptionsConstruction {
+  /**
+   * `false` : écrit aussi les contraintes que la réduction des remplaçants
+   * retire (voir `REDUCTION DES REMPLAÇANTS` plus bas). Même espace de
+   * solutions ; ne sert qu'à le prouver.
+   */
+  reduire?: boolean
+}
+
+export function construire(
+  p: Probleme,
+  options: OptionsConstruction = {},
+): Construit {
+  const reduire = options.reduire ?? true
   const m = new Modele()
   const nbSemaines = Math.ceil(p.nbJours / 7)
   const hasard = alea(p.graine)
@@ -536,12 +631,13 @@ export function construire(p: Probleme): Construit {
   const comptent = p.consignes.map((k) =>
     p.creneaux.filter((c) => c.presence === k.periode && jourDe(c) === k.jour),
   )
+  const besoinDe: BesoinDe = (place) => creneaux.get(place)
   const coutsMaximum = p.consignes.map((k, i) =>
-    k.maximum !== null ? coutConsigne(comptent[i]) : 0,
+    k.maximum !== null ? coutConsigne(comptent[i], besoinDe) : 0,
   )
   const presenceLaPlusChere = Math.max(0, ...coutsMaximum)
   const coutsMinimum = comptent.map((cs) =>
-    coutManqueMinimum(cs, presenceLaPlusChere),
+    coutManqueMinimum(cs, presenceLaPlusChere, besoinDe),
   )
 
   // Couverture, par PLACE : un besoin `b…` et ses remplaçants `r…`
@@ -569,8 +665,9 @@ export function construire(p: Probleme): Construit {
         // P4 : un dépannage coûte, un titulaire libre passe devant (D13).
         if (r === 'occasionnel') m.cout(coutDepannage(c), v)
         // P4 : un autre code du cycle coûte, le code imposé passe devant
-        // (D5, D13, D16), en plus du dépannage s'il y a lieu.
-        if (c.place !== null) m.cout(POIDS_REMPLACANT, v)
+        // (D5, D13, D16), en plus du dépannage s'il y a lieu ; l'écart
+        // d'heures avec le besoin est rendu (`coutRemplacant`).
+        if (c.place !== null) m.cout(coutRemplacant(c), v)
       }
     }
     const vm = m.entier(0, tete.effectif)
@@ -585,7 +682,7 @@ export function construire(p: Probleme): Construit {
       '<=',
       tete.effectif + tete.facultatif,
     )
-    m.cout(coutPlaceVideGroupe(membres, presenceLaPlusChere), vm)
+    m.cout(coutPlaceVideGroupe(membres, presenceLaPlusChere, besoinDe), vm)
     if (soutiens.length) {
       const nbImposes = soutiens.filter(([s, , c]) =>
         imposees.has(cle(s.id, c.id)),
@@ -669,22 +766,74 @@ export function construire(p: Probleme): Construit {
     }
 
     // Chevauchement et repos quotidien : paires interdites.
+    //
+    // REDUCTION DES REMPLAÇANTS (B2, plan planning-cycles-2026-10-30). Les
+    // créneaux remplaçants (`place !== null`) multiplient les créneaux d'un
+    // même jour : écrites une à une, ces paires passaient de ~1 400 à
+    // ~64 000 sur une vraie semaine. Deux réductions, qui ne changent RIEN à
+    // l'ensemble des plannings permis (solutions entières) :
+    //   1. Même jour, au plus un fixe ce jour-là : la contrainte du jour
+    //      ci-dessus est Σ x(jour) <= 1, et toutes les x sont >= 0, donc
+    //      x_a + x_b <= 1 en découle déjà. La paire n'est pas écrite.
+    //   2. Jours différents (repos quotidien d'un soir au lendemain) : pour
+    //      un créneau a, ses paires vers les créneaux b d'un même jour J (au
+    //      plus un fixe ce jour-là, donc Σ x(J) <= 1) deviennent UNE
+    //      contrainte  x_a + Σ_{b de J en conflit avec a} x_b <= 1.
+    //      En entiers : x_a = 1 force chaque x_b à 0, comme les paires ;
+    //      x_a = 0 laisse Σ x_b <= 1, déjà vrai par le jour J. Les paires se
+    //      déduisent de l'agrégat (x_b >= 0) : rien d'interdit n'est
+    //      permis, rien de permis n'est retiré. (Le relâché continu est
+    //      seulement plus serré, ce qui aide HiGHS sans changer l'optimum.)
+    //   La réduction 1, elle, laisse même le relâché identique.
+    // Seuls les groupes qui touchent un remplaçant sont réduits : sans
+    // remplaçant, le modèle reste OCTET POUR OCTET celui d'avant (test « même
+    // texte LP », generateur.test.ts) ; avec, l'équivalence est prouvée par
+    // la propriété « même valeur optimale » du même fichier.
+    const fixesDuJour = new Map<number, number>()
+    for (const c of fixes)
+      fixesDuJour.set(jourDe(c), (fixesDuJour.get(jourDe(c)) ?? 0) + 1)
+    const auPlusUnLeJour = (j: number) => (fixesDuJour.get(j) ?? 0) <= 1
+    const enConflit = (a: Creneau, b: Creneau) => {
+      const [premier, second] = a.debut <= b.debut ? [a, b] : [b, a]
+      return second.debut - premier.fin < s.reposQuotidienMin
+    }
+    // Agrégats (2) : a → jour de b → créneaux b.
+    const agreges = new Map<Creneau, Map<number, Creneau[]>>()
     for (let i = 0; i < siens.length; i++) {
       for (let k = i + 1; k < siens.length; k++) {
         const a = siens[i]
         const b = siens[k]
         if (fixes.includes(a) && fixes.includes(b)) continue
-        const [premier, second] = a.debut <= b.debut ? [a, b] : [b, a]
-        if (second.debut - premier.fin < s.reposQuotidienMin) {
-          m.ajoute(
-            [
-              [1, xv(a)],
-              [1, xv(b)],
-            ],
-            '<=',
-            1,
-          )
+        if (!enConflit(a, b)) continue
+        const remplacant = a.place !== null || b.place !== null
+        if (reduire && remplacant) {
+          const ja = jourDe(a)
+          const jb = jourDe(b)
+          if (ja === jb && auPlusUnLeJour(ja)) continue
+          if (ja !== jb && auPlusUnLeJour(jb)) {
+            const parJourB = agreges.get(a) ?? new Map<number, Creneau[]>()
+            agreges.set(a, parJourB)
+            parJourB.set(jb, [...(parJourB.get(jb) ?? []), b])
+            continue
+          }
         }
+        m.ajoute(
+          [
+            [1, xv(a)],
+            [1, xv(b)],
+          ],
+          '<=',
+          1,
+        )
+      }
+    }
+    for (const [a, parJourB] of agreges) {
+      for (const liste of parJourB.values()) {
+        m.ajoute(
+          [[1, xv(a)], ...liste.map((b) => [1, xv(b)] as Terme)],
+          '<=',
+          1,
+        )
       }
     }
 
@@ -742,12 +891,25 @@ export function construire(p: Probleme): Construit {
       }
 
       const minutes: Terme[] = []
+      // Contrat : minutes comptées contre le manque et contre le surplus
+      // (`minutesDues`, `minutesEnPlus`) ; elles ne diffèrent que sur un
+      // remplaçant d'une autre durée que son besoin.
+      const dues: Terme[] = []
+      const enPlus: Terme[] = []
       for (const c of siens) {
         if (!dans(jourDe(c))) continue
         minutes.push([travail(c), xv(c)])
+        const besoin = c.place !== null ? besoinDe(c.place) : undefined
+        dues.push([minutesDues(c, besoin), xv(c)])
+        enPlus.push([minutesEnPlus(c, besoin), xv(c)])
         const vc = court.get(cle(s.id, c.id))
-        if (vc) minutes.push([-c.raccourci, vc])
+        if (vc) {
+          minutes.push([-c.raccourci, vc])
+          dues.push([-c.raccourci, vc])
+          enPlus.push([-c.raccourci, vc])
+        }
       }
+      const memeMesure = dues.every(([k], i) => k === enPlus[i][0])
       // R-ECOLE-HEURES (L6222-24) : chaque jour d'école vaut une journée de
       // contrat (`journeeContrat`) ; les heures d'école de la semaine sont
       // une constante de la somme ; des fixes déjà au-delà restent tenables.
@@ -795,7 +957,7 @@ export function construire(p: Probleme): Construit {
       }
 
       if (s.reposHebdoMin && siens.length) {
-        reposHebdo(m, s, siens, xv, travaille, jours, fixes)
+        reposHebdo(m, s, siens, xv, travaille, jours, fixes, reduire)
       }
 
       if (!s.reposConsecutifs) {
@@ -880,7 +1042,22 @@ export function construire(p: Probleme): Construit {
       // Coller au contrat : minutes - contrat = plus - moins.
       const moins = m.continu(0, 7 * 24 * 60)
       const plus = m.continu(0, 7 * 24 * 60)
-      m.ajoute([...minutes, [-1, plus], [1, moins]], '=', s.minutesHebdoContrat)
+      if (memeMesure) {
+        m.ajoute(
+          [...minutes, [-1, plus], [1, moins]],
+          '=',
+          s.minutesHebdoContrat,
+        )
+      } else {
+        // Un remplaçant d'une autre durée : manque et surplus mesurés à
+        // part, chacun avec ses minutes comptées. moins et plus ont un coût
+        // positif : à l'optimum, moins = max(0, contrat - dues) et
+        // plus = max(0, enPlus - contrat), comme l'égalité quand les deux
+        // mesures coïncident. (`ecartTotalMinutes` lit donc ces minutes
+        // comptées, pas les minutes réelles, sur une telle semaine.)
+        m.ajoute([...dues, [1, moins]], '>=', s.minutesHebdoContrat)
+        m.ajoute([...enPlus, [-1, plus]], '<=', s.minutesHebdoContrat)
+      }
       ecarts.push([plus, moins])
       if (s.contratIndicatif) {
         m.cout(1, moins)
@@ -1092,9 +1269,14 @@ function reposHebdo(
   travaille: Map<number, string>,
   jours: number[],
   fixes: Creneau[],
+  reduire: boolean,
 ): void {
   if (!reposHebdoPossible(s, fixes, jours)) return
   const minimum = s.reposHebdoMin
+  const fixesDuJour = new Map<number, number>()
+  for (const c of fixes)
+    fixesDuJour.set(jourDe(c), (fixesDuJour.get(jourDe(c)) ?? 0) + 1)
+  const auPlusUnLeJour = (j: number) => (fixesDuJour.get(j) ?? 0) <= 1
   const longs: string[] = []
   for (const d of jours) {
     if (s.joursHorsSite.has(d)) continue
@@ -1148,19 +1330,44 @@ function reposHebdo(
         )
       }
     }
+    // Triplets « long ⇒ pas a et b ». Même réduction que les paires du repos
+    // quotidien (REDUCTION DES REMPLAÇANTS, `construire`) : pour un a, les b
+    // d'un même jour J (au plus un fixe ce jour-là, donc Σ x(J) <= 1) en
+    // conflit avec a forment UNE contrainte
+    //   long + x_a + Σ_{b de J} x_b <= 2.
+    // En entiers : long = x_a = 1 force chaque x_b à 0, comme les triplets ;
+    // sinon le membre gauche vaut au plus 1 + Σ x(J) <= 2, déjà vrai. Chaque
+    // triplet se déduit de l'agrégat. Réduit seulement si le groupe touche
+    // un remplaçant : sans remplaçant, le texte LP est celui d'avant.
     for (const a of avant) {
+      const parJourB = new Map<number, Creneau[]>()
       for (const b of apres) {
-        if (b.debut - a.fin < minimum) {
-          m.ajoute(
-            [
-              [1, long],
-              [1, xv(a)],
-              [1, xv(b)],
-            ],
-            '<=',
-            2,
-          )
+        if (b.debut - a.fin >= minimum) continue
+        const jb = jourDe(b)
+        if (
+          reduire &&
+          (a.place !== null || b.place !== null) &&
+          auPlusUnLeJour(jb)
+        ) {
+          parJourB.set(jb, [...(parJourB.get(jb) ?? []), b])
+          continue
         }
+        m.ajoute(
+          [
+            [1, long],
+            [1, xv(a)],
+            [1, xv(b)],
+          ],
+          '<=',
+          2,
+        )
+      }
+      for (const liste of parJourB.values()) {
+        m.ajoute(
+          [[1, long], [1, xv(a)], ...liste.map((b) => [1, xv(b)] as Terme)],
+          '<=',
+          2,
+        )
       }
     }
     longs.push(long)
