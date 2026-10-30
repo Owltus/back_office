@@ -2081,7 +2081,10 @@ référence des règles (`docs/regles-hcr.md` là-bas).
     codes (code et horaires seulement, décision utilisateur du 2026-10-30 :
     « certains employés ont plusieurs postes, pourquoi afficher l'un plus
     que l'autre » ; l'étiquette essayée le même jour est retirée, ne pas la
-    remettre). Volet : code permis sur plusieurs postes = choix
+    remettre). Exception (décision utilisateur du même jour) : un code qui
+    ferait CHANGER de poste un shift existant le dit sur sa ligne, « Passe en
+    Supervision » (`changePoste`), et le volet « Ce shift passe de Club à
+    Supervision. » ; jamais en silence. Volet : code permis sur plusieurs postes = choix
     segmenté « Réception | Club » sous la liste ; section Poste pour
     l'horaire spécifique seulement. Jamais un poste hors fiche, sauf celui du
     shift existant. La coupure de 11 h (12 h mineur) est permise à la main

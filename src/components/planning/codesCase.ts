@@ -295,6 +295,24 @@ export interface CodeUnique {
   postes: Poste[]
   /** Le poste déduit n'est pas le métier habituel (non affiché). */
   horsHabituel: boolean
+  /** Le shift existant changerait de poste avec ce code (décision
+   * utilisateur du 2026-10-30 : prévenir, jamais en silence) ; null sinon. */
+  changePoste: Poste | null
+}
+
+/** Avertissement du volet quand le shift change de poste. */
+export function changementDePoste(
+  avant: string | undefined,
+  apres: string | undefined,
+): string {
+  return avant && apres
+    ? `Ce shift passe de ${avant} à ${apres}.`
+    : 'Ce shift change de poste.'
+}
+
+/** Avertissement d'une ligne de code qui fait changer le shift de poste. */
+export function texteChangementPoste(poste: { nom: string }): string {
+  return `Passe en ${poste.nom}`
 }
 
 export interface CodesUniquesCase {
@@ -334,19 +352,25 @@ export function codesUniques(
           .filter((x) => x.lignes.some((l) => l.horaire.id === h.id))
           .map((x) => x.poste),
         horsHabituel: poste.id !== habituel,
+        changePoste:
+          prefere !== undefined && poste.id !== prefere ? poste : null,
       },
     ]
   })
   return { codes, texte: r.texte, actuel: r.actuel }
 }
 
-/** Nom accessible d'une ligne de code : code, nom, alerte (jamais le poste,
- * comme à l'écran). */
+/** Nom accessible d'une ligne de code : code, nom, alertes (le poste
+ * seulement quand il change, comme à l'écran). */
 export function nomLigneCode(c: {
   horaire: { code: string; nom: string }
   alerte: string | null
+  changePoste?: { nom: string } | null
 }): string {
-  return [c.horaire.code, c.horaire.nom, ...(c.alerte ? [c.alerte] : [])].join(
-    ', ',
-  )
+  return [
+    c.horaire.code,
+    c.horaire.nom,
+    ...(c.alerte ? [c.alerte] : []),
+    ...(c.changePoste ? [texteChangementPoste(c.changePoste)] : []),
+  ].join(', ')
 }

@@ -59,6 +59,7 @@ import { cn } from '#/lib/utils.ts'
 import { titreRegle } from '#/components/planning/semaine/PanneauAlertes.tsx'
 import { NEUTRE, travailCode } from '#/components/planning/semaine/edition.ts'
 import {
+  changementDePoste,
   codesDeLaCase,
   codesUniques,
   ligneDe,
@@ -637,6 +638,20 @@ export function EditeurShift({
                   </div>
                 </div>
               )}
+              {enCours &&
+                existant &&
+                b.horaire_id !== null &&
+                b.poste_id !== existant.poste_id && (
+                  <span
+                    role="status"
+                    className="col-span-2 text-xs text-amber-600 dark:text-amber-400"
+                  >
+                    {changementDePoste(
+                      postes.find((p) => p.id === existant.poste_id)?.nom,
+                      postes.find((p) => p.id === b.poste_id)?.nom,
+                    )}
+                  </span>
+                )}
               {uniques.texte && (
                 <span className="col-span-2 rounded-md border border-dashed px-2 py-1.5 text-xs text-muted-foreground">
                   {uniques.texte}

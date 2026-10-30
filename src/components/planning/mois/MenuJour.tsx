@@ -30,6 +30,7 @@ import {
   codesUniques,
   nomLigneCode,
   rubriquesDeLaCase,
+  texteChangementPoste,
 } from '#/components/planning/codesCase.ts'
 import type { CodeUnique, SourceCase } from '#/components/planning/codesCase.ts'
 import { heureAffichee } from '#/lib/planning/temps.ts'
@@ -176,6 +177,11 @@ export function MenuJour({
           {alerte && (
             <span className="text-xs text-amber-600 dark:text-amber-400">
               {alerte}
+            </span>
+          )}
+          {c.changePoste && (
+            <span className="text-xs text-amber-600 dark:text-amber-400">
+              {texteChangementPoste(c.changePoste)}
             </span>
           )}
         </span>

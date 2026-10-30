@@ -2,11 +2,14 @@ import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 
 import {
+  changementDePoste,
   codesDeLaCase,
   codesUniques,
   ligneDe,
+  nomLigneCode,
   posteDeduit,
   rubriquesDeLaCase,
+  texteChangementPoste,
 } from '#/components/planning/codesCase.ts'
 import type { SourceCase } from '#/components/planning/codesCase.ts'
 import { analyser } from '#/lib/planning/semaine.ts'
@@ -372,6 +375,34 @@ describe('codesUniques : chaque code une fois, poste déduit', () => {
     expect(
       posteDeduit(r.rubriques, idH('M'), undefined, idP('Veille de nuit'))?.nom,
     ).toBe('Réception')
+  })
+
+  it('prévient quand un code fait changer le shift de poste, jamais sinon', () => {
+    const p = personne({
+      competences: fiche(['Réception', 'titulaire'], ['Club', 'occasionnel']),
+    })
+    // Shift au Club : M va en Réception (niveau), le poste change.
+    const r = rubriquesDe(p, { poste_id: idP('Club'), type_shift_id: idH('M') })
+    const u = codesUniques(r, p, referentiel.postes, idP('Club'))
+    for (const c of u.codes) {
+      if (c.poste.id === idP('Club')) expect(c.changePoste).toBeNull()
+      else expect(c.changePoste?.id).toBe(c.poste.id)
+    }
+    const m = u.codes.find((c) => c.horaire.code === 'M')!
+    expect(m.changePoste?.nom).toBe('Réception')
+    expect(nomLigneCode(m)).toContain(texteChangementPoste(m.changePoste!))
+    // Aucun shift (case vide) : rien à prévenir.
+    const vide = codesUniques(rubriquesDe(p), p, referentiel.postes)
+    expect(vide.codes.every((c) => c.changePoste === null)).toBe(true)
+  })
+
+  it('texte du volet quand le shift change de poste', () => {
+    expect(changementDePoste('Club', 'Supervision')).toBe(
+      'Ce shift passe de Club à Supervision.',
+    )
+    expect(changementDePoste(undefined, 'Club')).toBe(
+      'Ce shift change de poste.',
+    )
   })
 
   it('place à pourvoir : son poste d’abord s’il permet le code', () => {

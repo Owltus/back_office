@@ -23,7 +23,10 @@ import {
   ROUGE_CODE,
   texteSur,
 } from '#/lib/planning/affichage.ts'
-import { nomLigneCode } from '#/components/planning/codesCase.ts'
+import {
+  nomLigneCode,
+  texteChangementPoste,
+} from '#/components/planning/codesCase.ts'
 import type { CodesUniquesCase } from '#/components/planning/codesCase.ts'
 import { heureAffichee } from '#/lib/planning/temps.ts'
 import { JOURS } from '#/lib/planning/types.ts'
@@ -133,6 +136,11 @@ export function MenuCase({
                   {c.alerte && (
                     <span className="text-xs text-amber-600 dark:text-amber-400">
                       {c.alerte}
+                    </span>
+                  )}
+                  {c.changePoste && (
+                    <span className="text-xs text-amber-600 dark:text-amber-400">
+                      {texteChangementPoste(c.changePoste)}
                     </span>
                   )}
                 </span>
