@@ -53,6 +53,7 @@ import { ajouterJours, heureAffichee } from '#/lib/planning/temps.ts'
 import type { Horaire, Referentiel, Salarie } from '#/lib/planning/types.ts'
 import { JOURS } from '#/lib/planning/types.ts'
 import { cn } from '#/lib/utils.ts'
+import { ligneAuLieuDe } from '#/components/planning/semaine/Cartes.tsx'
 import { PointsPresence } from '#/components/planning/semaine/Presence.tsx'
 import {
   caseDe,
@@ -638,6 +639,10 @@ function LigneMois({
     const resume = shift
       ? `${quand} · ${h ? `${h.code} · ${h.nom}` : 'Horaire spécifique'} ${heureAffichee(shift.debut)}–${heureAffichee(shift.fin)}${s.forfait_jours ? '' : ` · ${heures(shift.duree)}`} · ${shift.epinglee ? 'validé' : 'proposition'}`
       : `${quand} · Non attribué`
+    // « M6 au lieu de M3 » : la place tenue imposait un autre code du cycle.
+    const auLieuDe = shift
+      ? ligneAuLieuDe(h, horaireDe(shift.code_demande ?? null))
+      : null
     const alertesShift = shift?.alertes ?? []
     cellules.push(
       <CaseJour
@@ -662,8 +667,8 @@ function LigneMois({
             alertesShift.some((a) => a.nature === 'loi') &&
               'planning-mois-infraction',
           )}
-          tip={`${resume}${alertesShift.map((a) => `\n⚠ ${a.message}`).join('')}\n${glisser ? 'Cliquer pour modifier' : 'Cliquer pour ouvrir la semaine'}`}
-          etiquette={`${nom}, ${resume}${alertesShift.length ? `, ${alertesShift.length} alerte(s)` : ''}`}
+          tip={`${resume}${auLieuDe ? `\n${auLieuDe}` : ''}${alertesShift.map((a) => `\n⚠ ${a.message}`).join('')}\n${glisser ? 'Cliquer pour modifier' : 'Cliquer pour ouvrir la semaine'}`}
+          etiquette={`${nom}, ${resume}${auLieuDe ? `, ${auLieuDe}` : ''}${alertesShift.length ? `, ${alertesShift.length} alerte(s)` : ''}`}
           onClick={ouvrir(date, false)}
         >
           {shift && (

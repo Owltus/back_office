@@ -11,6 +11,7 @@
 
 import { refusDroits } from '#/lib/planning/erreurs.ts'
 import { SEMAINES_EQUITE } from '#/lib/planning/modele.ts'
+import { ORDRE_PERIODES } from '#/lib/planning/presence.ts'
 import type { NouveauShift } from '#/lib/planning/semaine.ts'
 import { ajouterJours, lundiDe } from '#/lib/planning/temps.ts'
 import type {
@@ -101,7 +102,7 @@ export async function fetchReferentiel(): Promise<Referentiel> {
       .from('planning_consignes')
       .select(COL_CONSIGNE)
       .order('jour')
-      .order('periode'),
+      .order('id'),
     supabase
       .from('planning_semaines_verrouillees')
       .select('lundi')
@@ -120,7 +121,13 @@ export async function fetchReferentiel(): Promise<Referentiel> {
     })),
     salaries: (verifier(salaries) as Salarie[]).map(normaliserSalarie),
     besoins: verifier(besoins),
-    consignes: verifier(consignes),
+    // Matin, soir, nuit : l'ordre alphabétique de la base (matin, nuit,
+    // soir) n'est pas celui de l'écran ; trié ici, une fois.
+    consignes: (verifier(consignes) as Consigne[]).sort(
+      (a, b) =>
+        a.jour - b.jour ||
+        ORDRE_PERIODES[a.periode] - ORDRE_PERIODES[b.periode],
+    ),
     verrous: (verifier(verrous) as Array<{ lundi: string }>).map(
       (v) => v.lundi,
     ),

@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  heureParlee,
   joursDesPlaces,
   nombreInfractions,
+  nommerJours,
+  phraseCycle,
+  phraseTrou,
   pointsAttention,
   porteeMois,
   porteeSemaine,
@@ -171,7 +175,7 @@ describe('points d’attention', () => {
       resumePoints(pointsAttention([semaine('2026-11-02')], SALARIES, POSTES)),
     ).toBe('Tout est en ordre.')
     expect(resumePoints(pointsAttention([SEM], SALARIES, POSTES))).toBe(
-      '5 points : 1 infraction, 2 shifts à pourvoir, 1 consigne de présence, 1 à regarder.',
+      '5 points : 1 infraction, 2 shifts à pourvoir, 1 cycle hors consigne, 1 à regarder.',
     )
   })
 })
@@ -358,5 +362,198 @@ describe('noms : deux personnes au même prénom restent distinctes', () => {
     expect(noms).toContain('Léa B.')
     expect(noms).toContain('Léa M.')
     expect(noms).not.toContain('Léa')
+  })
+})
+
+describe('personnes par cycle (matin, soir, nuit)', () => {
+  const ecart = (jour: number, periode: string, e: number) => ({
+    jour,
+    periode,
+    compte: 2 + e,
+    minimum: 2,
+    maximum: 2,
+    ecart: e,
+  })
+  const S = semaine('2026-11-02', {
+    presence: [
+      ecart(1, 'nuit', -1),
+      ecart(1, 'soir', 1),
+      ecart(1, 'matin', -2),
+      ecart(0, 'nuit', 0),
+    ],
+  } as unknown as Partial<SemaineOut>)
+
+  it('tri du jour : matin, soir, nuit (jamais l’ordre alphabétique)', () => {
+    const p = pointsAttention([S], SALARIES, POSTES)
+    expect(p.presence.map((e) => e.periode)).toEqual(['matin', 'soir', 'nuit'])
+    expect(p.total).toBe(3)
+  })
+
+  it('une phrase : il manque, ou de trop, avec le moment et le jour', () => {
+    const p = pointsAttention([S], SALARIES, POSTES)
+    const jour = nommerJours(p.presence.map((e) => e.date))
+    expect(p.presence.map((e) => phraseCycle(e, jour(e.date)))).toEqual([
+      'Il manque 2 personnes le matin mardi',
+      '1 personne de trop le soir mardi',
+      'Il manque 1 personne la nuit mardi',
+    ])
+  })
+
+  it('jours : le numéro seulement quand les dates sortent d’une semaine', () => {
+    expect(nommerJours(['2026-11-03'])('2026-11-03')).toBe('mardi')
+    expect(nommerJours(['2026-11-03', '2026-11-10'])('2026-11-10')).toBe(
+      'mardi 10',
+    )
+    expect(nommerJours([])('2026-11-04')).toBe('mercredi')
+  })
+})
+
+describe('trous entre équipes', () => {
+  const trou = (jour: number, debut: string, fin: string, poste_id = 9) => ({
+    poste_id,
+    jour,
+    debut,
+    fin,
+  })
+  // Semaine du 26 octobre : lundi 26 (octobre), dimanche 1er (novembre).
+  const S = semaine('2026-10-26', {
+    trous: [
+      trou(6, '15:00', '16:00'),
+      trou(0, '23:00', '00:30'),
+      trou(0, '15:00', '15:45'),
+    ],
+  })
+
+  it('jour par jour, l’ordre de l’analyse dans un jour', () => {
+    const p = pointsAttention([S], SALARIES, POSTES)
+    expect(p.trous.map((t) => [t.date, t.debut])).toEqual([
+      ['2026-10-26', '23:00'],
+      ['2026-10-26', '15:00'],
+      ['2026-11-01', '15:00'],
+    ])
+    expect(p.trous[0].poste?.nom).toBe('Réception')
+    expect(p.total).toBe(3)
+    expect(resumePoints(p)).toBe('3 points : 3 trous entre équipes.')
+  })
+
+  it('une phrase par trou : poste, jour, heures', () => {
+    const p = pointsAttention([S], SALARIES, POSTES)
+    const jour = nommerJours(p.trous.map((t) => t.date))
+    expect(p.trous.map((t) => phraseTrou(t, jour(t.date)))).toEqual([
+      'Réception lundi : personne de 23 h à 0 h 30',
+      'Réception lundi : personne de 15 h à 15 h 45',
+      'Réception dimanche : personne de 15 h à 16 h',
+    ])
+    expect(heureParlee('24:00')).toBe('0 h')
+    expect(heureParlee('07:05')).toBe('7 h 05')
+  })
+
+  it('portée : un mois ou une semaine ne montre que ses jours', () => {
+    const nov = pointsAttention([S], SALARIES, POSTES, porteeMois('2026-11'))
+    expect(nov.trous.map((t) => t.date)).toEqual(['2026-11-01'])
+    const sem = pointsAttention(
+      [S],
+      SALARIES,
+      POSTES,
+      porteeSemaine('2026-10-27'),
+    )
+    expect(sem.trous.map((t) => t.date)).toEqual(['2026-11-01'])
+    expect(resumePoints(sem)).toBe('1 point : 1 trou entre équipes.')
+  })
+
+  it('semaine sans le champ (données d’avant) : aucun trou', () => {
+    const p = pointsAttention([semaine('2026-11-02')], SALARIES, POSTES)
+    expect(p.trous).toEqual([])
+  })
+})
+
+describe('place que rien ne remplit', () => {
+  const bloque = (id: number) => ({
+    salarie_id: id,
+    messages: ['repos de 11 h non respecté'],
+    regles: ['R-REPOS-QUOTIDIEN'],
+  })
+  const libre = (id: number) => ({ salarie_id: id, messages: [], regles: [] })
+  const place = (
+    besoin_id: number,
+    jour: number,
+    raison_commune: string | null,
+    remplacants: SemaineOut['a_pourvoir'][number]['remplacants'] = [],
+  ) => ({
+    besoin_id,
+    poste_id: 9,
+    jour,
+    type_shift_id: 41,
+    debut: '07:00',
+    fin: '15:00',
+    duree: 450,
+    manquant: 1,
+    raisons: [bloque(1), bloque(3)],
+    remplacants,
+    raison_commune,
+  })
+  const HORAIRES = [
+    { id: 41, code: 'M3' },
+    { id: 42, code: 'M6' },
+  ]
+  const groupes = (s: SemaineOut) =>
+    regrouperPlaces(
+      pointsAttention([s], SALARIES, POSTES).aPourvoir.flatMap((j) => j.shifts),
+      HORAIRES,
+    )
+
+  it('la raison commune en clair, et un groupe à part', () => {
+    const g = groupes(
+      semaine('2026-11-02', {
+        a_pourvoir: [
+          place(1, 0, 'R-REPOS-QUOTIDIEN'),
+          place(2, 1, 'R-REPOS-QUOTIDIEN'),
+          place(3, 2, null),
+        ],
+      }),
+    )
+    expect(
+      g.map((x) => [
+        x.code,
+        joursDesPlaces(x.places.map((p) => p.date)),
+        x.raisonCommune,
+      ]),
+    ).toEqual([
+      [
+        'M3',
+        'lundi et mardi',
+        "Personne n'a assez de repos avec ses autres shifts.",
+      ],
+      ['M3', 'mercredi', null],
+    ])
+  })
+
+  it('règle qui ne bloque pas vraiment (6e jour) : les raisons par personne', () => {
+    const [g] = groupes(
+      semaine('2026-11-02', { a_pourvoir: [place(1, 0, 'SIXIEME-JOUR')] }),
+    )
+    expect(g.raisonCommune).toBeNull()
+    expect(g.places[0].raisonCommune).toBeNull()
+  })
+
+  it('autre code possible : dit, sans les extras ni ceux déjà libres', () => {
+    const [g] = groupes(
+      semaine('2026-11-02', {
+        a_pourvoir: [
+          {
+            ...place(1, 0, null, [
+              {
+                type_shift_id: 42,
+                raisons: [libre(1), libre(4), bloque(3)],
+              },
+            ]),
+            raisons: [bloque(1), libre(3)],
+          },
+        ],
+      }),
+    )
+    // Léa (fermée en M3, libre en M6) ; ni Max (extra), ni Zoé (bloquée en
+    // M6, et déjà libre en M3).
+    expect(g.autresCodes).toEqual([{ code: 'M6', noms: ['Léa'] }])
   })
 })

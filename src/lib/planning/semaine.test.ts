@@ -27,6 +27,7 @@ import {
   creneauRemplacant,
   estEcole,
   fiche,
+  heureMurale,
   idRemplacant,
   preparerGeneration,
   raisonCommune,
@@ -38,7 +39,11 @@ import type { DonneesSemaine, SemaineOut } from '#/lib/planning/semaine.ts'
 import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
 import { hotelReel } from '#/lib/planning/test/hotelReel.ts'
 import { PlanningMemoire } from '#/lib/planning/test/planningMemoire.ts'
-import { ajouterJours, MINUTES_PAR_JOUR } from '#/lib/planning/temps.ts'
+import {
+  ajouterJours,
+  minuteReelle,
+  MINUTES_PAR_JOUR,
+} from '#/lib/planning/temps.ts'
 import type {
   Affectation,
   Besoin,
@@ -1745,6 +1750,59 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
         ecart: 0,
       }),
     ])
+  })
+
+  it('trous entre équipes : en heures d’horloge, au jour de la plage', () => {
+    // M3 07:00-15:00 puis S4 15:00-23:00 : rien. Le soir tenu en S4 décalé à
+    // 16:00 : personne de 15 h à 16 h, le mardi.
+    const besoins = [besoin(100, M3), besoin(101, S4)]
+    const plein = analyser(
+      donnees(besoins, [shift(ALPHA, M3), shift(BRAVO, S4)]),
+    )
+    expect(plein.trous).toEqual([])
+    const sem = analyser(
+      donnees(besoins, [
+        shift(ALPHA, M3),
+        shift(BRAVO, null, 1, { debut: '16:00', fin: '23:00' }),
+      ]),
+    )
+    expect(sem.trous).toEqual([
+      { poste_id: ACCUEIL, jour: 1, debut: '15:00', fin: '16:00' },
+    ])
+    // Un soutien seul ne bouche pas le trou ; une fin à minuit s'écrit 00:00.
+    const soutien = analyser(
+      donnees(
+        [
+          besoin(100, M3),
+          besoin(101, null, 1, 1, { debut: '15:00', fin: '24:00' }),
+        ],
+        [
+          shift(ALPHA, M3),
+          shift(DELTA, null, 1, { debut: '15:00', fin: '24:00' }),
+        ],
+        [ALPHA, DELTA],
+      ),
+    )
+    expect(soutien.trous).toEqual([
+      { poste_id: ACCUEIL, jour: 1, debut: '15:00', fin: '00:00' },
+    ])
+  })
+
+  it('heure murale : inverse des minutes réelles, changement d’heure compris', () => {
+    // La semaine du 19 octobre 2026 contient le passage à l'heure d'hiver
+    // (dimanche 25) : l'aller-retour tient aussi ce jour-là.
+    expect(heureMurale(LUNDI, 15 * H)).toBe('15:00')
+    expect(heureMurale(LUNDI, MINUTES_PAR_JOUR + 7 * H + 30)).toBe('07:30')
+    const lundi = '2026-10-19'
+    for (const m of [
+      0,
+      6 * MINUTES_PAR_JOUR + 3 * H,
+      6 * MINUTES_PAR_JOUR + 23 * H,
+    ]) {
+      expect(heureMurale(lundi, minuteReelle(lundi, m))).toBe(
+        `${String(Math.floor((m % MINUTES_PAR_JOUR) / H)).padStart(2, '0')}:00`,
+      )
+    }
   })
 
   it('propriétés : rattaché une fois, jamais au-delà de la place, code exact préféré', () => {

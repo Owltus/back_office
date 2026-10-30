@@ -38,15 +38,32 @@ export interface ContenuCarte {
   duree?: number
   poste?: Poste
   horaire?: Horaire
+  /** Code imposé par la place tenue, quand le shift en a un autre du même
+   * cycle (`ShiftOut.code_demande`) ; absent sinon. */
+  demande?: Horaire
   epinglee: boolean
   etoile: boolean
   role: string | null
   alertes: AlerteOut[]
 }
 
+/**
+ * « M6 au lieu de M3 » : le shift tient une place prévue pour un autre code
+ * du même cycle. Rien si la place n'imposait rien ou le même code. Une seule
+ * source pour l'infobulle de la semaine et celle du mois.
+ */
+export function ligneAuLieuDe(
+  horaire: Horaire | undefined,
+  demande: Horaire | undefined,
+): string | null {
+  if (!horaire || !demande || horaire.id === demande.id) return null
+  return `${horaire.code} au lieu de ${demande.code}`
+}
+
 export function texteCarte(c: ContenuCarte): string[] {
   return [
     `${c.horaire ? `${c.horaire.code} · ${c.horaire.nom}` : 'Horaire spécifique'} · ${heureAffichee(c.debut)}-${heureAffichee(c.fin)}`,
+    ligneAuLieuDe(c.horaire, c.demande),
     c.poste?.nom,
     c.etoile && 'Journée étoile : une heure de moins',
     c.role === 'soutien' && 'En soutien (ne compte pas seul)',

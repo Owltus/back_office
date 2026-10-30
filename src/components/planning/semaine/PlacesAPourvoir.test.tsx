@@ -12,6 +12,7 @@ import {
   pointsAttention,
   regrouperPlaces,
 } from '#/components/planning/attention.ts'
+import { PanneauAlertes } from '#/components/planning/semaine/PanneauAlertes.tsx'
 import { PlacesAPourvoir } from '#/components/planning/semaine/PlacesAPourvoir.tsx'
 import type { DemandePlacement } from '#/components/planning/semaine/PlacesAPourvoir.tsx'
 import type { SemaineOut } from '#/lib/planning/semaine.ts'
@@ -189,5 +190,127 @@ describe('PlacesAPourvoir', () => {
         horaireId: 41,
       }),
     )
+  })
+})
+
+describe('place que rien ne remplit', () => {
+  const bloque = (id: number) => ({
+    salarie_id: id,
+    messages: ['repos de 11 h non respecté'],
+    regles: ['R-REPOS-QUOTIDIEN'],
+  })
+  const S = {
+    lundi: '2026-11-02',
+    a_pourvoir: [
+      {
+        ...place(1, 1, [bloque(1), bloque(3)]),
+        remplacants: [{ type_shift_id: 42, raisons: [bloque(1), bloque(3)] }],
+        raison_commune: 'R-REPOS-QUOTIDIEN',
+      },
+      {
+        ...place(2, 2, [bloque(1), bloque(3)]),
+        remplacants: [
+          {
+            type_shift_id: 42,
+            raisons: [{ salarie_id: 3, messages: [], regles: [] }],
+          },
+        ],
+        raison_commune: null,
+      },
+    ],
+    presence: [],
+    bilan: [],
+  } as unknown as SemaineOut
+  const monterCommune = (onPlacer?: (d: DemandePlacement) => void) =>
+    render(
+      <ul>
+        <PlacesAPourvoir
+          groupes={regrouperPlaces(
+            pointsAttention([S], SALARIES, POSTES).aPourvoir.flatMap(
+              (j) => j.shifts,
+            ),
+            [
+              { id: 41, code: 'M3' },
+              { id: 42, code: 'M6' },
+            ],
+          )}
+          onAller={vi.fn()}
+          onPlacer={onPlacer}
+        />
+      </ul>,
+    )
+
+  it('je ne peux pas, la raison, la solution ; Placer reste', () => {
+    monterCommune(vi.fn())
+    const mardi = screen.getByText('Je ne peux pas remplir ce M3.')
+    const bloc = mardi.parentElement!
+    expect(bloc.textContent).toBe(
+      "Je ne peux pas remplir ce M3.Personne n'a assez de repos avec ses autres shifts.Prenez un extra ou changez un shift.",
+    )
+    // Une seule place dit « je ne peux pas » : celle de mercredi garde les
+    // raisons par personne, et le code voisin possible.
+    expect(screen.getAllByText(/Je ne peux pas/)).toHaveLength(1)
+    expect(
+      screen.getAllByRole('list', { name: 'Pourquoi personne' }),
+    ).toHaveLength(1)
+    expect(screen.getByText('Possible en M6 : Céleste.')).toBeTruthy()
+    expect(
+      screen.getAllByRole('button', { name: /^Placer quelqu'un le/ }),
+    ).toHaveLength(2)
+  })
+})
+
+describe('panneau : personnes par cycle et trous entre équipes', () => {
+  it('deux familles, une phrase par point, comptées au résumé', () => {
+    const S = {
+      lundi: '2026-11-02',
+      a_pourvoir: [],
+      presence: [
+        {
+          jour: 1,
+          periode: 'nuit',
+          compte: 0,
+          minimum: 1,
+          maximum: null,
+          ecart: -1,
+        },
+        {
+          jour: 1,
+          periode: 'matin',
+          compte: 4,
+          minimum: 2,
+          maximum: 3,
+          ecart: 1,
+        },
+      ],
+      trous: [{ poste_id: 9, jour: 1, debut: '15:00', fin: '16:00' }],
+      bilan: [],
+    } as unknown as SemaineOut
+    render(
+      <PanneauAlertes
+        ouvert
+        onFermer={vi.fn()}
+        semaines={[S]}
+        salaries={SALARIES}
+        postes={POSTES}
+        periode="Cette semaine"
+      />,
+    )
+    expect(
+      screen.getByText(
+        '3 points : 2 cycles hors consigne, 1 trou entre équipes.',
+      ),
+    ).toBeTruthy()
+    expect(screen.getByText('Personnes par cycle')).toBeTruthy()
+    expect(screen.getByText('Trous entre équipes')).toBeTruthy()
+    const phrases = [
+      '1 personne de trop le matin mardi',
+      'Il manque 1 personne la nuit mardi',
+      'Club mardi : personne de 15 h à 16 h',
+    ]
+    for (const t of phrases) expect(screen.getByText(t)).toBeTruthy()
+    // Matin avant nuit.
+    const texte = document.body.textContent
+    expect(texte.indexOf(phrases[0])).toBeLessThan(texte.indexOf(phrases[1]))
   })
 })

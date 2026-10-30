@@ -155,9 +155,14 @@ describe('verifierReglages', () => {
     const r = propre()
     r.postes[0].horaires_autorises = [M, J]
     // Les besoins ignorés ne comptent plus : le lundi soir tombe sous sa
-    // consigne, ce qui est vrai.
+    // consigne, ce qui est vrai ; et plus aucun code du soir n'est permis sur
+    // le seul poste compté.
     const tous = verifierReglages(r)
-    expect(ids(tous)).toEqual([`besoin-code:1:${S}`, 'presence:0:soir'])
+    expect(ids(tous)).toEqual([
+      `besoin-code:1:${S}`,
+      'cycle-sans-code:soir',
+      'presence:0:soir',
+    ])
     const p = tous[0]
     expect(p).toMatchObject({
       id: `besoin-code:1:${S}`,
@@ -758,7 +763,9 @@ describe('verifierReglages, points complets (test de mutation)', () => {
 
   it('besoin intenable : une personne nommée, ou toutes les fiches', () => {
     const r = propre()
-    r.postes.push(poste(2, 'Bar'))
+    // Bar : J est son seul code du matin, donc sans remplaçant (M n'y est
+    // pas permis).
+    r.postes.push(poste(2, 'Bar', { horaires_autorises: [J, S] }))
     r.salaries[0].competences.push({ poste_id: 2, niveau: 'titulaire' })
     r.salaries[0].shifts_autorises = [M, S]
     r.besoins.push(besoin(2, 3, HORAIRES[3]))
@@ -1093,5 +1100,164 @@ describe('ordonnerPoints et aDesBloquants', () => {
     expect(
       aDesBloquants([p('a', 'besoins'), p('b', 'equipe', 'bloquant')]),
     ).toBe(true)
+  })
+})
+
+/*
+ * Cycles (plan planning-cycles-2026-10-30, étape 7) : la nuit compte sur les
+ * postes qui ont un code de nuit (D15) ; un minimum par cycle sans aucun code
+ * de ce cycle est signalé ; un besoin dont le code est tenu par personne
+ * n'est signalé que sans remplaçant du même cycle (D12). Chaque point est
+ * écrit en entier ici, sans relire le code testé.
+ */
+describe('verifierReglages, cycles', () => {
+  const VERS_PRESENCE = { page: '/planning/besoins', cible: 'presence' }
+  const sansPersonne = (r: Referentiel) =>
+    ids(verifierReglages(r)).filter((x) => x.startsWith('besoin-sans-personne'))
+  const deCycle = (r: Referentiel) =>
+    verifierReglages(r).filter((x) => x.id.startsWith('cycle'))
+
+  /** Propre + une Veille (code N seul, hors présence), un titulaire et une
+   * nuit le lundi. */
+  const avecVeille = (): Referentiel => {
+    const r = propre()
+    r.postes.push(
+      poste(2, 'Veille', { categorie: 'veille_nuit', horaires_autorises: [N] }),
+    )
+    r.salaries.push(
+      salarie(13, { competences: [{ poste_id: 2, niveau: 'titulaire' }] }),
+    )
+    r.besoins.push(besoin(2, 0, HORAIRES[2]))
+    return r
+  }
+
+  it('la Veille propre : aucun point', () => {
+    expect(verifierReglages(avecVeille())).toEqual([])
+  })
+
+  it('minimum du matin sans aucun code du matin sur les postes comptés', () => {
+    const r = propre()
+    r.postes[0].horaires_autorises = [S]
+    r.besoins = r.besoins.filter((b) => b.horaire_id === S)
+    r.consignes = [
+      { id: 1, jour: 0, periode: 'matin', minimum: 1, maximum: null },
+      { id: 2, jour: 2, periode: 'matin', minimum: 2, maximum: null },
+    ]
+    expect(deCycle(r)).toEqual([
+      {
+        id: 'cycle-sans-code:matin',
+        gravite: 'a-voir',
+        ecran: 'besoins',
+        texte:
+          "Un minimum est demandé le matin (lundi et mercredi), mais Réception n'a aucun horaire du matin. Il ne pourra pas être tenu.",
+        lien: VERS_PRESENCE,
+      },
+    ])
+  })
+
+  it('minimum à 0, ou un code du cycle permis : aucun point de cycle', () => {
+    const r = propre()
+    r.postes[0].horaires_autorises = [S]
+    r.besoins = r.besoins.filter((b) => b.horaire_id === S)
+    r.consignes = [{ id: 1, jour: 0, periode: 'matin', minimum: 0, maximum: 2 }]
+    expect(deCycle(r)).toEqual([])
+    // J est un code du matin : il suffit.
+    r.postes[0].horaires_autorises = [S, J]
+    r.consignes[0].minimum = 1
+    expect(deCycle(r)).toEqual([])
+  })
+
+  it('minimum du matin sans aucun poste compté', () => {
+    const r = propre()
+    r.postes[0].presence = false
+    r.consignes = [
+      { id: 1, jour: 0, periode: 'matin', minimum: 1, maximum: null },
+    ]
+    expect(deCycle(r).map((x) => x.texte)).toEqual([
+      'Un minimum est demandé le matin (lundi), mais aucun poste ne compte dans la présence. Cochez-les dans Postes.',
+    ])
+  })
+
+  it('minimum de nuit sans aucun poste à code de nuit', () => {
+    const r = propre()
+    r.postes[0].horaires_autorises = [M, S]
+    r.consignes = [
+      { id: 1, jour: 0, periode: 'nuit', minimum: 1, maximum: null },
+    ]
+    const points = verifierReglages(r)
+    expect(ids(points)).toEqual(['cycle-sans-code:nuit', 'presence:0:nuit'])
+    expect(points[0]).toEqual({
+      id: 'cycle-sans-code:nuit',
+      gravite: 'a-voir',
+      ecran: 'besoins',
+      texte:
+        "Un minimum est demandé la nuit (lundi), mais aucun poste n'a d'horaire de nuit. Il ne pourra pas être tenu.",
+      lien: VERS_PRESENCE,
+    })
+  })
+
+  it('la nuit compte la Veille, hors présence (D15) ; le minimum se compare', () => {
+    const r = avecVeille()
+    r.postes[0].horaires_autorises = [M, S]
+    r.consignes.push({
+      id: 3,
+      jour: 0,
+      periode: 'nuit',
+      minimum: 1,
+      maximum: null,
+    })
+    // Une nuit demandée en Veille : la consigne est tenue, aucun point.
+    expect(verifierReglages(r)).toEqual([])
+    r.consignes[2].minimum = 2
+    expect(verifierReglages(r)).toEqual([
+      {
+        id: 'presence:0:nuit',
+        gravite: 'a-voir',
+        ecran: 'besoins',
+        texte:
+          'Lundi nuit : les besoins demandent 1 personne, la consigne en veut au moins 2.',
+        lien: VERS_PRESENCE,
+      },
+    ])
+  })
+
+  it('code que personne ne tient, mais un remplaçant du même cycle : aucun point', () => {
+    const r = propre()
+    // J (matin) demandé le jeudi ; les fiches ne gardent que M et S. M est
+    // du même cycle et permis sur Réception : le planning le prendra.
+    r.besoins.push(besoin(1, 3, HORAIRES[3]))
+    for (const s of r.salaries) s.shifts_autorises = [M, S]
+    expect(verifierReglages(r)).toEqual([])
+  })
+
+  it('le remplaçant doit être du même cycle, et jamais un code sans famille', () => {
+    const r = propre()
+    r.besoins.push(besoin(1, 3, HORAIRES[3]))
+    // Seul S reste : aucun code du matin n'est tenu, M et J sont signalés.
+    for (const s of r.salaries) s.shifts_autorises = [S]
+    expect(sansPersonne(r)).toEqual([
+      `besoin-sans-personne:1:${M}`,
+      `besoin-sans-personne:1:${J}`,
+    ])
+    // D (sans famille) est permis partout, il ne remplace pas un matin.
+    for (const s of r.salaries) s.shifts_autorises = [D, S]
+    expect(sansPersonne(r)).toEqual([
+      `besoin-sans-personne:1:${M}`,
+      `besoin-sans-personne:1:${J}`,
+    ])
+  })
+
+  it('remplaçant permis par la fiche, refusé par la semaine type ce jour-là', () => {
+    const r = propre()
+    r.besoins.push(besoin(1, 3, HORAIRES[3]))
+    for (const s of r.salaries) {
+      s.shifts_autorises = [M, S]
+      // Le jeudi, la semaine type fixe S : ni J ni M ne passent ce jour-là.
+      s.semaine_type[3] = { mode: 'travail', type_shift_id: S }
+    }
+    expect(sansPersonne(r)).toEqual([
+      `besoin-sans-personne:1:${M}`,
+      `besoin-sans-personne:1:${J}`,
+    ])
   })
 })

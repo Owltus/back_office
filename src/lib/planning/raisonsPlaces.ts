@@ -257,3 +257,42 @@ export const estPossible = (raisons: readonly RaisonClaire[]) =>
         r.issue.mention === 'à appeler' ||
         r.issue.mention === 'à placer'),
   )
+
+// ------------------------------------------------- place que rien ne remplit
+
+/** La règle qui bloque TOUT LE MONDE sur une place (`raison_commune` de
+ * `analyser`, plan `planning-cycles-2026-10-30` étape 5), dite pour la place
+ * entière : « Je ne peux pas remplir ce M3. » puis cette phrase. Seul
+ * l'identifiant est connu (pas de message) : la phrase reste générale.
+ * Une phrase par règle de `REGLES_BLOCAGE` (test exhaustif). */
+const PHRASES_COMMUNES: Record<(typeof REGLES_BLOCAGE)[number], string> = {
+  POSTE: 'Personne ne tient ce poste.',
+  'HORS-CONTRAT': "Personne n'est sous contrat ce jour-là.",
+  ABSENCE: "Tout le monde est absent ou à l'école ce jour-là.",
+  'REPOS-FIXE': 'Tout le monde est en repos fixe ce jour-là.',
+  'HORAIRE-PERSO': "Personne n'a ce code ce jour-là.",
+  'R-JOUR-MAX': 'La journée serait trop longue pour tout le monde.',
+  'R-NUIT-MINEUR': 'Tout le monde est mineur : pas de travail de nuit.',
+  'R-REPOS-QUOTIDIEN': "Personne n'a assez de repos avec ses autres shifts.",
+  CHEVAUCHEMENT: 'Tout le monde est déjà en service à cette heure.',
+  'UN-SERVICE-PAR-JOUR': 'Tout le monde a déjà un shift ce jour-là.',
+  'R-SIX-JOURS-MAX': 'Tout le monde a déjà trop de jours de travail.',
+  'R-REPOS-HEBDO-HCR': 'Tout le monde a déjà trop de jours de travail.',
+  'SIXIEME-JOUR': 'Ce serait un 6e jour pour tout le monde.',
+  'R-SEMAINE-MAX': 'Tout le monde est au maximum de ses heures.',
+  'R-JOURNEE-ETOILE': 'Tout le monde a déjà sa journée courte.',
+  'R-REPOS-HEBDO-35H': 'Personne ne garderait son repos de 35 h.',
+  'R-REPOS-HEBDO-MINEUR':
+    'Tout le monde est mineur : deux jours de repos de suite.',
+  EXTRA: 'Seuls des extras sont libres.',
+}
+
+/** Phrase de la règle commune, ou null si la règle est inconnue ou si elle
+ * ne BLOQUE pas vraiment (6e jour, journée courte au contrat, extra à
+ * appeler : quelqu'un peut prendre la place, ses heures ou un appel
+ * mis à part, donc « Je ne peux pas » serait faux). */
+export function phraseCommune(regle: string | null | undefined): string | null {
+  if (!regle || !Object.hasOwn(PHRASES_COMMUNES, regle)) return null
+  if (estPossible([raisonClaire(regle, '', 0)])) return null
+  return PHRASES_COMMUNES[regle as keyof typeof PHRASES_COMMUNES]
+}

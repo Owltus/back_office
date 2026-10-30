@@ -9,6 +9,11 @@
  * Shifts à pourvoir (étape 8, 2026-10-29) : places identiques regroupées,
  * chaque raison avec son lien vers le réglage (`PlacesAPourvoir.tsx`) et,
  * avec `onPlacer`, « Placer quelqu'un » qui ouvre la case dans la vue.
+ *
+ * Personnes par cycle et trous entre équipes (plan
+ * `planning-cycles-2026-10-30`, étapes 5 et 6) : une phrase par point
+ * (« Il manque 1 personne le matin mardi », « Réception mardi : personne de
+ * 15 h à 16 h »).
  */
 
 import type { ReactNode } from 'react'
@@ -17,6 +22,9 @@ import { ChevronRight, CircleCheck } from 'lucide-react'
 
 import {
   nombreInfractions,
+  nommerJours,
+  phraseCycle,
+  phraseTrou,
   pointsAttention,
   regrouperPlaces,
   resumePoints,
@@ -28,7 +36,6 @@ import type {
 } from '#/components/planning/attention.ts'
 import { PlacesAPourvoir } from '#/components/planning/semaine/PlacesAPourvoir.tsx'
 import type { DemandePlacement } from '#/components/planning/semaine/PlacesAPourvoir.tsx'
-import { ecartTexte } from '#/components/planning/semaine/Presence.tsx'
 import {
   Sheet,
   SheetContent,
@@ -42,13 +49,6 @@ import type { SemaineOut } from '#/lib/planning/semaine.ts'
 import type { Horaire, Poste, Salarie } from '#/lib/planning/types.ts'
 import { cn } from '#/lib/utils.ts'
 
-const JOUR = new Intl.DateTimeFormat('fr-FR', {
-  weekday: 'short',
-  day: 'numeric',
-  month: 'short',
-  timeZone: 'UTC',
-})
-const jourCourt = (date: string) => JOUR.format(new Date(`${date}T12:00:00Z`))
 const majuscule = (t: string) => t.charAt(0).toUpperCase() + t.slice(1)
 
 /** Code de la règle (R-…) au survol seulement : la phrase suffit à l'écran
@@ -174,6 +174,8 @@ export function PanneauAlertes({
   const nbInfractions = nombreInfractions(p)
   const autres = !infractionsSeules
   const ok = infractionsSeules ? nbInfractions === 0 : p.total === 0
+  const jourCycle = nommerJours(p.presence.map((e) => e.date))
+  const jourTrou = nommerJours(p.trous.map((t) => t.date))
 
   return (
     <Sheet open={ouvert} onOpenChange={(o) => !o && onFermer()}>
@@ -226,27 +228,39 @@ export function PanneauAlertes({
           </Famille>
 
           <Famille
-            titre="Présence du matin et du soir"
+            titre="Personnes par cycle"
             nombre={autres ? p.presence.length : 0}
           >
             {p.presence.map((e) => (
               <li key={e.cle} className={LIGNE}>
-                <span className="w-24 shrink-0 text-muted-foreground">
-                  {jourCourt(e.date)}
-                </span>
-                <span>
-                  {majuscule(e.periode)} : {e.compte} pour{' '}
-                  {libelleConsigne(e.minimum, e.maximum)}
-                </span>
                 <span
                   className={cn(
-                    'ml-auto shrink-0 text-xs font-semibold',
-                    e.ecart < 0
-                      ? 'text-amber-600 dark:text-amber-400'
-                      : 'text-sky-600 dark:text-sky-400',
+                    'size-2 shrink-0 self-center rounded-full',
+                    e.ecart < 0 ? 'bg-amber-500' : 'bg-sky-500',
                   )}
-                >
-                  {ecartTexte(e.ecart)}
+                />
+                <span className="min-w-0">
+                  {phraseCycle(e, jourCycle(e.date))}
+                </span>
+                <span className="ml-auto shrink-0 text-xs text-muted-foreground tabular-nums">
+                  {e.compte} pour {libelleConsigne(e.minimum, e.maximum)}
+                </span>
+              </li>
+            ))}
+          </Famille>
+
+          <Famille
+            titre="Trous entre équipes"
+            nombre={autres ? p.trous.length : 0}
+          >
+            {p.trous.map((t) => (
+              <li key={t.cle} className={LIGNE}>
+                <span
+                  className="size-2 shrink-0 self-center rounded-full"
+                  style={{ background: t.poste?.couleur }}
+                />
+                <span className="min-w-0">
+                  {phraseTrou(t, jourTrou(t.date))}
                 </span>
               </li>
             ))}

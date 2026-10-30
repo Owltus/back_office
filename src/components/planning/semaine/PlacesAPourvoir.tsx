@@ -8,6 +8,12 @@
  * régler. « Placer quelqu'un » propose les personnes libres ce jour-là ; la
  * vue ouvre la case choisie (`onPlacer`).
  *
+ * Place que rien ne remplit (plan `planning-cycles-2026-10-30`, étape 5) :
+ * quand UNE règle bloque tout le monde, sur ce code comme sur les autres
+ * codes du même cycle, le panneau le dit franchement (« Je ne peux pas
+ * remplir ce M3. », la raison, « Prenez un extra ou changez un shift. ») au
+ * lieu des raisons personne par personne. « Placer quelqu'un » reste.
+ *
  * Sans routeur : les liens passent par `onAller` (le panneau navigue).
  */
 
@@ -15,7 +21,7 @@ import { useState } from 'react'
 import type { MouseEvent } from 'react'
 import { ChevronRight, UserPlus } from 'lucide-react'
 
-import { joursDesPlaces } from '#/components/planning/attention.ts'
+import { enListe, joursDesPlaces } from '#/components/planning/attention.ts'
 import type {
   GroupePlaces,
   RolePlace,
@@ -53,6 +59,15 @@ const ROLE: Record<RolePlace, string | null> = {
   occasionnel: 'dépannage',
   extra: 'extra',
 }
+
+/** Ce qu'il reste à faire quand le moteur ne peut pas (D3). */
+export const SOLUTION_HUMAINE = 'Prenez un extra ou changez un shift.'
+
+/** « Je ne peux pas remplir ce M3. » ; sans code : « cette place ». */
+export const jeNePeuxPas = (code: string | null) =>
+  code
+    ? `Je ne peux pas remplir ce ${code}.`
+    : 'Je ne peux pas remplir cette place.'
 
 const LIEN =
   'rounded text-xs font-medium text-primary underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none'
@@ -181,7 +196,15 @@ function Groupe({
               {heures}
             </span>
           )}
-          {g.personnes.length ? (
+          {g.raisonCommune ? (
+            <p className="flex flex-col text-xs text-muted-foreground">
+              <strong className="text-sm text-foreground">
+                {jeNePeuxPas(g.code)}
+              </strong>
+              <span>{g.raisonCommune}</span>
+              <span>{SOLUTION_HUMAINE}</span>
+            </p>
+          ) : g.personnes.length ? (
             <ul className="flex flex-col gap-1" aria-label="Pourquoi personne">
               {g.personnes.map((p) => (
                 <li key={p.id} className="flex flex-col">
@@ -232,6 +255,11 @@ function Groupe({
               </button>
             </span>
           )}
+          {g.autresCodes.map((a) => (
+            <span key={a.code} className="text-xs text-muted-foreground">
+              Possible en {a.code} : {enListe(a.noms)}.
+            </span>
+          ))}
           {onPlacer && (
             <ul className="flex flex-col gap-1 border-t pt-2">
               {g.places.map((place) => (

@@ -2,7 +2,8 @@
  * Paramètres du Planning : la semaine type des besoins (prototype
  * `BesoinsPage.tsx`, spec §5.3). Une carte par poste, une ligne par code
  * horaire (ou horaire spécifique), une case par jour. Refait le 2026-10-28
- * (« utile mais mal présenté ») : deux vues (par poste, matin et soir), et
+ * (« utile mais mal présenté ») : deux vues (par poste, par cycle : matin,
+ * soir et nuit depuis le 2026-10-30), et
  * on choisit CE QU'ON RÈGLE (personnes nécessaires, apprentis et
  * stagiaires, en plus si besoin) : une case = un seul compteur, au lieu de
  * trois empilés. Chaque compteur s'enregistre aussitôt
@@ -62,7 +63,7 @@ import {
 import { heures, listeEt, texteSur } from '#/lib/planning/affichage.ts'
 import { codesDuPoste } from '#/lib/planning/eligibilite.ts'
 import { planningKeys } from '#/lib/planning/keys.ts'
-import { besoinsPresence } from '#/lib/planning/coherence.ts'
+import { besoinsPresence, postesComptes } from '#/lib/planning/coherence.ts'
 import {
   clePresence,
   libelleConsigne,
@@ -103,7 +104,7 @@ const COUCHES: ReadonlyArray<{
   {
     valeur: 'renfort',
     libelle: 'En plus si besoin',
-    aide: "Des places facultatives, en renfort. Elles servent si quelqu'un manque d'heures dans sa semaine ou pour tenir le matin et le soir.",
+    aide: "Des places facultatives, en renfort. Elles servent si quelqu'un manque d'heures dans sa semaine ou pour tenir le matin, le soir ou la nuit.",
   },
 ]
 const LIBELLE_COUCHE = Object.fromEntries(
@@ -147,7 +148,7 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
   }, [])
   const [vue, setVueBrute] = useState<Vue>('postes')
   const [couche, setCouche] = useState<Couche>('effectif')
-  // « Ajuster » depuis la vue matin et soir : le moment dont on complète les
+  // « Ajuster » depuis la vue par cycle : le moment dont on complète les
   // besoins, ses lignes et son jour mis en évidence dans la vue par poste.
   const [evidence, setEvidence] = useState<Evidence | null>(null)
   const setVue = (v: Vue) => {
@@ -158,10 +159,12 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
     setVueBrute('postes')
     setCouche('effectif')
     setEvidence({ jour, periode })
-    const premier = ref.data?.postes.find((p) => p.presence)
+    // Le premier poste compté dans ce cycle (la nuit : un poste à code de
+    // nuit, D15).
+    const premier = ref.data ? postesComptes(ref.data, periode)[0] : undefined
     if (premier) window.setTimeout(() => allerAuPoste(premier.id), 0)
   }
-  // Lien d'un point « À vérifier » : la vue matin et soir, ou un poste
+  // Lien d'un point « À vérifier » : la vue par cycle, ou un poste
   // (réglage des apprentis et stagiaires pour `soutien-<id>`).
   useOuvrirCible(
     lien,
@@ -278,20 +281,21 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
               onChange={setVue}
               options={[
                 { valeur: 'postes', libelle: 'Par poste' },
-                { valeur: 'presence', libelle: 'Matin et soir' },
+                { valeur: 'presence', libelle: 'Par cycle' },
               ]}
             />
             <p className="text-sm text-muted-foreground">
               {vue === 'postes'
                 ? 'Pour chaque poste, une ligne par horaire où il faut du monde, et le nombre de personnes chaque jour. Le planning automatique place les gens sur ces lignes.'
-                : "Combien de personnes au total le matin et le soir, tous postes de l'accueil confondus. Le planning automatique essaie de s'y tenir."}
+                : 'Combien de personnes au total le matin, le soir et la nuit, tous postes comptés confondus. Le planning automatique tient ces minimums.'}
             </p>
             <p className="text-xs text-muted-foreground">
               Dans quel ordre le planning automatique décide : la loi d'abord,
-              puis les personnes nécessaires, puis le matin et le soir et les
-              contrats, puis un titulaire avant un dépannage, puis le confort
-              (repos groupés, jours habituels, partage des week-ends, des soirs
-              et des matins tôt sur les 4 dernières semaines).
+              puis les personnes nécessaires et le minimum de chaque cycle, puis
+              le maximum de chaque cycle, puis les contrats, puis un titulaire
+              avant un dépannage, puis le confort (repos groupés, jours
+              habituels, partage des week-ends, des soirs et des matins tôt sur
+              les 4 dernières semaines).
             </p>
           </div>
 
@@ -695,10 +699,19 @@ function LigneTableau({
   const couleur = h?.couleur ?? '#98a2b3'
   const trop = alerteBesoin(poste.categorie, presence(ligne.debut, ligne.fin))
   const lundi = affiche(poste.id, ligne, 0)
-  // « Ajuster » : la ligne compte pour le moment à compléter.
+  // « Ajuster » : la ligne compte pour le moment à compléter (la nuit, sur
+  // un poste à code de nuit, D15).
   const compte =
     evidence !== null &&
-    periodePresence(poste, h, ligne.debut) === evidence.periode
+    periodePresence(
+      poste,
+      h,
+      ligne.debut,
+      evidence.periode === 'nuit' &&
+        codesDuPoste(poste, referentiel.horaires).some(
+          (x) => x.periode === 'nuit',
+        ),
+    ) === evidence.periode
   const desactive = !modifiable
   // Ce qui est réglé dans les AUTRES choix : une ligne à 0 ici n'a pas
   // l'air d'un oubli quand elle porte des places ailleurs.

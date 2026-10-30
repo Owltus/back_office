@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   estPossible,
+  phraseCommune,
   RAISON_LIBRE,
   raisonClaire,
   raisonsClaires,
@@ -519,5 +520,43 @@ describe('table complète des raisons (test de mutation)', () => {
     expect(estPossible([sixieme, loi])).toBe(false)
     expect(estPossible([poste])).toBe(false)
     expect(estPossible([raisonClaire('EXTRA', 'x', 3)])).toBe(true)
+  })
+})
+
+describe('place que rien ne remplit : la raison commune en clair', () => {
+  // Ne bloquent pas : quelqu'un peut prendre la place (ses heures ou un
+  // appel mis à part), « Je ne peux pas » serait faux.
+  const NON_BLOQUANTES = ['SIXIEME-JOUR', 'R-JOURNEE-ETOILE', 'EXTRA']
+
+  it('exhaustif : une phrase courte pour chaque règle qui bloque', () => {
+    for (const regle of REGLES_BLOCAGE) {
+      const p = phraseCommune(regle)
+      if (NON_BLOQUANTES.includes(regle)) {
+        expect(p, regle).toBeNull()
+        continue
+      }
+      expect(p, regle).toMatch(/^[A-Z][^«»—]{8,70}\.$/)
+      expect(p).not.toMatch(/[A-Z]-[A-Z]|\bIA\b/)
+    }
+  })
+
+  it('exemples', () => {
+    expect(phraseCommune('R-REPOS-QUOTIDIEN')).toBe(
+      "Personne n'a assez de repos avec ses autres shifts.",
+    )
+    expect(phraseCommune('UN-SERVICE-PAR-JOUR')).toBe(
+      'Tout le monde a déjà un shift ce jour-là.',
+    )
+    expect(phraseCommune('R-SIX-JOURS-MAX')).toBe(
+      'Tout le monde a déjà trop de jours de travail.',
+    )
+  })
+
+  it('inconnue, vide ou héritée de l’objet : rien', () => {
+    expect(phraseCommune(null)).toBeNull()
+    expect(phraseCommune(undefined)).toBeNull()
+    expect(phraseCommune('')).toBeNull()
+    expect(phraseCommune('R-INCONNUE')).toBeNull()
+    expect(phraseCommune('toString')).toBeNull()
   })
 })

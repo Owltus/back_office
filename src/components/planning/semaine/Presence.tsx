@@ -1,8 +1,11 @@
 /*
- * Consignes de présence à l'écran : deux pastilles sous chaque jour de la
- * semaine (matin, soir : présents / attendus) et des points sous ceux du
- * mois ; les écarts vont dans « Points d'attention » (`attention.ts`). Ambre : il manque du monde ; bleu : du monde en
- * plus ; discret : conforme.
+ * Personnes par cycle à l'écran : une pastille par consigne sous chaque jour
+ * de la semaine (matin, soir, nuit : présents / attendus, dans l'ordre de
+ * `ORDRE_PERIODES`, déjà trié par `bilanPresence`) et un point par consigne
+ * sous ceux du mois ; seuls les cycles qui ont une consigne s'affichent. Les
+ * écarts vont dans « Points d'attention » (`attention.ts`). Ambre : il manque
+ * du monde ; bleu : du monde en plus ; discret : conforme. Un middle n'est
+ * jamais compté (D11), la nuit l'est sur les postes à code de nuit (D15).
  */
 
 import { Moon, Sun, Sunset } from 'lucide-react'
@@ -50,7 +53,8 @@ export function PastillesPresence({ presence }: { presence: PresenceOut[] }) {
   )
 }
 
-/** Vue mois : deux points sous le numéro du jour (matin, soir). */
+/** Vue mois : un point par consigne sous le numéro du jour (matin, soir,
+ * nuit). */
 export function PointsPresence({ presence }: { presence: PresenceOut[] }) {
   if (!presence.length) return null
   const lignes = presence.map(

@@ -363,6 +363,64 @@ describe('VueSemaine', () => {
     ).toBeGreaterThan(0)
   })
 
+  describe('survol d’un remplaçant (code_demande)', () => {
+    const horaire = (code: string) =>
+      DONNEES.referentiel.horaires.find((h) => h.code === code)!
+    /** La semaine de démo, le shift de nuit tenant une place d'un autre code.
+     * Seul l'affichage est en jeu : le couple N / M n'a pas à être réaliste. */
+    const avecDemande = (id: number | null) => ({
+      ...SEMAINE,
+      affectations: SEMAINE.affectations.map((a) => ({
+        ...a,
+        code_demande: id,
+      })),
+    })
+    const survoler = async () => {
+      globalThis.ResizeObserver = class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      }
+      const carte = screen.getByRole('button', { name: /Nuit · 23:00-07:45/ })
+      fireEvent.pointerMove(carte, { pointerType: 'mouse' })
+      // L'infobulle s'ouvre : sa première ligne apparaît.
+      await screen.findAllByText(
+        /^N · Nuit · 23:00-07:45$/,
+        {},
+        { timeout: 3000 },
+      )
+      return carte
+    }
+
+    it('code_demande différent : « N au lieu de M » dans l’infobulle, rien sur la case', async () => {
+      etat.droits = { pret: true, lire: true, ecrire: false, gerer: false }
+      vue.semaine = avecDemande(horaire('M').id)
+      rendre()
+      const carte = await survoler()
+      expect(screen.getAllByText('N au lieu de M').length).toBeGreaterThan(0)
+      expect(carte.getAttribute('aria-label')).toMatch(/, N au lieu de M,/)
+      // La case elle-même n'affiche rien de plus.
+      expect(carte.textContent).not.toMatch(/au lieu de/)
+    })
+
+    it('code_demande null : aucune ligne « au lieu de »', async () => {
+      etat.droits = { pret: true, lire: true, ecrire: false, gerer: false }
+      vue.semaine = avecDemande(null)
+      rendre()
+      const carte = await survoler()
+      expect(screen.queryByText(/au lieu de/)).toBeNull()
+      expect(carte.getAttribute('aria-label')).not.toMatch(/au lieu de/)
+    })
+
+    it('code_demande égal au code du shift : aucune ligne', async () => {
+      etat.droits = { pret: true, lire: true, ecrire: false, gerer: false }
+      vue.semaine = avecDemande(horaire('N').id)
+      rendre()
+      await survoler()
+      expect(screen.queryByText(/au lieu de/)).toBeNull()
+    })
+  })
+
   describe('prêt à générer (étape 7)', () => {
     const VIDE = { horaires: [], postes: [], salaries: [], besoins: [] }
 

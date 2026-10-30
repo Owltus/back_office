@@ -326,18 +326,79 @@ describe('Besoins', () => {
     })
   })
 
-  it('matin et soir : les postes qui comptent, dits en français', () => {
+  it('par cycle : les postes qui comptent, dits en français', () => {
     const ref = referentielDemo()
     for (const p of ref.postes)
       if (p.nom === 'Réception' || p.nom === 'Club') p.presence = true
     etat.referentiel = ref
     monter(<BesoinsPage />)
-    fireEvent.click(screen.getByRole('radio', { name: 'Matin et soir' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Par cycle' }))
+    const carte = screen.getByRole('region', { name: 'Personnes par cycle' })
+    expect(carte.textContent).toContain(
+      'Le matin et le soir, comptent les personnes placées en Réception et Club, sauf les apprentis et stagiaires, qui viennent en plus.',
+    )
+    // Aucun code de la famille nuit dans l'hôtel fictif : la nuit ne compte
+    // pas, et c'est dit.
+    expect(carte.textContent).toContain(
+      "La nuit ne compte pas : aucun poste n'a d'horaire de nuit.",
+    )
+    expect(carte.textContent).toContain('Un middle est là, mais ne compte pas.')
+  })
+
+  it('par cycle : la nuit compte la Veille de nuit, et Ajuster la retrouve', () => {
+    const ref = referentielDemo()
+    for (const p of ref.postes)
+      p.presence = p.nom === 'Réception' || p.nom === 'Club'
+    for (const h of ref.horaires) {
+      h.periode = h.code === 'N' ? 'nuit' : h.code === 'M' ? 'matin' : null
+    }
+    ref.consignes = [
+      { id: 1, jour: 0, periode: 'nuit', minimum: 2, maximum: null },
+    ]
+    etat.referentiel = ref
+    monter(<BesoinsPage />)
+    fireEvent.click(screen.getByRole('radio', { name: 'Par cycle' }))
+    const carte = within(
+      screen.getByRole('region', { name: 'Personnes par cycle' }),
+    )
+    expect(carte.getByRole('rowheader', { name: 'Nuit' })).toBeTruthy()
     expect(
-      screen.getByText(
-        'Comptent les personnes placées en Réception et Club, sauf les apprentis et stagiaires, qui viennent en plus.',
-      ),
+      screen.getByRole('region', { name: 'Personnes par cycle' }).textContent,
+    ).toContain('La nuit, comptent les personnes placées en Veille de nuit.')
+    // Oracle : un besoin N (nuit) par jour en Veille de nuit, effectif 1.
+    const nuitLundi = ref.besoins
+      .filter(
+        (b) =>
+          b.jour === 0 &&
+          b.horaire_id === ref.horaires.find((h) => h.code === 'N')?.id,
+      )
+      .reduce((n, b) => n + b.effectif, 0)
+    expect(nuitLundi).toBe(1)
+    const cellule = document.querySelector<HTMLElement>(
+      '[data-besoins="0:nuit"]',
+    )
+    expect(cellule?.textContent).toBe('Besoins : 1')
+    expect(cellule?.dataset.ecart).toBe('true')
+    expect(
+      carte.getByRole('button', {
+        name: 'Nuit du lundi : au moins : un de plus',
+      }),
     ).toBeTruthy()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Ajuster les besoins du lundi nuit' }),
+    )
+    expect(
+      screen.getByRole('status', { name: 'Moment à ajuster' }).textContent,
+    ).toContain(
+      'Lundi nuit : les besoins donnent 1, la consigne en veut au moins 2.',
+    )
+    const lignes = [
+      ...document.querySelectorAll<HTMLElement>('tr[data-evidence]'),
+    ].map((tr) => [
+      tr.closest('section')?.querySelector('h2')?.textContent,
+      tr.querySelector('td div.truncate')?.textContent,
+    ])
+    expect(lignes).toEqual([['Veille de nuit', 'Nuit']])
   })
 
   it('consignes de présence : au moins et au plus, le plafond suit', async () => {
@@ -350,9 +411,9 @@ describe('Besoins', () => {
     }
     etat.referentiel = { ...referentielDemo(), consignes: [lundiSoir] }
     monter(<BesoinsPage />)
-    fireEvent.click(screen.getByRole('radio', { name: 'Matin et soir' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Par cycle' }))
     const carte = within(
-      screen.getByRole('region', { name: 'Présence du matin et du soir' }),
+      screen.getByRole('region', { name: 'Personnes par cycle' }),
     )
     fireEvent.click(
       carte.getByRole('button', {
@@ -400,9 +461,9 @@ describe('Besoins', () => {
   it('en écriture (sans gestion) : consignes en lecture seule', () => {
     etat.droits = { pret: true, lire: true, ecrire: true, gerer: false }
     monter(<BesoinsPage />)
-    fireEvent.click(screen.getByRole('radio', { name: 'Matin et soir' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Par cycle' }))
     const carte = within(
-      screen.getByRole('region', { name: 'Présence du matin et du soir' }),
+      screen.getByRole('region', { name: 'Personnes par cycle' }),
     )
     for (const b of carte.getAllByRole('button', {
       name: /un de (plus|moins)$/,
@@ -456,9 +517,11 @@ describe('Besoins', () => {
       const ref = avecConsigne()
       etat.referentiel = ref
       monter(<BesoinsPage />)
-      fireEvent.click(screen.getByRole('radio', { name: 'Matin et soir' }))
+      fireEvent.click(screen.getByRole('radio', { name: 'Par cycle' }))
       expect(
-        screen.getByText(/Les besoins par poste font le planning/),
+        screen.getByText(
+          /Le planning tient ces minimums avant les heures des contrats/,
+        ),
       ).toBeTruthy()
       const attendu = sommeAttendue(ref, 5)
       expect(attendu).toBe(2)
@@ -487,7 +550,7 @@ describe('Besoins', () => {
         etat.referentiel = { ...r, besoins: [...r.besoins, { id: 999, ...v }] }
       })
       monter(<BesoinsPage />)
-      fireEvent.click(screen.getByRole('radio', { name: 'Matin et soir' }))
+      fireEvent.click(screen.getByRole('radio', { name: 'Par cycle' }))
       fireEvent.click(
         screen.getByRole('button', {
           name: 'Ajuster les besoins du samedi matin',
@@ -530,7 +593,7 @@ describe('Besoins', () => {
       const somme = sommeAttendue(etat.referentiel, 5)
       expect(somme).toBeGreaterThanOrEqual(3)
       expect(momentAjuste()).toContain(`les besoins donnent ${somme}`)
-      fireEvent.click(screen.getByRole('radio', { name: 'Matin et soir' }))
+      fireEvent.click(screen.getByRole('radio', { name: 'Par cycle' }))
       expect(caseBesoins('5:matin')?.textContent).toBe(`Besoins : ${somme}`)
       expect(caseBesoins('5:matin')?.dataset.ecart).toBeUndefined()
       expect(
@@ -553,7 +616,7 @@ describe('Besoins', () => {
       }
       etat.referentiel = ref
       monter(<BesoinsPage />)
-      fireEvent.click(screen.getByRole('radio', { name: 'Matin et soir' }))
+      fireEvent.click(screen.getByRole('radio', { name: 'Par cycle' }))
       expect(sommeAttendue(ref, 0)).toBe(3)
       expect(caseBesoins('0:matin')?.textContent).toBe('Besoins : 3')
       // En « Au moins » (vue par défaut, celle du lien du contrôle), le

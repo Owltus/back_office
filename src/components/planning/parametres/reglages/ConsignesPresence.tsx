@@ -1,9 +1,11 @@
 /*
- * Consignes de présence du matin et du soir (demande utilisateur du
- * 2026-10-27) : pour chaque jour de la semaine type, combien de personnes le
- * matin et le soir, au moins et au plus (« 3 ou 4 »). Elles comptent les
- * personnes autonomes des postes cochés « compte dans la présence », selon
- * la période de leur code horaire. Chaque compteur s'enregistre aussitôt,
+ * Personnes par cycle (demande utilisateur du 2026-10-27, nuit ajoutée le
+ * 2026-10-30, plan `planning-cycles-2026-10-30`) : pour chaque jour de la
+ * semaine type, combien de personnes le matin, le soir et la nuit, au moins
+ * et au plus (« 3 ou 4 »). Le matin et le soir comptent les personnes
+ * autonomes des postes cochés « compte dans la présence », la nuit celles des
+ * postes qui ont un code de nuit (D15), selon la période de leur code
+ * horaire ; un middle ne compte jamais (D11). Chaque compteur s'enregistre aussitôt,
  * comme les besoins ; les écritures partent l'une après l'autre, chacune
  * avec la consigne RELUE. Depuis le 2026-10-28, on règle « au moins » OU
  * « au plus » (un compteur par case, comme les besoins), la fourchette
@@ -19,7 +21,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Sun, Sunset } from 'lucide-react'
+import { Moon, Sun, Sunset } from 'lucide-react'
 
 import { useEcriture } from '#/components/planning/hooks/usePlanning.ts'
 import { useNotifier } from '#/components/planning/Messages.tsx'
@@ -29,7 +31,7 @@ import {
 } from '#/components/planning/parametres/reglages/controles.tsx'
 import { listeEt } from '#/lib/planning/affichage.ts'
 import { planningKeys } from '#/lib/planning/keys.ts'
-import { besoinsPresence } from '#/lib/planning/coherence.ts'
+import { besoinsPresence, postesComptes } from '#/lib/planning/coherence.ts'
 import { clePresence, libelleConsigne } from '#/lib/planning/presence.ts'
 import { reglerConsigne } from '#/lib/planning/service.ts'
 import { JOURS } from '#/lib/planning/types.ts'
@@ -49,6 +51,7 @@ const PERIODES: ReadonlyArray<{
 }> = [
   { periode: 'matin', libelle: 'Matin', Icone: Sun },
   { periode: 'soir', libelle: 'Soir', Icone: Sunset },
+  { periode: 'nuit', libelle: 'Nuit', Icone: Moon },
 ]
 
 const cle = (jour: number, periode: PeriodeConsigne) => `${jour}|${periode}`
@@ -129,7 +132,8 @@ export function ConsignesPresence({
     })
   }
 
-  const comptent = referentiel.postes.filter((p) => p.presence)
+  const comptent = postesComptes(referentiel, 'matin')
+  const deNuit = postesComptes(referentiel, 'nuit')
   const besoins = useMemo(() => besoinsPresence(referentiel), [referentiel])
   const [champ, setChamp] = useState<'minimum' | 'maximum'>('minimum')
   const mot = champ === 'minimum' ? 'au moins' : 'au plus'
@@ -142,17 +146,20 @@ export function ConsignesPresence({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-col gap-1">
           <h2 id="titre-consignes" className="text-base font-semibold">
-            Présence du matin et du soir
+            Personnes par cycle
           </h2>
           <p className="text-sm">
-            Les besoins par poste font le planning. Le matin et le soir
-            vérifient qu'il y a assez de monde, et le planning automatique
-            essaie de les tenir.
+            Le planning tient ces minimums avant les heures des contrats. Si un
+            code est impossible, il prend un autre code du même cycle. Un middle
+            est là, mais ne compte pas.
           </p>
           <p className="text-sm text-muted-foreground">
             {comptent.length
-              ? `Comptent les personnes placées en ${listeEt(comptent.map((p) => p.nom))}, sauf les apprentis et stagiaires, qui viennent en plus.`
-              : 'Aucun poste ne compte encore dans la présence : cochez-les dans Postes.'}
+              ? `Le matin et le soir, comptent les personnes placées en ${listeEt(comptent.map((p) => p.nom))}, sauf les apprentis et stagiaires, qui viennent en plus.`
+              : 'Aucun poste ne compte encore le matin et le soir : cochez-les dans Postes.'}{' '}
+            {deNuit.length
+              ? `La nuit, comptent les personnes placées en ${listeEt(deNuit.map((p) => p.nom))}.`
+              : "La nuit ne compte pas : aucun poste n'a d'horaire de nuit."}
           </p>
         </div>
         <Segmente

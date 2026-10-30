@@ -151,6 +151,10 @@ function contenuCarte(
     horaire: a.type_shift_id
       ? ref.horaires.find((h) => h.id === a.type_shift_id)
       : undefined,
+    demande:
+      a.code_demande != null
+        ? ref.horaires.find((h) => h.id === a.code_demande)
+        : undefined,
     epinglee: a.epinglee,
     etoile: estEtoile(s, a),
     role: a.role,

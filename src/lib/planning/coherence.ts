@@ -21,6 +21,12 @@
  * Correctifs de la relecture adverse (2026-10-29) : besoins tous écartés
  * distingués de « aucun besoin », besoin que personne ne peut tenir (fiche
  * ou semaine type), personne sans poste avec un code fixé.
+ *
+ * Cycles (plan `planning-cycles-2026-10-30`, étape 7) : la nuit compte sur
+ * les postes qui ont un code de nuit (D15, `postesAvecNuit`) ; un minimum par
+ * cycle sans aucun code de ce cycle sur les postes comptés est signalé ; un
+ * besoin n'est « sans personne » que si personne ne peut tenir ni son code ni
+ * un autre code du même cycle (`remplacantsDe`, D12).
  */
 
 import { listeEt, nomComplet } from '#/lib/planning/affichage.ts'
@@ -43,11 +49,13 @@ import {
   besoinsValides,
   contexte,
   creneauBesoin,
+  remplacantsDe,
 } from '#/lib/planning/semaine.ts'
 import { JOURS } from '#/lib/planning/types.ts'
 import type {
   Besoin,
   Horaire,
+  PeriodePresence,
   Poste,
   Referentiel,
   Salarie,
@@ -81,7 +89,7 @@ export function cibleFiche(salarieId: number, partie?: PartieFiche): string {
  * `horaire-<id>`, `poste-<id>`, `salarie-<id>` (`.partie` en plus pour
  * ouvrir la fiche sur une partie, `cibleFiche`), et sur Besoins
  * `poste-<id>`, `soutien-<id>` (le poste, réglage des apprentis) ou
- * `presence` (la vue matin et soir). */
+ * `presence` (la vue par cycle). */
 export interface LienReglage {
   page: PageReglage
   cible?: string
@@ -153,9 +161,34 @@ function presentDans(s: Salarie, aujourdhui?: string): boolean {
   return !aujourdhui || !s.date_sortie || s.date_sortie >= aujourdhui
 }
 
-/** Personnes nécessaires des besoins valides, par moment matin et soir
+/** Postes qui ont au moins un code de la famille nuit (`codesDuPoste`) : la
+ * nuit n'est comptée que là (D15). Même règle que le moteur (`semaine.ts`). */
+export function postesAvecNuit(
+  r: Pick<Referentiel, 'postes' | 'horaires'>,
+): Set<number> {
+  return new Set(
+    r.postes
+      .filter((p) =>
+        codesDuPoste(p, r.horaires).some((h) => h.periode === 'nuit'),
+      )
+      .map((p) => p.id),
+  )
+}
+
+/** Postes comptés dans un cycle : cochés « présence » le matin et le soir,
+ * ceux qui ont un code de nuit la nuit (D15). */
+export function postesComptes(
+  r: Pick<Referentiel, 'postes' | 'horaires'>,
+  periode: PeriodePresence,
+): Poste[] {
+  if (periode !== 'nuit') return r.postes.filter((p) => p.presence)
+  const nuit = postesAvecNuit(r)
+  return r.postes.filter((p) => nuit.has(p.id))
+}
+
+/** Personnes nécessaires des besoins valides, par moment matin, soir et nuit
  * (`clePresence`) : la somme que `verifierReglages` compare aux consignes,
- * reprise par la vue Matin et soir des Besoins. */
+ * reprise par la vue Par cycle des Besoins. */
 export function besoinsPresence(r: Referentiel): Map<string, number> {
   const ctx = contexte({
     lundi: LUNDI_TYPE,
@@ -169,6 +202,7 @@ export function besoinsPresence(r: Referentiel): Map<string, number> {
     besoinsValides(ctx).valides,
     new Map(r.postes.map((p) => [p.id, p])),
     new Map(r.horaires.map((h) => [h.id, h])),
+    postesAvecNuit(r),
   )
 }
 
@@ -416,8 +450,9 @@ export function verifierReglages(
   }
 
   // Besoin que personne ne peut tenir : le poste a des autonomes, mais
-  // aucun n'a ce code permis ce jour-là (fiche, semaine type). Regroupé par
-  // poste et horaire, avec les jours.
+  // aucun n'a ce code permis ce jour-là (fiche, semaine type), ni un autre
+  // code du même cycle que le planning prendrait à sa place (`remplacantsDe`,
+  // D12). Regroupé par poste et horaire, avec les jours.
   const intenables = new Map<
     string,
     { poste: Poste; besoin: Besoin; jours: number[]; tenants: Salarie[] }
@@ -428,6 +463,13 @@ export function verifierReglages(
     const autonomes = tenants(b.poste_id, autonome)
     if (!autonomes.length) continue // déjà dit par « sans-autonome »
     if (autonomes.some((s) => peutTenir(s, b))) continue
+    const remplacants = remplacantsDe(ctx, b)
+    if (
+      remplacants.some((h) =>
+        autonomes.some((s) => peutTenir(s, { ...b, horaire_id: h.id })),
+      )
+    )
+      continue
     const cle = `${b.poste_id}:${b.horaire_id ?? `${b.debut}-${b.fin}`}`
     const g = intenables.get(cle) ?? {
       poste,
@@ -655,9 +697,45 @@ export function verifierReglages(
     )
   }
 
-  // Matin et soir : les personnes nécessaires des postes qui comptent,
-  // face à la consigne du jour.
-  const somme = sommeBesoinsPresence(demandes, postes, horaires)
+  // Minimum par cycle sans aucun code de ce cycle sur les postes comptés :
+  // le planning ne pourra jamais le tenir. Un point par cycle, avec les jours.
+  const sansCode = new Map<PeriodePresence, number[]>()
+  for (const c of r.consignes) {
+    if (c.minimum <= 0) continue
+    const aUnCode = postesComptes(r, c.periode).some((p) =>
+      codesDuPoste(p, r.horaires).some((h) => h.periode === c.periode),
+    )
+    if (aUnCode) continue
+    sansCode.set(c.periode, [...(sansCode.get(c.periode) ?? []), c.jour])
+  }
+  for (const periode of [...sansCode.keys()].sort(
+    (a, b) => ORDRE_PERIODES[a] - ORDRE_PERIODES[b],
+  )) {
+    const quand = listeJours(sansCode.get(periode) ?? [])
+    const comptes = postesComptes(r, periode)
+    const texte =
+      periode === 'nuit'
+        ? `Un minimum est demandé la nuit (${quand}), mais aucun poste n'a d'horaire de nuit. Il ne pourra pas être tenu.`
+        : comptes.length
+          ? `Un minimum est demandé le ${periode} (${quand}), mais ${listeEt(comptes.map((p) => p.nom))} n'${comptes.length > 1 ? 'ont' : 'a'} aucun horaire du ${periode}. Il ne pourra pas être tenu.`
+          : `Un minimum est demandé le ${periode} (${quand}), mais aucun poste ne compte dans la présence. Cochez-les dans Postes.`
+    ajouter(
+      `cycle-sans-code:${periode}`,
+      'a-voir',
+      'besoins',
+      texte,
+      'presence',
+    )
+  }
+
+  // Par cycle : les personnes nécessaires des postes qui comptent, face à
+  // la consigne du jour (la nuit sur les postes à code de nuit, D15).
+  const somme = sommeBesoinsPresence(
+    demandes,
+    postes,
+    horaires,
+    postesAvecNuit(r),
+  )
   for (const c of [...r.consignes].sort(
     (a, b) =>
       a.jour - b.jour || ORDRE_PERIODES[a.periode] - ORDRE_PERIODES[b.periode],

@@ -51,8 +51,10 @@ import {
   MINUTES_PAR_JOUR,
   ajouterJours,
   bornes,
+  decalageParis,
   ecartJours,
   heuresLisibles,
+  hhmm,
   horaireDe,
   lundiDe,
   minuteReelle,
@@ -76,6 +78,7 @@ import type {
 import {
   raisonsBlocage,
   reposHebdoTrouve,
+  trous,
   violations,
 } from '#/lib/planning/verificateur.ts'
 import type { Violation } from '#/lib/planning/verificateur.ts'
@@ -142,6 +145,32 @@ export interface APourvoirOut {
   raison_commune: string | null
 }
 
+/** Un trou entre deux équipes, pour l'écran. */
+export interface TrouOut {
+  poste_id: number
+  /** Jour du planning (0 = lundi) des besoins qui fixent la plage. */
+  jour: number
+  /** Heures d'horloge (« 15:00 »), fin exclue ; une fin à minuit vaut
+   * « 00:00 ». */
+  debut: string
+  fin: string
+}
+
+/** Minutes RÉELLES depuis le lundi (repère du solveur) → heure d'horloge à
+ * Paris. Inverse de `minuteReelle` : le lundi 00:00 n'est jamais sur un
+ * changement d'heure (il a lieu le dimanche à 01:00 UTC). */
+export function heureMurale(lundi: string, reelle: number): string {
+  const naif = versJour(lundi) * 86_400_000
+  const origine = naif - decalageParis(naif - 3 * 3_600_000) * 60_000
+  const instant = origine + reelle * 60_000
+  const murale = Math.round(
+    (instant + decalageParis(instant) * 60_000 - naif) / 60_000,
+  )
+  return hhmm(
+    ((murale % MINUTES_PAR_JOUR) + MINUTES_PAR_JOUR) % MINUTES_PAR_JOUR,
+  )
+}
+
 export interface BilanOut {
   salarie_id: number
   minutes: number
@@ -164,6 +193,11 @@ export interface SemaineOut {
   alertes_besoins: Array<{ besoin_id: number; message: string }>
   /** Consignes de présence du matin et du soir, et ce que la semaine en fait. */
   presence: PresenceOut[]
+  /** Trous entre deux équipes (étape 6) : moments d'un poste sans personne
+   * autonome entre le premier et le dernier besoin du jour
+   * (`verificateur.trous`), en heures d'horloge. Ajouté le 2026-10-30 ;
+   * absent de l'API du prototype. */
+  trous: TrouOut[]
   stats: {
     places: number
     pourvues: number
@@ -1269,6 +1303,12 @@ export function analyser(d: DonneesSemaine): SemaineOut {
     bilan,
     alertes_besoins: alertesBesoins,
     presence: bilanPresence(ctx.consignes, presents),
+    trous: trous(p, affs).map((t) => ({
+      poste_id: Number(t.poste),
+      jour: t.jour,
+      debut: heureMurale(lundi, t.debut),
+      fin: heureMurale(lundi, t.fin),
+    })),
     stats: {
       places: besoins.reduce((t, b) => t + b.effectif, 0),
       pourvues: besoins.reduce(
