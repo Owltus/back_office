@@ -43,6 +43,8 @@ import { travail } from '#/lib/planning/modele.ts'
 import {
   clePresence,
   ORDRE_PERIODES,
+  periodePresence,
+  posteADesCodesDeNuit,
   sommeBesoinsPresence,
 } from '#/lib/planning/presence.ts'
 import {
@@ -161,16 +163,15 @@ function presentDans(s: Salarie, aujourdhui?: string): boolean {
   return !aujourdhui || !s.date_sortie || s.date_sortie >= aujourdhui
 }
 
-/** Postes qui ont au moins un code de la famille nuit (`codesDuPoste`) : la
- * nuit n'est comptée que là (D15). Même règle que le moteur (`semaine.ts`). */
+/** Postes qui listent au moins un code de la famille nuit
+ * (`posteADesCodesDeNuit`, un poste « Tous » n'en a pas) : la nuit n'est
+ * comptée que là (D15). Même règle que le moteur (`semaine.ts`). */
 export function postesAvecNuit(
   r: Pick<Referentiel, 'postes' | 'horaires'>,
 ): Set<number> {
   return new Set(
     r.postes
-      .filter((p) =>
-        codesDuPoste(p, r.horaires).some((h) => h.periode === 'nuit'),
-      )
+      .filter((p) => posteADesCodesDeNuit(p, r.horaires))
       .map((p) => p.id),
   )
 }
@@ -697,15 +698,31 @@ export function verifierReglages(
     )
   }
 
-  // Minimum par cycle sans aucun code de ce cycle sur les postes comptés :
-  // le planning ne pourra jamais le tenir. Un point par cycle, avec les jours.
+  // Minimum par cycle que rien ne peut tenir : ni un code permis d'un poste,
+  // ni un besoin (horaire libre ou code court compris) que `periodePresence`
+  // range dans ce cycle. MÊME règle que le comptage des consignes : sans
+  // elle, un besoin libre du matin tenait le minimum et le cycle était dit
+  // intenable en même temps. Un point par cycle, avec les jours.
+  const nuitIci = postesAvecNuit(r)
+  const tenables = new Set<PeriodePresence>()
+  for (const p of r.postes) {
+    for (const h of codesDuPoste(p, r.horaires)) {
+      const k = periodePresence(p, h, h.debut, nuitIci.has(p.id))
+      if (k) tenables.add(k)
+    }
+  }
+  for (const b of demandes) {
+    const k = periodePresence(
+      postes.get(b.poste_id),
+      b.horaire_id !== null ? horaires.get(b.horaire_id) : undefined,
+      b.debut,
+      nuitIci.has(b.poste_id),
+    )
+    if (k) tenables.add(k)
+  }
   const sansCode = new Map<PeriodePresence, number[]>()
   for (const c of r.consignes) {
-    if (c.minimum <= 0) continue
-    const aUnCode = postesComptes(r, c.periode).some((p) =>
-      codesDuPoste(p, r.horaires).some((h) => h.periode === c.periode),
-    )
-    if (aUnCode) continue
+    if (c.minimum <= 0 || tenables.has(c.periode)) continue
     sansCode.set(c.periode, [...(sansCode.get(c.periode) ?? []), c.jour])
   }
   for (const periode of [...sansCode.keys()].sort(

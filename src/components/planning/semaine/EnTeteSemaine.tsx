@@ -207,12 +207,15 @@ export function EnTeteSemaine({
       disabled={!!raisonCompleter}
       onClick={actions.onCompleter}
       aria-label="Compléter le planning"
+      aria-busy={enGeneration || undefined}
       aria-describedby={
         raisonCompleter ? 'completer-semaine-raison' : undefined
       }
     >
+      {/* Le calcul dure 1 à 3 s : le bouton le dit, sans toast (le mois
+          affiche déjà sa progression). */}
       {enGeneration ? <Loader2 className="animate-spin" /> : <Sparkles />}
-      Compléter
+      {enGeneration ? 'Calcul en cours…' : 'Compléter'}
     </Button>
   )
   const autres = (

@@ -342,7 +342,9 @@ describe('Besoins', () => {
     expect(carte.textContent).toContain(
       "La nuit ne compte pas : aucun poste n'a d'horaire de nuit.",
     )
-    expect(carte.textContent).toContain('Un middle est là, mais ne compte pas.')
+    expect(carte.textContent).toContain(
+      'Un middle compte comme présent, mais pas dans ces minimums.',
+    )
   })
 
   it('par cycle : la nuit compte la Veille de nuit, et Ajuster la retrouve', () => {

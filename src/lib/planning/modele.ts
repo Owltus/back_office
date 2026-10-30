@@ -22,6 +22,10 @@ export interface Creneau {
   pause: number
   /** Minutes retirées quand le shift est fait en « journée courte ». */
   raccourci: number
+  /** Dont au DÉBUT (`raccourci_debut` du code) : la version courte commence
+   * `raccourciDebut` plus tard et finit `raccourci - raccourciDebut` plus
+   * tôt (`horaireDe`, `temps.ts`). 0 : toute la journée courte en fin. */
+  raccourciDebut: number
   /** Places en plus de l'effectif, jamais obligatoires. */
   facultatif: number
   /** Jour du planning où le shift est écrit, quand ce n'est pas celui où il
@@ -55,6 +59,7 @@ export function creneau(
     soutien: 0,
     pause: 0,
     raccourci: 0,
+    raccourciDebut: 0,
     facultatif: 0,
     jourPlanning: null,
     ferme: false,

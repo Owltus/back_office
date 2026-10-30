@@ -1261,3 +1261,27 @@ describe('verifierReglages, cycles', () => {
     ])
   })
 })
+
+describe('Martin V3-I : minimum par cycle tenu par un horaire libre', () => {
+  // Oracle écrit à la main : un besoin en horaire LIBRE de 07:00 à 15:00 sur
+  // un poste compté est un matin (`periodeLibre`, avant 12 h 30) ; il compte
+  // dans le minimum du matin (`sommeBesoinsPresence`, aucun point
+  // `presence:0:matin`). Dire « Il ne pourra pas être tenu » est alors faux.
+  it('un matin demandé en horaire libre tient le minimum : pas de cycle-sans-code', () => {
+    const r = propre()
+    r.postes[0].horaires_autorises = [S]
+    r.besoins = r.besoins.map((b) =>
+      b.horaire_id === M
+        ? { ...b, horaire_id: null, debut: '07:00', fin: '15:00' }
+        : b,
+    )
+    r.consignes = [
+      { id: 1, jour: 0, periode: 'matin', minimum: 1, maximum: null },
+    ]
+    const points = ids(verifierReglages(r))
+    // Le minimum est tenu par les besoins…
+    expect(points).not.toContain('presence:0:matin')
+    // …donc il ne doit pas être dit intenable.
+    expect(points).not.toContain('cycle-sans-code:matin')
+  })
+})

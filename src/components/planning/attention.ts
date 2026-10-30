@@ -324,6 +324,21 @@ export function pointsAttention(
 
 const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? 's' : ''}`
 
+/** La famille « Personnes par cycle » dans le résumé, avec les mots de ses
+ * phrases (`phraseCycle` : « Il manque… », « … de trop ») : « 2 cycles à
+ * compléter » si tous manquent de monde, « 1 cycle avec du monde en trop »
+ * si tous en ont trop, sinon « 3 écarts de personnes par cycle ». */
+export function resumeCycles(
+  presence: ReadonlyArray<Pick<EcartPresence, 'ecart'>>,
+): string {
+  const n = presence.length
+  if (presence.every((e) => e.ecart < 0))
+    return `${pluriel(n, 'cycle')} à compléter`
+  if (presence.every((e) => e.ecart > 0))
+    return `${pluriel(n, 'cycle')} avec du monde en trop`
+  return `${pluriel(n, 'écart')} de personnes par cycle`
+}
+
 /** « Tout est en ordre », ou « 7 points : 5 shifts à pourvoir, 2 … ». */
 export function resumePoints(p: PointsAttention): string {
   if (p.total === 0) return 'Tout est en ordre.'
@@ -332,8 +347,7 @@ export function resumePoints(p: PointsAttention): string {
   if (infractions) morceaux.push(pluriel(infractions, 'infraction'))
   const shifts = p.aPourvoir.reduce((n, j) => n + j.shifts.length, 0)
   if (shifts) morceaux.push(`${pluriel(shifts, 'shift')} à pourvoir`)
-  if (p.presence.length)
-    morceaux.push(pluriel(p.presence.length, 'cycle') + ' hors consigne')
+  if (p.presence.length) morceaux.push(resumeCycles(p.presence))
   if (p.trous.length)
     morceaux.push(pluriel(p.trous.length, 'trou') + ' entre équipes')
   const autres = p.aRegarder.reduce((n, x) => n + x.messages.length, 0)

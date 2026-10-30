@@ -151,7 +151,7 @@ export function ConsignesPresence({
           <p className="text-sm">
             Le planning tient ces minimums avant les heures des contrats. Si un
             code est impossible, il prend un autre code du même cycle. Un middle
-            est là, mais ne compte pas.
+            compte comme présent, mais pas dans ces minimums.
           </p>
           <p className="text-sm text-muted-foreground">
             {comptent.length

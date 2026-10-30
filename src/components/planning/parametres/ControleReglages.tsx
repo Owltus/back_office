@@ -55,6 +55,20 @@ export function usePointsReglages(
   )
 }
 
+/** Libellé de la pastille. Elle compte les points des RÉGLAGES et les
+ * données à ranger (shifts déjà posés qui contredisent les réglages) ; la
+ * boîte de génération ne compte que les points des réglages à voir
+ * (`ConfirmationGeneration`). Les deux portées sont voulues : le libellé
+ * dit donc la part des données à ranger, pour que « 29 » ici et « 13 »
+ * là se lisent ensemble. */
+export function etiquetteAVerifier(reglages: number, aRanger: number): string {
+  const total = reglages + aRanger
+  if (!total) return 'Réglages cohérents : rien à vérifier'
+  const tete = `À vérifier : ${total} point${total > 1 ? 's' : ''}`
+  if (!aRanger) return tete
+  return `${tete}, dont ${aRanger} donnée${aRanger > 1 ? 's' : ''} à ranger`
+}
+
 /** La pastille de l'en-tête et son volet. */
 export function ControleReglages() {
   const ref = useReferentiel()
@@ -74,9 +88,10 @@ export function ControleReglages() {
       search: lien.cible ? { ouvrir: lien.cible } : {},
     })
   }
-  const etiquette = total
-    ? `À vérifier : ${total} point${total > 1 ? 's' : ''}`
-    : 'Réglages cohérents : rien à vérifier'
+  const etiquette = etiquetteAVerifier(
+    points.length,
+    donnees.groupes?.length ?? 0,
+  )
   return (
     <>
       <Tip label={etiquette}>

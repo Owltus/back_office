@@ -1389,6 +1389,15 @@ function reposHebdo(
     )
 }
 
+/** La version courte du créneau couvre-t-elle encore [a, b] ? Elle
+ * commence `raccourciDebut` plus tard et finit le reste du raccourci plus
+ * tôt (même règle que `enVersionCourte` du vérificateur et `horaireDe`).
+ * `raccourciDebut` à 0 : seule la fin compte, comme avant. */
+function courteCouvre(c: Creneau, a: number, b: number): boolean {
+  const auDebut = Math.min(Math.max(c.raccourciDebut, 0), c.raccourci)
+  return c.debut + auDebut <= a && c.fin - (c.raccourci - auDebut) >= b
+}
+
 /**
  * Trous entre équipes (D10, contrat de la vague 1 §3), P2, jamais dur. MÊME
  * définition que l'oracle (`trousDuJour`, `cycles.ts`), réécrite ici sans
@@ -1403,7 +1412,8 @@ function reposHebdo(
  *     présence autonome (pas un soutien) le couvre EN ENTIER ;
  *   - présences : tous les créneaux du poste (besoin, remplaçant, middle,
  *     shift posé), quel que soit le jour où ils sont écrits (la nuit de la
- *     veille couvre le petit matin), version courte appliquée.
+ *     veille couvre le petit matin), version courte appliquée (début
+ *     retardé de `raccourciDebut`, fin avancée du reste, `courteCouvre`).
  * Une variable par suite de quarts d'heure où les mêmes créneaux couvrent :
  *   Σ x(autonomes qui couvrent) [- court(…) si la version courte ne couvre
  *   plus] + trou >= 1
@@ -1447,7 +1457,7 @@ function trousEntreEquipes(
         const b = Math.min(q + QUART, fin)
         const cle = presents
           .filter((c) => c.debut <= a && c.fin >= b)
-          .map((c) => `${c.id}${c.fin - c.raccourci >= b ? '' : '~'}`)
+          .map((c) => `${c.id}${courteCouvre(c, a, b) ? '' : '~'}`)
           .join('|')
         const derniere = suites.at(-1)
         if (derniere && derniere.cle === cle && derniere.fin === a)
@@ -1458,7 +1468,7 @@ function trousEntreEquipes(
         const termes: Terme[] = []
         for (const c of presents) {
           if (c.debut > suite.debut || c.fin < suite.fin) continue
-          const courteCouvre = c.fin - c.raccourci >= suite.fin
+          const courte = courteCouvre(c, suite.debut, suite.fin)
           for (const s of p.salaries) {
             const k = cle(s.id, c.id)
             const v = x.get(k)
@@ -1466,7 +1476,7 @@ function trousEntreEquipes(
             termes.push([1, v])
             // Fait en version courte, il est parti avant la fin du quart.
             const vc = court.get(k)
-            if (vc && !courteCouvre) termes.push([-1, vc])
+            if (vc && !courte) termes.push([-1, vc])
           }
         }
         const v = m.continu(0, 1)

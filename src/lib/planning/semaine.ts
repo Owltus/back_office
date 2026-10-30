@@ -45,8 +45,12 @@ import {
   bilanPresence,
   periodePresence,
   periodeShift,
+  posteADesCodesDeNuit,
 } from '#/lib/planning/presence.ts'
 import type { PresenceOut } from '#/lib/planning/presence.ts'
+// Cycle d'import voulu (semaine → raisonsPlaces → coherence → semaine) :
+// `phraseCommune` n'est appelée qu'à l'exécution, jamais au chargement.
+import { phraseCommune } from '#/lib/planning/raisonsPlaces.ts'
 import {
   MINUTES_PAR_JOUR,
   ajouterJours,
@@ -444,8 +448,9 @@ export function fiche(
 
 // --------------------------------------------------------------- créneaux
 
-/** Postes qui ont au moins un code de la famille nuit (`codesDuPoste`) : la
- * nuit n'y compte dans les consignes que là (D15). Calculé une fois par
+/** Postes qui listent au moins un code de la famille nuit
+ * (`posteADesCodesDeNuit`, « Tous » exclu) : la nuit n'y compte dans les
+ * consignes que là (D15). Calculé une fois par
  * contexte. */
 const nuitParHoraires = new WeakMap<
   Map<number, Horaire>,
@@ -459,9 +464,7 @@ function nuitComptee(ctx: Contexte, posteId: number): boolean {
   }
   let v = r.get(posteId)
   if (v === undefined) {
-    v = codesDuPoste(ctx.postes.get(posteId), [...ctx.horaires.values()]).some(
-      (h) => h.periode === 'nuit',
-    )
+    v = posteADesCodesDeNuit(ctx.postes.get(posteId), ctx.horaires.values())
     r.set(posteId, v)
   }
   return v
@@ -539,6 +542,7 @@ export function creneauBesoin(
     soutien: soutien ?? b.soutien,
     pause: h ? h.pause : 0,
     raccourci: h ? h.raccourci : 0,
+    raccourciDebut: h ? h.raccourci_debut : 0,
     facultatif: facultatif ?? b.renfort,
     jourPlanning: b.jour,
     presenceMax: presenceMaxDe(ctx, b.poste_id),
@@ -621,6 +625,7 @@ export function creneauRemplacant(
     soutien: 0,
     pause: h.pause,
     raccourci: h.raccourci,
+    raccourciDebut: h.raccourci_debut,
     facultatif: 0,
     jourPlanning: b.jour,
     ferme: false,
@@ -1072,7 +1077,8 @@ function raisonsOut(raisons: Map<string, Violation[]>): RaisonOut[] {
  * prendre), sans personne à qui la poser, ou sans règle commune. Un extra
  * seulement « à appeler » (`EXTRA` seule) est laissé de côté : c'est la
  * solution humaine, pas un blocage. Plusieurs règles communes : la première
- * dans l'ordre du vérificateur, chez la première personne. */
+ * qui BLOQUE (`phraseCommune`, `raisonsPlaces.ts`), sinon la première, dans
+ * l'ordre du vérificateur chez la première personne. */
 export function raisonCommune(
   parCode: ReadonlyArray<ReadonlyMap<string, readonly Violation[]>>,
 ): string | null {
@@ -1086,10 +1092,14 @@ export function raisonCommune(
     }
   }
   if (!listes.length) return null
+  const communes = listes[0].filter(
+    (r) => r !== 'EXTRA' && listes.every((l) => l.includes(r)),
+  )
+  // Une règle qui BLOQUE vraiment d'abord (`phraseCommune` non nulle) : un
+  // 6e jour ou une journée courte au contrat commun ne doit pas cacher un
+  // repos de 11 h commun, sinon « Je ne peux pas » disparaît à tort.
   return (
-    listes[0].find(
-      (r) => r !== 'EXTRA' && listes.every((l) => l.includes(r)),
-    ) ?? null
+    communes.find((r) => phraseCommune(r) !== null) ?? communes.at(0) ?? null
   )
 }
 
@@ -1489,21 +1499,30 @@ export function preparerGeneration(
   // Un soutien rattaché par cycle reste un shift posé à part (son créneau
   // `a…`, ses vraies heures) : les remplaçants n'ont pas de place de soutien
   // (contrat de la vague 1, §2), et le poser sur `b…` lui donnerait les
-  // heures du code imposé.
+  // heures du code imposé. Mais il TIENT la place de soutien de son besoin,
+  // comme dans `analyser` (`besoin_id`) : cette place est retirée de `b…`,
+  // sinon le moteur pouvait y poser un second apprenti (2 pour 1 place).
   const enSoutien = new Map(
     [...corr.soutien].filter(([aId]) => !demande.has(aId)),
   )
   const deja = new Map<number, number>()
   const dejaSoutien = new Map<number, number>()
+  const soutienParCycle = new Map<number, number>()
   for (const id of lien.values()) deja.set(id, (deja.get(id) ?? 0) + 1)
   for (const id of enSoutien.values())
     dejaSoutien.set(id, (dejaSoutien.get(id) ?? 0) + 1)
+  for (const [aId, id] of corr.soutien)
+    if (demande.has(aId))
+      soutienParCycle.set(id, (soutienParCycle.get(id) ?? 0) + 1)
 
   const creneaux: Creneau[] = besoins.map((b) =>
     creneauBesoin(
       ctx,
       b,
-      Math.max(b.soutien, dejaSoutien.get(b.id) ?? 0),
+      Math.max(
+        b.soutien - (soutienParCycle.get(b.id) ?? 0),
+        dejaSoutien.get(b.id) ?? 0,
+      ),
       Math.max(b.renfort, (deja.get(b.id) ?? 0) - b.effectif),
     ),
   )

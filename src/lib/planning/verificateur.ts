@@ -356,9 +356,18 @@ export function entreFiches(
   return erreurs
 }
 
-/** Le créneau tel qu'il est fait en journée courte : fin avancée. */
+/** Le créneau tel qu'il est fait en journée courte : début retardé de
+ * `raccourciDebut`, fin avancée du reste (`horaireDe`, `temps.ts`, qui
+ * écrit le shift court). */
 export function enVersionCourte(c: Creneau): Creneau {
-  return { ...c, fin: c.fin - c.raccourci, raccourci: 0 }
+  const auDebut = Math.min(Math.max(c.raccourciDebut, 0), c.raccourci)
+  return {
+    ...c,
+    debut: c.debut + auDebut,
+    fin: c.fin - (c.raccourci - auDebut),
+    raccourci: 0,
+    raccourciDebut: 0,
+  }
 }
 
 export function violations(
@@ -590,28 +599,32 @@ export interface EcartPresence {
 }
 
 /** Recompte des consignes de présence (matin, soir, nuit), sans le
- * générateur : personnes autonomes DISTINCTES posées ce jour (`jourDe`) sur
+ * générateur : AFFECTATIONS autonomes posées ce jour (`jourDe`) sur
  * un créneau qui compte dans cette période (`Creneau.presence`, posé par
  * l'assemblage : le middle n'y compte jamais, D11 ; la nuit sur un poste qui
  * a des codes de nuit, D15). Remplaçants, shifts posés et épinglés compris.
- * Une ligne par consigne, dans l'ordre de `p.consignes`. */
+ * Une affectation = une présence, comme le moteur (une variable par
+ * affectation) et `analyser` (`bilanPresence`, un shift = un) : une même
+ * personne sur deux shifts du même cycle compte deux fois partout (cas
+ * qu'une autre règle signale déjà : un service par jour). Une ligne par
+ * consigne, dans l'ordre de `p.consignes`. */
 export function presenceParCycle(
   p: Probleme,
   affectations: AffectationSolveur[],
 ): EcartPresence[] {
   const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
   const salaries = new Map(p.salaries.map((s) => [s.id, s]))
-  const presents = new Map<string, Set<string>>()
+  const presents = new Map<string, number>()
   for (const a of affectationsCompletes(p, affectations)) {
     const c = creneaux.get(a.creneauId)
     const s = salaries.get(a.salarieId)
     if (!c || !s || c.presence === null) continue
     if (role(s, c.poste) === 'soutien') continue
     const k = `${jourDe(c)}|${c.presence}`
-    presents.set(k, (presents.get(k) ?? new Set<string>()).add(s.id))
+    presents.set(k, (presents.get(k) ?? 0) + 1)
   }
   return p.consignes.map((k) => {
-    const compte = presents.get(`${k.jour}|${k.periode}`)?.size ?? 0
+    const compte = presents.get(`${k.jour}|${k.periode}`) ?? 0
     let ecart = 0
     if (compte < k.minimum) ecart = compte - k.minimum
     else if (k.maximum !== null && compte > k.maximum)

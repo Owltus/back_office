@@ -175,7 +175,7 @@ describe('points d’attention', () => {
       resumePoints(pointsAttention([semaine('2026-11-02')], SALARIES, POSTES)),
     ).toBe('Tout est en ordre.')
     expect(resumePoints(pointsAttention([SEM], SALARIES, POSTES))).toBe(
-      '5 points : 1 infraction, 2 shifts à pourvoir, 1 cycle hors consigne, 1 à regarder.',
+      '5 points : 1 infraction, 2 shifts à pourvoir, 1 cycle à compléter, 1 à regarder.',
     )
   })
 })

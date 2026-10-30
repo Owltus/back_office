@@ -921,13 +921,16 @@ describe('consignes par cycle (recompte sans le générateur)', () => {
     expect(r[2]).toMatchObject({ periode: 'nuit', compte: 2, ecart: 1 })
   })
 
-  it('une personne compte une fois ; un shift épinglé compte même s’il n’est pas passé', () => {
+  it('une affectation compte une fois (comme le moteur et analyser) ; un shift épinglé compte même s’il n’est pas passé', () => {
+    // Même personne sur deux créneaux du matin : deux affectations, donc 2,
+    // comme le moteur (une variable par affectation) et `bilanPresence`
+    // (un shift = un). Le doublon est signalé par UN-SERVICE-PAR-JOUR.
     const avecImposee = { ...p, imposees: new Set([cle('e', 'bs1')]) }
     const r = presenceParCycle(avecImposee, [
       aff('a', 'bm1'),
       aff('a', 'rm1-6'),
     ])
     expect(r[0]).toMatchObject({ periode: 'soir', compte: 1, ecart: 0 })
-    expect(r[1]).toMatchObject({ periode: 'matin', compte: 1, ecart: -1 })
+    expect(r[1]).toMatchObject({ periode: 'matin', compte: 2, ecart: 0 })
   })
 })

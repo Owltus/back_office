@@ -298,7 +298,7 @@ describe('panneau : personnes par cycle et trous entre équipes', () => {
     )
     expect(
       screen.getByText(
-        '3 points : 2 cycles hors consigne, 1 trou entre équipes.',
+        '3 points : 2 écarts de personnes par cycle, 1 trou entre équipes.',
       ),
     ).toBeTruthy()
     expect(screen.getByText('Personnes par cycle')).toBeTruthy()

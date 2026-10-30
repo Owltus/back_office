@@ -52,7 +52,11 @@ import type {
   Poste,
   Salarie,
 } from '#/lib/planning/types.ts'
-import { violations } from '#/lib/planning/verificateur.ts'
+import {
+  presenceParCycle,
+  trous,
+  violations,
+} from '#/lib/planning/verificateur.ts'
 import type { Violation } from '#/lib/planning/verificateur.ts'
 
 /*
@@ -1888,6 +1892,248 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
         },
       ),
       { numRuns: 300 },
+    )
+  })
+
+  it('Martin V3-I : recompte par cycle = oracle à la main (middle et soutien jamais)', () => {
+    // Oracle : matin / soir = famille du code sur l'Accueil (coché présence) ;
+    // horaire libre : matin avant 12 h 30 ; middle, code sans famille et
+    // soutien : jamais. Une personne par jour au plus.
+    type Choix = { h: Horaire | null; debut: string; fin: string } | null
+    const choix: Choix[] = [
+      null,
+      { h: M3, debut: M3.debut, fin: M3.fin },
+      { h: M6, debut: M6.debut, fin: M6.fin },
+      { h: S4, debut: S4.debut, fin: S4.fin },
+      { h: MI, debut: MI.debut, fin: MI.fin },
+      { h: MI2, debut: MI2.debut, fin: MI2.fin },
+      { h: D, debut: D.debut, fin: D.fin },
+      { h: null, debut: '07:00', fin: '12:00' },
+      { h: null, debut: '12:30', fin: '20:00' },
+      { h: null, debut: '12:15', fin: '19:00' },
+    ]
+    const oracle = (c: NonNullable<Choix>): 'matin' | 'soir' | null => {
+      if (c.h)
+        return c.h.periode === 'matin' || c.h.periode === 'soir'
+          ? c.h.periode
+          : null
+      const [hh, mm] = c.debut.split(':').map(Number)
+      return hh * 60 + mm < 12 * 60 + 30 ? 'matin' : 'soir'
+    }
+    const gens = [ALPHA, BRAVO, CHARLIE, DELTA]
+    const consignes: Consigne[] = []
+    let n = 1
+    for (let j = 0; j < 3; j++)
+      for (const periode of ['matin', 'soir'] as const)
+        consignes.push({ id: n++, jour: j, periode, minimum: 0, maximum: null })
+    fc.assert(
+      fc.property(
+        fc.array(fc.integer({ min: 0, max: choix.length - 1 }), {
+          minLength: gens.length * 3,
+          maxLength: gens.length * 3,
+        }),
+        (tirage) => {
+          const affs: Affectation[] = []
+          const attendu = new Map<string, number>()
+          tirage.forEach((k, i) => {
+            const c = choix[k]
+            if (!c) return
+            const x = gens[i % gens.length]
+            const jour = Math.floor(i / gens.length)
+            affs.push(shift(x, c.h, jour, { debut: c.debut, fin: c.fin }))
+            const p = oracle(c)
+            if (p && x.id !== DELTA.id) {
+              const cleP = `${jour}|${p}`
+              attendu.set(cleP, (attendu.get(cleP) ?? 0) + 1)
+            }
+          })
+          const d = donnees([], affs, gens, consignes)
+          const g = preparerGeneration(d, { aujourdhui: AUJOURDHUI })
+          const recompte = presenceParCycle(g.probleme, [])
+          const sem = analyser(d)
+          for (const c of consignes) {
+            const v = attendu.get(`${c.jour}|${c.periode}`) ?? 0
+            expect(
+              recompte.find((x) => x.jour === c.jour && x.periode === c.periode)
+                ?.compte,
+            ).toBe(v)
+            expect(
+              sem.presence.find(
+                (x) => x.jour === c.jour && x.periode === c.periode,
+              )?.compte,
+            ).toBe(v)
+          }
+        },
+      ),
+      { numRuns: 300 },
+    )
+  })
+
+  it('Martin V3-I (corrigé) : trous d’une journée courte qui commence plus tard (raccourci_debut)', () => {
+    // Oracle à la main, d'après `horaireDe` (temps.ts) : un S4 de 15:00 à
+    // 23:00 raccourci de 60 min dont 30 au début se fait de 15:30 à 22:30.
+    // Avec un M3 de 07:00 à 15:00, il y a donc personne de 15:00 à 15:30 et
+    // de 22:30 à 23:00. Le vérificateur (`enVersionCourte`) avance la fin de
+    // 60 min sans décaler le début : il voit 22:00 à 23:00 seulement.
+    const S4c: Horaire = { ...S4, raccourci: 60, raccourci_debut: 30 }
+    const d = donnees([besoin(100, M3), besoin(101, S4c)], [])
+    d.referentiel.horaires = HORAIRES.map((h) => (h.id === S4.id ? S4c : h))
+    const g = preparerGeneration(d, { aujourdhui: AUJOURDHUI })
+    const affs: AffectationSolveur[] = [
+      { salarieId: String(ALPHA.id), creneauId: 'b100', court: false },
+      { salarieId: String(BRAVO.id), creneauId: 'b101', court: true },
+    ]
+    // Ce que l'app écrira pour le shift court (même fonction que traduire).
+    const ecrit = g.traduire({ affectations: affs } as never)
+    expect(ecrit.find((n) => n.salarie_id === BRAVO.id)).toMatchObject({
+      debut: '15:30',
+      fin: '22:30',
+    })
+    const vus = trous(g.probleme, affs).map((t) => [
+      heureMurale(LUNDI, t.debut),
+      heureMurale(LUNDI, t.fin),
+    ])
+    expect(vus).toEqual([
+      ['15:00', '15:30'],
+      ['22:30', '23:00'],
+    ])
+  })
+})
+
+describe('Martin V3-I : heure murale, propriété', () => {
+  // Oracle indépendant : la règle UE écrite ici (le dimanche du changement
+  // est le dernier de mars ou d'octobre, donc le 25 au plus tôt). Hors de
+  // l'heure qui n'existe pas (dernier dimanche de mars, 02:00 à 02:59),
+  // revenir à l'heure d'horloge rend l'heure de départ.
+  const hhmm = (m: number) => {
+    const j = ((m % MINUTES_PAR_JOUR) + MINUTES_PAR_JOUR) % MINUTES_PAR_JOUR
+    return `${String(Math.floor(j / 60)).padStart(2, '0')}:${String(j % 60).padStart(2, '0')}`
+  }
+  const lundiArb = fc.oneof(
+    fc
+      .integer({ min: 0, max: 400 })
+      .map((n) => ajouterJours('2024-01-01', 7 * n)),
+    fc.constantFrom('2026-03-23', '2026-10-19', '2027-03-22', '2027-10-25'),
+  )
+  it('heureMurale ∘ minuteReelle = identité hors heure qui n’existe pas', () => {
+    fc.assert(
+      fc.property(
+        lundiArb,
+        fc.integer({ min: 0, max: 7 * MINUTES_PAR_JOUR + 8 * 60 }),
+        (lundi, m) => {
+          const jour = Math.floor(m / MINUTES_PAR_JOUR)
+          const date = ajouterJours(lundi, jour)
+          const [, mois, j] = date.split('-').map(Number)
+          const dimanche = new Date(`${date}T12:00:00Z`).getUTCDay() === 0
+          const reste = m % MINUTES_PAR_JOUR
+          const inexistante =
+            dimanche && mois === 3 && j >= 25 && reste >= 120 && reste < 180
+          fc.pre(!inexistante)
+          expect(heureMurale(lundi, minuteReelle(lundi, m))).toBe(hhmm(m))
+        },
+      ),
+      { numRuns: 1000 },
+    )
+  })
+
+  it('l’heure d’hiver dure 25 h réelles : deux minutes réelles pour 02:30', () => {
+    // Semaine du 19 octobre 2026 : dimanche 25, 03:00 CEST → 02:00 CET.
+    const lundi = '2026-10-19'
+    const premiere = minuteReelle(lundi, 6 * MINUTES_PAR_JOUR + 2 * 60 + 30)
+    expect(heureMurale(lundi, premiere)).toBe('02:30')
+    expect(heureMurale(lundi, premiere + 60)).toBe('02:30')
+    expect(heureMurale(lundi, premiere + 120)).toBe('03:30')
+    // Fin de semaine : la semaine compte 7 × 24 h + 1 h réelles.
+    expect(minuteReelle(lundi, 7 * MINUTES_PAR_JOUR)).toBe(
+      7 * MINUTES_PAR_JOUR + 60,
+    )
+  })
+
+  it('l’heure d’été dure 23 h réelles : 01:59 puis 03:00', () => {
+    const lundi = '2026-03-23'
+    const avant = minuteReelle(lundi, 6 * MINUTES_PAR_JOUR + 60 + 59)
+    expect(heureMurale(lundi, avant)).toBe('01:59')
+    expect(heureMurale(lundi, avant + 1)).toBe('03:00')
+    expect(minuteReelle(lundi, 7 * MINUTES_PAR_JOUR)).toBe(
+      7 * MINUTES_PAR_JOUR - 60,
+    )
+  })
+})
+
+describe('Martin V3-I : remplaçants, propriété', () => {
+  // Oracle écrit à la main : un remplaçant est un AUTRE code permis sur le
+  // poste (liste vide = tous), de la MÊME famille non nulle que le code du
+  // besoin ; rien pour un horaire libre ni un code sans famille ; trié par id.
+  const familles: Horaire['periode'][] = [
+    'matin',
+    'soir',
+    'nuit',
+    'middle',
+    'court',
+    null,
+  ]
+  const codeArb = fc.record({
+    periode: fc.constantFrom(...familles),
+    h: fc.integer({ min: 0, max: 23 }),
+  })
+  it('remplacantsDe = autres codes permis du poste, même famille', () => {
+    fc.assert(
+      fc.property(
+        fc.array(codeArb, { minLength: 1, maxLength: 8 }),
+        fc.array(fc.boolean(), { minLength: 8, maxLength: 8 }),
+        fc.nat(),
+        fc.boolean(),
+        (specs, permis, pick, libre) => {
+          const horaires: Horaire[] = specs.map((s, i) => ({
+            id: 50 - i * 3, // ids non triés à l'entrée
+            code: `C${i}`,
+            nom: `C${i}`,
+            debut: `${String(s.h).padStart(2, '0')}:00`,
+            fin: `${String((s.h + 6) % 24).padStart(2, '0')}:00`,
+            couleur: '#888888',
+            pause: 0,
+            raccourci: 0,
+            raccourci_debut: 0,
+            periode: s.periode,
+            code_rouge: false,
+          }))
+          const autorises = horaires
+            .filter((_, i) => permis[i])
+            .map((h) => h.id)
+          const poste: Poste = {
+            id: 1,
+            nom: 'P',
+            categorie: 'reception',
+            couleur: '#000000',
+            horaires_autorises: autorises,
+            a_part: false,
+            presence: true,
+          }
+          const ctx = {
+            horaires: new Map(horaires.map((h) => [h.id, h])),
+            postes: new Map([[1, poste]]),
+          }
+          const h = horaires[pick % horaires.length]
+          const r = remplacantsDe(ctx, {
+            poste_id: 1,
+            horaire_id: libre ? null : h.id,
+          }).map((x) => x.id)
+          const attendu =
+            libre || h.periode === null
+              ? []
+              : horaires
+                  .filter(
+                    (c) =>
+                      c.id !== h.id &&
+                      c.periode === h.periode &&
+                      (autorises.length === 0 || autorises.includes(c.id)),
+                  )
+                  .map((c) => c.id)
+                  .sort((a, b) => a - b)
+          expect(r).toEqual(attendu)
+        },
+      ),
+      { numRuns: 500 },
     )
   })
 })

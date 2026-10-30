@@ -44,6 +44,23 @@ export function periodeLibre(debut: string): 'matin' | 'soir' | 'nuit' {
   return m < 12 * 60 + 30 ? 'matin' : 'soir'
 }
 
+/** Le poste a-t-il des codes de NUIT (D15) ? Seulement s'il les liste
+ * EXPLICITEMENT dans `horaires_autorises`. Un poste « Tous les codes »
+ * (liste vide) n'en a pas au sens de D15 : sinon tout poste « Tous » d'un
+ * hôtel qui a une veille de nuit compterait la nuit. SEULE règle, pour
+ * l'assemblage (`semaine.ts`) comme pour le contrôle des réglages
+ * (`coherence.ts`). */
+export function posteADesCodesDeNuit(
+  poste: Pick<Poste, 'horaires_autorises'> | undefined,
+  horaires: Iterable<Pick<Horaire, 'id' | 'periode'>>,
+): boolean {
+  if (!poste?.horaires_autorises.length) return false
+  const autorises = new Set(poste.horaires_autorises)
+  for (const h of horaires)
+    if (h.periode === 'nuit' && autorises.has(h.id)) return true
+  return false
+}
+
 /** Période d'un shift pour les consignes, ou null s'il n'y compte pas (voir
  * l'en-tête). `nuitComptee` : le poste a au moins un code de famille nuit
  * (faux par défaut : la nuit ne compte pas). */
