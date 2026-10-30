@@ -1,9 +1,15 @@
+import fc from 'fast-check'
 import highsLoader from 'highs'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import { generer } from '#/lib/planning/generateur.ts'
 import type { Highs } from '#/lib/planning/generateur.ts'
-import { creneau, probleme, salarieSolveur } from '#/lib/planning/modele.ts'
+import {
+  cle,
+  creneau,
+  probleme,
+  salarieSolveur,
+} from '#/lib/planning/modele.ts'
 import type {
   AffectationSolveur,
   Creneau,
@@ -18,8 +24,11 @@ import {
 } from '#/lib/planning/regles.ts'
 import type { Fiche } from '#/lib/planning/regles.ts'
 import {
+  autonomesParPlace,
   manquants,
+  presenceParCycle,
   raisonsBlocage,
+  trous,
   violations,
   violationsSalarie,
 } from '#/lib/planning/verificateur.ts'
@@ -584,5 +593,341 @@ describe('traduction des règles (regles.ts)', () => {
     )
     expect(s.joursHorsSite).toEqual(new Set([0, 1]))
     expect(s.indisponibilites).toEqual(new Set([0, 1, 4]))
+  })
+})
+
+// ------------------------------------- cycles : places, trous, consignes
+
+/*
+ * Plan planning-cycles-2026-10-30, contrat de la vague 1 §4. Les créneaux
+ * remplaçants (`r…`, `place` = id du besoin) sont écrits à la main, comme
+ * l'assemblage les produira (§2) : `effectif: 0`, `facultatif: 0`.
+ */
+
+/** Remplaçant du besoin `place` : autre code du même cycle. */
+const remplacant = (
+  id: string,
+  place: string,
+  jour: number,
+  debut: number,
+  fin: number,
+  kw: Partial<Creneau> = {},
+) => cr(id, jour, debut, fin, 'rec', { effectif: 0, place, ...kw })
+
+const apprenti = (id = 's') =>
+  sal(id, { postes: new Set(), postesSoutien: new Set(['rec']) })
+
+describe('places : un remplaçant tient la place de son besoin', () => {
+  const b = cr('b1', 0, 7 * H, 15 * H, 'rec', { presence: 'matin' })
+  const r = remplacant('r1-6', 'b1', 0, 7 * H, 14 * H, { presence: 'matin' })
+
+  it('un titulaire sur le remplaçant remplit la place (accepté)', () => {
+    const p = probleme({ salaries: [sal('a')], creneaux: [b, r] })
+    expect(manquants(p, [aff('a', 'r1-6')])).toEqual(new Map())
+    expect(violations(p, [aff('a', 'r1-6')])).toEqual([])
+  })
+
+  it('personne : la place manque, le remplaçant n’a jamais d’entrée (refusé)', () => {
+    const p = probleme({ salaries: [sal('a')], creneaux: [b, r] })
+    expect(manquants(p, [])).toEqual(new Map([['b1', 1]]))
+  })
+
+  it('un soutien sur le remplaçant ne remplit pas la place', () => {
+    const p = probleme({ salaries: [apprenti()], creneaux: [b, r] })
+    expect(manquants(p, [aff('s', 'r1-6')])).toEqual(new Map([['b1', 1]]))
+  })
+
+  it('sureffectif compté sur la place : besoin + remplaçant > effectif', () => {
+    const p = probleme({ salaries: [sal('a'), sal('c')], creneaux: [b, r] })
+    const v = violations(p, [aff('a', 'b1'), aff('c', 'r1-6')])
+    expect(
+      v
+        .filter((x) => x.regle === 'SUREFFECTIF')
+        .map((x) => [x.message, x.creneaux]),
+    ).toEqual([['2/1', ['b1']]])
+    const deux = { ...b, effectif: 2 }
+    const p2 = probleme({ salaries: [sal('a'), sal('c')], creneaux: [deux, r] })
+    expect(
+      violations(p2, [aff('a', 'b1'), aff('c', 'r1-6')]).filter(
+        (x) => x.regle === 'SUREFFECTIF',
+      ),
+    ).toEqual([])
+  })
+
+  it('les renforts de la place bornent aussi ses remplaçants', () => {
+    const avecRenfort = { ...b, facultatif: 1 }
+    const p = probleme({
+      salaries: [sal('a'), sal('c'), sal('d')],
+      creneaux: [avecRenfort, r],
+    })
+    const surplus = (affs: AffectationSolveur[]) =>
+      violations(p, affs)
+        .filter((x) => x.regle === 'SUREFFECTIF')
+        .map((x) => x.message)
+    expect(surplus([aff('a', 'b1'), aff('c', 'r1-6')])).toEqual([])
+    expect(
+      surplus([aff('a', 'b1'), aff('c', 'r1-6'), aff('d', 'r1-6')]),
+    ).toEqual(['3/2'])
+  })
+
+  it('un remplaçant d’une place inconnue n’a droit à personne', () => {
+    const orphelin = remplacant('r9-6', 'b9', 0, 7 * H, 14 * H)
+    const p = probleme({ salaries: [sal('a')], creneaux: [orphelin] })
+    expect(
+      violations(p, [aff('a', 'r9-6')])
+        .filter((x) => x.regle === 'SUREFFECTIF')
+        .map((x) => [x.message, x.creneaux]),
+    ).toEqual([['1/0', ['b9']]])
+    expect(manquants(p, [aff('a', 'r9-6')])).toEqual(new Map())
+  })
+
+  it('propriété : le manque d’une place ne dépend que du nombre d’autonomes de son groupe', () => {
+    const r2 = remplacant('r1-7', 'b1', 0, 8 * H, 15 * H)
+    const gens = ['a', 'c', 'd', 'e'].map((i) => sal(i))
+    const s = apprenti()
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 1, max: 3 }),
+        fc.array(fc.constantFrom('b1', 'r1-6', 'r1-7'), {
+          minLength: 4,
+          maxLength: 4,
+        }),
+        fc.array(fc.boolean(), { minLength: 4, maxLength: 4 }),
+        fc.constantFrom('b1', 'r1-6', 'r1-7', null),
+        (effectif, ou, pris, soutien) => {
+          const p = probleme({
+            salaries: [...gens, s],
+            creneaux: [{ ...b, effectif }, r, r2],
+          })
+          const affs = gens
+            .map((g, i) => (pris[i] ? aff(g.id, ou[i]) : null))
+            .filter((x): x is AffectationSolveur => x !== null)
+          if (soutien) affs.push(aff('s', soutien))
+          const n = pris.filter(Boolean).length
+          expect(autonomesParPlace(p, affs).get('b1') ?? 0).toBe(n)
+          expect(manquants(p, affs).get('b1') ?? 0).toBe(
+            Math.max(0, effectif - n),
+          )
+          expect([...manquants(p, affs).keys()].every((k) => k === 'b1')).toBe(
+            true,
+          )
+        },
+      ),
+    )
+  })
+})
+
+describe('trous entre deux équipes (vérificateur)', () => {
+  // Réception : matin 07:00 → 15:00, soir 16:00 → 23:00 ; veille de nuit à part.
+  const matin = cr('bm', 0, 7 * H, 15 * H, 'rec', { presence: 'matin' })
+  const soir = cr('bs', 0, 16 * H, 23 * H, 'rec', { presence: 'soir' })
+  const gens = [sal('a'), sal('c'), sal('m')]
+
+  it('une heure entre le matin et le soir : un trou (refusé)', () => {
+    const p = probleme({ salaries: gens, creneaux: [matin, soir] })
+    expect(trous(p, [aff('a', 'bm'), aff('c', 'bs')])).toEqual([
+      { poste: 'rec', jour: 0, debut: 15 * H, fin: 16 * H },
+    ])
+  })
+
+  it('un middle posé à la main bouche le trou, même hors des affectations passées (accepté)', () => {
+    const middle = cr('a7', 0, 12 * H, 20 * H, 'rec', { ferme: true })
+    const p = probleme({
+      salaries: gens,
+      creneaux: [matin, soir, middle],
+      imposees: new Set([cle('m', 'a7')]),
+    })
+    expect(trous(p, [aff('a', 'bm'), aff('c', 'bs')])).toEqual([])
+    // Le shift posé ne fixe pas la plage : sans besoin, rien à signaler.
+    expect(
+      trous(
+        probleme({
+          salaries: gens,
+          creneaux: [middle, { ...matin, presence: 'matin', effectif: 0 }],
+          imposees: new Set([cle('m', 'a7')]),
+        }),
+        [],
+        new Set(['rec']),
+      ),
+    ).toEqual([])
+  })
+
+  it('un soutien sur le middle ne bouche pas le trou', () => {
+    const middle = cr('a7', 0, 12 * H, 20 * H, 'rec', { ferme: true })
+    const p = probleme({
+      salaries: [...gens, apprenti()],
+      creneaux: [matin, soir, middle],
+    })
+    expect(trous(p, [aff('a', 'bm'), aff('c', 'bs'), aff('s', 'a7')])).toEqual([
+      { poste: 'rec', jour: 0, debut: 15 * H, fin: 16 * H },
+    ])
+  })
+
+  it('un remplaçant compte comme présence mais ne fixe pas la plage', () => {
+    const tot = remplacant('rm-1', 'bm', 0, 6 * H, 15 * H, {
+      presence: 'matin',
+    })
+    const tard = remplacant('rs-2', 'bs', 0, 15 * H, 23 * H, {
+      presence: 'soir',
+    })
+    const p = probleme({ salaries: gens, creneaux: [matin, soir, tot, tard] })
+    expect(trous(p, [aff('a', 'rm-1'), aff('c', 'rs-2')])).toEqual([])
+    // Personne le matin : le trou commence au besoin (7 h), pas au remplaçant.
+    expect(trous(p, [aff('c', 'rs-2')])).toEqual([
+      { poste: 'rec', jour: 0, debut: 7 * H, fin: 15 * H },
+    ])
+  })
+
+  it('une journée courte (fin avancée) ouvre un trou', () => {
+    const matinCourt = { ...matin, fin: 16 * H, raccourci: 60 }
+    const p = probleme({ salaries: gens, creneaux: [matinCourt, soir] })
+    expect(trous(p, [aff('a', 'bm'), aff('c', 'bs')])).toEqual([])
+    expect(
+      trous(p, [
+        { salarieId: 'a', creneauId: 'bm', court: true },
+        aff('c', 'bs'),
+      ]),
+    ).toEqual([{ poste: 'rec', jour: 0, debut: 15 * H, fin: 16 * H }])
+  })
+
+  it('seuls les postes qui comptent dans la présence sont regardés', () => {
+    const nuit = cr('bn', 0, 23 * H, 31 * H, 'veille', { presence: 'nuit' })
+    const p = probleme({ salaries: gens, creneaux: [matin, nuit] })
+    expect(trous(p, [aff('a', 'bm')])).toEqual([])
+    expect(trous(p, [aff('a', 'bm')], new Set(['veille']))).toEqual([
+      { poste: 'veille', jour: 0, debut: 23 * H, fin: 31 * H },
+    ])
+  })
+
+  it('nuit du dimanche : le besoin écrit dimanche « 24:00 → 07:00 » reste au dimanche', () => {
+    const soirDim = cr('bs6', 6, 15 * H, 23 * H, 'rec', { presence: 'soir' })
+    const nuitDim = cr('bn6', 7, 0, 7 * H, 'rec', {
+      jourPlanning: 6,
+      presence: null,
+    })
+    const p = probleme({ salaries: gens, creneaux: [soirDim, nuitDim] })
+    expect(trous(p, [aff('a', 'bs6')])).toEqual([
+      { poste: 'rec', jour: 6, debut: 6 * J + 23 * H, fin: 7 * J + 7 * H },
+    ])
+    expect(trous(p, [aff('a', 'bs6'), aff('c', 'bn6')])).toEqual([
+      { poste: 'rec', jour: 6, debut: 6 * J + 23 * H, fin: 7 * J },
+    ])
+  })
+
+  it('propriété : un titulaire de plus ne crée jamais de trou ; l’ordre ne change rien', () => {
+    const creneaux = [
+      matin,
+      soir,
+      cr('a7', 0, 12 * H, 20 * H, 'rec', { ferme: true }),
+      remplacant('rm-1', 'bm', 0, 6 * H, 14 * H, { presence: 'matin' }),
+      cr('bm1', 1, 7 * H, 15 * H, 'rec', { presence: 'matin' }),
+    ]
+    const ids = creneaux.map((c) => c.id)
+    const tous = ['a', 'c', 'm', 'e'].map((i) => sal(i))
+    fc.assert(
+      fc.property(
+        fc.array(
+          fc.tuple(fc.constantFrom('a', 'c', 'm'), fc.constantFrom(...ids)),
+          {
+            maxLength: 5,
+          },
+        ),
+        fc.constantFrom(...ids),
+        (paires, ajout) => {
+          const p = probleme({ salaries: tous, creneaux })
+          const affs = paires.map(([s, c]) => aff(s, c))
+          const minutesTrou = (t: ReturnType<typeof trous>) =>
+            new Set(
+              t.flatMap((x) =>
+                range(x.debut, x.fin).map((m) => `${x.poste}|${m}`),
+              ),
+            )
+          const avant = minutesTrou(trous(p, affs))
+          for (const m of minutesTrou(trous(p, [...affs, aff('e', ajout)]))) {
+            expect(avant.has(m)).toBe(true)
+          }
+          const inverse = probleme({
+            salaries: tous,
+            creneaux: [...creneaux].reverse(),
+          })
+          expect(trous(inverse, [...affs].reverse())).toEqual(trous(p, affs))
+        },
+      ),
+    )
+  })
+})
+
+describe('consignes par cycle (recompte sans le générateur)', () => {
+  const m1 = cr('bm1', 0, 7 * H, 15 * H, 'rec', {
+    presence: 'matin',
+    effectif: 3,
+  })
+  const rm = remplacant('rm1-6', 'bm1', 0, 6 * H, 14 * H, { presence: 'matin' })
+  const mid = cr('bx', 0, 11 * H, 19 * H, 'rec', { presence: null })
+  const s1 = cr('bs1', 0, 15 * H, 23 * H, 'rec', { presence: 'soir' })
+  const n1 = cr('bn1', 0, 23 * H, 31 * H, 'veille', { presence: 'nuit' })
+  const gens = ['a', 'c', 'd', 'e', 'v'].map((i) =>
+    sal(i, { postes: new Set(['rec', 'veille']) }),
+  )
+  const consignes = [
+    { jour: 0, periode: 'soir' as const, minimum: 1, maximum: null },
+    { jour: 0, periode: 'matin' as const, minimum: 2, maximum: 2 },
+    { jour: 0, periode: 'nuit' as const, minimum: 1, maximum: 1 },
+    { jour: 1, periode: 'matin' as const, minimum: 1, maximum: null },
+  ]
+  const p = probleme({
+    salaries: [...gens, apprenti()],
+    creneaux: [m1, rm, mid, s1, n1],
+    consignes,
+  })
+  const ecarts = (affs: AffectationSolveur[]) =>
+    presenceParCycle(p, affs).map((x) => [x.periode, x.jour, x.compte, x.ecart])
+
+  it('conforme : remplaçant compté au matin, middle jamais, nuit comprise (accepté)', () => {
+    expect(
+      ecarts([
+        aff('a', 'bm1'),
+        aff('c', 'rm1-6'),
+        aff('d', 'bx'),
+        aff('e', 'bs1'),
+        aff('v', 'bn1'),
+      ]),
+    ).toEqual([
+      ['soir', 0, 1, 0],
+      ['matin', 0, 2, 0],
+      ['nuit', 0, 1, 0],
+      ['matin', 1, 0, -1],
+    ])
+  })
+
+  it('il manque du monde : écart négatif ; le soutien ne compte pas (refusé)', () => {
+    expect(ecarts([aff('a', 'bm1'), aff('s', 'bm1')])).toEqual([
+      ['soir', 0, 0, -1],
+      ['matin', 0, 1, -1],
+      ['nuit', 0, 0, -1],
+      ['matin', 1, 0, -1],
+    ])
+  })
+
+  it('du monde en plus : écart positif au-delà du maximum (refusé)', () => {
+    const r = presenceParCycle(p, [
+      aff('a', 'bm1'),
+      aff('c', 'bm1'),
+      aff('d', 'rm1-6'),
+      aff('v', 'bn1'),
+      aff('e', 'bn1'),
+    ])
+    expect(r[1]).toMatchObject({ periode: 'matin', compte: 3, ecart: 1 })
+    expect(r[2]).toMatchObject({ periode: 'nuit', compte: 2, ecart: 1 })
+  })
+
+  it('une personne compte une fois ; un shift épinglé compte même s’il n’est pas passé', () => {
+    const avecImposee = { ...p, imposees: new Set([cle('e', 'bs1')]) }
+    const r = presenceParCycle(avecImposee, [
+      aff('a', 'bm1'),
+      aff('a', 'rm1-6'),
+    ])
+    expect(r[0]).toMatchObject({ periode: 'soir', compte: 1, ecart: 0 })
+    expect(r[1]).toMatchObject({ periode: 'matin', compte: 1, ecart: -1 })
   })
 })

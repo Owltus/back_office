@@ -432,8 +432,9 @@ describe('Besoins', () => {
       ]
       return ref
     }
-    // Oracle indépendant : un code du matin compte le matin ; un middle,
-    // le matin s'il commence de 5 h à 12 h 30 ; un code sans période jamais.
+    // Oracle indépendant : un code du matin compte le matin ; un middle
+    // jamais (D11, il est là mais ne compte pas) ; un code sans période
+    // jamais.
     const sommeAttendue = (ref: Referentiel, jour: number) => {
       const comptent = new Set(
         ref.postes.filter((p) => p.presence).map((p) => p.id),
@@ -442,10 +443,7 @@ describe('Besoins', () => {
       for (const b of ref.besoins) {
         if (b.jour !== jour || !comptent.has(b.poste_id)) continue
         const h = ref.horaires.find((x) => x.id === b.horaire_id)
-        const matin =
-          h?.periode === 'matin' ||
-          (h?.periode === 'middle' && b.debut >= '05:00' && b.debut < '12:30')
-        if (matin) n += b.effectif
+        if (h?.periode === 'matin') n += b.effectif
       }
       return n
     }
@@ -517,23 +515,23 @@ describe('Besoins', () => {
       ])
       expect(lignes).toEqual([
         ['Réception', 'Matin'],
-        ['Réception', 'Middle'],
         ['Club', 'Matin'],
       ])
-      expect(document.querySelectorAll('[data-jour-ajuste]')).toHaveLength(3)
+      expect(document.querySelectorAll('[data-jour-ajuste]')).toHaveLength(2)
       expect(service.reglerBesoin).not.toHaveBeenCalled()
 
       fireEvent.click(
         poste('Réception').getByRole('button', {
-          name: 'Personnes nécessaires Samedi, Middle : un de plus',
+          name: 'Personnes nécessaires Samedi, Matin : un de plus',
         }),
       )
-      await waitFor(() =>
-        expect(momentAjuste()).toContain('les besoins donnent 3'),
-      )
+      // Un matin de plus en Réception : la somme (oracle) atteint la consigne.
+      await waitFor(() => expect(momentAjuste()).toContain("C'est bon"))
+      const somme = sommeAttendue(etat.referentiel, 5)
+      expect(somme).toBeGreaterThanOrEqual(3)
+      expect(momentAjuste()).toContain(`les besoins donnent ${somme}`)
       fireEvent.click(screen.getByRole('radio', { name: 'Matin et soir' }))
-      expect(sommeAttendue(etat.referentiel, 5)).toBe(3)
-      expect(caseBesoins('5:matin')?.textContent).toBe('Besoins : 3')
+      expect(caseBesoins('5:matin')?.textContent).toBe(`Besoins : ${somme}`)
       expect(caseBesoins('5:matin')?.dataset.ecart).toBeUndefined()
       expect(
         screen.queryByRole('button', { name: /^Ajuster les besoins/ }),

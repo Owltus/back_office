@@ -1,7 +1,8 @@
+import fc from 'fast-check'
 import highsLoader from 'highs'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import { generer } from '#/lib/planning/generateur.ts'
+import { construire, generer } from '#/lib/planning/generateur.ts'
 import type { Highs } from '#/lib/planning/generateur.ts'
 import {
   cle,
@@ -552,5 +553,86 @@ describe('générateur', () => {
       creneaux: s,
     })
     expect(reglesDe(apresCinq, six).has('R-REPOS-HEBDO-HCR')).toBe(false)
+  })
+})
+
+/*
+ * Cycles (plan planning-cycles-2026-10-30, vague 1, lot B) : sans créneau
+ * remplaçant, sans consigne et sans poste compté dans la présence, le modèle
+ * écrit est OCTET POUR OCTET celui d'avant la vague (empreinte relevée sur le
+ * commit 7e9a566, avant toute modification du générateur). Le même modèle
+ * donne la même solution : rien ne bouge pour une semaine sans cycles.
+ */
+describe('sans remplaçant, consigne ni présence : le modèle d’avant', () => {
+  /** FNV-1a 32 bits, assez pour reconnaître un texte. */
+  const empreinte = (texte: string) => {
+    let h = 0x811c9dc5
+    for (let i = 0; i < texte.length; i++) {
+      h ^= texte.charCodeAt(i)
+      h = Math.imul(h, 0x01000193) >>> 0
+    }
+    return h.toString(16).padStart(8, '0')
+  }
+
+  it('même texte LP sur des semaines tirées au hasard', () => {
+    const arbSalarie = fc.record({
+      contratH: fc.integer({ min: 0, max: 39 }),
+      depannage: fc.boolean(),
+      soutien: fc.boolean(),
+      deuxPostes: fc.boolean(),
+      absents: fc.subarray([0, 1, 2, 3, 4, 5, 6]),
+      reposHebdo: fc.boolean(),
+      groupe: fc.boolean(),
+      soirs: fc.integer({ min: 0, max: 5 }),
+      fixe: fc.subarray([0, 1, 2, 3, 4, 5, 6]),
+    })
+    const arbCreneau = fc.record({
+      poste: fc.constantFrom('reception', 'club'),
+      jour: fc.integer({ min: 0, max: 6 }),
+      debutH: fc.integer({ min: 5, max: 16 }),
+      dureeH: fc.integer({ min: 3, max: 10 }),
+      effectif: fc.integer({ min: 0, max: 2 }),
+      facultatif: fc.integer({ min: 0, max: 1 }),
+      soutien: fc.integer({ min: 0, max: 1 }),
+      raccourci: fc.constantFrom(0, 60),
+    })
+    const textes: string[] = []
+    fc.assert(
+      fc.property(
+        fc.array(arbSalarie, { minLength: 1, maxLength: 4 }),
+        fc.array(arbCreneau, { minLength: 1, maxLength: 10 }),
+        fc.integer({ min: 0, max: 1000 }),
+        (gens, places, graine) => {
+          const salaries = gens.map((g, i) =>
+            receptionniste(`s${i}`, g.contratH, {
+              postes: g.soutien
+                ? new Set()
+                : new Set(g.deuxPostes ? ['reception', 'club'] : ['reception']),
+              postesSoutien: g.soutien ? new Set(['reception']) : new Set(),
+              postesOccasionnels:
+                g.depannage && g.deuxPostes ? new Set(['club']) : new Set(),
+              indisponibilites: new Set(g.absents),
+              reposHebdoMin: g.reposHebdo ? 35 * H : 0,
+              groupeEquite: g.groupe ? 'reception' : null,
+              travailFixe: new Set(g.fixe),
+              equiteAvant: { weekends: 1, soirs: g.soirs, matinsTot: 0 },
+            }),
+          )
+          const creneaux = places.map((c, i) => ({
+            ...creneau(`c${i}`, c.poste, c.jour, c.debutH, c.debutH + c.dureeH),
+            effectif: c.effectif,
+            facultatif: c.facultatif,
+            soutien: c.soutien,
+            raccourci: c.raccourci,
+            soir: c.debutH >= 13,
+          }))
+          textes.push(
+            construire(probleme({ salaries, creneaux, graine })).modele.lp(),
+          )
+        },
+      ),
+      { numRuns: 80, seed: 20261030 },
+    )
+    expect(empreinte(textes.join('\n=====\n'))).toBe('c66ff0f1')
   })
 })

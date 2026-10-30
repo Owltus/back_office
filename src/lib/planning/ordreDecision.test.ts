@@ -6,7 +6,9 @@ import {
   BRUIT_MAX,
   coutConsigne,
   coutDepannage,
+  coutManqueMinimum,
   coutPlaceVide,
+  coutPlaceVideGroupe,
   EQUITE_MAX_PAR_SHIFT,
   generer,
   PART_FIXE_DEPANNAGE,
@@ -16,10 +18,12 @@ import {
   POIDS_EQUITE,
   POIDS_JOUR_FIXE,
   POIDS_PRESENCE_MINUTE,
+  POIDS_REMPLACANT,
   POIDS_REPOS_SEPARES,
   POIDS_SIXIEME_JOUR,
   POIDS_SOUS_CONTRAT,
   POIDS_SUR_CONTRAT,
+  POIDS_TROU_QUART,
 } from '#/lib/planning/generateur.ts'
 import type { Highs } from '#/lib/planning/generateur.ts'
 import {
@@ -38,6 +42,7 @@ import { MINUTES_PAR_JOUR } from '#/lib/planning/temps.ts'
 import {
   manquants,
   raisonsBlocage,
+  trous as trousVerifies,
   violations,
   violationsSalarie,
 } from '#/lib/planning/verificateur.ts'
@@ -262,7 +267,9 @@ describe('P2 : le matin et le soir, sous les places nécessaires (D1 = A)', () =
     }
   })
 
-  it('le coût d’une consigne est plafonné sous les heures dues de chaque créneau qui y compte', () => {
+  // Vague 1 des cycles (D7) : ce plafond ne vaut plus que pour le MAXIMUM ;
+  // le minimum est une place nécessaire (P1), voir plus bas.
+  it('le coût du maximum d’une consigne est plafonné sous les heures dues de chaque créneau qui y compte', () => {
     const long = creneau('long', 0, 7, 17, { presence: 'matin' })
     const court = creneau('court', 0, 7, 9, { presence: 'matin' })
     // Un seul créneau long : proportionnel, comme avant.
@@ -277,26 +284,43 @@ describe('P2 : le matin et le soir, sous les places nécessaires (D1 = A)', () =
     )
     expect(coutConsigne([long, court])).toBeGreaterThan(0)
     expect(coutConsigne([])).toBe(0)
+    // Le minimum, lui, n'est pas plafonné : il passe au-dessus de tout ce
+    // qu'il faut payer pour ajouter quelqu'un.
+    expect(coutManqueMinimum([long, court], 0)).toBeGreaterThan(
+      coutConsigne([long, court]),
+    )
   })
 
-  it('une place nécessaire passe avant la consigne', () => {
-    // Une seule personne, deux créneaux le même jour : la place nécessaire
-    // (hors consigne) contre le renfort qui compterait dans la consigne.
-    const p = probleme({
-      salaries: [personne('a', 7)],
-      creneaux: [
-        creneau('besoin', 0, 13, 20),
-        creneau('renfort', 0, 7, 14, {
-          effectif: 0,
-          facultatif: 1,
-          presence: 'matin',
-        }),
-      ],
-      consignes: [lundi(1)],
+  // Vague 1 des cycles (D7) : le minimum est AU NIVEAU d'une place
+  // nécessaire. Avant, la place passait toujours devant la consigne ; à
+  // durée égale, les deux coûtent désormais la même chose.
+  it('une place nécessaire et le minimum d’une consigne sont au même niveau', () => {
+    const besoin = creneau('besoin', 0, 13, 20)
+    const renfort = creneau('renfort', 0, 7, 14, {
+      effectif: 0,
+      facultatif: 1,
+      presence: 'matin',
     })
-    const r = gen(p)
-    expect(qui(r, 'besoin')).toEqual(['a'])
-    expect(r.manques).toEqual([])
+    expect(coutManqueMinimum([renfort], 0)).toBe(coutPlaceVide(besoin, 0))
+    // Une seule personne : elle tient l'un des deux, l'autre manque.
+    const r = gen(
+      probleme({
+        salaries: [personne('a', 7)],
+        creneaux: [besoin, renfort],
+        consignes: [lundi(1)],
+      }),
+    )
+    expect(r.affectations).toHaveLength(1)
+    // Le besoin qui compte LUI-MÊME dans la consigne passe devant un besoin
+    // qui n'y compte pas : son manque se paierait deux fois.
+    const r2 = gen(
+      probleme({
+        salaries: [personne('a', 7)],
+        creneaux: [besoin, creneau('matin', 0, 7, 14, { presence: 'matin' })],
+        consignes: [lundi(1)],
+      }),
+    )
+    expect(qui(r2, 'matin')).toEqual(['a'])
   })
 })
 
@@ -706,5 +730,535 @@ describe('la loi d’une semaine à l’autre : R-REPOS-HEBDO-35H', () => {
     expect(
       violations(p2, [{ salarieId: 'a', creneauId: 'tard', court: false }]),
     ).toEqual([])
+  })
+})
+
+/*
+ * Plan planning-cycles-2026-10-30, vague 1, lot B : remplaçants, minimum par
+ * cycle, trous entre équipes. Les créneaux remplaçants (`r…`) sont écrits à
+ * la main comme le lot C les fabriquera (contrat §2) : `place` = id du
+ * besoin, effectif 0, autre code. Oracle : le recomptage à la main (le
+ * vérificateur compte les places par `c.place ?? c.id` après le lot D).
+ */
+describe('cycles : un autre code du même cycle tient la place (D5, D13, D16)', () => {
+  /** Besoin M3 lundi 7 h - 14 h ; remplaçant M6 10 h - 17 h (même durée). */
+  const besoin = creneau('b1', 0, 7, 14, { typeShift: 'M3' })
+  const remplacant = creneau('r1-M6', 0, 10, 17, {
+    typeShift: 'M6',
+    place: 'b1',
+    effectif: 0,
+  })
+  const place = [besoin, remplacant]
+  const seulement = (...codes: string[]) => ({
+    shiftsAutorises: new Set(codes),
+  })
+  const depannage = (id: string, kw: Partial<SalarieSolveur> = {}) =>
+    personne(id, 7, { postesOccasionnels: new Set(['r']), ...kw })
+  /** Qui tient la place, sur quel créneau. */
+  const tenue = (r: Resultat) =>
+    r.affectations.map((a) => `${a.salarieId}@${a.creneauId}`)
+
+  it('M3 impossible (repos de 11 h), M6 possible : le remplaçant est posé', () => {
+    // Fin la veille à 22 h : 9 h avant M3, 12 h avant M6.
+    const a = personne('a', 7, { finServicePrecedent: -2 * H })
+    for (const graine of graines) {
+      const r = gen(probleme({ salaries: [a], creneaux: place, graine }))
+      expect(tenue(r)).toEqual(['a@r1-M6'])
+      expect(r.manques).toEqual([])
+    }
+  })
+
+  it('M3 possible : le code imposé, jamais le remplaçant', () => {
+    for (const graine of graines) {
+      const r = gen(
+        probleme({ salaries: [personne('a', 7)], creneaux: place, graine }),
+      )
+      expect(tenue(r)).toEqual(['a@b1'])
+    }
+  })
+
+  it('aucun code possible : la place reste vide, au nom du besoin', () => {
+    const a = personne('a', 7, { finServicePrecedent: 0 })
+    const r = gen(probleme({ salaries: [a], creneaux: place }))
+    expect(r.affectations).toEqual([])
+    expect(r.manques).toEqual([{ creneauId: 'b1', manquant: 1 }])
+  })
+
+  it('une seule personne sur la place, besoin et remplaçant ensemble', () => {
+    // Deux personnes libres qui doivent chacune 7 h : la place n'en prend
+    // qu'une (effectif 1, aucun facultatif).
+    for (const graine of graines) {
+      const r = gen(
+        probleme({
+          salaries: [personne('a', 7), personne('b', 7)],
+          creneaux: place,
+          graine,
+        }),
+      )
+      expect(r.affectations).toHaveLength(1)
+      expect(r.manques).toEqual([])
+    }
+    // Avec une place facultative en plus, les deux.
+    const r = gen(
+      probleme({
+        salaries: [personne('a', 7), personne('b', 7)],
+        creneaux: [{ ...besoin, facultatif: 1 }, remplacant],
+      }),
+    )
+    expect(r.affectations).toHaveLength(2)
+  })
+
+  it('soutien jamais seul : compté sur la place entière', () => {
+    const soutien = personne('s', 7, {
+      postes: new Set(),
+      postesSoutien: new Set(['r']),
+    })
+    const avecSoutien = [{ ...besoin, soutien: 1 }, remplacant]
+    const r = gen(
+      probleme({
+        salaries: [soutien, personne('t', 7, seulement('M6'))],
+        creneaux: avecSoutien,
+      }),
+    )
+    expect(new Set(tenue(r))).toEqual(new Set(['s@b1', 't@r1-M6']))
+    const seul = gen(probleme({ salaries: [soutien], creneaux: avecSoutien }))
+    expect(seul.affectations).toEqual([])
+  })
+
+  it('les paliers D13 sont dans l’ordre, unité contre unité', () => {
+    expect(POIDS_REMPLACANT).toBeGreaterThan(0)
+    // Titulaire remplaçant < dépannage au code imposé, quelle que soit la
+    // durée du shift.
+    expect(POIDS_REMPLACANT).toBeLessThan(PART_FIXE_DEPANNAGE)
+    // Dépannage au code imposé < dépannage remplaçant < place vide.
+    expect(coutDepannage(remplacant) + POIDS_REMPLACANT).toBeLessThan(
+      coutPlaceVideGroupe(place, 0),
+    )
+    // La place vide d'une place à remplaçants dépasse le pire de ses codes.
+    expect(coutPlaceVideGroupe(place, 0)).toBeGreaterThan(
+      pireCoutRemplir(remplacant, 0),
+    )
+    expect(pireCoutRemplir(remplacant, 0)).toBe(
+      pireCoutRemplir(besoin, 0) + POIDS_REMPLACANT,
+    )
+    // Sans remplaçant, la place vide est celle d'avant.
+    expect(coutPlaceVideGroupe([besoin], 0)).toBe(coutPlaceVide(besoin, 0))
+  })
+
+  // Les quatre paliers, chacun seul possible, puis deux à la fois : le plus
+  // haut gagne. tE / tR : titulaire qui ne peut faire que M3 / que M6 ; t :
+  // les deux ; dE, dR, d : de même en dépannage.
+  const cas: Array<[string, SalarieSolveur[], string[]]> = [
+    [
+      'titulaire au code imposé',
+      [personne('tE', 7, seulement('M3'))],
+      ['tE@b1'],
+    ],
+    [
+      'titulaire remplaçant',
+      [personne('tR', 7, seulement('M6'))],
+      ['tR@r1-M6'],
+    ],
+    ['dépannage au code imposé', [depannage('dE', seulement('M3'))], ['dE@b1']],
+    ['dépannage remplaçant', [depannage('dR', seulement('M6'))], ['dR@r1-M6']],
+    ['titulaire : imposé avant remplaçant', [personne('t', 7)], ['t@b1']],
+    ['dépannage : imposé avant remplaçant', [depannage('d')], ['d@b1']],
+    [
+      'titulaire imposé avant titulaire remplaçant',
+      [personne('tR', 7, seulement('M6')), personne('tE', 7, seulement('M3'))],
+      ['tE@b1'],
+    ],
+    [
+      'titulaire remplaçant avant dépannage imposé',
+      [depannage('dE', seulement('M3')), personne('tR', 7, seulement('M6'))],
+      ['tR@r1-M6'],
+    ],
+    [
+      'dépannage imposé avant dépannage remplaçant',
+      [depannage('dR', seulement('M6')), depannage('dE', seulement('M3'))],
+      ['dE@b1'],
+    ],
+    [
+      'titulaire remplaçant avant dépannage remplaçant',
+      [depannage('dR', seulement('M6')), personne('tR', 7, seulement('M6'))],
+      ['tR@r1-M6'],
+    ],
+  ]
+  for (const [nom, salaries, attendu] of cas) {
+    it(`palier : ${nom}`, () => {
+      for (const graine of graines) {
+        const r = gen(probleme({ salaries, creneaux: place, graine }))
+        expect(tenue(r)).toEqual(attendu)
+        expect(r.manques).toEqual([])
+      }
+    })
+  }
+})
+
+describe('cycles : le minimum d’une consigne est une place nécessaire (D7)', () => {
+  const lundi = (periode: 'matin' | 'soir' | 'nuit', minimum: number) => ({
+    jour: 0,
+    periode,
+    minimum,
+    maximum: null,
+  })
+
+  it('le coût du manque est dérivé comme une place vide', () => {
+    for (const heures of [2, 7, 10]) {
+      const c = creneau('c', 0, 7, 7 + heures, { presence: 'matin' })
+      const r = creneau('r', 0, 8, 8 + heures, {
+        presence: 'matin',
+        place: 'c',
+        effectif: 0,
+      })
+      for (const presence of [0, 48_000]) {
+        // Au-dessus du pire coût d'ajouter quelqu'un sur CHACUN des créneaux
+        // qui comptent, remplaçant compris.
+        for (const k of [c, r]) {
+          expect(coutManqueMinimum([c, r], presence)).toBeGreaterThan(
+            pireCoutRemplir(k, presence),
+          )
+        }
+      }
+      // Un shift posé à la main ne reçoit personne : hors du calcul.
+      const pose = creneau('pose', 0, 0, 23, { presence: 'matin', ferme: true })
+      expect(coutManqueMinimum([c, pose], 0)).toBe(coutPlaceVide(c, 0))
+      expect(coutManqueMinimum([pose], 0)).toBe(0)
+    }
+  })
+
+  it('un matin de 2 h manquant passe avant un 6e jour et des heures en plus', () => {
+    const creneaux = [
+      ...[1, 2, 3, 4, 5].map((j) => creneau(`m${j}`, j, 7, 14)),
+      creneau('lun', 0, 7, 9, {
+        effectif: 0,
+        facultatif: 1,
+        presence: 'matin',
+      }),
+    ]
+    // Avant la vague (P2, plafonné) : 12 000 < 6e jour + 2 h en plus.
+    expect(coutConsigne([creneaux[5]])).toBeLessThan(
+      POIDS_SIXIEME_JOUR + POIDS_SUR_CONTRAT * 2 * H,
+    )
+    expect(coutManqueMinimum([creneaux[5]], 0)).toBeGreaterThan(
+      POIDS_SIXIEME_JOUR + POIDS_SUR_CONTRAT * 2 * H,
+    )
+    for (const graine of graines) {
+      const r = gen(
+        probleme({
+          salaries: [personne('a', 35)],
+          creneaux,
+          consignes: [lundi('matin', 1)],
+          graine,
+        }),
+      )
+      expect(qui(r, 'lun')).toEqual(['a'])
+      expect(r.affectations).toHaveLength(6)
+    }
+  })
+
+  it('le minimum du matin passe avant des heures dues un autre jour', () => {
+    // a doit 8 h 50 et ne travaille qu'un jour : le mardi de 8 h 50 les
+    // donne toutes, le matin du lundi (7 h) en laisse 110 min dues.
+    const a = personne('a', 0, {
+      minutesHebdoContrat: 530,
+      joursTravaillesMaxSemaine: 1,
+      joursPreferesSemaine: 1,
+    })
+    const lun = creneau('lun', 0, 7, 14, {
+      effectif: 0,
+      facultatif: 1,
+      presence: 'matin',
+    })
+    const mar = creneauModele({
+      id: 'mar',
+      poste: 'r',
+      debut: MINUTES_PAR_JOUR + 7 * H,
+      fin: MINUTES_PAR_JOUR + 7 * H + 530,
+      effectif: 0,
+      facultatif: 1,
+    })
+    // Avant (P2) : 42 000 < 110 min dues (44 000) < maintenant (P1).
+    expect(coutConsigne([lun])).toBeLessThan(POIDS_SOUS_CONTRAT * 110)
+    expect(coutManqueMinimum([lun], 0)).toBeGreaterThan(
+      POIDS_SOUS_CONTRAT * 110,
+    )
+    const sans = gen(probleme({ salaries: [a], creneaux: [lun, mar] }))
+    expect(qui(sans, 'mar')).toEqual(['a'])
+    for (const graine of graines) {
+      const r = gen(
+        probleme({
+          salaries: [a],
+          creneaux: [lun, mar],
+          consignes: [lundi('matin', 1)],
+          graine,
+        }),
+      )
+      expect(qui(r, 'lun')).toEqual(['a'])
+    }
+  })
+
+  it('la nuit compte aussi', () => {
+    const veille = creneau('veille', 0, 23, 31, {
+      effectif: 0,
+      facultatif: 1,
+      presence: 'nuit',
+    })
+    const p = (consignes: Probleme['consignes']) =>
+      gen(
+        probleme({
+          salaries: [personne('a', 0)],
+          creneaux: [veille],
+          consignes,
+        }),
+      )
+    expect(p([]).affectations).toEqual([])
+    expect(qui(p([lundi('nuit', 1)]), 'veille')).toEqual(['a'])
+  })
+
+  it('le maximum garde son coût P2 : une personne due reste placée', () => {
+    // Le même cas qu'au-dessus (P2), avec un minimum en plus : rien ne change
+    // pour le maximum.
+    const p = probleme({
+      salaries: [personne('a', 10), personne('b', 2)],
+      creneaux: [
+        creneau('long', 0, 7, 17, { presence: 'matin' }),
+        creneau('court', 0, 7, 9, {
+          presence: 'matin',
+          effectif: 0,
+          facultatif: 1,
+        }),
+      ],
+      consignes: [{ jour: 0, periode: 'matin', minimum: 1, maximum: 1 }],
+    })
+    const r = gen(p)
+    expect(qui(r, 'long')).toEqual(['a'])
+    expect(qui(r, 'court')).toEqual(['b'])
+  })
+})
+
+describe('cycles : pas de trou entre deux équipes (D10)', () => {
+  // Réception comptée dans la présence : matin 7 h - 15 h, soir 16 h - 23 h,
+  // et un autre code du soir, 15 h - 23 h, qui touche le matin.
+  const matin = creneau('mat', 0, 7, 15, { typeShift: 'M', presence: 'matin' })
+  const soir = creneau('soi', 0, 16, 23, { typeShift: 'S1', presence: 'soir' })
+  const soirLong = creneau('soi-S2', 0, 15, 23, {
+    typeShift: 'S2',
+    presence: 'soir',
+    place: 'soi',
+    effectif: 0,
+  })
+  const equipe = [
+    personne('a', 8, { shiftsAutorises: new Set(['M']) }),
+    // b doit 7 h : le soir long lui fait une heure en plus.
+    personne('b', 7, { shiftsAutorises: new Set(['S1', 'S2']) }),
+  ]
+
+  it('le coût d’un trou : par quart d’heure, au niveau d’une consigne', () => {
+    expect(POIDS_TROU_QUART).toBe(15 * POIDS_PRESENCE_MINUTE)
+    // Un quart d'heure ne vaut pas un changement de code, une demi-heure si.
+    expect(POIDS_TROU_QUART).toBeLessThan(POIDS_REMPLACANT)
+    expect(2 * POIDS_TROU_QUART).toBeGreaterThan(POIDS_REMPLACANT)
+    // Le trou d'une heure contre le soir long : une heure en plus et un
+    // changement de code.
+    expect(4 * POIDS_TROU_QUART).toBeGreaterThan(
+      POIDS_SUR_CONTRAT * H + POIDS_REMPLACANT,
+    )
+  })
+
+  it('un code qui couvre le trou de 15 h à 16 h est choisi', () => {
+    for (const graine of graines) {
+      const r = gen(
+        probleme({
+          salaries: equipe,
+          creneaux: [matin, soir, soirLong],
+          graine,
+        }),
+      )
+      expect(qui(r, 'mat')).toEqual(['a'])
+      expect(qui(r, 'soi-S2')).toEqual(['b'])
+      expect(r.trous).toEqual([])
+    }
+  })
+
+  it('sans code qui le couvre, le trou reste et il est rendu', () => {
+    const r = gen(probleme({ salaries: equipe, creneaux: [matin, soir] }))
+    expect(qui(r, 'soi')).toEqual(['b'])
+    expect(r.trous).toEqual([
+      { poste: 'r', jour: 0, debut: 15 * H, fin: 16 * H },
+    ])
+  })
+
+  it('un poste hors présence n’a pas de trou : le code imposé reste', () => {
+    const horsPresence = [matin, soir, soirLong].map((c) => ({
+      ...c,
+      presence: null,
+    }))
+    const r = gen(probleme({ salaries: equipe, creneaux: horsPresence }))
+    expect(qui(r, 'soi')).toEqual(['b'])
+    expect(r.trous).toEqual([])
+  })
+
+  it('une place vide laisse un trou sur toute sa durée', () => {
+    const r = gen(probleme({ salaries: [equipe[0]], creneaux: [matin, soir] }))
+    expect(r.trous).toEqual([
+      { poste: 'r', jour: 0, debut: 15 * H, fin: 23 * H },
+    ])
+  })
+
+  it('un middle ferme le trou ; un soutien, non', () => {
+    const middle = creneau('mid', 0, 12, 20, { effectif: 0, facultatif: 1 })
+    const c = personne('c', 8, { shiftsAutorises: new Set(['']) })
+    const r = gen(
+      probleme({ salaries: [...equipe, c], creneaux: [matin, soir, middle] }),
+    )
+    expect(qui(r, 'mid')).toEqual(['c'])
+    expect(r.trous).toEqual([])
+    // Un soutien n'est pas autonome : il ne compte pas. Ici il est posé sur
+    // un middle 15 h - 21 h dont la place est tenue par d sur son autre
+    // code, 16 h - 22 h : de 15 h à 16 h, il n'y a que le soutien.
+    const s = personne('s', 6, {
+      postes: new Set(),
+      postesSoutien: new Set(['r']),
+    })
+    const d = personne('d', 6, { shiftsAutorises: new Set(['Y']) })
+    const mid = creneau('mid', 0, 15, 21, {
+      typeShift: 'X',
+      effectif: 0,
+      facultatif: 1,
+      soutien: 1,
+    })
+    const midR = creneau('mid-Y', 0, 16, 22, {
+      typeShift: 'Y',
+      effectif: 0,
+      place: 'mid',
+    })
+    const r2 = gen(
+      probleme({
+        salaries: [...equipe, s, d],
+        creneaux: [matin, soir, mid, midR],
+      }),
+    )
+    expect(qui(r2, 'mid')).toEqual(['s'])
+    expect(qui(r2, 'mid-Y')).toEqual(['d'])
+    expect(r2.trous).toEqual([
+      { poste: 'r', jour: 0, debut: 15 * H, fin: 16 * H },
+    ])
+  })
+
+  it('la nuit du dimanche, écrite le dimanche, ferme la plage du dimanche', () => {
+    const soir6 = creneau('soir6', 6, 15, 23, { presence: 'soir' })
+    // « 24:00 → 07:00 » : commence lundi 0 h, écrite dimanche.
+    const nuit = creneau('nuit6', 7, 0, 7, { jourPlanning: 6 })
+    const r = gen(
+      probleme({
+        salaries: [
+          personne('x', 8),
+          personne('y', 7, { nuitInterdite: false }),
+        ],
+        creneaux: [soir6, nuit],
+      }),
+    )
+    expect(r.manques).toEqual([])
+    expect(r.trous).toEqual([
+      {
+        poste: 'r',
+        jour: 6,
+        debut: 6 * MINUTES_PAR_JOUR + 23 * H,
+        fin: 7 * MINUTES_PAR_JOUR,
+      },
+    ])
+  })
+})
+
+describe('cycles : ce que le lot C pose et ce que l’oracle compte', () => {
+  it('un M6 posé (imposé) sur le remplaçant tient la place : aucun manque, personne de plus sur le besoin', () => {
+    const besoin = creneau('b1', 0, 7, 14, { typeShift: 'M3' })
+    const r6 = creneau('r1-M6', 0, 10, 17, {
+      typeShift: 'M6',
+      place: 'b1',
+      effectif: 0,
+    })
+    for (const graine of graines) {
+      const r = gen(
+        probleme({
+          // b doit 7 h et pourrait tenir M3 : il ne s'ajoute pas.
+          salaries: [personne('a', 7), personne('b', 7)],
+          creneaux: [besoin, r6],
+          imposees: new Set(['a|r1-M6']),
+          graine,
+        }),
+      )
+      expect(r.statut).toBe('optimal')
+      expect(r.manques).toEqual([])
+      expect(qui(r, 'r1-M6')).toEqual(['a'])
+      expect(qui(r, 'b1')).toEqual([])
+    }
+  })
+
+  // Les trois cas de bord de la définition commune (contrat §3) : le
+  // générateur et l'oracle (`trous` du vérificateur, `trousDuJour`) disent
+  // la même chose.
+  const matin = (fin: number, kw: Partial<Creneau> = {}) =>
+    creneauModele({
+      id: 'mat',
+      poste: 'r',
+      debut: 7 * H,
+      fin,
+      presence: 'matin',
+      typeShift: 'M',
+      ...kw,
+    })
+  const soirDe = (debut: number) =>
+    creneauModele({
+      id: 'soi',
+      poste: 'r',
+      debut,
+      fin: 23 * H,
+      presence: 'soir',
+      typeShift: 'S',
+    })
+  const deux = [personne('a', 0), personne('b', 0)]
+
+  it('un relais au milieu d’un quart d’heure laisse ce quart compté comme un trou', () => {
+    const p = probleme({
+      salaries: deux,
+      creneaux: [matin(15 * H + 5), soirDe(15 * H + 5)],
+    })
+    const r = gen(p)
+    expect(r.manques).toEqual([])
+    const attendu = [{ poste: 'r', jour: 0, debut: 15 * H, fin: 15 * H + 15 }]
+    expect(r.trous).toEqual(attendu)
+    expect(trousVerifies(p, r.affectations)).toEqual(attendu)
+  })
+
+  it('une journée courte qui part avant l’équipe du soir laisse un trou', () => {
+    // a fait sa journée étoile (courte, une heure de moins) ce lundi.
+    const p = probleme({
+      salaries: [
+        personne('a', 7, {
+          etoileFixe: new Set([0]),
+          shiftsAutorises: new Set(['M']),
+        }),
+        personne('b', 8, { shiftsAutorises: new Set(['S']) }),
+      ],
+      creneaux: [matin(15 * H, { raccourci: H }), soirDe(15 * H)],
+    })
+    const r = gen(p)
+    expect(r.affectations.find((x) => x.creneauId === 'mat')?.court).toBe(true)
+    const attendu = [{ poste: 'r', jour: 0, debut: 14 * H, fin: 15 * H }]
+    expect(r.trous).toEqual(attendu)
+    expect(trousVerifies(p, r.affectations)).toEqual(attendu)
+  })
+
+  it('une plage qui ne commence pas au quart d’heure est coupée à son bord', () => {
+    const p = probleme({
+      salaries: deux,
+      creneaux: [matin(15 * H, { debut: 7 * H + 5 }), soirDe(15 * H + 20)],
+    })
+    const r = gen(p)
+    const attendu = [{ poste: 'r', jour: 0, debut: 15 * H, fin: 15 * H + 30 }]
+    expect(r.trous).toEqual(attendu)
+    expect(trousVerifies(p, r.affectations)).toEqual(attendu)
   })
 })

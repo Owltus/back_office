@@ -61,6 +61,8 @@ const SEM = semaine('2026-10-26', {
       fin: '23:15',
       duree: 480,
       manquant: 1,
+      remplacants: [],
+      raison_commune: null,
       raisons: [
         {
           salarie_id: 4,
@@ -94,6 +96,8 @@ const SEM = semaine('2026-10-26', {
       fin: '15:45',
       duree: 480,
       manquant: 1,
+      remplacants: [],
+      raison_commune: null,
       raisons: [],
     },
   ],
@@ -248,6 +252,8 @@ describe('places regroupées (même poste, même code, plusieurs jours)', () => 
     duree: 450,
     manquant: 1,
     raisons,
+    remplacants: [],
+    raison_commune: null,
   })
   const repos = (id: number) => ({
     salarie_id: id,

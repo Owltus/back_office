@@ -1,15 +1,24 @@
 /*
- * Consignes de présence du matin et du soir (demande utilisateur du
- * 2026-10-27) : « lundi, 2 le matin et 2 le soir ; samedi, 3 ou 4 le
- * matin ». Une consigne compte les personnes AUTONOMES (titulaires et
- * dépannage ; pas les profils « soutien », les apprentis en renfort) posées
- * sur un poste qui compte dans la présence (`Poste.presence`, Réception et
- * Club à l'hôtel), selon la période de leur shift.
+ * Consignes de présence (demande utilisateur du 2026-10-27) : « lundi, 2 le
+ * matin et 2 le soir ; samedi, 3 ou 4 le matin ». Une consigne compte les
+ * personnes AUTONOMES (titulaires et dépannage ; pas les profils « soutien »,
+ * les apprentis en renfort), selon la période de leur shift
+ * (`periodePresence`, seule règle, plan `planning-cycles-2026-10-30`) :
  *
- * Période d'un shift : celle de son code (`Horaire.periode`) ; sans code, ou
- * pour un code « middle » ou « court » (familles du 2026-10-28, qui ne
- * changent pas les consignes), elle se déduit de l'heure de début
- * (`periodeLibre`).
+ * - matin, soir : seulement sur un poste qui compte dans la présence
+ *   (`Poste.presence`, Réception et Club à l'hôtel) ;
+ * - nuit : un code de famille `nuit`, ou un horaire libre qui commence la
+ *   nuit (22 h à 5 h), sur un poste qui a au moins un code de nuit
+ *   (`nuitComptee`, calculé par l'appelant), que le poste soit coché
+ *   « présence » ou non (D15 : la Réception et le Club n'ont pas de code de
+ *   nuit, c'est la Veille de nuit qui fait le minimum de nuit) ;
+ * - middle : JAMAIS (D11, « il ne compte pas mais il est quand même là » ;
+ *   il compte pour les trous entre équipes, ailleurs) ;
+ * - court : selon son heure de début, matin ou soir, jamais nuit ;
+ * - code sans famille (`periode === null`) : jamais.
+ *
+ * `periodeShift` (équité du générateur) garde son ancienne règle : middle et
+ * court selon l'heure de début.
  */
 
 import { minutes } from '#/lib/planning/temps.ts'
@@ -35,15 +44,26 @@ export function periodeLibre(debut: string): 'matin' | 'soir' | 'nuit' {
   return m < 12 * 60 + 30 ? 'matin' : 'soir'
 }
 
-/** Période d'un shift pour les consignes, ou null s'il n'y compte pas
- * (poste hors présence, code de nuit ou sans période). */
+/** Période d'un shift pour les consignes, ou null s'il n'y compte pas (voir
+ * l'en-tête). `nuitComptee` : le poste a au moins un code de famille nuit
+ * (faux par défaut : la nuit ne compte pas). */
 export function periodePresence(
   poste: Pick<Poste, 'presence'> | undefined,
   horaire: Pick<Horaire, 'periode'> | undefined,
   debut: string,
-): 'matin' | 'soir' | null {
-  if (!poste?.presence) return null
-  return periodeShift(horaire, debut)
+  nuitComptee = false,
+): PeriodePresence | null {
+  const famille = horaire ? horaire.periode : null
+  // Middle (D11) et code sans famille : jamais.
+  if (horaire && (famille === 'middle' || famille === null)) return null
+  const p = !horaire || famille === 'court' ? periodeLibre(debut) : famille
+  if (p === 'nuit') {
+    // Un court qui commence la nuit ne compte pas (règle d'avant).
+    if (famille === 'court') return null
+    return nuitComptee ? 'nuit' : null
+  }
+  if (p !== 'matin' && p !== 'soir') return null
+  return poste?.presence ? p : null
 }
 
 /** Période d'un shift, sur tout poste : celle de son code, ou son heure de
@@ -83,7 +103,8 @@ export function ecartConsigne(
 }
 
 /** Bilan des consignes d'une semaine : `presents` = (jour, période) des
- * shifts qui comptent. */
+ * shifts qui comptent, déjà filtrés par `periodePresence` (middle exclu,
+ * nuit possible) ; ce bilan ne fait que compter. */
 export function bilanPresence(
   consignes: Consigne[],
   presents: ReadonlyArray<{ jour: number; periode: PeriodePresence }>,
@@ -126,14 +147,17 @@ export const clePresence = (jour: number, periode: PeriodePresence) =>
   `${jour}:${periode}`
 
 /** Somme des personnes nécessaires (`effectif`) des besoins qui comptent dans
- * le matin et le soir, par moment (`clePresence`). Seule source de cette
- * somme : contrôle des réglages (`coherence.ts`) et vue Matin et soir. */
+ * les consignes, par moment (`clePresence`), même règle que `periodePresence`
+ * (middle exclu). `postesAvecNuit` : ids des postes qui ont au moins un code
+ * de nuit ; absent, la nuit ne compte pas (comme avant). Seule source de
+ * cette somme : contrôle des réglages (`coherence.ts`) et vue Matin et soir. */
 export function sommeBesoinsPresence(
   besoins: ReadonlyArray<
     Pick<Besoin, 'poste_id' | 'jour' | 'horaire_id' | 'debut' | 'effectif'>
   >,
   postes: ReadonlyMap<number, Pick<Poste, 'presence'>>,
   horaires: ReadonlyMap<number, Pick<Horaire, 'periode'>>,
+  postesAvecNuit?: ReadonlySet<number>,
 ): Map<string, number> {
   const somme = new Map<string, number>()
   for (const b of besoins) {
@@ -142,6 +166,7 @@ export function sommeBesoinsPresence(
       postes.get(b.poste_id),
       b.horaire_id !== null ? horaires.get(b.horaire_id) : undefined,
       b.debut,
+      postesAvecNuit?.has(b.poste_id) ?? false,
     )
     if (!periode) continue
     const cle = clePresence(b.jour, periode)

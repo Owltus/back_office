@@ -5,11 +5,14 @@
  * violation porte l'identifiant de sa règle et les créneaux en cause.
  */
 
+import { postesAPresence, trousDuJour } from '#/lib/planning/cycles.ts'
+import type { PresencePoste } from '#/lib/planning/cycles.ts'
 import {
   codeDeLaFiche,
   codeImposeRespecte,
 } from '#/lib/planning/eligibilite.ts'
 import {
+  cle,
   dansLeContrat,
   duree,
   jourDe,
@@ -25,6 +28,7 @@ import type {
   SalarieSolveur,
 } from '#/lib/planning/modele.ts'
 import { heuresLisibles as h } from '#/lib/planning/temps.ts'
+import type { PeriodePresence } from '#/lib/planning/types.ts'
 
 export type Nature = 'loi' | 'organisation'
 
@@ -364,28 +368,30 @@ export function violations(
   const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
   const salaries = new Map(p.salaries.map((s) => [s.id, s]))
   const erreurs: Violation[] = []
-  const parCreneau = new Map<string, number>()
   const parSalarie = new Map<string, Creneau[]>()
   for (const a of affectations) {
     const c = creneaux.get(a.creneauId)
     const s = salaries.get(a.salarieId)
     if (!c || !s) continue
-    if (role(s, c.poste) !== 'soutien') {
-      parCreneau.set(c.id, (parCreneau.get(c.id) ?? 0) + 1)
-    }
     parSalarie.set(s.id, [
       ...(parSalarie.get(s.id) ?? []),
       a.court ? enVersionCourte(c) : c,
     ])
   }
-  for (const c of p.creneaux) {
-    const n = parCreneau.get(c.id) ?? 0
-    if (n > c.effectif + c.facultatif) {
+  // Une place se compte avec ses remplaçants (`c.place ?? c.id`) : un
+  // titulaire en M6 sur la place d'un M3 la tient, et l'effectif plus les
+  // renforts de la place bornent le tout.
+  const parPlace = autonomesParPlace(p, affectations)
+  for (const [place, n] of parPlace) {
+    const c = creneaux.get(place)
+    // Un remplaçant dont la place est inconnue n'a droit à personne.
+    const limite = c ? c.effectif + c.facultatif : 0
+    if (n > limite) {
       erreurs.push({
         salarieId: null,
         regle: 'SUREFFECTIF',
-        message: `${n}/${c.effectif + c.facultatif}`,
-        creneaux: [c.id],
+        message: `${n}/${limite}`,
+        creneaux: [place],
         nature: 'loi',
       })
     }
@@ -442,27 +448,183 @@ export function soutiensSeuls(
   return erreurs
 }
 
-/** Places restées vides, par créneau (les profils « soutien » ne comptent pas). */
-export function manquants(
+/** Personnes autonomes (pas les profils « soutien ») par PLACE : une
+ * affectation sur un remplaçant `r…` compte pour le besoin `b…` qu'il sert
+ * (`c.place ?? c.id`, contrat de la vague 1 §4). */
+export function autonomesParPlace(
   p: Probleme,
   affectations: AffectationSolveur[],
 ): Map<string, number> {
   const salaries = new Map(p.salaries.map((s) => [s.id, s]))
-  const postes = new Map(p.creneaux.map((c) => [c.id, c.poste]))
+  const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
   const compte = new Map<string, number>()
   for (const a of affectations) {
     const s = salaries.get(a.salarieId)
-    const poste = postes.get(a.creneauId)
-    if (s && poste !== undefined && role(s, poste) !== 'soutien') {
-      compte.set(a.creneauId, (compte.get(a.creneauId) ?? 0) + 1)
+    const c = creneaux.get(a.creneauId)
+    if (s && c && role(s, c.poste) !== 'soutien') {
+      const place = c.place ?? c.id
+      compte.set(place, (compte.get(place) ?? 0) + 1)
     }
   }
+  return compte
+}
+
+/** Places restées vides, par place (les profils « soutien » ne comptent pas,
+ * un remplaçant compte pour la place qu'il sert et n'a jamais d'entrée à
+ * lui). */
+export function manquants(
+  p: Probleme,
+  affectations: AffectationSolveur[],
+): Map<string, number> {
+  const compte = autonomesParPlace(p, affectations)
   const r = new Map<string, number>()
   for (const c of p.creneaux) {
+    if (c.place !== null) continue
     const n = compte.get(c.id) ?? 0
     if (n < c.effectif) r.set(c.id, c.effectif - n)
   }
   return r
+}
+
+// ------------------------------------------ présences : trous et consignes
+
+/** Affectations faites, épinglées comprises (`p.imposees`, version courte
+ * selon `p.courtes`), une seule fois par (salarié, créneau) : les shifts
+ * posés comptent même si l'appelant ne passe que les propositions. */
+function affectationsCompletes(
+  p: Probleme,
+  affectations: AffectationSolveur[],
+): AffectationSolveur[] {
+  const vues = new Map<string, AffectationSolveur>()
+  for (const a of affectations) {
+    const k = cle(a.salarieId, a.creneauId)
+    if (!vues.has(k)) vues.set(k, a)
+  }
+  for (const k of p.imposees) {
+    if (vues.has(k)) continue
+    const i = k.indexOf('|')
+    vues.set(k, {
+      salarieId: k.slice(0, i),
+      creneauId: k.slice(i + 1),
+      court: p.courtes.has(k),
+    })
+  }
+  return [...vues.values()]
+}
+
+/** Moment d'un poste sans personne autonome (étape 6). */
+export interface Trou {
+  poste: string
+  /** Jour du planning des besoins qui fixent la plage (`jourDe`). */
+  jour: number
+  /** Minutes réelles depuis le lundi, fin exclue. */
+  debut: number
+  fin: number
+}
+
+/** Trous entre deux équipes (contrat de la vague 1 §3, `trousDuJour`) : pour
+ * chaque poste qui compte dans la présence et chaque jour, les quarts d'heure
+ * sans personne autonome entre le début du premier besoin et la fin du
+ * dernier. Besoins : les créneaux `b…` (ni posés hors besoins, ni
+ * remplaçants) d'au moins une personne nécessaire, rangés au jour où ils
+ * sont écrits. Présences : toutes les affectations du poste, quel que soit
+ * leur jour (remplaçants, shifts posés et épinglés compris), version courte
+ * appliquée. `postes` : par défaut `postesAPresence`. */
+export function trous(
+  p: Probleme,
+  affectations: AffectationSolveur[],
+  postes: ReadonlySet<string> = postesAPresence(p.creneaux),
+): Trou[] {
+  const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
+  const salaries = new Map(p.salaries.map((s) => [s.id, s]))
+  const presences = new Map<string, PresencePoste[]>()
+  for (const a of affectationsCompletes(p, affectations)) {
+    const c = creneaux.get(a.creneauId)
+    const s = salaries.get(a.salarieId)
+    if (!c || !s || !postes.has(c.poste)) continue
+    const fait = a.court ? enVersionCourte(c) : c
+    presences.set(c.poste, [
+      ...(presences.get(c.poste) ?? []),
+      {
+        debut: fait.debut,
+        fin: fait.fin,
+        autonome: role(s, c.poste) !== 'soutien',
+      },
+    ])
+  }
+  const besoins = new Map<
+    string,
+    { poste: string; jour: number; liste: Creneau[] }
+  >()
+  for (const c of p.creneaux) {
+    if (c.ferme || c.place !== null || c.effectif <= 0) continue
+    if (!postes.has(c.poste)) continue
+    const k = `${c.poste}|${jourDe(c)}`
+    const g = besoins.get(k) ?? { poste: c.poste, jour: jourDe(c), liste: [] }
+    g.liste.push(c)
+    besoins.set(k, g)
+  }
+  const r: Trou[] = []
+  for (const { poste, jour, liste } of besoins.values()) {
+    for (const t of trousDuJour(liste, presences.get(poste) ?? [])) {
+      r.push({ poste, jour, debut: t.debut, fin: t.fin })
+    }
+  }
+  return r.sort(
+    (a, b) =>
+      a.debut - b.debut ||
+      a.jour - b.jour ||
+      (a.poste < b.poste ? -1 : a.poste > b.poste ? 1 : 0),
+  )
+}
+
+/** Une consigne de présence et ce que le planning en fait. */
+export interface EcartPresence {
+  jour: number
+  periode: PeriodePresence
+  compte: number
+  minimum: number
+  maximum: number | null
+  /** < 0 : il manque du monde ; > 0 : du monde en plus ; 0 : conforme. */
+  ecart: number
+}
+
+/** Recompte des consignes de présence (matin, soir, nuit), sans le
+ * générateur : personnes autonomes DISTINCTES posées ce jour (`jourDe`) sur
+ * un créneau qui compte dans cette période (`Creneau.presence`, posé par
+ * l'assemblage : le middle n'y compte jamais, D11 ; la nuit sur un poste qui
+ * a des codes de nuit, D15). Remplaçants, shifts posés et épinglés compris.
+ * Une ligne par consigne, dans l'ordre de `p.consignes`. */
+export function presenceParCycle(
+  p: Probleme,
+  affectations: AffectationSolveur[],
+): EcartPresence[] {
+  const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
+  const salaries = new Map(p.salaries.map((s) => [s.id, s]))
+  const presents = new Map<string, Set<string>>()
+  for (const a of affectationsCompletes(p, affectations)) {
+    const c = creneaux.get(a.creneauId)
+    const s = salaries.get(a.salarieId)
+    if (!c || !s || c.presence === null) continue
+    if (role(s, c.poste) === 'soutien') continue
+    const k = `${jourDe(c)}|${c.presence}`
+    presents.set(k, (presents.get(k) ?? new Set<string>()).add(s.id))
+  }
+  return p.consignes.map((k) => {
+    const compte = presents.get(`${k.jour}|${k.periode}`)?.size ?? 0
+    let ecart = 0
+    if (compte < k.minimum) ecart = compte - k.minimum
+    else if (k.maximum !== null && compte > k.maximum)
+      ecart = compte - k.maximum
+    return {
+      jour: k.jour,
+      periode: k.periode,
+      compte,
+      minimum: k.minimum,
+      maximum: k.maximum,
+      ecart,
+    }
+  })
 }
 
 /** Pour un créneau vide : pourquoi chaque salarié qui tient ce poste ne peut

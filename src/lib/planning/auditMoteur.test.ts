@@ -21,7 +21,12 @@ import type { SemaineOut } from '#/lib/planning/semaine.ts'
 import { hotelReel } from '#/lib/planning/test/hotelReel.ts'
 import { PlanningMemoire } from '#/lib/planning/test/planningMemoire.ts'
 import { ajouterJours, bornes, MINUTES_PAR_JOUR } from '#/lib/planning/temps.ts'
-import { violations } from '#/lib/planning/verificateur.ts'
+import {
+  manquants,
+  presenceParCycle,
+  trous,
+  violations,
+} from '#/lib/planning/verificateur.ts'
 
 /*
  * Port de `backend/tests/test_audit_moteur.py` (prototype) : défauts du
@@ -595,5 +600,87 @@ describe('9. mineurs', () => {
       generer(probleme({ salaries: [s], creneaux: [sansCourt] }), highs)
         .affectations,
     ).toEqual([])
+  })
+})
+
+// ------------------------------------- 10. cycles : oracle de bout en bout
+
+/*
+ * Plan planning-cycles-2026-10-30 (contrat de la vague 1 §3 et §4) : ce que
+ * rend le moteur est recompté par le vérificateur, qui n'importe rien du
+ * générateur. Les remplaçants (`r…`) sont écrits à la main, comme
+ * l'assemblage les produit (§2).
+ */
+
+describe('10. cycles : le vérificateur recompte le moteur', () => {
+  const manquesDe = (r: {
+    manques: { creneauId: string; manquant: number }[]
+  }) => new Map(r.manques.map((m) => [m.creneauId, m.manquant]))
+
+  it('un titulaire qui n’a que le code voisin tient la place par le remplaçant', () => {
+    // Besoin M3 07:00 → 15:00 ; la personne n'a que M6 (07:00 → 14:00).
+    const b = creneau('b1', 0, 7, 15, { typeShift: '3', presence: 'matin' })
+    const r = creneau('r1-6', 0, 7, 14, {
+      typeShift: '6',
+      place: 'b1',
+      effectif: 0,
+      presence: 'matin',
+    })
+    const s = receptionniste('r', { shiftsAutorises: new Set(['6']) })
+    const p = probleme({
+      salaries: [s],
+      creneaux: [b, r],
+      consignes: [{ jour: 0, periode: 'matin', minimum: 1, maximum: 1 }],
+    })
+    const res = generer(p, highs)
+    expect(violations(p, res.affectations)).toEqual([])
+    expect(manquants(p, res.affectations)).toEqual(manquesDe(res))
+    expect(manquants(p, res.affectations)).toEqual(new Map())
+    expect(presenceParCycle(p, res.affectations)).toMatchObject([
+      { periode: 'matin', compte: 1, ecart: 0 },
+    ])
+  })
+
+  it('personne pour la place : le moteur et le vérificateur voient le même manque', () => {
+    const b = creneau('b1', 0, 7, 15, { typeShift: '3', presence: 'matin' })
+    const r = creneau('r1-6', 0, 7, 14, {
+      typeShift: '6',
+      place: 'b1',
+      effectif: 0,
+      presence: 'matin',
+    })
+    const absent = receptionniste('r', { indisponibilites: new Set([0]) })
+    const p = probleme({
+      salaries: [absent],
+      creneaux: [b, r],
+      consignes: [{ jour: 0, periode: 'matin', minimum: 1, maximum: null }],
+    })
+    const res = generer(p, highs)
+    expect(res.affectations).toEqual([])
+    expect(manquants(p, res.affectations)).toEqual(new Map([['b1', 1]]))
+    expect(manquesDe(res)).toEqual(new Map([['b1', 1]]))
+    expect(presenceParCycle(p, res.affectations)).toMatchObject([
+      { periode: 'matin', compte: 0, ecart: -1 },
+    ])
+  })
+
+  it('matin et soir qui se touchent, tous deux tenus : aucun trou', () => {
+    const matin = creneau('bm', 0, 7, 15, { presence: 'matin' })
+    const soir = creneau('bs', 0, 15, 23, { presence: 'soir' })
+    const p = probleme({
+      salaries: [receptionniste('a'), receptionniste('b')],
+      creneaux: [matin, soir],
+    })
+    const res = generer(p, highs)
+    expect(violations(p, res.affectations)).toEqual([])
+    expect(manquants(p, res.affectations)).toEqual(new Map())
+    expect(trous(p, res.affectations)).toEqual([])
+    // Le soir seul : le vérificateur voit le matin vide comme un trou.
+    expect(
+      trous(
+        p,
+        res.affectations.filter((a) => a.creneauId === 'bs'),
+      ),
+    ).toEqual([{ poste: 'r', jour: 0, debut: 7 * H, fin: 15 * H }])
   })
 })

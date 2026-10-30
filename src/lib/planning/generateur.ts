@@ -56,19 +56,29 @@ import type {
  *   P0  la loi : contraintes DURES (repos de 11 h, 6 jours, 48 h, nuit des
  *       mineurs, soutien jamais seul, code fixé…). Aucun poids ne la passe.
  *   P1  une place « nécessaire » vide : `coutPlaceVide`, DÉRIVÉ des poids
- *       ci-dessous (pas posé à la main).
- *   P2  le matin et le soir (consignes) : `POIDS_PRESENCE_MINUTE` par
- *       personne et par minute de la période.
+ *       ci-dessous (pas posé à la main) ; une PLACE est le besoin et ses
+ *       remplaçants (`coutPlaceVideGroupe`). Au même niveau, une personne
+ *       de moins que le MINIMUM d'une consigne, matin, soir ou nuit
+ *       (`coutManqueMinimum`, même dérivation, D7 du plan des cycles).
+ *   P2  le MAXIMUM d'une consigne : `POIDS_PRESENCE_MINUTE` par personne et
+ *       par minute de la période (`coutConsigne`) ; un trou entre deux
+ *       équipes : `POIDS_TROU_QUART` par quart d'heure (D10).
  *   P3  les contrats : heures dues (`POIDS_SOUS_CONTRAT`) > 6e jour > heures
  *       au-delà (`POIDS_SUR_CONTRAT`).
- *   P4  titulaire avant dépannage : `POIDS_DEPANNAGE_MINUTE` par minute
- *       plus `PART_FIXE_DEPANNAGE` par shift.
+ *   P4  le métier d'abord (D13), à durée égale :
+ *         titulaire au code imposé              0
+ *       < titulaire avec un autre code du cycle  POIDS_REMPLACANT (2 000)
+ *       < dépannage au code imposé              `coutDepannage` (10 / min
+ *                                               + PART_FIXE_DEPANNAGE 4 609)
+ *       < dépannage avec un autre code          `coutDepannage` + 2 000
+ *       < place vide                            P1.
  *   P5  le confort : jours habituels, repos accolés, équité.
  *
  * P1 : ajouter UNE personne libre (rien d'autre ne bouge) sur un créneau `c`
  * coûte au pire, tous termes de l'objectif confondus :
  *     (POIDS_SUR_CONTRAT + POIDS_DEPANNAGE_MINUTE) × durée(c)   heures en plus, dépannage
  *   + PART_FIXE_DEPANNAGE                                       dépannage, part fixe
+ *   + POIDS_REMPLACANT (si `c` est un remplaçant)               un autre code du cycle
  *   + POIDS_SIXIEME_JOUR                                        un jour de plus = au plus un 6e jour
  *   + POIDS_REPOS_SEPARES                                       la paire de repos accolés perdue
  *   + max des consignes (P2)                                    une personne au-delà d'un « au plus »
@@ -79,11 +89,19 @@ import type {
  * coûte strictement plus : à l'optimum, une place nécessaire n'est vide que
  * si PERSONNE ne peut y être ajouté sans enfreindre une règle dure — ce que
  * dit `raisonsBlocage`. L'inégalité tient quels que soient les poids, parce
- * que `coutPlaceVide` les relit.
+ * que `coutPlaceVide` les relit. Une place qui a des remplaçants coûte le
+ * PIRE de ses créneaux : elle n'est vide que si personne ne peut tenir aucun
+ * de ses codes. Le minimum d'une consigne se dérive de même sur les créneaux
+ * qui y comptent. Ni les trous (ajouter une personne n'en crée pas) ni le
+ * minimum (il ne peut que baisser) n'ont à entrer dans le pire coût ; le
+ * « max des consignes » ne relit que les MAXIMUMS, sinon le minimum
+ * dépendrait de lui-même.
  *
- * P2 sous P1 : `coutPlaceVide` contient le plus cher des P2. P2 par minute
- * (100) > heures au-delà (50) : pour un shift de 8 h, une personne qui
- * manque le matin passe avant un 6e jour et 8 h en plus (39 000 < 48 000).
+ * P2 sous P1 : `coutPlaceVide` contient le plus cher des maximums. Un trou
+ * ne se compare pas à une place : il disparaît dès qu'une personne de plus
+ * est là. P2 par minute (100) > heures au-delà (50) : pour un shift de
+ * 8 h, une personne de trop sur un « au plus », ou 8 h de trou, pèse plus
+ * qu'un 6e jour et 8 h en plus (39 000 < 48 000).
  * Mais P2 < heures dues (400 par minute) : une personne due reste placée,
  * au pire en trop sur un « au plus » (choix du 2026-10-27, gardé). Le coût
  * d'une consigne est donc PLAFONNÉ sous les heures dues de chaque créneau
@@ -97,6 +115,21 @@ import type {
  * de shift, et sous le 6e jour jusqu'à 17 h : un titulaire qui ferait des
  * heures en plus ou un 6e jour laisse la place au dépannage. P4 sous P1 :
  * une place tenue en dépannage vaut mieux qu'une place vide (D13, D14).
+ * Remplaçant (D16, option A) : POIDS_REMPLACANT < PART_FIXE_DEPANNAGE, donc
+ * un titulaire change de code plutôt que de laisser la place à un
+ * dépannage ; il est au niveau du confort (jour habituel 2 000), qui peut
+ * rarement faire préférer un code voisin (accepté). Sous les heures (50 par
+ * minute) : un remplaçant d'une heure plus long que le besoin coûte 3 000 de
+ * plus, le code imposé reste devant. Sous un trou d'une demi-heure (3 000) :
+ * changer de code pour fermer un trou vaut la peine.
+ *
+ * RELÈVE (chevauchement de l'équipe qui arrive et de celle qui part, D4) :
+ * PAS de bonus dans le modèle. Le bonus devait être P5 ; or la part fixe du
+ * dépannage est DÉRIVÉE de tout le confort d'un shift : un bonus de relève
+ * l'obligeait à grandir (le modèle de toutes les semaines changeait) et
+ * demandait une variable par paire de créneaux qui se chevauchent. Le coût
+ * des trous pousse déjà les codes à se toucher ; un chevauchement n'est pas
+ * récompensé de plus.
  *
  * P5 sous P4, pour TOUTE durée de shift : la part fixe du dépannage dépasse
  * la somme de tout le confort qu'un shift peut faire gagner ou perdre (jour
@@ -119,8 +152,14 @@ export const POIDS_EQUITE = 100
 export const POIDS_REPOS_SEPARES = 1_000
 /** Travailler un jour habituel (semaine type « travail »). */
 export const POIDS_JOUR_FIXE = 2_000
-// P4 — titulaire avant dépannage.
+// P4 — titulaire avant dépannage, code imposé avant remplaçant.
 export const POIDS_DEPANNAGE_MINUTE = 10
+/** Un shift tenu avec un AUTRE code du même cycle que celui du besoin
+ * (créneau remplaçant `r…`, D5, D16 option A). Sous la part fixe d'un
+ * dépannage (D13 : titulaire remplaçant avant dépannage au code imposé),
+ * au niveau du confort : le confort peut rarement faire préférer un code
+ * voisin (accepté, D16). */
+export const POIDS_REMPLACANT = 2_000
 // P3 — contrats.
 export const POIDS_SUR_CONTRAT = 50
 export const POIDS_SIXIEME_JOUR = 15_000
@@ -129,6 +168,14 @@ export const POIDS_SOUS_CONTRAT = 400
 /** Une personne de moins (ou de plus) qu'une consigne, par minute de la
  * période (durée du plus long créneau qui y compte ce jour-là). */
 export const POIDS_PRESENCE_MINUTE = 100
+/** Un quart d'heure sans personne autonome sur un poste compté dans la
+ * présence, entre le premier et le dernier besoin du jour (trou entre deux
+ * équipes, D10) : le prix d'une personne qui manque à une consigne, par
+ * minute. Une demi-heure (3 000) vaut un changement de code (2 000), un
+ * quart d'heure seul (1 500) non. */
+export const POIDS_TROU_QUART = 15 * POIDS_PRESENCE_MINUTE
+/** Pas de la grille des trous, en minutes réelles (0, 15, 30…). */
+const QUART = 15
 // Départage.
 export const POIDS_DEJA_PROPOSE = 5
 /** Bruit de la graine : 0 à 3 par affectation. */
@@ -172,11 +219,13 @@ export function coutConsigne(creneaux: Creneau[]): number {
   return Math.max(0, Math.min(POIDS_PRESENCE_MINUTE * long, plafond))
 }
 
-/** Le pire que coûte l'ajout d'une personne libre sur `c` (voir P1). */
+/** Le pire que coûte l'ajout d'une personne libre sur `c` (voir P1), le
+ * changement de code compris quand `c` est un remplaçant. */
 export function pireCoutRemplir(c: Creneau, presenceLaPlusChere: number) {
   return (
     (POIDS_SUR_CONTRAT + POIDS_DEPANNAGE_MINUTE) * duree(c) +
     PART_FIXE_DEPANNAGE +
+    (c.place !== null ? POIDS_REMPLACANT : 0) +
     POIDS_SIXIEME_JOUR +
     POIDS_REPOS_SEPARES +
     presenceLaPlusChere +
@@ -191,6 +240,47 @@ export function pireCoutRemplir(c: Creneau, presenceLaPlusChere: number) {
 export function coutPlaceVide(c: Creneau, presenceLaPlusChere: number) {
   return pireCoutRemplir(c, presenceLaPlusChere) + 1
 }
+
+/** P1 : une personne qui manque sur une PLACE tenue par le besoin ou l'un
+ * de ses remplaçants (`membres`) : au-dessus du pire de chacun, pour que la
+ * place ne reste vide que si personne ne peut tenir AUCUN des codes. Sans
+ * remplaçant, `coutPlaceVide` du besoin, inchangé. */
+export function coutPlaceVideGroupe(
+  membres: Creneau[],
+  presenceLaPlusChere: number,
+) {
+  return Math.max(...membres.map((c) => coutPlaceVide(c, presenceLaPlusChere)))
+}
+
+/** P1 (D7) : une personne de moins que le minimum d'une consigne, dont
+ * `creneaux` sont les créneaux qui y comptent ce jour-là. Même dérivation
+ * que la place vide : ajouter une personne libre sur l'un d'eux coûte au
+ * plus `pireCoutRemplir` (heures en plus, dépannage, remplaçant, 6e jour,
+ * repos accolés, « au plus » d'une consigne, équité, départage) ; le manque
+ * coûte strictement plus que le pire d'entre eux. À l'optimum, un minimum
+ * n'est manqué que si personne ne peut être ajouté sur aucun créneau qui
+ * compte (règle dure, ou place déjà au plus). Un shift posé à la main
+ * (`ferme`) ne reçoit personne : il n'entre pas dans le calcul. */
+export function coutManqueMinimum(
+  creneaux: Creneau[],
+  presenceLaPlusChere: number,
+) {
+  const ouverts = creneaux.filter((c) => !c.ferme)
+  return ouverts.length ? coutPlaceVideGroupe(ouverts, presenceLaPlusChere) : 0
+}
+
+/** Un moment sans personne autonome sur un poste compté dans la présence,
+ * entre le début du premier besoin et la fin du dernier du jour. Minutes
+ * réelles depuis le lundi (`temps.ts`). */
+export interface Trou {
+  poste: string
+  jour: number
+  debut: number
+  fin: number
+}
+
+/** Le résultat du générateur, avec les trous entre équipes restés. */
+export type ResultatGeneration = Resultat & { trous: Trou[] }
 
 /** Le solveur HiGHS tel que le rend `highs` (API historique). */
 export interface Highs {
@@ -379,6 +469,8 @@ interface Construit {
   court: Map<string, string>
   manque: Map<string, string>
   ecarts: Array<[string, string]>
+  /** Variables de trou (une par morceau de plage), voir `trousEntreEquipes`. */
+  trous: Array<Trou & { v: string }>
 }
 
 export function construire(p: Probleme): Construit {
@@ -436,54 +528,75 @@ export function construire(p: Probleme): Construit {
   const ecarts: Array<[string, string]> = []
   const manque = new Map<string, string>()
 
-  // P2 : coût d'une personne de moins (ou de plus) pour chaque consigne
-  // (`coutConsigne` : le plus long créneau de la période, plafonné).
-  const coutsConsignes = p.consignes.map((k) =>
-    coutConsigne(
-      p.creneaux.filter(
-        (c) => c.presence === k.periode && jourDe(c) === k.jour,
-      ),
-    ),
+  // Consignes de présence : les créneaux qui comptent, ce jour et à cette
+  // période. Le maximum se paie en P2 (`coutConsigne`) ; le minimum est une
+  // place nécessaire (P1, D7), dérivé comme `coutPlaceVide`. Seul le maximum
+  // entre dans `presenceLaPlusChere` : le coût du minimum en dépend, il ne
+  // peut pas en faire partie (pas de boucle).
+  const comptent = p.consignes.map((k) =>
+    p.creneaux.filter((c) => c.presence === k.periode && jourDe(c) === k.jour),
   )
-  const presenceLaPlusChere = Math.max(0, ...coutsConsignes)
+  const coutsMaximum = p.consignes.map((k, i) =>
+    k.maximum !== null ? coutConsigne(comptent[i]) : 0,
+  )
+  const presenceLaPlusChere = Math.max(0, ...coutsMaximum)
+  const coutsMinimum = comptent.map((cs) =>
+    coutManqueMinimum(cs, presenceLaPlusChere),
+  )
 
-  // Couverture.
+  // Couverture, par PLACE : un besoin `b…` et ses remplaçants `r…`
+  // (`place` = id du besoin, même cycle, autre code permis) forment un
+  // groupe. Un seul manque par groupe, au plus effectif + facultatif du
+  // besoin au total ; les remplaçants n'ont aucune contrainte propre.
+  const groupes = new Map<string, Creneau[]>()
   for (const c of p.creneaux) {
     if (c.ferme) continue
+    const g = c.place ?? c.id
+    groupes.set(g, [...(groupes.get(g) ?? []), c])
+  }
+  for (const [g, membres] of groupes) {
+    // Le besoin fixe la place ; sans lui (remplaçant orphelin), le premier.
+    const tete = membres.find((c) => c.id === g) ?? membres[0]
     const autonomes: string[] = []
-    const soutiens: Array<[SalarieSolveur, string]> = []
-    for (const s of p.salaries) {
-      const v = x.get(cle(s.id, c.id))
-      if (!v) continue
-      const r = role(s, c.poste)
-      if (r === 'soutien') soutiens.push([s, v])
-      else autonomes.push(v)
-      // P4 : un dépannage coûte, un titulaire libre passe devant (D13).
-      if (r === 'occasionnel') m.cout(coutDepannage(c), v)
+    const soutiens: Array<[SalarieSolveur, string, Creneau]> = []
+    for (const c of membres) {
+      for (const s of p.salaries) {
+        const v = x.get(cle(s.id, c.id))
+        if (!v) continue
+        const r = role(s, c.poste)
+        if (r === 'soutien') soutiens.push([s, v, c])
+        else autonomes.push(v)
+        // P4 : un dépannage coûte, un titulaire libre passe devant (D13).
+        if (r === 'occasionnel') m.cout(coutDepannage(c), v)
+        // P4 : un autre code du cycle coûte, le code imposé passe devant
+        // (D5, D13, D16), en plus du dépannage s'il y a lieu.
+        if (c.place !== null) m.cout(POIDS_REMPLACANT, v)
+      }
     }
-    const vm = m.entier(0, c.effectif)
-    manque.set(c.id, vm)
+    const vm = m.entier(0, tete.effectif)
+    manque.set(tete.id, vm)
     m.ajoute(
       [...autonomes.map((v) => [1, v] as Terme), [1, vm]],
       '>=',
-      c.effectif,
+      tete.effectif,
     )
     m.ajoute(
       autonomes.map((v) => [1, v] as Terme),
       '<=',
-      c.effectif + c.facultatif,
+      tete.effectif + tete.facultatif,
     )
-    m.cout(coutPlaceVide(c, presenceLaPlusChere), vm)
+    m.cout(coutPlaceVideGroupe(membres, presenceLaPlusChere), vm)
     if (soutiens.length) {
-      const nbImposes = p.salaries.filter(
-        (s) => imposees.has(cle(s.id, c.id)) && role(s, c.poste) === 'soutien',
+      const nbImposes = soutiens.filter(([s, , c]) =>
+        imposees.has(cle(s.id, c.id)),
       ).length
       m.ajoute(
         soutiens.map(([, v]) => [1, v] as Terme),
         '<=',
-        Math.max(c.soutien, nbImposes),
+        Math.max(tete.soutien, nbImposes),
       )
-      for (const [s, v] of soutiens) {
+      // Soutien jamais seul : compté sur la place entière.
+      for (const [s, v, c] of soutiens) {
         if (!imposees.has(cle(s.id, c.id))) {
           m.ajoute([[1, v], ...autonomes.map((a) => [-1, a] as Terme)], '<=', 0)
         }
@@ -491,14 +604,12 @@ export function construire(p: Probleme): Construit {
     }
   }
 
-  // Consignes de présence : personnes autonomes sur les créneaux qui
-  // comptent, ce jour et à cette période. Souples des deux côtés (le modèle
-  // reste toujours réalisable) : un manque ou un surplus se paie.
+  // Consignes : personnes autonomes sur les créneaux qui comptent. Souples
+  // des deux côtés (le modèle reste toujours réalisable) : un manque ou un
+  // surplus se paie.
   p.consignes.forEach((k, i) => {
-    const cout = coutsConsignes[i]
     const termes: Terme[] = []
-    for (const c of p.creneaux) {
-      if (c.presence !== k.periode || jourDe(c) !== k.jour) continue
+    for (const c of comptent[i]) {
       for (const s of p.salaries) {
         const v = x.get(cle(s.id, c.id))
         if (v && role(s, c.poste) !== 'soutien') termes.push([1, v])
@@ -507,14 +618,16 @@ export function construire(p: Probleme): Construit {
     if (k.minimum > 0) {
       const vm = m.entier(0, k.minimum)
       m.ajoute([...termes, [1, vm]], '>=', k.minimum)
-      m.cout(cout, vm)
+      m.cout(coutsMinimum[i], vm)
     }
     if (k.maximum !== null && termes.length > k.maximum) {
       const vp = m.entier(0, termes.length)
       m.ajoute([...termes, [-1, vp]], '<=', k.maximum)
-      m.cout(cout, vp)
+      m.cout(coutsMaximum[i], vp)
     }
   })
+
+  const trous = trousEntreEquipes(m, p, x, court)
 
   // Une « expression » : termes + constante.
   type Expr = { termes: Terme[]; constante: number }
@@ -836,7 +949,7 @@ export function construire(p: Probleme): Construit {
     for (const v of x.values()) m.cout(Math.floor(hasard() * 4), v)
   }
 
-  return { modele: m, x, court, manque, ecarts }
+  return { modele: m, x, court, manque, ecarts, trous }
 }
 
 /**
@@ -1060,28 +1173,124 @@ function reposHebdo(
     )
 }
 
+/**
+ * Trous entre équipes (D10, contrat de la vague 1 §3), P2, jamais dur. MÊME
+ * définition que l'oracle (`trousDuJour`, `cycles.ts`), réécrite ici sans
+ * rien en reprendre :
+ *   - postes regardés : ceux qui ont au moins un créneau du matin ou du soir
+ *     (`presence.ts` ne les donne qu'à un poste coché ; la nuit vient des
+ *     codes de nuit et ne dit rien du poste, D15) ;
+ *   - PLAGE d'un poste un jour : du plus petit début au plus grand fin des
+ *     besoins `b…` (non posés, `place` nulle, effectif > 0) écrits ce jour ;
+ *   - grille des quarts d'heure ABSOLUE en minutes réelles (0, 15, 30…),
+ *     coupée aux bords de la plage ; un quart d'heure est tenu quand UNE
+ *     présence autonome (pas un soutien) le couvre EN ENTIER ;
+ *   - présences : tous les créneaux du poste (besoin, remplaçant, middle,
+ *     shift posé), quel que soit le jour où ils sont écrits (la nuit de la
+ *     veille couvre le petit matin), version courte appliquée.
+ * Une variable par suite de quarts d'heure où les mêmes créneaux couvrent :
+ *   Σ x(autonomes qui couvrent) [- court(…) si la version courte ne couvre
+ *   plus] + trou >= 1
+ * coût `POIDS_TROU_QUART` par quart d'heure de la suite (au prorata d'un
+ * quart coupé au bord de la plage).
+ *
+ * Ajouter une personne ne crée jamais de trou : la dérivation de P1
+ * (`pireCoutRemplir`) n'a rien à compter.
+ */
+function trousEntreEquipes(
+  m: Modele,
+  p: Probleme,
+  x: Map<string, string>,
+  court: Map<string, string>,
+): Array<Trou & { v: string }> {
+  const postes = new Set(
+    p.creneaux
+      .filter((c) => c.presence === 'matin' || c.presence === 'soir')
+      .map((c) => c.poste),
+  )
+  const r: Array<Trou & { v: string }> = []
+  for (const poste of postes) {
+    const duPoste = p.creneaux.filter((c) => c.poste === poste)
+    const parJour = new Map<number, Creneau[]>()
+    for (const c of duPoste) {
+      if (c.ferme || c.place !== null || c.effectif <= 0) continue
+      parJour.set(jourDe(c), [...(parJour.get(jourDe(c)) ?? []), c])
+    }
+    for (const jour of [...parJour.keys()].sort((a, b) => a - b)) {
+      const besoins = (parJour.get(jour) ?? []).filter((c) => c.fin > c.debut)
+      if (!besoins.length) continue
+      const debut = Math.min(...besoins.map((c) => c.debut))
+      const fin = Math.max(...besoins.map((c) => c.fin))
+      const presents = duPoste.filter((c) => c.debut < fin && c.fin > debut)
+      // Suites de quarts d'heure couverts par les mêmes créneaux (et la même
+      // part en version courte) : une seule variable.
+      const suites: Array<{ debut: number; fin: number; cle: string }> = []
+      const premier = Math.floor(debut / QUART) * QUART
+      for (let q = premier; q < fin; q += QUART) {
+        const a = Math.max(q, debut)
+        const b = Math.min(q + QUART, fin)
+        const cle = presents
+          .filter((c) => c.debut <= a && c.fin >= b)
+          .map((c) => `${c.id}${c.fin - c.raccourci >= b ? '' : '~'}`)
+          .join('|')
+        const derniere = suites.at(-1)
+        if (derniere && derniere.cle === cle && derniere.fin === a)
+          derniere.fin = b
+        else suites.push({ debut: a, fin: b, cle })
+      }
+      for (const suite of suites) {
+        const termes: Terme[] = []
+        for (const c of presents) {
+          if (c.debut > suite.debut || c.fin < suite.fin) continue
+          const courteCouvre = c.fin - c.raccourci >= suite.fin
+          for (const s of p.salaries) {
+            const k = cle(s.id, c.id)
+            const v = x.get(k)
+            if (!v || role(s, c.poste) === 'soutien') continue
+            termes.push([1, v])
+            // Fait en version courte, il est parti avant la fin du quart.
+            const vc = court.get(k)
+            if (vc && !courteCouvre) termes.push([-1, vc])
+          }
+        }
+        const v = m.continu(0, 1)
+        m.ajoute([...termes, [1, v]], '>=', 1)
+        m.cout(
+          Math.round((POIDS_TROU_QUART * (suite.fin - suite.debut)) / QUART),
+          v,
+        )
+        r.push({ poste, jour, debut: suite.debut, fin: suite.fin, v })
+      }
+    }
+  }
+  return r
+}
+
 function scinder(k: string): [string, string] {
   const i = k.indexOf('|')
   return [k.slice(0, i), k.slice(i + 1)]
 }
 
 /** Résout le problème avec HiGHS (chargé par l'appelant : worker ou test). */
-export function generer(p: Probleme, highs: Highs): Resultat {
-  const { modele, x, court, manque, ecarts } = construire(p)
+export function generer(p: Probleme, highs: Highs): ResultatGeneration {
+  const { modele, x, court, manque, ecarts, trous } = construire(p)
   if (modele.impossible) {
     return {
       statut: 'inconnu',
       affectations: [],
       manques: [],
       ecartTotalMinutes: null,
+      trous: [],
     }
   }
+  // Sans variable ni place : aucun besoin, donc aucune plage, aucun trou.
   if (x.size === 0 && manque.size === 0) {
     return {
       statut: 'optimal',
       affectations: [],
       manques: [],
       ecartTotalMinutes: 0,
+      trous: [],
     }
   }
   const solution = highs.solve(modele.lp(), {
@@ -1104,7 +1313,13 @@ export function generer(p: Probleme, highs: Highs): Resultat {
         ? 'realisable'
         : 'inconnu'
   if (statut === 'inconnu') {
-    return { statut, affectations: [], manques: [], ecartTotalMinutes: null }
+    return {
+      statut,
+      affectations: [],
+      manques: [],
+      ecartTotalMinutes: null,
+      trous: [],
+    }
   }
   const affectations: AffectationSolveur[] = []
   for (const [k, v] of x) {
@@ -1122,6 +1337,20 @@ export function generer(p: Probleme, highs: Highs): Resultat {
     const n = valeur(v)
     if (n) manques.push({ creneauId, manquant: n })
   }
+  // Trous restés, morceaux qui se touchent réunis.
+  const restes: Trou[] = []
+  for (const { v, ...t } of trous) {
+    if (valeur(v) !== 1) continue
+    const dernier = restes.at(-1)
+    if (
+      dernier &&
+      dernier.poste === t.poste &&
+      dernier.jour === t.jour &&
+      dernier.fin === t.debut
+    )
+      dernier.fin = t.fin
+    else restes.push(t)
+  }
   return {
     statut,
     affectations,
@@ -1130,5 +1359,6 @@ export function generer(p: Probleme, highs: Highs): Resultat {
       (t, [plus, moins]) => t + valeur(plus) + valeur(moins),
       0,
     ),
+    trous: restes,
   }
 }

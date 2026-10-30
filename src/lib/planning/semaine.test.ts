@@ -1,3 +1,4 @@
+import fc from 'fast-check'
 import highsLoader from 'highs'
 import { beforeAll, describe, expect, it } from 'vitest'
 
@@ -16,19 +17,38 @@ import type {
   Probleme,
   SalarieSolveur,
 } from '#/lib/planning/modele.ts'
+import { versSolveur } from '#/lib/planning/regles.ts'
 import {
+  analyser,
+  besoinsValides,
+  contexte,
+  correspondances,
+  creneauBesoin,
+  creneauRemplacant,
   estEcole,
+  fiche,
+  idRemplacant,
   preparerGeneration,
+  raisonCommune,
+  remplacantsDe,
   semaineRemplie,
 } from '#/lib/planning/semaine.ts'
 import { REGLES_BLOCAGE } from '#/lib/planning/raisonsPlaces.ts'
-import type { SemaineOut } from '#/lib/planning/semaine.ts'
+import type { DonneesSemaine, SemaineOut } from '#/lib/planning/semaine.ts'
 import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
 import { hotelReel } from '#/lib/planning/test/hotelReel.ts'
 import { PlanningMemoire } from '#/lib/planning/test/planningMemoire.ts'
 import { ajouterJours, MINUTES_PAR_JOUR } from '#/lib/planning/temps.ts'
-import type { Affectation, Salarie } from '#/lib/planning/types.ts'
+import type {
+  Affectation,
+  Besoin,
+  Consigne,
+  Horaire,
+  Poste,
+  Salarie,
+} from '#/lib/planning/types.ts'
 import { violations } from '#/lib/planning/verificateur.ts'
+import type { Violation } from '#/lib/planning/verificateur.ts'
 
 /*
  * Port des tests du prototype qui passaient par l'API et SQLite
@@ -1288,5 +1308,528 @@ describe('shift sans code (test_audit_api.py)', () => {
     const b = sem.affectations.find((s) => s.id === a.id)!
     expect(b.type_shift_id).toBeNull()
     expect([b.pause, b.duree]).toEqual([60, 480])
+  })
+})
+
+// ======================== cycles : rattachement et remplaçants (2026-10-30)
+
+/*
+ * Plan planning-cycles-2026-10-30, étapes 3 à 5 (contrat de la vague 1,
+ * §2 et §5). Petit hôtel construit à la main, sous des pseudonymes : un
+ * poste Accueil (présence) aux codes M3, M6 (matin), S4 (soir), MI, MI2
+ * (middle), D, D2 (sans famille) ; M9 existe mais n'est pas un code du
+ * poste ; une Veille aux codes N (nuit).
+ */
+describe('cycles : un shift posé tient la place de son cycle', () => {
+  const ACCUEIL = 1
+  const VEILLE = 2
+  const code = (
+    id: number,
+    c: string,
+    debut: string,
+    fin: string,
+    periode: Horaire['periode'],
+  ): Horaire => ({
+    id,
+    code: c,
+    nom: c,
+    debut,
+    fin,
+    couleur: '#888888',
+    pause: 30,
+    raccourci: 0,
+    raccourci_debut: 0,
+    periode,
+    code_rouge: false,
+  })
+  const M3 = code(1, 'M3', '07:00', '15:00', 'matin')
+  const M6 = code(2, 'M6', '08:00', '16:00', 'matin')
+  const S4 = code(3, 'S4', '15:00', '23:00', 'soir')
+  const MI = code(4, 'MI', '10:00', '18:00', 'middle')
+  const MI2 = code(5, 'MI2', '11:00', '19:00', 'middle')
+  const D = code(6, 'D', '09:00', '17:00', null)
+  const D2 = code(7, 'D2', '08:00', '16:00', null)
+  const M9 = code(8, 'M9', '06:30', '14:30', 'matin')
+  const N = code(9, 'N', '23:00', '07:00', 'nuit')
+  const HORAIRES = [M3, M6, S4, MI, MI2, D, D2, M9, N]
+  const POSTES: Poste[] = [
+    {
+      id: ACCUEIL,
+      nom: 'Accueil',
+      categorie: 'reception',
+      couleur: '#111111',
+      horaires_autorises: [1, 2, 3, 4, 5, 6, 7],
+      a_part: false,
+      presence: true,
+    },
+    {
+      id: VEILLE,
+      nom: 'Veille',
+      categorie: 'veille_nuit',
+      couleur: '#222222',
+      horaires_autorises: [9],
+      a_part: false,
+      presence: false,
+    },
+  ]
+  const personne = (
+    id: number,
+    prenom: string,
+    niveau: 'titulaire' | 'soutien' = 'titulaire',
+    poste = ACCUEIL,
+  ): Salarie => ({
+    id,
+    prenom,
+    nom: 'Essai',
+    groupe_id: null,
+    type_contrat: niveau === 'soutien' ? 'apprenti' : 'cdi',
+    heures_hebdo: 35,
+    forfait_jours: false,
+    mineur: false,
+    competences: [{ poste_id: poste, niveau }],
+    semaine_type: Array.from({ length: 7 }, () => ({ mode: 'auto' as const })),
+    shifts_autorises: [],
+    date_entree: null,
+    date_sortie: null,
+    actif: true,
+    suite_de: null,
+  })
+  const ALPHA = personne(10, 'Alpha')
+  const BRAVO = personne(11, 'Bravo')
+  const CHARLIE = personne(12, 'Charlie')
+  const DELTA = personne(13, 'Delta', 'soutien')
+  const besoin = (
+    id: number,
+    h: Horaire | null,
+    jour = 1,
+    effectif = 1,
+    kw: Partial<Besoin> = {},
+  ): Besoin => ({
+    id,
+    poste_id: ACCUEIL,
+    jour,
+    horaire_id: h ? h.id : null,
+    debut: h ? h.debut : '07:00',
+    fin: h ? h.fin : '15:00',
+    effectif,
+    soutien: 0,
+    renfort: 0,
+    ...kw,
+  })
+  let prochainId = 1000
+  const shift = (
+    x: Salarie,
+    h: Horaire | null,
+    jour = 1,
+    kw: Partial<Affectation> = {},
+  ): Affectation => ({
+    id: prochainId++,
+    lundi: LUNDI,
+    salarie_id: x.id,
+    poste_id: ACCUEIL,
+    jour,
+    horaire_id: h ? h.id : null,
+    debut: h ? h.debut : '07:00',
+    fin: h ? h.fin : '15:00',
+    epinglee: true,
+    court: false,
+    pause: h ? h.pause : 0,
+    ...kw,
+  })
+  const donnees = (
+    besoins: Besoin[],
+    affectations: Affectation[],
+    salaries: Salarie[] = [ALPHA, BRAVO, CHARLIE],
+    consignes: Consigne[] = [],
+  ): DonneesSemaine => ({
+    lundi: LUNDI,
+    referentiel: {
+      horaires: HORAIRES,
+      motifs: [],
+      postes: POSTES,
+      groupes: [],
+      salaries,
+      besoins,
+      consignes,
+      verrous: [],
+    },
+    absences: [],
+    affectations,
+    avant: [],
+    apres: [],
+  })
+  const corr = (d: DonneesSemaine) => {
+    const ctx = contexte(d)
+    const salaries = new Map(
+      ctx.staff.map((x) => [x.id, versSolveur(fiche(x, ctx.lundi, ctx))]),
+    )
+    return correspondances(ctx, besoinsValides(ctx).valides, salaries)
+  }
+  const shiftOut = (sem: SemaineOut, id: number) =>
+    sem.affectations.find((a) => a.id === id)!
+  const idsR = (p: Probleme) =>
+    p.creneaux.filter((c) => c.id.startsWith('r')).map((c) => c.id)
+
+  it('M6 posé, besoin M3 : la place est tenue, code_demande = M3, aucun doublon', () => {
+    const a = shift(ALPHA, M6)
+    const d = donnees([besoin(100, M3)], [a])
+    const sem = analyser(d)
+    expect(sem.a_pourvoir).toEqual([])
+    expect(shiftOut(sem, a.id)).toMatchObject({
+      besoin_id: 100,
+      code_demande: M3.id,
+    })
+    expect([sem.stats.places, sem.stats.pourvues]).toEqual([1, 1])
+    const g = preparerGeneration(d, { aujourdhui: AUJOURDHUI })
+    // Le M6 est imposé sur le remplaçant qui le porte, et rien d'autre.
+    expect(idsR(g.probleme)).toEqual([idRemplacant(100, M6.id)])
+    expect(g.probleme.imposees.has(cle('10', idRemplacant(100, M6.id)))).toBe(
+      true,
+    )
+    const nouveaux = g.traduire(generer(g.probleme, highs))
+    expect(nouveaux.filter((n) => n.jour === 1)).toEqual([])
+  })
+
+  it('S4 posé ne tient pas un M3', () => {
+    const a = shift(ALPHA, S4)
+    const sem = analyser(donnees([besoin(100, M3)], [a]))
+    expect(sem.a_pourvoir.map((x) => x.besoin_id)).toEqual([100])
+    expect(shiftOut(sem, a.id)).toMatchObject({
+      besoin_id: null,
+      code_demande: null,
+    })
+  })
+
+  it('un code sans famille ne se rattache que par code exact', () => {
+    const exact = shift(ALPHA, D)
+    const voisin = shift(BRAVO, D2)
+    const sem = analyser(
+      donnees([besoin(100, D), besoin(101, D, 2)], [exact, voisin]),
+    )
+    expect(shiftOut(sem, exact.id)).toMatchObject({
+      besoin_id: 100,
+      code_demande: null,
+    })
+    expect(shiftOut(sem, voisin.id).besoin_id).toBeNull()
+    // Et un shift de code sans famille ne tient pas une place à code familier.
+    const r = corr(donnees([besoin(102, M3)], [shift(ALPHA, D2)]))
+    expect(r.lien.size).toBe(0)
+  })
+
+  it('un horaire libre ne se rattache que par ses heures exactes', () => {
+    const libre = shift(ALPHA, null, 1, { debut: '08:00', fin: '16:00' })
+    const r = corr(donnees([besoin(100, M3)], [libre]))
+    expect(r.lien.size).toBe(0)
+  })
+
+  it('un middle ne tient pas un matin, il tient un autre middle', () => {
+    const mi = shift(ALPHA, MI)
+    expect(corr(donnees([besoin(100, M3)], [mi])).lien.size).toBe(0)
+    const r = corr(donnees([besoin(101, MI)], [shift(BRAVO, MI2)]))
+    expect([...r.lien.values()]).toEqual([101])
+    expect([...r.demande.values()]).toEqual([MI.id])
+    // Et un matin ne tient pas un middle.
+    expect(corr(donnees([besoin(102, MI)], [shift(ALPHA, M6)])).lien.size).toBe(
+      0,
+    )
+  })
+
+  it('remplaçants : même cycle, codes du poste seulement', () => {
+    const ctx = contexte(donnees([], []))
+    const ids = (b: Besoin) => remplacantsDe(ctx, b).map((h) => h.code)
+    // M9 est un matin, mais pas un code de l'Accueil.
+    expect(ids(besoin(1, M3))).toEqual(['M6'])
+    expect(ids(besoin(2, M6))).toEqual(['M3'])
+    expect(ids(besoin(3, S4))).toEqual([])
+    expect(ids(besoin(4, MI))).toEqual(['MI2'])
+    expect(ids(besoin(5, D))).toEqual([])
+    expect(ids(besoin(6, null))).toEqual([])
+    // Poste qui permet tous les codes : M9 devient un remplaçant possible.
+    const tous = contexte({
+      ...donnees([], []),
+      referentiel: {
+        ...donnees([], []).referentiel,
+        postes: [{ ...POSTES[0], horaires_autorises: [] }, POSTES[1]],
+      },
+    })
+    expect(remplacantsDe(tous, besoin(7, M3)).map((h) => h.code)).toEqual([
+      'M6',
+      'M9',
+    ])
+  })
+
+  it('créneau remplaçant : forme du contrat (§2)', () => {
+    const ctx = contexte(donnees([], []))
+    const b = besoin(100, M3)
+    const c = creneauRemplacant(ctx, b, M6)
+    const [debut, fin] = [8 * H, 16 * H].map((m) => MINUTES_PAR_JOUR + m) as [
+      number,
+      number,
+    ]
+    expect(c).toMatchObject({
+      id: 'r100-2',
+      place: 'b100',
+      poste: String(ACCUEIL),
+      effectif: 0,
+      facultatif: 0,
+      soutien: 0,
+      typeShift: '2',
+      ferme: false,
+      pause: M6.pause,
+      raccourci: M6.raccourci,
+      presence: 'matin',
+      jourPlanning: 1,
+      debut,
+      fin,
+    })
+    // Le besoin, lui, n'a pas de place.
+    expect(creneauBesoin(ctx, b).place).toBeNull()
+  })
+
+  it('place pleine : aucun remplaçant ; place ouverte : les voisins du cycle', () => {
+    const plein = preparerGeneration(
+      donnees([besoin(100, M3)], [shift(ALPHA, M3)]),
+      { aujourdhui: AUJOURDHUI },
+    )
+    expect(idsR(plein.probleme)).toEqual([])
+    const ouvert = preparerGeneration(
+      donnees([besoin(100, M3, 1, 2), besoin(101, D)], [shift(ALPHA, M3)]),
+      { aujourdhui: AUJOURDHUI },
+    )
+    expect(idsR(ouvert.probleme)).toEqual(['r100-2'])
+    // Sans aucun shift posé : un remplaçant par code voisin, pour chaque besoin.
+    const vide = preparerGeneration(
+      donnees(
+        [
+          besoin(100, M3),
+          besoin(101, S4),
+          besoin(102, MI, 2, 0, { renfort: 1 }),
+        ],
+        [],
+      ),
+      { aujourdhui: AUJOURDHUI },
+    )
+    expect(idsR(vide.probleme).sort()).toEqual(['r100-2', 'r102-5'])
+  })
+
+  it('M3 impossible (repos de 11 h), M6 possible : le moteur pose un M6 au lieu du M3', () => {
+    // Alpha, seul, finit lundi à 21 h : 10 h avant 7 h, 11 h avant 8 h.
+    const veille = shift(ALPHA, null, 0, { debut: '13:00', fin: '21:00' })
+    const d = donnees([besoin(100, M3)], [veille], [ALPHA])
+    const g = preparerGeneration(d, { aujourdhui: AUJOURDHUI })
+    const nouveaux = g.traduire(generer(g.probleme, highs))
+    const mardi = nouveaux.filter((n) => n.jour === 1)
+    expect(mardi).toEqual([
+      expect.objectContaining({
+        salarie_id: ALPHA.id,
+        poste_id: ACCUEIL,
+        horaire_id: M6.id,
+        debut: '08:00',
+        fin: '16:00',
+        pause: M6.pause,
+        code_demande: M3.id,
+      }),
+    ])
+    // Posé, il tient la place.
+    const sem = analyser({
+      ...d,
+      affectations: [
+        veille,
+        ...mardi.map((n, i) => ({
+          ...n,
+          id: 5000 + i,
+          lundi: LUNDI,
+          epinglee: false,
+        })),
+      ],
+    })
+    expect(sem.a_pourvoir).toEqual([])
+    expect(shiftOut(sem, 5000).code_demande).toBe(M3.id)
+  })
+
+  it('M3 possible : le moteur pose le M3, jamais un remplaçant', () => {
+    const d = donnees([besoin(100, M3)], [], [ALPHA])
+    const g = preparerGeneration(d, { aujourdhui: AUJOURDHUI })
+    const mardi = g
+      .traduire(generer(g.probleme, highs))
+      .filter((n) => n.jour === 1)
+    expect(mardi).toHaveLength(1)
+    expect(mardi[0].horaire_id).toBe(M3.id)
+    expect(mardi[0].code_demande).toBeUndefined()
+  })
+
+  it('place vide : raisons sur le code imposé et sur chaque remplaçant, raison commune', () => {
+    // Alpha finit lundi à 23 h : ni M3 ni M6 mardi (repos de 11 h).
+    const tard = shift(ALPHA, S4, 0)
+    const sem = analyser(donnees([besoin(100, M3)], [tard], [ALPHA]))
+    const place = sem.a_pourvoir.find((x) => x.besoin_id === 100)!
+    expect(place.raisons[0].regles).toContain('R-REPOS-QUOTIDIEN')
+    expect(place.remplacants.map((r) => r.type_shift_id)).toEqual([M6.id])
+    expect(place.remplacants[0].raisons[0].regles).toContain(
+      'R-REPOS-QUOTIDIEN',
+    )
+    expect(place.raison_commune).toBe('R-REPOS-QUOTIDIEN')
+    // Fin à 21 h : le M6 reste possible, rien ne bloque tout le monde.
+    const t21 = shift(ALPHA, null, 0, { debut: '13:00', fin: '21:00' })
+    const sem2 = analyser(donnees([besoin(100, M3)], [t21], [ALPHA]))
+    const place2 = sem2.a_pourvoir.find((x) => x.besoin_id === 100)!
+    expect(place2.raisons[0].regles).toContain('R-REPOS-QUOTIDIEN')
+    expect(place2.remplacants[0].raisons[0].regles).toEqual([])
+    expect(place2.raison_commune).toBeNull()
+  })
+
+  it('raisonCommune : personne, un libre, un extra à appeler', () => {
+    const v = (regle: string): Violation => ({
+      salarieId: 's',
+      regle,
+      message: regle,
+      creneaux: [],
+      nature: 'loi',
+    })
+    expect(raisonCommune([])).toBeNull()
+    expect(raisonCommune([new Map()])).toBeNull()
+    expect(
+      raisonCommune([
+        new Map([
+          ['a', [v('A'), v('B')]],
+          ['b', [v('B')]],
+        ]),
+        new Map([['a', [v('C'), v('B')]]]),
+      ]),
+    ).toBe('B')
+    expect(
+      raisonCommune([
+        new Map([
+          ['a', [v('A')]],
+          ['b', []],
+        ]),
+      ]),
+    ).toBeNull()
+    expect(
+      raisonCommune([
+        new Map([
+          ['a', [v('A')]],
+          ['x', [v('EXTRA')]],
+        ]),
+      ]),
+    ).toBe('A')
+    expect(raisonCommune([new Map([['x', [v('EXTRA')]]])])).toBeNull()
+  })
+
+  it('soutien : place de soutien seulement, par code exact ou par cycle', () => {
+    const b = besoin(100, M3, 1, 1, { soutien: 1 })
+    const sM6 = shift(DELTA, M6)
+    const r = corr(donnees([b], [sM6], [ALPHA, DELTA]))
+    expect(r.lien.size).toBe(0)
+    expect([...r.soutien]).toEqual([[sM6.id, 100]])
+    expect(r.demande.get(sM6.id)).toBe(M3.id)
+    // Sans place de soutien, il ne prend pas la place d'un autonome.
+    const r2 = corr(
+      donnees([besoin(101, M3)], [shift(DELTA, M6)], [ALPHA, DELTA]),
+    )
+    expect(r2.lien.size + r2.soutien.size).toBe(0)
+  })
+
+  it('nuit : comptée sur un poste qui a des codes de nuit, sans regarder la présence', () => {
+    const veille = personne(14, 'Echo', 'titulaire', VEILLE)
+    const nuit = shift(veille, N, 2, { poste_id: VEILLE })
+    const consignes: Consigne[] = [
+      { id: 1, jour: 2, periode: 'nuit', minimum: 1, maximum: null },
+    ]
+    const sem = analyser(donnees([], [nuit], [veille], consignes))
+    expect(sem.presence).toEqual([
+      expect.objectContaining({
+        jour: 2,
+        periode: 'nuit',
+        compte: 1,
+        ecart: 0,
+      }),
+    ])
+  })
+
+  it('propriétés : rattaché une fois, jamais au-delà de la place, code exact préféré', () => {
+    const codes = [M3, M6, S4, MI, MI2, D, D2, null]
+    const gens = [ALPHA, BRAVO, CHARLIE, DELTA]
+    fc.assert(
+      fc.property(
+        fc.array(
+          fc.record({
+            code: fc.integer({ min: 0, max: codes.length - 1 }),
+            jour: fc.integer({ min: 0, max: 1 }),
+            effectif: fc.integer({ min: 0, max: 2 }),
+            renfort: fc.integer({ min: 0, max: 1 }),
+            soutien: fc.integer({ min: 0, max: 1 }),
+          }),
+          { maxLength: 6 },
+        ),
+        fc.array(
+          fc.record({
+            code: fc.integer({ min: 0, max: codes.length - 1 }),
+            jour: fc.integer({ min: 0, max: 1 }),
+            qui: fc.integer({ min: 0, max: gens.length - 1 }),
+            epinglee: fc.boolean(),
+          }),
+          { maxLength: 8 },
+        ),
+        (bs, as) => {
+          const besoins = bs.map((b, i) =>
+            besoin(200 + i, codes[b.code], b.jour, b.effectif, {
+              renfort: b.renfort,
+              soutien: b.soutien,
+            }),
+          )
+          const affs = as.map((a) =>
+            shift(gens[a.qui], codes[a.code], a.jour, { epinglee: a.epinglee }),
+          )
+          const r = corr(donnees(besoins, affs, gens))
+          // Un shift rattaché au plus une fois.
+          for (const id of r.lien.keys()) expect(r.soutien.has(id)).toBe(false)
+          for (const id of r.demande.keys())
+            expect(r.lien.has(id) || r.soutien.has(id)).toBe(true)
+          // Une place jamais au-delà de son effectif (+ renfort), ni de son soutien.
+          for (const b of besoins) {
+            const n = [...r.lien.values()].filter((x) => x === b.id).length
+            const s = [...r.soutien.values()].filter((x) => x === b.id).length
+            expect(n).toBeLessThanOrEqual(b.effectif + b.renfort)
+            expect(s).toBeLessThanOrEqual(b.soutien)
+          }
+          // Code exact préféré : si une place est tenue par un voisin, tout
+          // shift (autonome) au code exact de ce poste et de ce jour est
+          // rattaché par son code.
+          const parId = new Map(affs.map((a) => [a.id, a]))
+          const parBesoin = new Map(besoins.map((b) => [b.id, b]))
+          for (const [aId, bId] of r.lien) {
+            if (!r.demande.has(aId)) continue
+            const b = parBesoin.get(bId)!
+            const a = parId.get(aId)!
+            expect(a.horaire_id).not.toBe(b.horaire_id)
+            for (const autre of affs) {
+              if (
+                autre.horaire_id !== b.horaire_id ||
+                autre.jour !== b.jour ||
+                autre.salarie_id === DELTA.id
+              )
+                continue
+              expect(r.lien.has(autre.id)).toBe(true)
+              expect(r.demande.has(autre.id)).toBe(false)
+            }
+          }
+          // Sans code voisin posé, rien n'est rattaché par cycle.
+          if (
+            affs.every((a) =>
+              besoins.every(
+                (b) =>
+                  a.horaire_id === b.horaire_id ||
+                  !remplacantsDe(contexte(donnees([], [])), b).some(
+                    (h) => h.id === a.horaire_id,
+                  ),
+              ),
+            )
+          )
+            expect(r.demande.size).toBe(0)
+        },
+      ),
+      { numRuns: 300 },
+    )
   })
 })

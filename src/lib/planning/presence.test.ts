@@ -1,3 +1,4 @@
+import fc from 'fast-check'
 import highsLoader from 'highs'
 import { beforeAll, describe, expect, it } from 'vitest'
 
@@ -15,7 +16,10 @@ import {
   libelleConsigne,
   periodeLibre,
   periodePresence,
+  periodeShift,
+  sommeBesoinsPresence,
 } from '#/lib/planning/presence.ts'
+import type { Periode } from '#/lib/planning/types.ts'
 import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
 import { PlanningMemoire } from '#/lib/planning/test/planningMemoire.ts'
 import { MINUTES_PAR_JOUR } from '#/lib/planning/temps.ts'
@@ -93,21 +97,139 @@ describe('fonctions pures', () => {
     expect(periodeLibre('05:00')).toBe('matin')
   })
 
-  it('seul un poste qui compte, à une période matin ou soir, compte', () => {
+  it('matin et soir : seulement sur un poste qui compte', () => {
     const oui = { presence: true }
     const non = { presence: false }
+    // Acceptés.
     expect(periodePresence(oui, { periode: 'matin' }, '15:00')).toBe('matin')
     expect(periodePresence(oui, { periode: 'soir' }, '07:00')).toBe('soir')
-    expect(periodePresence(oui, { periode: 'nuit' }, '23:00')).toBeNull()
-    expect(periodePresence(oui, { periode: null }, '08:00')).toBeNull()
     expect(periodePresence(oui, undefined, '13:00')).toBe('soir')
+    expect(periodePresence(oui, undefined, '07:00', true)).toBe('matin')
+    // Refusés : poste hors présence (même avec un code de nuit sur le
+    // poste), poste inconnu, code sans famille.
     expect(periodePresence(non, { periode: 'matin' }, '07:00')).toBeNull()
+    expect(periodePresence(non, { periode: 'soir' }, '15:00', true)).toBeNull()
+    expect(periodePresence(non, undefined, '07:00', true)).toBeNull()
     expect(periodePresence(undefined, undefined, '07:00')).toBeNull()
-    // Middle et court : selon l'heure de début, comme un horaire libre.
-    expect(periodePresence(oui, { periode: 'middle' }, '11:00')).toBe('matin')
-    expect(periodePresence(oui, { periode: 'middle' }, '13:00')).toBe('soir')
+    expect(periodePresence(oui, { periode: null }, '08:00')).toBeNull()
+    expect(periodePresence(oui, { periode: null }, '23:00', true)).toBeNull()
+  })
+
+  it('middle : jamais compté (D11)', () => {
+    const oui = { presence: true }
+    expect(periodePresence(oui, { periode: 'middle' }, '11:00')).toBeNull()
+    expect(periodePresence(oui, { periode: 'middle' }, '13:00')).toBeNull()
+    expect(
+      periodePresence(oui, { periode: 'middle' }, '23:00', true),
+    ).toBeNull()
+    // Contrôle : le même début sans code compte.
+    expect(periodePresence(oui, undefined, '11:00')).toBe('matin')
+  })
+
+  it('court : selon l’heure de début, jamais la nuit', () => {
+    const oui = { presence: true }
     expect(periodePresence(oui, { periode: 'court' }, '07:00')).toBe('matin')
     expect(periodePresence(oui, { periode: 'court' }, '19:00')).toBe('soir')
+    expect(
+      periodePresence({ presence: false }, { periode: 'court' }, '07:00'),
+    ).toBeNull()
+    expect(periodePresence(oui, { periode: 'court' }, '23:00', true)).toBeNull()
+  })
+
+  it('nuit : sur un poste qui a un code de nuit, coché ou non (D15)', () => {
+    const oui = { presence: true }
+    const non = { presence: false }
+    // Acceptés : code de nuit ou horaire libre de nuit, nuitComptee.
+    expect(periodePresence(non, { periode: 'nuit' }, '23:00', true)).toBe(
+      'nuit',
+    )
+    expect(periodePresence(oui, { periode: 'nuit' }, '21:00', true)).toBe(
+      'nuit',
+    )
+    expect(periodePresence(non, undefined, '23:00', true)).toBe('nuit')
+    expect(periodePresence(undefined, undefined, '02:00', true)).toBe('nuit')
+    // Refusés : sans nuitComptee (défaut compris).
+    expect(periodePresence(oui, { periode: 'nuit' }, '23:00')).toBeNull()
+    expect(periodePresence(oui, { periode: 'nuit' }, '23:00', false)).toBeNull()
+    expect(periodePresence(oui, undefined, '23:00')).toBeNull()
+    expect(periodePresence(non, undefined, '23:00', false)).toBeNull()
+  })
+
+  it('propriété : un middle ne compte jamais, quelle que soit l’heure', () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 0, max: 23 }),
+        fc.integer({ min: 0, max: 59 }),
+        fc.boolean(),
+        fc.boolean(),
+        (h, m, presence, nuitComptee) => {
+          const debut = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+          expect(
+            periodePresence(
+              { presence },
+              { periode: 'middle' },
+              debut,
+              nuitComptee,
+            ),
+          ).toBeNull()
+        },
+      ),
+    )
+  })
+
+  it('periodeShift garde son ancienne règle (équité)', () => {
+    expect(periodeShift({ periode: 'middle' }, '11:00')).toBe('matin')
+    expect(periodeShift({ periode: 'middle' }, '13:00')).toBe('soir')
+    expect(periodeShift({ periode: 'nuit' }, '23:00')).toBeNull()
+    expect(periodeShift(undefined, '23:00')).toBeNull()
+  })
+
+  it('somme des besoins : même règle, nuit seulement si le poste en a', () => {
+    // Poste 1 : Réception (présence) ; poste 2 : Veille (code de nuit).
+    const postes = new Map([
+      [1, { presence: true }],
+      [2, { presence: false }],
+    ])
+    const horaires = new Map<number, { periode: Periode | null }>([
+      [10, { periode: 'matin' }],
+      [11, { periode: 'middle' }],
+      [12, { periode: 'nuit' }],
+    ])
+    const besoin = (
+      poste_id: number,
+      horaire_id: number | null,
+      debut: string,
+      effectif: number,
+    ) => ({ poste_id, jour: 0, horaire_id, debut, effectif })
+    const besoins = [
+      besoin(1, 10, '07:00', 2),
+      besoin(1, 11, '11:00', 1), // middle : exclu
+      besoin(2, 12, '23:00', 1),
+      besoin(1, null, '23:00', 3), // libre de nuit sur un poste sans nuit
+      besoin(1, 10, '07:00', 0), // effectif nul : ignoré
+    ]
+    // Sans l'argument : la nuit ne compte pas (appelants d'avant).
+    expect(sommeBesoinsPresence(besoins, postes, horaires)).toEqual(
+      new Map([['0:matin', 2]]),
+    )
+    expect(
+      sommeBesoinsPresence(besoins, postes, horaires, new Set([2])),
+    ).toEqual(
+      new Map([
+        ['0:matin', 2],
+        ['0:nuit', 1],
+      ]),
+    )
+  })
+
+  it('bilan : un shift de nuit présent compte dans la consigne de nuit', () => {
+    const b = bilanPresence(
+      [{ id: 1, jour: 0, periode: 'nuit', minimum: 1, maximum: 1 }],
+      [{ jour: 0, periode: 'nuit' }],
+    )
+    expect(b.map((x) => [x.periode, x.compte, x.ecart])).toEqual([
+      ['nuit', 1, 0],
+    ])
   })
 
   it('écart à une consigne', () => {

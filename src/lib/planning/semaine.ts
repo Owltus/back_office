@@ -8,9 +8,11 @@
  * que l'écran se porte tel quel.
  */
 
+import { cycleDe } from '#/lib/planning/cycles.ts'
 import {
   codePrevuAuPoste,
   codesDeLaFiche,
+  codesDuPoste,
   codesImposes,
 } from '#/lib/planning/eligibilite.ts'
 import {
@@ -66,6 +68,7 @@ import type {
   Consigne,
   Horaire,
   Motif,
+  PeriodePresence,
   Poste,
   Referentiel,
   Salarie,
@@ -75,6 +78,7 @@ import {
   reposHebdoTrouve,
   violations,
 } from '#/lib/planning/verificateur.ts'
+import type { Violation } from '#/lib/planning/verificateur.ts'
 
 // ----------------------------------------------------------------- sorties
 
@@ -123,7 +127,19 @@ export interface APourvoirOut {
   fin: string
   duree: number
   manquant: number
+  /** Pourquoi chacun ne peut pas prendre la place avec le code imposé. */
   raisons: RaisonOut[]
+  /** Les autres codes du même cycle qui pourraient tenir la place
+   * (`remplacantsDe`), et pourquoi chacun ne peut pas les prendre non plus.
+   * Vide pour un code sans famille ou sans voisin. Ajouté le 2026-10-30
+   * (plan planning-cycles-2026-10-30, étape 5) ; absent du prototype. */
+  remplacants: Array<{ type_shift_id: number; raisons: RaisonOut[] }>
+  /** Règle (identifiant, comme `RaisonOut.regles`) qui bloque TOUT LE MONDE,
+   * sur le code imposé comme sur chaque remplaçant : celle de « Je ne peux
+   * pas remplir ce M3 ». Null : personne à qui la poser, ou quelqu'un qu'aucune
+   * règle ne bloque sur au moins un code, ou pas de règle commune. Un extra
+   * seulement « à appeler » (règle `EXTRA` seule) n'est pas compté. */
+  raison_commune: string | null
 }
 
 export interface BilanOut {
@@ -394,15 +410,39 @@ export function fiche(
 
 // --------------------------------------------------------------- créneaux
 
+/** Postes qui ont au moins un code de la famille nuit (`codesDuPoste`) : la
+ * nuit n'y compte dans les consignes que là (D15). Calculé une fois par
+ * contexte. */
+const nuitParHoraires = new WeakMap<
+  Map<number, Horaire>,
+  Map<number, boolean>
+>()
+function nuitComptee(ctx: Contexte, posteId: number): boolean {
+  let r = nuitParHoraires.get(ctx.horaires)
+  if (!r) {
+    r = new Map()
+    nuitParHoraires.set(ctx.horaires, r)
+  }
+  let v = r.get(posteId)
+  if (v === undefined) {
+    v = codesDuPoste(ctx.postes.get(posteId), [...ctx.horaires.values()]).some(
+      (h) => h.periode === 'nuit',
+    )
+    r.set(posteId, v)
+  }
+  return v
+}
+
 /** Consigne de présence où compte un shift ou un besoin (`presence.ts`). */
 function presenceDe(
   ctx: Contexte,
   x: { poste_id: number; horaire_id: number | null; debut: string },
-): 'matin' | 'soir' | null {
+): PeriodePresence | null {
   return periodePresence(
     ctx.postes.get(x.poste_id),
     x.horaire_id !== null ? ctx.horaires.get(x.horaire_id) : undefined,
     x.debut,
+    nuitComptee(ctx, x.poste_id),
   )
 }
 
@@ -495,6 +535,69 @@ export function creneauAffectation(ctx: Contexte, a: Affectation): Creneau {
   })
 }
 
+// ------------------------------------------------------------ remplaçants
+
+/** Codes qui peuvent tenir la place d'un besoin à la place de son code
+ * (plan planning-cycles-2026-10-30, D12) : les AUTRES codes du poste
+ * (`codesDuPoste`) du MÊME cycle (`cycleDe`). Un middle ne remplace qu'un
+ * middle (même famille, donc même cycle). Un code sans famille
+ * (`periode === null` : direction, supervision) n'a jamais de remplaçant et
+ * n'en est jamais un ; un besoin en horaire libre non plus. Aucun code n'est
+ * créé ni modifié : on choisit parmi ceux qui existent. Triés par id. */
+export function remplacantsDe(
+  ctx: Pick<Contexte, 'horaires' | 'postes'>,
+  b: Pick<Besoin, 'poste_id' | 'horaire_id'>,
+): Horaire[] {
+  if (b.horaire_id === null) return []
+  const h = ctx.horaires.get(b.horaire_id)
+  if (!h || h.periode === null) return []
+  const cycle = cycleDe(h, h.debut)
+  return codesDuPoste(ctx.postes.get(b.poste_id), [...ctx.horaires.values()])
+    .filter(
+      (c) =>
+        c.id !== h.id && c.periode !== null && cycleDe(c, c.debut) === cycle,
+    )
+    .sort((a, c) => a.id - c.id)
+}
+
+/** Id du créneau remplaçant d'un besoin pour un code. */
+export const idRemplacant = (besoinId: number, horaireId: number) =>
+  `r${besoinId}-${horaireId}`
+
+/** Créneau remplaçant (`r<besoin>-<code>`, contrat de la vague 1, §2) : la
+ * place du besoin `b<id>` tenue avec un autre code du même cycle. Aucune
+ * place propre (effectif, facultatif et soutien à 0) : le moteur compte ses
+ * autonomes avec ceux de `b<id>` (`place`). Bornes, pause, raccourci et
+ * présence sont ceux du code remplaçant, le jour et le poste ceux du
+ * besoin. */
+export function creneauRemplacant(
+  ctx: Contexte,
+  b: Besoin,
+  h: Horaire,
+): Creneau {
+  const [d, f] = bornes(ctx.lundi, b.jour, h.debut, h.fin)
+  const x = { poste_id: b.poste_id, horaire_id: h.id, debut: h.debut }
+  return creneau({
+    id: idRemplacant(b.id, h.id),
+    poste: String(b.poste_id),
+    debut: d,
+    fin: f,
+    effectif: 0,
+    typeShift: String(h.id),
+    soutien: 0,
+    pause: h.pause,
+    raccourci: h.raccourci,
+    facultatif: 0,
+    jourPlanning: b.jour,
+    ferme: false,
+    presenceMax: presenceMaxDe(ctx, b.poste_id),
+    nuit: toucheLaNuit(b.jour, h.debut, h.fin),
+    presence: presenceDe(ctx, x),
+    place: `b${b.id}`,
+    ...equiteDe(ctx, x),
+  })
+}
+
 /** Écarte les besoins trop longs pour leur catégorie et ceux dont le code
  * horaire n'est pas prévu pour le poste. */
 export function besoinsValides(ctx: Contexte): {
@@ -518,15 +621,38 @@ export function besoinsValides(ctx: Contexte): {
   return { valides, alertes }
 }
 
-/** Rattache chaque shift au besoin qu'il couvre (même poste, jour et
- * horaire ; l'horaire, c'est le code quand il y en a un : un shift en
- * journée courte couvre le besoin de son code). Deux liens : effectif et
- * soutien. */
+/** Ce que `correspondances` rend. */
+export interface Correspondances {
+  /** shift → besoin dont il tient une place (autonome). */
+  lien: Map<number, number>
+  /** shift → besoin dont il tient une place de soutien. */
+  soutien: Map<number, number>
+  /** shift rattaché PAR CYCLE (seconde passe) → code imposé par le besoin
+   * (`horaire_id`) : « M6 au lieu de M3 ». Absent : rattaché par son code,
+   * ou pas rattaché. Sous-ensemble des clés de `lien` et `soutien`. */
+  demande: Map<number, number>
+}
+
+/** Rattache chaque shift au besoin qu'il couvre, en deux passes (plan
+ * planning-cycles-2026-10-30, D6) :
+ *
+ * 1. code exact, comme avant : même poste, jour et horaire (l'horaire, c'est
+ *    le code quand il y en a un : un shift en journée courte couvre le
+ *    besoin de son code) ;
+ * 2. les shifts encore libres prennent les places encore libres du MÊME
+ *    poste, du MÊME jour et du MÊME cycle, quand leur code est un remplaçant
+ *    du code du besoin (`remplacantsDe` : codes du poste, même cycle, un
+ *    middle pour un middle, jamais un code sans famille ni un horaire libre).
+ *    Le début le plus proche d'abord. Marqués dans `demande`.
+ *
+ * Dans chaque passe, épinglés d'abord ; un profil soutien ne prend qu'une
+ * place de soutien. Le code exact passe toujours avant un voisin : la
+ * seconde passe ne voit que ce que la première a laissé. */
 export function correspondances(
   ctx: Contexte,
   besoins: Besoin[],
   salaries: Map<number, SalarieSolveur>,
-): { lien: Map<number, number>; soutien: Map<number, number> } {
+): Correspondances {
   const cleDe = (x: {
     poste_id: number
     jour: number
@@ -552,13 +678,19 @@ export function correspondances(
   }
   const lien = new Map<number, number>()
   const soutien = new Map<number, number>()
+  const demande = new Map<number, number>()
   const ordre = [...ctx.affectations].sort(
     (a, b) => Number(!a.epinglee) - Number(!b.epinglee) || a.id - b.id,
   )
+  const enSoutien = (a: Affectation) => {
+    const sol = salaries.get(a.salarie_id)
+    return sol !== undefined && role(sol, String(a.poste_id)) === 'soutien'
+  }
+
+  // 1. Code exact.
   for (const a of ordre) {
     const k = cleDe(a)
-    const sol = salaries.get(a.salarie_id)
-    if (sol && role(sol, String(a.poste_id)) === 'soutien') {
+    if (enSoutien(a)) {
       const r = renforts.get(k)
       if (r?.length) soutien.set(a.id, r.pop() as number)
     } else {
@@ -566,7 +698,36 @@ export function correspondances(
       if (p?.length) lien.set(a.id, p.pop() as number)
     }
   }
-  return { lien, soutien }
+
+  // 2. Même poste, même jour, même cycle.
+  const voisins = new Map(
+    besoins.map((b) => [b.id, new Set(remplacantsDe(ctx, b).map((h) => h.id))]),
+  )
+  for (const a of ordre) {
+    if (lien.has(a.id) || soutien.has(a.id) || a.horaire_id === null) continue
+    const h = ctx.horaires.get(a.horaire_id)
+    if (!h || h.periode === null) continue
+    const soutienIci = enSoutien(a)
+    const reserve = soutienIci ? renforts : places
+    let choisi: Besoin | undefined
+    let ecart = Infinity
+    for (const b of besoins) {
+      if (b.poste_id !== a.poste_id || b.jour !== a.jour) continue
+      if (b.horaire_id === null || !voisins.get(b.id)?.has(h.id)) continue
+      if (!reserve.get(cleDe(b))?.includes(b.id)) continue
+      const e = Math.abs(minutes(b.debut) - minutes(a.debut))
+      if (e < ecart || (e === ecart && choisi && b.id < choisi.id)) {
+        choisi = b
+        ecart = e
+      }
+    }
+    if (!choisi || choisi.horaire_id === null) continue
+    const pool = reserve.get(cleDe(choisi)) as number[]
+    pool.splice(pool.lastIndexOf(choisi.id), 1)
+    ;(soutienIci ? soutien : lien).set(a.id, choisi.id)
+    demande.set(a.id, choisi.horaire_id)
+  }
+  return { lien, soutien, demande }
 }
 
 /** Fiches d'une même personne (contrats liés par `suite_de`) : id → clé. */
@@ -863,6 +1024,41 @@ export function semaineRemplie(
 
 // ----------------------------------------------------------------- analyse
 
+function raisonsOut(raisons: Map<string, Violation[]>): RaisonOut[] {
+  return [...raisons].map(([sid, vs]) => ({
+    salarie_id: Number(sid),
+    messages: vs.map((v) => v.message),
+    regles: vs.map((v) => v.regle),
+  }))
+}
+
+/** La règle qui bloque tout le monde (étape 5) : présente pour chaque
+ * personne sur chaque code essayé (le code imposé, puis chaque remplaçant).
+ * Null dès qu'une personne n'a aucune raison sur un code (elle pourrait le
+ * prendre), sans personne à qui la poser, ou sans règle commune. Un extra
+ * seulement « à appeler » (`EXTRA` seule) est laissé de côté : c'est la
+ * solution humaine, pas un blocage. Plusieurs règles communes : la première
+ * dans l'ordre du vérificateur, chez la première personne. */
+export function raisonCommune(
+  parCode: ReadonlyArray<ReadonlyMap<string, readonly Violation[]>>,
+): string | null {
+  const listes: string[][] = []
+  for (const raisons of parCode) {
+    for (const vs of raisons.values()) {
+      const regles = vs.map((v) => v.regle)
+      if (regles.length === 1 && regles[0] === 'EXTRA') continue
+      if (!regles.length) return null
+      listes.push(regles)
+    }
+  }
+  if (!listes.length) return null
+  return (
+    listes[0].find(
+      (r) => r !== 'EXTRA' && listes.every((l) => l.includes(r)),
+    ) ?? null
+  )
+}
+
 export function analyser(d: DonneesSemaine): SemaineOut {
   const ctx = contexte(d)
   const lundi = ctx.lundi
@@ -872,7 +1068,11 @@ export function analyser(d: DonneesSemaine): SemaineOut {
     ctx.staff.map((x) => [x.id, versSolveur(fiche(x, lundi, ctx))]),
   )
   salaries = avecSemainesVoisines(d, ctx, salaries)
-  const { lien, soutien: enSoutien } = correspondances(ctx, besoins, salaries)
+  const {
+    lien,
+    soutien: enSoutien,
+    demande,
+  } = correspondances(ctx, besoins, salaries)
 
   const creneaux = new Map<string, Creneau>()
   for (const a of ctx.affectations)
@@ -934,7 +1134,7 @@ export function analyser(d: DonneesSemaine): SemaineOut {
       court: a.court,
       epinglee: a.epinglee,
       besoin_id: lien.get(a.id) ?? enSoutien.get(a.id) ?? null,
-      code_demande: null,
+      code_demande: demande.get(a.id) ?? null,
       role: sol ? role(sol, String(a.poste_id)) : null,
       alertes,
     })
@@ -942,11 +1142,28 @@ export function analyser(d: DonneesSemaine): SemaineOut {
 
   const pourvus = new Map<number, number>()
   for (const id of lien.values()) pourvus.set(id, (pourvus.get(id) ?? 0) + 1)
+  // Places vides : raisons sur le code imposé ET sur chaque remplaçant. Les
+  // créneaux remplaçants ne servent qu'ici : ils restent hors de `p`, donc
+  // hors des alertes de la semaine.
+  const vides = besoins.filter((b) => b.effectif - (pourvus.get(b.id) ?? 0) > 0)
+  const voisins = new Map(
+    vides.map((b) => [
+      b.id,
+      remplacantsDe(ctx, b).map((h) => creneauRemplacant(ctx, b, h)),
+    ]),
+  )
+  const pRaisons: Probleme = {
+    ...p,
+    creneaux: [...p.creneaux, ...[...voisins.values()].flat()],
+  }
   const aPourvoir: APourvoirOut[] = []
-  for (const b of besoins) {
+  for (const b of vides) {
     const manquant = b.effectif - (pourvus.get(b.id) ?? 0)
-    if (manquant <= 0) continue
-    const raisons = raisonsBlocage(p, affs, `b${b.id}`)
+    const raisons = raisonsBlocage(pRaisons, affs, `b${b.id}`)
+    const parCode = (voisins.get(b.id) ?? []).map((c) => ({
+      type_shift_id: Number(c.typeShift),
+      raisons: raisonsBlocage(pRaisons, affs, c.id),
+    }))
     aPourvoir.push({
       besoin_id: b.id,
       poste_id: b.poste_id,
@@ -956,11 +1173,15 @@ export function analyser(d: DonneesSemaine): SemaineOut {
       fin: b.fin,
       duree: travail(creneaux.get(`b${b.id}`) as Creneau),
       manquant,
-      raisons: [...raisons].map(([sid, vs]) => ({
-        salarie_id: Number(sid),
-        messages: vs.map((v) => v.message),
-        regles: vs.map((v) => v.regle),
+      raisons: raisonsOut(raisons),
+      remplacants: parCode.map((r) => ({
+        type_shift_id: r.type_shift_id,
+        raisons: raisonsOut(r.raisons),
       })),
+      raison_commune: raisonCommune([
+        raisons,
+        ...parCode.map((r) => r.raisons),
+      ]),
     })
   }
 
@@ -1031,7 +1252,7 @@ export function analyser(d: DonneesSemaine): SemaineOut {
   }
 
   // Présence : personnes autonomes sur les postes qui comptent.
-  const presents: Array<{ jour: number; periode: 'matin' | 'soir' }> = []
+  const presents: Array<{ jour: number; periode: PeriodePresence }> = []
   for (const a of ctx.affectations) {
     const periode = presenceDe(ctx, a)
     const sol = salaries.get(a.salarie_id)
@@ -1101,6 +1322,12 @@ export interface NouveauShift {
   fin: string
   court: boolean
   pause: number
+  /** Remplaçant seulement : le code imposé par le besoin dont il tient la
+   * place (« M6 au lieu de M3 »). Absent pour un shift au code du besoin.
+   * Information de l'écran : `planning_appliquer_generation` lit ses clés
+   * une à une et ignore celle-ci ; l'analyse la retrouve
+   * (`correspondances`, `ShiftOut.code_demande`). */
+  code_demande?: number
 }
 
 export interface Generation {
@@ -1217,7 +1444,15 @@ export function preparerGeneration(
         equiteAvant: faits.get(x.id)!,
       })
   }
-  const { lien, soutien: enSoutien } = correspondances(ctx, besoins, salaries)
+  const corr = correspondances(ctx, besoins, salaries)
+  const { lien, demande } = corr
+  // Un soutien rattaché par cycle reste un shift posé à part (son créneau
+  // `a…`, ses vraies heures) : les remplaçants n'ont pas de place de soutien
+  // (contrat de la vague 1, §2), et le poser sur `b…` lui donnerait les
+  // heures du code imposé.
+  const enSoutien = new Map(
+    [...corr.soutien].filter(([aId]) => !demande.has(aId)),
+  )
   const deja = new Map<number, number>()
   const dejaSoutien = new Map<number, number>()
   for (const id of lien.values()) deja.set(id, (deja.get(id) ?? 0) + 1)
@@ -1232,15 +1467,40 @@ export function preparerGeneration(
       Math.max(b.renfort, (deja.get(b.id) ?? 0) - b.effectif),
     ),
   )
+  // Remplaçants (`r<besoin>-<code>`, étape 4) : pour une place encore
+  // ouverte, chaque autre code du même cycle ; pour une place pleine, aucun,
+  // sauf celui qui porte un shift posé rattaché par cycle (il y est imposé,
+  // avec ses vraies heures de code).
+  const remplacants = new Map<string, { b: Besoin; h: Horaire }>()
+  const ajouteRemplacant = (b: Besoin, h: Horaire) => {
+    const id = idRemplacant(b.id, h.id)
+    if (remplacants.has(id)) return
+    remplacants.set(id, { b, h })
+    creneaux.push(creneauRemplacant(ctx, b, h))
+  }
+  const parBesoin = new Map(besoins.map((b) => [b.id, b]))
+  for (const a of ctx.affectations) {
+    const bId = lien.get(a.id)
+    const h = a.horaire_id !== null ? ctx.horaires.get(a.horaire_id) : undefined
+    if (bId === undefined || !demande.has(a.id) || !h) continue
+    ajouteRemplacant(parBesoin.get(bId) as Besoin, h)
+  }
+  for (const b of besoins) {
+    if ((deja.get(b.id) ?? 0) >= b.effectif + b.renfort) continue
+    for (const h of remplacantsDe(ctx, b)) ajouteRemplacant(b, h)
+  }
   const rattache = new Map([...lien, ...enSoutien])
   for (const a of ctx.affectations) {
     if (!rattache.has(a.id)) creneaux.push(creneauAffectation(ctx, a))
   }
-  const paire = (a: Affectation) =>
-    cle(
-      String(a.salarie_id),
-      rattache.has(a.id) ? `b${rattache.get(a.id)}` : `a${a.id}`,
-    )
+  const creneauDe = (a: Affectation) => {
+    const bId = rattache.get(a.id)
+    if (bId === undefined) return `a${a.id}`
+    return demande.has(a.id) && a.horaire_id !== null
+      ? idRemplacant(bId, a.horaire_id)
+      : `b${bId}`
+  }
+  const paire = (a: Affectation) => cle(String(a.salarie_id), creneauDe(a))
   const imposees = new Set(ctx.affectations.map(paire))
   const courtes = new Set(
     ctx.affectations.filter((a) => a.court && rattache.has(a.id)).map(paire),
@@ -1269,6 +1529,22 @@ export function preparerGeneration(
     const nouveaux: NouveauShift[] = []
     for (const a of r.affectations) {
       if (imposees.has(cle(a.salarieId, a.creneauId))) continue
+      const rempl = remplacants.get(a.creneauId)
+      if (rempl) {
+        // Un remplaçant : le code réel sur le poste et le jour du besoin.
+        const { b, h } = rempl
+        nouveaux.push({
+          salarie_id: Number(a.salarieId),
+          poste_id: b.poste_id,
+          jour: b.jour,
+          horaire_id: h.id,
+          ...horaireDe(h, a.court),
+          court: a.court,
+          pause: h.pause,
+          code_demande: b.horaire_id as number,
+        })
+        continue
+      }
       const b = parId.get(a.creneauId)
       if (!b) continue
       const h =
