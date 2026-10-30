@@ -2,8 +2,8 @@
  * Menu d'un jour de la vue mois (prototype `MenuCase.tsx`), ouvert au clic
  * ou au clic droit sur une case, au curseur : tous les horaires que la
  * personne peut faire sur ses postes, chacun une seule fois, rangés par
- * moment, le poste déduit (étiquette s'il n'est pas son métier habituel),
- * pour changer d'un clic ; valider ou remettre en
+ * moment (code et horaires seulement : le poste est déduit sans être
+ * affiché), pour changer d'un clic ; valider ou remettre en
  * proposition, la journée étoile, et l'ouverture de la semaine pour tout
  * modifier (absence, école…).
  */
@@ -32,7 +32,6 @@ import {
   rubriquesDeLaCase,
 } from '#/components/planning/codesCase.ts'
 import type { CodeUnique, SourceCase } from '#/components/planning/codesCase.ts'
-import { EtiquettePoste } from '#/components/planning/EtiquettePoste.tsx'
 import { heureAffichee } from '#/lib/planning/temps.ts'
 import type { Horaire, Referentiel, Salarie } from '#/lib/planning/types.ts'
 
@@ -180,7 +179,6 @@ export function MenuJour({
             </span>
           )}
         </span>
-        {c.horsHabituel && <EtiquettePoste poste={poste} />}
         {actuel ? (
           <Check className="size-4 shrink-0 text-primary" />
         ) : (

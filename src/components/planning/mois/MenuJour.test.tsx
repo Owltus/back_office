@@ -100,9 +100,7 @@ describe('MenuJour : code actuel non permis', () => {
   it('place à pourvoir : le code choisi est posé sur le poste de la place', () => {
     // Personne 3 : titulaire Réception (2, métier habituel) et Club (3).
     const { onHoraire } = rendre(referentiel, { posteId: 3 })
-    fireEvent.click(
-      screen.getByRole('menuitem', { name: 'AM, Après-midi, Club' }),
-    )
+    fireEvent.click(screen.getByRole('menuitem', { name: 'AM, Après-midi' }))
     expect(onHoraire).toHaveBeenCalledWith(
       expect.objectContaining({ code: 'AM' }),
       3,
@@ -118,7 +116,7 @@ describe('MenuJour : code actuel non permis', () => {
     const groupe = screen.getByRole('group', { name: 'Place à pourvoir' })
     const items = screen.getAllByRole('menuitem')
     // Premier élément du menu : le code de la place, focalisé à l'ouverture.
-    expect(items[0].getAttribute('aria-label')).toBe('AM, Après-midi, Club')
+    expect(items[0].getAttribute('aria-label')).toBe('AM, Après-midi')
     expect(groupe.contains(items[0])).toBe(true)
     expect(screen.getAllByRole('menuitem', { name: /^AM,/ })).toHaveLength(1)
     fireEvent.click(items[0])
@@ -191,20 +189,24 @@ describe('MenuJour : une seule liste, poste déduit (mode manuel)', () => {
     expect(screen.queryByRole('group', { name: 'Réception' })).toBeNull()
   })
 
-  it('poste du shift existant s’il permet le code, étiquette hors métier habituel', () => {
+  it('poste du shift existant s’il permet le code, jamais affiché', () => {
     // Shift de la personne 3 sur le Club : ses codes y restent.
     const { onHoraire } = rendre(referentiel, undefined, 3, 3)
-    expect(etiquettes()).toContain('AM, Après-midi, Club')
-    fireEvent.click(
-      screen.getByRole('menuitem', { name: 'AM, Après-midi, Club' }),
-    )
+    expect(etiquettes()).toContain('AM, Après-midi')
+    // Code et horaires seulement : aucun nom de poste dans le menu.
+    expect(
+      screen
+        .getAllByRole('menuitem')
+        .every((m) => !/Club|Réception/.test(m.textContent ?? '')),
+    ).toBe(true)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'AM, Après-midi' }))
     expect(onHoraire).toHaveBeenCalledWith(
       expect.objectContaining({ code: 'AM' }),
       3,
     )
   })
 
-  it('sans shift : le premier poste de la fiche, titulaire d’abord, sans étiquette', () => {
+  it('sans shift : le premier poste de la fiche, titulaire d’abord', () => {
     // Personne 2 : titulaire Réception, dépannage Club.
     const { onHoraire } = rendre(referentiel, undefined, 2)
     expect(etiquettes().every((n) => !n.includes('Club'))).toBe(true)

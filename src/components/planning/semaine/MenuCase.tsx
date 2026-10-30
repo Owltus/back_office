@@ -1,8 +1,8 @@
 /*
  * Menu du clic droit sur une case (prototype `MenuCase.tsx`) : tous les
  * horaires que la personne peut faire sur ses postes, chacun une seule fois,
- * rangés par moment, posés d'un clic sur le poste déduit (étiquette quand ce
- * n'est pas son métier habituel) ;
+ * rangés par moment, posés d'un clic sur le poste déduit (jamais affiché :
+ * code et horaires seulement) ;
  * valider le shift, la journée étoile. Le
  * positionnement au curseur et la fermeture (Échap, clic ailleurs) sont ceux
  * du `ContextMenu` de shadcn.
@@ -25,7 +25,6 @@ import {
 } from '#/lib/planning/affichage.ts'
 import { nomLigneCode } from '#/components/planning/codesCase.ts'
 import type { CodesUniquesCase } from '#/components/planning/codesCase.ts'
-import { EtiquettePoste } from '#/components/planning/EtiquettePoste.tsx'
 import { heureAffichee } from '#/lib/planning/temps.ts'
 import { JOURS } from '#/lib/planning/types.ts'
 import type { Horaire } from '#/lib/planning/types.ts'
@@ -148,7 +147,6 @@ export function MenuCase({
                     </span>
                   )}
                 </span>
-                {c.horsHabituel && <EtiquettePoste poste={c.poste} />}
                 {estActuel ? (
                   <Check
                     className="size-3.5 text-primary"

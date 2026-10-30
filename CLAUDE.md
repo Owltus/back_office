@@ -2075,10 +2075,13 @@ référence des règles (`docs/regles-hcr.md` là-bas).
     (`grouperHoraires`). Liste = union des postes de la fiche
     (`rubriquesDeLaCase` = `codesPermis` par poste, brique interne ;
     `codesUniques`, `codesCase.ts`). Poste DÉDUIT par `posteDeduit` : celui du
-    shift (ou de la place à pourvoir) s'il permet le code, sinon le premier
-    de la fiche (titulaire, dépannage, soutien, ordre des postes) ; étiquette
-    (pastille + nom, `EtiquettePoste`) seulement hors du métier habituel
-    (`posteDeReference`). Volet : code permis sur plusieurs postes = choix
+    shift (ou de la place à pourvoir) s'il permet le code, sinon le meilleur
+    niveau de la fiche (titulaire, dépannage, soutien), puis le poste du
+    shift à niveau égal. Le poste n'est JAMAIS affiché dans les listes de
+    codes (code et horaires seulement, décision utilisateur du 2026-10-30 :
+    « certains employés ont plusieurs postes, pourquoi afficher l'un plus
+    que l'autre » ; l'étiquette essayée le même jour est retirée, ne pas la
+    remettre). Volet : code permis sur plusieurs postes = choix
     segmenté « Réception | Club » sous la liste ; section Poste pour
     l'horaire spécifique seulement. Jamais un poste hors fiche, sauf celui du
     shift existant. La coupure de 11 h (12 h mineur) est permise à la main

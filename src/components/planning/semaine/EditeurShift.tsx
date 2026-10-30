@@ -54,8 +54,7 @@ import {
   presence,
 } from '#/lib/planning/temps.ts'
 import { JOURS } from '#/lib/planning/types.ts'
-import type { Horaire, Poste, Referentiel } from '#/lib/planning/types.ts'
-import { EtiquettePoste } from '#/components/planning/EtiquettePoste.tsx'
+import type { Horaire, Referentiel } from '#/lib/planning/types.ts'
 import { cn } from '#/lib/utils.ts'
 import { titreRegle } from '#/components/planning/semaine/PanneauAlertes.tsx'
 import { NEUTRE, travailCode } from '#/components/planning/semaine/edition.ts'
@@ -387,7 +386,6 @@ export function EditeurShift({
     b.poste_id,
     b.poste_id === posteDemande ? posteDemande : undefined,
   )
-  const habituel = posteDeReference(fichePersonne, postes)
   const parId = new Map(uniques.codes.map((c) => [c.horaire.id, c]))
   const enCours = !vider && motif === null && !libre
   const choisiUnique = parId.get(b.horaire_id ?? -1)
@@ -582,12 +580,6 @@ export function EditeurShift({
                 </span>,
                 ...g.horaires.map((h) => {
                   const c = parId.get(h.id)!
-                  // Le code choisi montre le poste retenu (choix « Sur le
-                  // poste » compris), les autres leur poste déduit.
-                  const affiche =
-                    enCours && b.horaire_id === h.id
-                      ? (postes.find((p) => p.id === b.poste_id) ?? c.poste)
-                      : c.poste
                   return (
                     <Choix
                       key={h.id}
@@ -596,7 +588,6 @@ export function EditeurShift({
                       titre={h.nom}
                       detail={`${heureAffichee(h.debut)}-${heureAffichee(h.fin)}${h.pause > 0 ? ` · ${heures(travailCode(h))} de travail` : ''}`}
                       alerte={c.alerte}
-                      etiquette={affiche.id !== habituel ? affiche : undefined}
                       choisi={enCours && b.horaire_id === h.id}
                       onClick={() => {
                         setVider(false)
@@ -958,7 +949,6 @@ function Choix({
   choisi,
   desactive = false,
   alerte = null,
-  etiquette,
   onClick,
 }: {
   couleur: string
@@ -967,8 +957,6 @@ function Choix({
   detail: string
   /** Règle passée à la main (coupure de repos) : dite sur la ligne. */
   alerte?: string | null
-  /** Poste du code quand ce n'est pas le métier habituel. */
-  etiquette?: Pick<Poste, 'nom' | 'couleur'>
   choisi: boolean
   /** Montré grisé, avec sa raison en détail : non cliquable. */
   desactive?: boolean
@@ -1004,11 +992,6 @@ function Choix({
           </small>
         )}
       </span>
-      {etiquette && (
-        <span className="ml-auto">
-          <EtiquettePoste poste={etiquette} />
-        </span>
-      )}
     </button>
   )
 }

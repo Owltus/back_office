@@ -435,7 +435,7 @@ describe('EditeurShift : règle des codes', () => {
     )
   })
 
-  it('code permis sur un seul poste : pas de choix de poste, étiquette hors métier habituel', () => {
+  it('code permis sur un seul poste : pas de choix de poste, poste non affiché', () => {
     // Fiche : Réception sans le Middle, Club avec. Le Middle va au Club.
     rendreAvec(
       {
@@ -449,7 +449,7 @@ describe('EditeurShift : règle des codes', () => {
       { mode: 'creation', salarie_id: 3, jour: 2 },
     )
     const middle = screen.getByRole('button', { name: /^MI\s*Middle/ })
-    expect(middle.textContent).toMatch(/Club/)
+    expect(middle.textContent).not.toMatch(/Club|Réception/)
     expect(
       screen.getByRole('button', { name: /^M\s*Matin/ }).textContent,
     ).not.toMatch(/Club|Réception/)

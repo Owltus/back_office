@@ -293,7 +293,7 @@ export interface CodeUnique {
   poste: Poste
   /** Tous les postes de la fiche qui le permettent (ordre des rubriques). */
   postes: Poste[]
-  /** Le poste déduit n'est pas le métier habituel : l'écran le dit. */
+  /** Le poste déduit n'est pas le métier habituel (non affiché). */
   horsHabituel: boolean
 }
 
@@ -340,18 +340,13 @@ export function codesUniques(
   return { codes, texte: r.texte, actuel: r.actuel }
 }
 
-/** Nom accessible d'une ligne de code : code, nom, poste s'il n'est pas le
- * métier habituel, alerte. */
+/** Nom accessible d'une ligne de code : code, nom, alerte (jamais le poste,
+ * comme à l'écran). */
 export function nomLigneCode(c: {
   horaire: { code: string; nom: string }
   alerte: string | null
-  poste: { nom: string }
-  horsHabituel: boolean
 }): string {
-  return [
-    c.horaire.code,
-    c.horaire.nom,
-    ...(c.horsHabituel ? [c.poste.nom] : []),
-    ...(c.alerte ? [c.alerte] : []),
-  ].join(', ')
+  return [c.horaire.code, c.horaire.nom, ...(c.alerte ? [c.alerte] : [])].join(
+    ', ',
+  )
 }
