@@ -2089,6 +2089,41 @@ référence des règles (`docs/regles-hcr.md` là-bas).
     automatique (générateur inchangé, le vérificateur signale le shift posé).
     Les autres raisons restent bloquantes. La génération propose,
     l'utilisateur valide (D18).
+- **Cycles et codes remplaçants (2026-10-30, plan `plan/planning-cycles-2026-10-30/`,
+  décisions D1-D16 de l'utilisateur, exécuté en essaim de 5 vagues)** : « je
+  t'impose des besoins et des codes, tu dois jouer avec les outils ; si tu ne
+  trouves pas, laisse vide, à l'impossible nul n'est tenu ». Les besoins par
+  code RESTENT. Cycle d'un code = sa famille (`cycles.ts`, `cycleDe`, seule
+  source). Un shift posé compte pour le besoin de son cycle, même poste, même
+  jour (`correspondances` en deux passes : code exact puis cycle ;
+  `code_demande` → survol « M6 au lieu de M3 »). Le moteur crée des créneaux
+  REMPLAÇANTS `r<besoin>-<code>` (`place = b…`, autres codes du poste du même
+  cycle, middle seulement pour un middle, code sans famille jamais) ; ordre
+  D13 figé par paliers : titulaire code exact < titulaire autre code
+  (`POIDS_REMPLACANT` 2 000, option A) < dépannage code exact < dépannage
+  autre code < place vide ; un remplaçant d'une autre durée ne compte que les
+  heures du besoin face au contrat (jamais choisi pour des heures). Minimum
+  par cycle (consignes matin / soir / NUIT, migration
+  `20261030100000_planning_consigne_nuit`) au niveau d'une place nécessaire
+  (P1), avant les contrats ; la nuit compte sur les postes qui LISTENT un code
+  de nuit (`posteADesCodesDeNuit`, un poste « Tous » ne compte pas) ; un
+  middle ne compte dans aucun minimum mais compte comme présent pour les
+  trous (D11). TROU entre équipes : quart d'heure (grille absolue, couvert en
+  entier par une personne autonome) sans personne entre le premier et le
+  dernier besoin d'un poste de présence ; coût P2, jamais bloquant ;
+  `trousDuJour` (oracle) = variables de trou du générateur, propriété qui les
+  compare. Calcul en DEUX TEMPS dans `generer` : sans remplaçants d'abord,
+  avec seulement s'il reste un manque, un minimum, un trou, ou une place à
+  remplaçants tenue en dépannage ; contraintes impliquées par « un shift par
+  jour » non écrites (82 000 → 7 300 par semaine réelle, même optimum).
+  Mesuré sur 8 semaines réelles : 0 infraction, 0 place vide, minimums tenus,
+  0 trou ; 0,36 s avant le chantier, 1,3 s en moyenne après (2,1 s au pire).
+  Deux temps : premier temps plafonné à la moitié du budget ; second temps
+  aussi sur un manque d'heures dues qu'un remplaçant comblerait ; une
+  solution sans objectif fini (temps limite) n'est jamais retenue.
+  Place impossible : « Je ne peux pas remplir ce M3. » + raison commune
+  bloquante + « Prenez un extra ou changez un shift. ». `Creneau.raccourciDebut`
+  place la version courte à ses vraies heures (défaut ancien corrigé).
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), jours fériés (décision utilisateur relayée par le binôme), scénario
   « exclus » à l'écran (retiré du prototype aussi).

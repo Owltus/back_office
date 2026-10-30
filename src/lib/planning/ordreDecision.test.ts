@@ -1,6 +1,6 @@
 import fc from 'fast-check'
 import highsLoader from 'highs'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import {
   BRUIT_MAX,
@@ -11,7 +11,12 @@ import {
   coutPlaceVideGroupe,
   EQUITE_MAX_PAR_SHIFT,
   generer,
+  minutesDues,
+  minutesDuesCourt,
+  minutesEnPlus,
+  minutesEnPlusCourt,
   PART_FIXE_DEPANNAGE,
+  PART_TEMPS_1,
   pireCoutRemplir,
   POIDS_DEJA_PROPOSE,
   POIDS_DEPANNAGE_MINUTE,
@@ -1508,5 +1513,188 @@ describe('cycles : le code exact d’abord, en deux temps', () => {
     )
     expect(r.etapes).toBe(1)
     expect(r.manques).toEqual([])
+  })
+})
+
+/*
+ * Relecture adverse du 2026-10-30 (V4b) : quatre défauts confirmés par
+ * exécution, un test chacun.
+ */
+describe('deux temps : résultats sans solution, heures dues, budget', () => {
+  const m3 = (j: number) => creneau(`b${j}`, j, 7, 14, { typeShift: 'M3' })
+  const m6 = (j: number) =>
+    creneau(`r${j}-M6`, j, 9, 16, {
+      typeShift: 'M6',
+      place: `b${j}`,
+      effectif: 0,
+    })
+  /** Un CDI de 35 h sur cinq M3 ; le lundi, le M3 est interdit (fin la
+   * veille à 22 h, repos de 11 h), le M6 (9 h) se peut ; un extra libre. */
+  const semaineCdi = () => ({
+    salaries: [
+      personne('a', 35, { finServicePrecedent: -2 * H }),
+      personne('x', 0, { contratIndicatif: true }),
+    ],
+    creneaux: [0, 1, 2, 3, 4].flatMap((j) => [m3(j), m6(j)]),
+  })
+
+  /** Ce que rend HiGHS au temps limite SANS solution : colonnes à zéro,
+   * objectif infini. */
+  const sansSolution = (lp: string, o?: Record<string, unknown>) => {
+    const vrai = highs.solve(lp, o as Record<string, string | number>)
+    const Columns: Record<string, { Primal: number }> = {}
+    for (const k of Object.keys(vrai.Columns)) Columns[k] = { Primal: 0 }
+    return {
+      Status: 'Time limit reached',
+      ObjectiveValue: Number.POSITIVE_INFINITY,
+      Columns,
+    }
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('temps limite sans solution au temps 1 : jamais pris pour un planning vide', () => {
+    // Le temps 2 atteint lui aussi la limite, AVEC une solution (une place
+    // reste vide : deux places en même temps pour une personne). Le planning
+    // vide « sans manque » du temps 1 ne doit pas lui être préféré.
+    let appels = 0
+    const faux: Highs = {
+      solve: (lp, o) =>
+        appels++ === 0
+          ? sansSolution(lp, o)
+          : { ...highs.solve(lp, o), Status: 'Time limit reached' },
+    }
+    const p = probleme({
+      salaries: [personne('a', 7)],
+      creneaux: [m3(0), m6(0), creneau('c0', 0, 7, 14, { typeShift: 'M3' })],
+    })
+    const r = generer(p, faux)
+    expect(appels).toBe(2)
+    expect(r.etapes).toBe(2)
+    expect(r.statut).toBe('realisable')
+    expect(r.affectations).toHaveLength(1)
+    expect(r.manques).toHaveLength(1)
+  })
+
+  it('temps limite sans solution, une seule résolution : inconnu', () => {
+    const faux: Highs = { solve: sansSolution }
+    const r = generer(
+      probleme({ salaries: [personne('a', 7)], creneaux: [m3(0)] }),
+      faux,
+    )
+    expect(r.statut).toBe('inconnu')
+    // Et aux deux temps : rien de trouvé, rien de rendu comme planning.
+    const r2 = generer(
+      probleme({ salaries: [personne('a', 7)], creneaux: [m3(0), m6(0)] }),
+      faux,
+    )
+    expect(r2.statut).toBe('inconnu')
+  })
+
+  it('heures dues perdues au code imposé : second temps, le CDI prend le M6 (P3 avant P4)', () => {
+    for (const graine of graines) {
+      const r = gen(probleme({ ...semaineCdi(), graine }))
+      expect(r.etapes).toBe(2)
+      expect(qui(r, 'r0-M6')).toEqual(['a'])
+      expect(qui(r, 'b0')).toEqual([])
+      for (const j of [1, 2, 3, 4]) expect(qui(r, `b${j}`)).toEqual(['a'])
+      expect(r.manques).toEqual([])
+      // Aucun manque d'heures : 35 h faites sur 35 h dues.
+      expect(r.ecartTotalMinutes).toBe(0)
+    }
+  })
+
+  it('un manque d’heures structurel (personne pour céder) ne relance rien', () => {
+    // Deux CDI pour cinq shifts : l'un reste sous son contrat quoi qu'il
+    // arrive ; aucun extra ne tient de place : le temps 2 n'y gagnerait rien.
+    const p = probleme({
+      salaries: [personne('a', 35), personne('b', 35)],
+      creneaux: [0, 1, 2, 3, 4].flatMap((j) => [m3(j), m6(j)]),
+    })
+    expect(gen(p).etapes).toBe(1)
+  })
+
+  it('budget : le temps 1 n’en prend que sa part, le temps 2 a le reste', () => {
+    // Le solveur use tout le temps qu'on lui laisse (horloge simulée).
+    let maintenant = 1_000_000
+    vi.spyOn(Date, 'now').mockImplementation(() => maintenant)
+    const limites: number[] = []
+    const lent: Highs = {
+      solve: (lp, o) => {
+        const t = Number(o?.time_limit)
+        limites.push(t)
+        maintenant += t * 1000
+        return highs.solve(lp, o)
+      },
+    }
+    const budget = 4
+    const r = generer(
+      { ...probleme({ ...semaineCdi(), graine: 1 }), tempsMaxSecondes: budget },
+      lent,
+    )
+    expect(limites).toHaveLength(2)
+    expect(limites[0]).toBeLessThanOrEqual(budget * PART_TEMPS_1)
+    expect(limites[1]).toBeCloseTo(budget - limites[0], 6)
+    expect(r.etapes).toBe(2)
+    expect(r.manques).toEqual([])
+    expect(qui(r, 'r0-M6')).toEqual(['a'])
+  })
+
+  it('temps 1 au temps limite (sans optimum prouvé) : problème complet ensuite', () => {
+    let appels = 0
+    const lps: string[] = []
+    const faux: Highs = {
+      solve: (lp, o) => {
+        lps.push(lp)
+        const r = highs.solve(lp, o)
+        return appels++ === 0 ? { ...r, Status: 'Time limit reached' } : r
+      },
+    }
+    // Sans manque ni dépannage : un optimum au temps 1 s'arrêterait là.
+    const p = probleme({
+      salaries: [personne('a', 7)],
+      creneaux: [m3(0), m6(0)],
+    })
+    const r = generer(p, faux)
+    expect(appels).toBe(2)
+    // Le second modèle porte le remplaçant (des variables de plus).
+    expect(lps[1].length).toBeGreaterThan(lps[0].length)
+    expect(r.etapes).toBe(2)
+    expect(r.manques).toEqual([])
+  })
+
+  it('remplaçant fait court : heures dues sur ses minutes réelles', () => {
+    const besoin = creneau('b', 0, 7, 14, { typeShift: 'M3' })
+    const long = creneau('r', 0, 9, 17, {
+      typeShift: 'M6',
+      place: 'b',
+      effectif: 0,
+      raccourci: H,
+    })
+    // M6 de 8 h fait en 7 h sur un M3 de 7 h : 7 h comptées, pas 6.
+    expect(minutesDuesCourt(long, besoin)).toBe(7 * H)
+    expect(minutesEnPlusCourt(long, besoin)).toBe(7 * H)
+    expect(minutesDues(long, besoin)).toBe(7 * H)
+    expect(minutesEnPlus(long, besoin)).toBe(8 * H)
+    // Sans remplaçant : le raccourci seul.
+    const seul = { ...long, place: null }
+    expect(minutesDuesCourt(seul)).toBe(7 * H)
+    expect(minutesEnPlusCourt(seul)).toBe(7 * H)
+    // Dans le modèle : le CDI de 7 h, M3 interdit, M6 obligatoirement
+    // court (7 h par jour au plus) : aucun écart au contrat.
+    const a = personne('a', 7, {
+      finServicePrecedent: -2 * H,
+      minutesJourMax: 7 * H,
+    })
+    for (const graine of graines) {
+      const r = gen(
+        probleme({ salaries: [a], creneaux: [besoin, long], graine }),
+      )
+      expect(qui(r, 'r')).toEqual(['a'])
+      expect(r.affectations[0].court).toBe(true)
+      expect(r.ecartTotalMinutes).toBe(0)
+    }
   })
 })

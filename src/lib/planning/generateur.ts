@@ -204,6 +204,22 @@ export function minutesEnPlus(c: Creneau, besoin?: Creneau): number {
     : travail(c)
 }
 
+/** `minutesDues` du shift fait COURT (`raccourci` en moins) : un
+ * remplaçant raccourci compte encore au plus les heures du besoin, sur ses
+ * minutes réelles (M6 de 8 h fait en 7 h sur un M3 de 7 h : 7 h). */
+export function minutesDuesCourt(c: Creneau, besoin?: Creneau): number {
+  return c.place !== null && besoin
+    ? Math.min(travail(c) - c.raccourci, travail(besoin))
+    : travail(c) - c.raccourci
+}
+
+/** `minutesEnPlus` du shift fait COURT, de même. */
+export function minutesEnPlusCourt(c: Creneau, besoin?: Creneau): number {
+  return c.place !== null && besoin
+    ? Math.max(travail(c) - c.raccourci, travail(besoin))
+    : travail(c) - c.raccourci
+}
+
 /** Le besoin d'un créneau remplaçant, cherché par son id de place. */
 export type BesoinDe = (place: string) => Creneau | undefined
 // P3 — contrats.
@@ -375,6 +391,8 @@ export interface Highs {
     options?: Record<string, string | number | boolean>,
   ) => {
     Status: string
+    /** Infini (ou absent) quand aucune solution n'est connue. */
+    ObjectiveValue?: number
     Columns: Record<string, { Primal?: number }>
   }
 }
@@ -543,6 +561,10 @@ function enLignes(noms: string[]): string[] {
   return r
 }
 
+/** Les termes à coefficient non nul (un shift court qui ne change pas la
+ * mesure ajoute un terme nul). */
+const nonNuls = (t: Terme[]) => t.filter(([k]) => k !== 0)
+
 function intervalle(debut: number, fin: number): number[] {
   const r: number[] = []
   for (let i = debut; i < fin; i++) r.push(i)
@@ -559,6 +581,9 @@ interface Construit {
   trous: Array<Trou & { v: string }>
   /** Variables de manque aux minimums des consignes (une par consigne). */
   minimums: string[]
+  /** Minutes sous et au-dessus du contrat des personnes à contrat NON
+   * indicatif, par personne et par semaine : [fiche, moins, plus]. */
+  sousContrat: Array<[string, string, string]>
 }
 
 /** Réglages internes de la construction (tests et mesures seulement). */
@@ -628,6 +653,7 @@ export function construire(
   }
 
   const ecarts: Array<[string, string]> = []
+  const sousContrat: Array<[string, string, string]> = []
   const manque = new Map<string, string>()
   const minimums: string[] = []
 
@@ -913,9 +939,15 @@ export function construire(
         enPlus.push([minutesEnPlus(c, besoin), xv(c)])
         const vc = court.get(cle(s.id, c.id))
         if (vc) {
+          // Fait court : la variable `court` ajoute l'écart entre la mesure
+          // du shift court et celle du shift long (une constante, donc
+          // linéaire et exact) ; sans remplaçant, -raccourci partout.
           minutes.push([-c.raccourci, vc])
-          dues.push([-c.raccourci, vc])
-          enPlus.push([-c.raccourci, vc])
+          dues.push([minutesDuesCourt(c, besoin) - minutesDues(c, besoin), vc])
+          enPlus.push([
+            minutesEnPlusCourt(c, besoin) - minutesEnPlus(c, besoin),
+            vc,
+          ])
         }
       }
       const memeMesure = dues.every(([k], i) => k === enPlus[i][0])
@@ -1064,8 +1096,8 @@ export function construire(
         // plus = max(0, enPlus - contrat), comme l'égalité quand les deux
         // mesures coïncident. (`ecartTotalMinutes` lit donc ces minutes
         // comptées, pas les minutes réelles, sur une telle semaine.)
-        m.ajoute([...dues, [1, moins]], '>=', s.minutesHebdoContrat)
-        m.ajoute([...enPlus, [-1, plus]], '<=', s.minutesHebdoContrat)
+        m.ajoute([...nonNuls(dues), [1, moins]], '>=', s.minutesHebdoContrat)
+        m.ajoute([...nonNuls(enPlus), [-1, plus]], '<=', s.minutesHebdoContrat)
       }
       ecarts.push([plus, moins])
       if (s.contratIndicatif) {
@@ -1074,6 +1106,7 @@ export function construire(
       } else {
         m.cout(POIDS_SOUS_CONTRAT, moins)
         m.cout(POIDS_SUR_CONTRAT, plus)
+        sousContrat.push([s.id, moins, plus])
       }
     }
   }
@@ -1135,7 +1168,7 @@ export function construire(
     for (const v of x.values()) m.cout(Math.floor(hasard() * 4), v)
   }
 
-  return { modele: m, x, court, manque, ecarts, trous, minimums }
+  return { modele: m, x, court, manque, ecarts, trous, minimums, sousContrat }
 }
 
 /**
@@ -1501,6 +1534,10 @@ function scinder(k: string): [string, string] {
 type Resolution = Omit<ResultatGeneration, 'etapes'> & {
   /** Personnes qui manquent aux minimums des consignes, toutes ensemble. */
   manqueMinimum: number
+  /** Fiches à contrat non indicatif à qui il manque des heures dues. */
+  sousContrat: Set<string>
+  /** Fiches à contrat non indicatif au-dessus de leur contrat. */
+  auDessusContrat: Set<string>
 }
 
 const echec = (): Resolution => ({
@@ -1510,15 +1547,24 @@ const echec = (): Resolution => ({
   ecartTotalMinutes: null,
   trous: [],
   manqueMinimum: 0,
+  sousContrat: new Set(),
+  auDessusContrat: new Set(),
 })
 
-/** Résout UNE fois le problème `p` avec HiGHS, en `tempsMax` secondes. */
+/** Plus petit temps laissé à HiGHS (secondes). */
+const TEMPS_MIN = 0.05
+
+/** Résout UNE fois le problème `p` avec HiGHS, jusqu'à `echeance` (en ms,
+ * horloge `Date.now`) : le temps laissé à HiGHS est compté APRÈS la
+ * construction du modèle, et borné par `plafond` secondes s'il est donné. */
 function resoudreUneFois(
   p: Probleme,
   highs: Highs,
-  tempsMax: number,
+  echeance: number,
+  plafond = Number.POSITIVE_INFINITY,
 ): Resolution {
-  const { modele, x, court, manque, ecarts, trous, minimums } = construire(p)
+  const { modele, x, court, manque, ecarts, trous, minimums, sousContrat } =
+    construire(p)
   if (modele.impossible) return echec()
   // Sans variable ni place : aucun besoin, donc aucune plage, aucun trou.
   if (x.size === 0 && manque.size === 0) {
@@ -1529,8 +1575,14 @@ function resoudreUneFois(
       ecartTotalMinutes: 0,
       trous: [],
       manqueMinimum: 0,
+      sousContrat: new Set(),
+      auDessusContrat: new Set(),
     }
   }
+  const tempsMax = Math.max(
+    TEMPS_MIN,
+    Math.min(plafond, (echeance - Date.now()) / 1000),
+  )
   const solution = highs.solve(modele.lp(), {
     time_limit: tempsMax,
     mip_rel_gap: 0,
@@ -1542,12 +1594,17 @@ function resoudreUneFois(
     Math.round(
       (solution.Columns[v] as { Primal?: number } | undefined)?.Primal ?? 0,
     )
-  const aSolution = Object.keys(solution.Columns).length > 0
-  const statut =
-    solution.Status === 'Optimal'
+  // Au temps limite SANS solution, HiGHS rend des colonnes à zéro et un
+  // objectif infini : ce n'est pas une solution (un planning vide passerait
+  // pour réalisable, sans manque).
+  const aSolution =
+    Object.keys(solution.Columns).length > 0 &&
+    Number.isFinite(solution.ObjectiveValue)
+  const statut = !aSolution
+    ? 'inconnu'
+    : solution.Status === 'Optimal'
       ? 'optimal'
-      : aSolution &&
-          /time limit|iteration limit|interrupt/i.test(solution.Status)
+      : /time limit|iteration limit|interrupt/i.test(solution.Status)
         ? 'realisable'
         : 'inconnu'
   if (statut === 'inconnu') return echec()
@@ -1591,6 +1648,12 @@ function resoudreUneFois(
     ),
     trous: restes,
     manqueMinimum: minimums.reduce((t, v) => t + valeur(v), 0),
+    sousContrat: new Set(
+      sousContrat.filter(([, v]) => valeur(v) > 0).map(([id]) => id),
+    ),
+    auDessusContrat: new Set(
+      sousContrat.filter(([, , v]) => valeur(v) > 0).map(([id]) => id),
+    ),
   }
 }
 
@@ -1603,7 +1666,7 @@ function aTenir(r: Resolution): [number, number] {
 }
 
 const rendre = (
-  { manqueMinimum: _, ...r }: Resolution,
+  { manqueMinimum: _, sousContrat: _s, auDessusContrat: _a, ...r }: Resolution,
   etapes: 1 | 2,
 ): ResultatGeneration => ({ ...r, etapes })
 
@@ -1615,79 +1678,100 @@ const rendre = (
  * le code exact suffit presque toujours.
  *
  * Temps 1 : le même problème SANS les remplaçants non imposés (un shift
- * posé rattaché par cycle reste : c'est un fait). Puis :
- *   - une place nécessaire vide, un manque à un minimum de consigne ou un
- *     trou entre équipes : temps 2 sur le problème COMPLET ;
- *   - sinon, des places qui ont des remplaçants tenues en DÉPANNAGE :
- *     temps 2 avec les remplaçants de CES places seulement (D13 : un
- *     titulaire sur un autre code du cycle passe devant un dépannage au
- *     code imposé). Mesuré : sur les vraies semaines, ~8 places par semaine
- *     sont tenues par une adjointe ou un superviseur, et le problème
- *     complet n'y pose jamais de remplaçant ; ne garder que leurs ~50
- *     remplaçants (sur ~385) suffit à en juger. Ce qui est laissé : une
- *     chaîne où un titulaire passe sur l'autre code d'une place tenue au
- *     code imposé pour libérer celui-ci à un autre : un changement de code
- *     de plus (2 000) pour un gain d'heures ou de confort (voir plus bas) ;
- *   - sinon, la solution du temps 1 est rendue.
+ * posé rattaché par cycle reste : c'est un fait), en au plus
+ * `PART_TEMPS_1` du budget. Puis :
+ *   - pas d'optimum prouvé (temps limite, ou rien trouvé), une place
+ *     nécessaire vide, un manque à un minimum de consigne ou un trou entre
+ *     équipes : temps 2 sur le problème COMPLET ;
+ *   - sinon, temps 2 avec les remplaçants qui peuvent servir (rien d'autre
+ *     n'est ajouté) :
+ *       · ceux des places tenues en DÉPANNAGE (D13 : un titulaire sur un
+ *         autre code du cycle passe devant un dépannage au code imposé).
+ *         Mesuré : sur les vraies semaines, ~8 places par semaine sont
+ *         tenues par une adjointe ou un superviseur, et le problème complet
+ *         n'y pose jamais de remplaçant ; leurs ~50 remplaçants (sur ~385)
+ *         suffisent à en juger ;
+ *       · ceux des JOURS où une personne à contrat (non indicatif) à qui il
+ *         manque des heures dues est libre et pourrait tenir un créneau,
+ *         et où une place à remplaçants est tenue par quelqu'un qui peut la
+ *         céder sans perdre d'heures dues (extra, ou au-dessus de son
+ *         contrat) : `remplacantsPourHeures`. P3 passe devant P4 : 7 h dues
+ *         valent 168 000, un remplaçant 2 000. Le jour entier, pour la
+ *         chaîne d'un cran : elle prend le remplaçant, OU une autre passe
+ *         sur le remplaçant pour lui laisser le code imposé ;
+ *   - si aucun des deux, la solution du temps 1 est rendue.
  *
  * Pourquoi c'est sûr. La solution du temps 1 est une solution du problème
  * complet (remplaçants à 0 : ils n'ont aucune contrainte propre). Un
  * remplaçant coûte toujours POIDS_REMPLACANT (2 000) de plus, ne rapporte
  * jamais plus d'heures dues que le besoin ni n'épargne d'heures en plus
  * (`minutesDues`, `minutesEnPlus`), et ne sert qu'à tenir une place, un
- * minimum, fermer un trou (P1, P2) ou éviter un dépannage (P4 : part fixe
- * au-dessus du remplaçant). Les quatre sont regardés ci-dessus : s'il n'en
- * reste aucun, ce que le problème complet gagnerait de plus vient de ce qui
- * reste, contre au moins 2 000 par remplaçant :
- *   - P3 (contrats) : une personne qui ne peut pas tenir le code imposé
- *     (repos de 11 h…) prendrait le code voisin à la place d'une autre qui
- *     le tient, pour lui donner ses heures dues, ou pour retirer des heures
- *     en plus ou un 6e jour à l'autre (le même jour, la même place) ;
+ * minimum, fermer un trou (P1, P2), donner des heures dues (P3) ou éviter
+ * un dépannage (P4 : part fixe au-dessus du remplaçant). Les cinq sont
+ * regardés ci-dessus. Ce que le problème complet peut encore gagner, contre
+ * au moins 2 000 par remplaçant :
+ *   - P3 par une chaîne d'un jour à l'autre (une personne passe sur un
+ *     remplaçant un AUTRE jour que celui où il manque des heures à
+ *     l'autre), ou à travers quelqu'un qui est pile à son contrat, ou pour
+ *     retirer des heures en plus ou un 6e jour à quelqu'un ;
  *   - P2 maximum d'une consigne (un code voisin d'une autre période) ;
  *   - P5 confort (repos accolés, équité, jours habituels), plafonné par
  *     shift sous la part fixe d'un dépannage, donc rarement plus de 2 000.
  * Dans ces cas l'optimum du problème complet PEUT différer de celui rendu :
- * c'est voulu, « le code exact tant qu'il suffit » ; chaque place reste
- * tenue avec le code demandé, rien n'est vide ni hors la loi.
+ * « le code exact tant qu'il suffit » ; chaque place reste tenue avec le
+ * code demandé, rien n'est vide ni hors la loi, et aucune heure due n'est
+ * perdue qu'un remplaçant du même jour aurait donnée.
  * Les poids dérivés (`coutPlaceVideGroupe`, `coutManqueMinimum`, maximum
  * des consignes) sont calculés sur les créneaux de CHAQUE problème : les
  * deux premiers ne jouent qu'en cas de manque (alors problème complet) ; le
  * maximum garde son rang P2.
  *
- * Budget : `tempsMaxSecondes` couvre les deux temps. Si le temps 1 l'a
- * tout pris, ou si le temps 2 ne trouve rien, le meilleur connu est rendu
- * (moins de personnes manquantes, puis moins de minutes de trou ; à
- * égalité, le temps 2).
+ * Budget : `tempsMaxSecondes` couvre les deux temps, construction des
+ * modèles comprise (le temps laissé à HiGHS est compté après elle). Le
+ * temps 1 n'en prend au plus que `PART_TEMPS_1` : le reste est gardé pour
+ * le temps 2. Si le temps 2 n'a plus de temps ou ne trouve rien, le temps 1
+ * est rendu ; une solution n'est jamais écartée pour un « rien trouvé »
+ * (statut `inconnu`). Entre deux solutions, la meilleure connue : moins de
+ * personnes manquantes, puis moins de minutes de trou ; à égalité, le
+ * temps 2 (son problème contient celui du temps 1).
  */
+/** Part du budget au plus laissée au temps 1 (le reste : au temps 2). */
+export const PART_TEMPS_1 = 0.5
+
 /** Résout le problème avec HiGHS (chargé par l'appelant : worker ou test). */
 export function generer(p: Probleme, highs: Highs): ResultatGeneration {
+  const echeance = Date.now() + p.tempsMaxSecondes * 1000
   const imposes = new Set([...p.imposees].map((k) => scinder(k)[1]))
-  const garde = (places: ReadonlySet<string>) =>
+  const garde = (places: ReadonlySet<string>, ids: ReadonlySet<string>) =>
     p.creneaux.filter(
-      (c) => c.place === null || imposes.has(c.id) || places.has(c.place),
+      (c) =>
+        c.place === null ||
+        imposes.has(c.id) ||
+        places.has(c.place) ||
+        ids.has(c.id),
     )
-  const creneaux1 = garde(new Set())
+  const creneaux1 = garde(new Set(), new Set())
   if (creneaux1.length === p.creneaux.length) {
-    return rendre(resoudreUneFois(p, highs, p.tempsMaxSecondes), 1)
+    return rendre(resoudreUneFois(p, highs, echeance), 1)
   }
-  const debut = Date.now()
   const r1 = resoudreUneFois(
     { ...p, creneaux: creneaux1 },
     highs,
-    p.tempsMaxSecondes,
+    echeance,
+    p.tempsMaxSecondes * PART_TEMPS_1,
   )
   let creneaux2 = p.creneaux
-  if (r1.statut !== 'inconnu') {
+  if (r1.statut === 'optimal') {
     const [manquants, trou] = aTenir(r1)
     if (manquants === 0 && trou === 0) {
       const places = placesEnDepannage(p, r1)
-      if (places.size === 0) return rendre(r1, 1)
-      creneaux2 = garde(places)
+      const pourHeures = remplacantsPourHeures(p, r1)
+      if (places.size === 0 && pourHeures.size === 0) return rendre(r1, 1)
+      creneaux2 = garde(places, pourHeures)
     }
   }
-  const reste = p.tempsMaxSecondes - (Date.now() - debut) / 1000
-  if (reste <= 0.05) return rendre(r1, 1)
-  const r2 = resoudreUneFois({ ...p, creneaux: creneaux2 }, highs, reste)
+  if ((echeance - Date.now()) / 1000 <= TEMPS_MIN) return rendre(r1, 1)
+  const r2 = resoudreUneFois({ ...p, creneaux: creneaux2 }, highs, echeance)
   if (r2.statut === 'inconnu') return rendre(r1, 1)
   if (r2.statut === 'realisable' && r1.statut !== 'inconnu') {
     const [m1, t1] = aTenir(r1)
@@ -1695,6 +1779,49 @@ export function generer(p: Probleme, highs: Highs): ResultatGeneration {
     if (m1 < m2 || (m1 === m2 && t1 < t2)) return rendre(r1, 1)
   }
   return rendre(r2, 2)
+}
+
+/** Les remplaçants (ids de créneaux) des JOURS où des heures dues peuvent
+ * être gagnées : une personne à contrat non indicatif à qui le temps 1
+ * laisse un manque d'heures dues y est libre et pourrait y tenir un créneau
+ * (remplaçant ou non), ET une place qui a des remplaçants y est tenue (hors
+ * shift posé) par quelqu'un qui peut la céder sans perdre d'heures dues :
+ * contrat indicatif (extra) ou au-dessus de son contrat. Sans ce second
+ * point, un manque structurel (plus d'heures dues que de shifts) relancerait
+ * le temps 2 pour rien : les heures ne feraient que changer de mains. */
+function remplacantsPourHeures(p: Probleme, r: Resolution): Set<string> {
+  const ids = new Set<string>()
+  if (r.sousContrat.size === 0) return ids
+  const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
+  const salaries = new Map(p.salaries.map((s) => [s.id, s]))
+  const avecRemplacants = new Set<string>()
+  for (const c of p.creneaux) if (c.place !== null) avecRemplacants.add(c.place)
+  const occupes = new Set<string>()
+  const cedables = new Set<number>()
+  for (const a of r.affectations) {
+    const c = creneaux.get(a.creneauId)
+    const h = salaries.get(a.salarieId)
+    if (!c || !h) continue
+    occupes.add(`${a.salarieId}|${jourDe(c)}`)
+    if (
+      avecRemplacants.has(c.place ?? c.id) &&
+      !p.imposees.has(cle(a.salarieId, a.creneauId)) &&
+      (h.contratIndicatif || r.auDessusContrat.has(h.id))
+    )
+      cedables.add(jourDe(c))
+  }
+  const jours = new Set<number>()
+  for (const s of p.salaries) {
+    if (!r.sousContrat.has(s.id)) continue
+    for (const c of p.creneaux) {
+      const j = jourDe(c)
+      if (!cedables.has(j) || jours.has(j) || c.ferme) continue
+      if (!occupes.has(`${s.id}|${j}`) && compatible(s, c)) jours.add(j)
+    }
+  }
+  for (const c of p.creneaux)
+    if (c.place !== null && jours.has(jourDe(c))) ids.add(c.id)
+  return ids
 }
 
 /** Les places qui ont des remplaçants et que le temps 1 fait tenir en

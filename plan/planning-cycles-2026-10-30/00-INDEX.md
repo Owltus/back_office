@@ -18,8 +18,8 @@ fondée sur une « courbe de présence » par plages (jugée pas claire) :
   peux pas faire de choix et laisse vide… après, à nous de prendre un extra » ;
 - « le chevauchement c'est mieux, mais pas obligatoire ».
 
-> **PLAN, rien d'exécuté.** Toutes les décisions sont prises
-> ([D-decisions.md](./D-decisions.md)) ; l'étape 1 est faite.
+> **EXÉCUTÉ le 2026-10-30 en essaim, NON poussé.** Décisions D1-D16
+> ([D-decisions.md](./D-decisions.md)). Bilan en fin de fichier.
 
 ---
 
@@ -120,3 +120,56 @@ lance la suite complète. 12 agents au total, jamais plus de 4 à la fois.
 | Écrans    | `BesoinsPage.tsx`, `ConsignesPresence.tsx`, `attention.ts`, `PanneauAlertes.tsx`, cases mois et semaine                       | —                                        |
 | Doc       | `CLAUDE.md` (section Planning)                                                                                                | ce dossier                               |
 | **Total** | **~15 modifiés**                                                                                                              | **~3 nouveaux**                          |
+
+---
+
+## Bilan (2026-10-30)
+
+Commits : ebd0e33 (plan) → 7e9a566 (vague 0) → d004e5a (vague 1) → 8aa31c8
+(vague 2) → 5ea5d9e, dec17ad (moteur allégé, deux temps) → 7b4ee9e
+(correctifs) → commit suivant (correctifs du calcul en deux temps), tous
+locaux.
+
+Essaim : 19 agents (3 reconnaissances, 1 fondations, 4 moteur, 3 écrans,
+mesure, 2 optimisations, Martin, essais navigateur, 2 relectures adverses,
+1 correction). Un fichier = un lot ; l'orchestrateur seul commite.
+
+| Mesure (8 semaines réelles, base locale) | Avant (37f3b17)   | Après                             |
+| ---------------------------------------- | ----------------- | --------------------------------- |
+| Temps moyen par semaine                  | 0,36 s            | 1,3 s                             |
+| Pire temps                               | 0,87 s            | 2,1 s                             |
+| Contraintes par semaine                  | ~3 000            | ~7 300 (82 000 sans la réduction) |
+| Infractions à la loi                     | 0                 | 0                                 |
+| Places nécessaires vides                 | 0                 | 0                                 |
+| Minimums par cycle non tenus (règle D11) | 5 à 6 par semaine | 0                                 |
+| Trous entre équipes                      | 1 à 6 par semaine | 0                                 |
+| Remplaçants posés                        | sans objet        | 0 (le code exact suffit)          |
+| Tests planning (lib + écrans)            | 685               | 861                               |
+
+Essai « codes exotiques » (3 M6 posés sur des besoins M3) : places tenues,
+`code_demande` rempli, aucun doublon. Essais dans le navigateur (port à
+part, compte d'essai supprimé, 209 shifts d'essai effacés par id) : textes
+conformes, aucune erreur de console.
+
+Relectures adverses : (1) remplaçant choisi pour des heures de contrat →
+corrigé (5ea5d9e) ; nuit sur un poste « Tous », soutien rattaché par cycle,
+raison commune non bloquante, comptage du vérificateur → corrigés (7b4ee9e).
+Martin : deux défauts prouvés par test (contrôle « cycle sans code » qui
+contredisait la somme ; version courte mal placée, défaut ANTÉRIEUR au
+chantier) → corrigés (7b4ee9e). Relecture finale : solution vide prise
+pour bonne au temps limite, heures dues sacrifiées au premier temps,
+budget du second temps, remplaçant fait court → corrigés (commit
+suivant). Stryker : arrêté, trop long sur ces
+fichiers (pas de score) ; mutations faites à la main par chaque lot, toutes
+attrapées.
+
+À faire par l'utilisateur ou à décider :
+
+- changer un code au clic droit peut changer le poste sans le dire (mode
+  manuel du même jour : le Club n'avait pas le M5, le shift est passé en
+  Supervision) ;
+- aucune consigne de nuit n'existe encore en base : à poser dans Besoins si
+  voulu ;
+- livraison : la migration nuit part au prochain « push » ; `db diff` local
+  montre un trigger de storage (`enforce_versioning_status_transition`) lié
+  à l'image Docker, pas au chantier : à vérifier avant de livrer.
