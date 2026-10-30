@@ -311,8 +311,19 @@ function controlesLocaux() {
   // migration ne partirait pas, en silence. Structure seulement, jamais le
   // contenu (base fantôme rejouée depuis les migrations).
   process.stdout.write('- structure locale = migrations… ')
+  // `--agent yes` : sortie JSON même face à un vrai terminal (livrer.bat) ;
+  // sinon le CLI écrit pour une personne et la sortie est illisible ici.
   const diff = lancer(
-    ['supabase', 'db', 'diff', '--local', '--schema', 'public,private,storage'],
+    [
+      'supabase',
+      'db',
+      'diff',
+      '--local',
+      '--schema',
+      'public,private,storage',
+      '--agent',
+      'yes',
+    ],
     { accepterEchec: true },
   )
   if (!diff.ok)

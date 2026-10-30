@@ -206,8 +206,18 @@ try {
   // Studio sans migration serait effacée, en silence, à chaque démarrage
   // (2026-10-15). Structure seulement : le contenu local, lui, est remplacé
   // par la copie, c'est son rôle.
+  // `--agent yes` : sortie JSON même face à un vrai terminal (start.bat).
   const diff = lancer(
-    ['supabase', 'db', 'diff', '--local', '--schema', 'public,private,storage'],
+    [
+      'supabase',
+      'db',
+      'diff',
+      '--local',
+      '--schema',
+      'public,private,storage',
+      '--agent',
+      'yes',
+    ],
     { accepterEchec: true },
   )
   if (!diff.ok)
