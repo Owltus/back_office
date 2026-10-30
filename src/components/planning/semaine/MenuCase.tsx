@@ -67,9 +67,6 @@ export function MenuCase({
         <ContextMenuItem onSelect={vider}>
           <Eraser />
           <span className="font-medium">Non attribué</span>
-          <span className="ml-auto pl-3 text-xs text-muted-foreground">
-            vider la case
-          </span>
         </ContextMenuItem>
       )}
       {validation && (
@@ -86,9 +83,6 @@ export function MenuCase({
                 ? 'Remettre en proposition'
                 : 'Valider ce shift'}
             </span>
-            <span className="ml-auto pl-3 text-xs text-muted-foreground">
-              {validation.active ? 'recalculable' : 'gardé par les générations'}
-            </span>
           </ContextMenuItem>
         </>
       )}
@@ -98,13 +92,8 @@ export function MenuCase({
           <ContextMenuItem onSelect={etoile.onBasculer}>
             <Star className="fill-amber-400 text-amber-400" />
             <span className="font-medium">Journée étoile</span>
-            <span className="ml-auto pl-3 text-xs text-muted-foreground">
-              {etoile.active ? 'retirer' : 'mettre ce jour'}
-            </span>
-            {etoile.active ? (
-              <Check className="size-3.5 text-primary" />
-            ) : (
-              <span className="size-3.5" />
+            {etoile.active && (
+              <Check className="ml-auto size-3.5 text-primary" />
             )}
           </ContextMenuItem>
         </>

@@ -237,7 +237,6 @@ export function MenuJour({
           >
             <Eraser className="size-4" />
             <span className="flex-1 font-medium">Non attribué</span>
-            <span className="text-xs text-muted-foreground">vider la case</span>
           </button>
         )}
         {ecrire && validation && (
@@ -259,11 +258,6 @@ export function MenuJour({
                   ? 'Remettre en proposition'
                   : 'Valider ce shift'}
               </span>
-              <span className="text-xs text-muted-foreground">
-                {validation.active
-                  ? 'recalculable'
-                  : 'gardé par les générations'}
-              </span>
             </button>
           </>
         )}
@@ -278,9 +272,6 @@ export function MenuJour({
             >
               <Star className="size-4 text-amber-500" />
               <span className="flex-1 font-medium">Journée étoile</span>
-              <span className="text-xs text-muted-foreground">
-                {etoile.active ? 'retirer' : 'mettre ce jour'}
-              </span>
               {etoile.active && <Check className="size-4 text-primary" />}
             </button>
           </>
@@ -294,9 +285,6 @@ export function MenuJour({
         >
           <CalendarRange className="size-4" />
           <span className="flex-1 font-medium">Ouvrir la semaine</span>
-          <span className="text-xs text-muted-foreground">
-            {ecrire ? 'poste, absence, école…' : 'voir le détail'}
-          </span>
         </button>
         {grouperHoraires(liste.map((c) => c.horaire)).map((g) => (
           <div key={g.libelle} role="group" aria-label={g.libelle}>
