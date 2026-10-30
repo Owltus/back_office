@@ -8,7 +8,7 @@
 -- Ne casse rien :
 --   - aucun libellé existant renommé ni supprimé (feuilles liées par id) ;
 --   - le nombre de lignes des 9 existantes n'est pas touché ;
---   - rejouable : `on conflict do nothing`, mises à jour par libellé.
+--   - rejouable : `on conflict do nothing`.
 -- « nombre » = lignes du tableau Date | Note | Signature (1 page A4).
 --
 -- ⚠ Déjà joué À LA MAIN en prod (éditeur SQL) le 2026-10-30 par
@@ -27,19 +27,11 @@ insert into public.classeur_periodicites (label, nombre, sort_order) values
   ('Décennal',        4, 160)   -- tous les 10 ans
 on conflict (label) do nothing;
 
--- 2) Ordre complet, de la plus fréquente à la plus rare
-update public.classeur_periodicites p
-set sort_order = o.sort_order
-from (values
-  ('Quotidien',       10), ('Hebdomadaire',    20), ('Bimensuel',       30),
-  ('Mensuel',         40), ('Sesquimestriel',  50), ('Bimestriel',      60),
-  ('Trimestriel',     70), ('Quadrimestriel',  80), ('Semestriel',      90),
-  ('Annuel',         100), ('Biennale',       110), ('Triennal',       120),
-  ('Quadriennal',    130), ('Quinquennal',    140), ('Décennal',       160),
-  ('Non défini',     999)
-) as o(label, sort_order)
-where p.label = o.label
-  and p.sort_order is distinct from o.sort_order;
+-- 2) Ordre complet, de la plus fréquente à la plus rare : déjà posé en prod
+-- à la main (vérifié en lecture le 2026-10-30 : 10, 20, … 160, 999). La
+-- réécriture des 9 de départ est retirée de ce fichier : elle ne changeait
+-- rien en prod, et sur une base rejouée depuis zéro elles n'existent pas
+-- encore (seed joué après les migrations).
 
 -- 3) Garde-fou : même borne que l'import (1 à 60 lignes)
 do $$
