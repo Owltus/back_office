@@ -87,12 +87,16 @@ const CONFIRME =
 
 // ── commandes ──────────────────────────────────────────────────────────────
 
-function lancer(cmd, { voir = false, accepterEchec = false } = {}) {
+function lancer(
+  cmd,
+  { voir = false, accepterEchec = false, clavier = true } = {},
+) {
+  const entree = clavier ? 'inherit' : 'ignore'
   const r = spawnSync(cmd[0], cmd.slice(1), {
     cwd: RACINE,
     encoding: 'utf8',
     shell: process.platform === 'win32',
-    stdio: voir ? 'inherit' : ['inherit', 'pipe', 'pipe'],
+    stdio: voir ? [entree, 'inherit', 'inherit'] : [entree, 'pipe', 'pipe'],
     maxBuffer: 64 * 1024 * 1024,
   })
   const res = {
@@ -686,7 +690,12 @@ try {
   const arret = controlesLocaux()
   if (arret) throw new Error(arret)
   titre('Liaison temporaire à la prod')
-  lancer(['supabase', 'link', '--project-ref', REF_PROD], { voir: true })
+  // Sans clavier : face à un vrai terminal (livrer.bat), le CLI attendait en
+  // silence le mot de passe de la base, inutile ici (constaté le 2026-10-30).
+  lancer(['supabase', 'link', '--project-ref', REF_PROD], {
+    voir: true,
+    clavier: false,
+  })
   if (MODE === 'amorcer') await amorcer()
   else if (MODE === 'reprendre') await reprendreInstantane()
   else await livrer()
