@@ -489,9 +489,7 @@ describe('EditeurShift : règle des codes', () => {
       { semaine },
     )
     const matin = screen.getByRole('button', { name: /^M\s*Matin/ })
-    expect(matin.textContent).toMatch(
-      /Coupure de 11 h non respectée avec la veille/,
-    )
+    expect(matin.textContent).toContain('-11 h de repos')
     expect(matin.hasAttribute('disabled')).toBe(false)
     // Rien d'office qui casse la coupure : l'après-midi est proposé.
     expect(matin.getAttribute('aria-pressed')).toBe('false')

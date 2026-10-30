@@ -167,9 +167,7 @@ describe('rubriquesDeLaCase', () => {
       source: apresMidiMardi,
     })
     const matin = ligneDe(r, idP('Réception'), idH('M'))
-    expect(matin?.ligne.alerte).toBe(
-      'Coupure de 11 h non respectée avec la veille',
-    )
+    expect(matin?.ligne.alerte).toBe('-11 h de repos')
     expect(ligneDe(r, idP('Réception'), idH('AM'))?.ligne.alerte).toBeNull()
     expect(ligneDe(r, idP('Club'), idH('M'))?.ligne.alerte).toMatch(/11 h/)
   })
@@ -182,7 +180,7 @@ describe('rubriquesDeLaCase', () => {
       source: apresMidiMardi,
     })
     expect(ligneDe(r, idP('Réception'), idH('M'))?.ligne.alerte).toBe(
-      'Coupure de 12 h non respectée avec la veille',
+      '-12 h de repos',
     )
   })
 
@@ -413,8 +411,6 @@ describe('codesUniques : chaque code une fois, poste déduit', () => {
     const u = codesUniques(r, BASE, referentiel.postes)
     const matins = u.codes.filter((c) => c.horaire.code === 'M')
     expect(matins).toHaveLength(1)
-    expect(matins[0].alerte).toBe(
-      'Coupure de 11 h non respectée avec la veille',
-    )
+    expect(matins[0].alerte).toBe('-11 h de repos')
   })
 })

@@ -203,7 +203,7 @@ export function MenuJour({
         role="menu"
         aria-label={titre}
         style={pos}
-        className="fixed z-50 max-h-[80dvh] min-w-80 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+        className="fixed z-50 max-h-[80dvh] w-60 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
       >
         <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
           {titre}

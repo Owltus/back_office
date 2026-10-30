@@ -404,12 +404,12 @@ describe('VueMois', { timeout: 20_000 }, () => {
     // ligne ; le vérificateur signalera l'infraction sur le shift posé.
     // Une seule liste : chaque code une fois, posé sur le métier habituel.
     const matin = await screen.findByRole('menuitem', {
-      name: 'M, Matin, Coupure de 11 h non respectée avec la veille',
+      name: 'M, Matin, -11 h de repos',
     })
     expect(matin.getAttribute('aria-disabled')).toBeNull()
     expect(
       screen.getByRole('menuitem', {
-        name: 'MI, Middle, Coupure de 11 h non respectée avec la veille',
+        name: 'MI, Middle, -11 h de repos',
       }),
     ).toBeTruthy()
     // L'après-midi reste proposé sans alerte, une seule fois.

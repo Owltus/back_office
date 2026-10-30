@@ -59,7 +59,7 @@ export function MenuCase({
   const horsPermis = codes.actuel
   const parId = new Map(codes.codes.map((c) => [c.horaire.id, c]))
   return (
-    <ContextMenuContent className="min-w-80">
+    <ContextMenuContent className="w-60">
       <ContextMenuLabel className="text-xs text-muted-foreground">
         {ouverture.nom} · {JOURS[ouverture.jour]}
       </ContextMenuLabel>

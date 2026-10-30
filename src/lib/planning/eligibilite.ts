@@ -152,14 +152,10 @@ export const TEXTE_RAISON: Record<RaisonCodes, string> = {
   'coupure-11h': 'Coupure de repos non respectée',
 }
 
-/** Texte de la coupure, selon le côté et le repos dû (11 h, 12 h mineur). */
-export function texteCoupure(
-  cote: 'veille' | 'lendemain',
-  minimum: number,
-): string {
-  return `Coupure de ${Math.round(minimum / 60)} h non respectée avec ${
-    cote === 'veille' ? 'la veille' : 'le lendemain'
-  }`
+/** Texte court de la coupure (lu dans un menu), selon le repos dû (11 h,
+ * 12 h mineur) ; le côté reste dans `Ecarte.cote`. */
+export function texteCoupure(minimum: number): string {
+  return `-${Math.round(minimum / 60)} h de repos`
 }
 
 /** Un shift déjà posé un autre jour, dans le repère du lundi (jour -1 :
@@ -269,14 +265,14 @@ export function codesPermis<
       horaire: h,
       raison: 'coupure-11h',
       cote,
-      texte: texteCoupure(cote, minimum),
+      texte: texteCoupure(minimum),
     })
   }
   if (!codes.length) {
     return {
       codes,
       raison: 'coupure-11h',
-      texte: texteCoupure(ecartes[0].cote, minimum),
+      texte: texteCoupure(minimum),
       ecartes,
     }
   }

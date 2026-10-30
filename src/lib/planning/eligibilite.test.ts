@@ -267,9 +267,7 @@ describe('codesPermis', () => {
       [1, 'veille'],
       [4, 'veille'],
     ])
-    expect(r.ecartes[0].texte).toBe(
-      'Coupure de 11 h non respectée avec la veille',
-    )
+    expect(r.ecartes[0].texte).toBe('-11 h de repos')
   })
 
   it('coupure avec le lendemain, et liste vide', () => {
@@ -282,7 +280,7 @@ describe('codesPermis', () => {
     })
     expect(r.codes).toEqual([])
     expect(r.raison).toBe('coupure-11h')
-    expect(r.texte).toBe('Coupure de 11 h non respectée avec le lendemain')
+    expect(r.texte).toBe('-11 h de repos')
   })
 
   it('mineur : 12 h, chiffre de regles.ts', () => {
@@ -304,9 +302,7 @@ describe('codesPermis', () => {
       personne: salarie({ mineur: true }),
     })
     expect(ids(mineur.codes)).toEqual([1])
-    expect(mineur.ecartes[0].texte).toBe(
-      'Coupure de 12 h non respectée avec la veille',
-    )
+    expect(mineur.ecartes[0].texte).toBe('-12 h de repos')
   })
 })
 
@@ -733,9 +729,7 @@ describe('code actuel qui n’est plus permis', () => {
       lundi: LUNDI,
       voisins: [{ jour: 1, debut: '15:00', fin: '23:00' }],
     })
-    expect(actuelNonPermis(coupure, TOUS, 1)?.texte).toBe(
-      'Coupure de 11 h non respectée avec la veille',
-    )
+    expect(actuelNonPermis(coupure, TOUS, 1)?.texte).toBe('-11 h de repos')
   })
 })
 
