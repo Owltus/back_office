@@ -34,7 +34,11 @@ import {
   codesPermis,
 } from '#/lib/planning/eligibilite.ts'
 import { travail } from '#/lib/planning/modele.ts'
-import { clePresence, sommeBesoinsPresence } from '#/lib/planning/presence.ts'
+import {
+  clePresence,
+  ORDRE_PERIODES,
+  sommeBesoinsPresence,
+} from '#/lib/planning/presence.ts'
 import {
   besoinsValides,
   contexte,
@@ -655,7 +659,8 @@ export function verifierReglages(
   // face à la consigne du jour.
   const somme = sommeBesoinsPresence(demandes, postes, horaires)
   for (const c of [...r.consignes].sort(
-    (a, b) => a.jour - b.jour || (a.periode === 'matin' ? -1 : 1),
+    (a, b) =>
+      a.jour - b.jour || ORDRE_PERIODES[a.periode] - ORDRE_PERIODES[b.periode],
   )) {
     const n = somme.get(clePresence(c.jour, c.periode)) ?? 0
     const moment = `${JOURS[c.jour]} ${c.periode}`

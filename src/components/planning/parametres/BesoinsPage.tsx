@@ -76,6 +76,7 @@ import type {
   Besoin,
   Consigne,
   Horaire,
+  PeriodePresence,
   Poste,
   Referentiel,
 } from '#/lib/planning/types.ts'
@@ -112,7 +113,7 @@ const LIBELLE_COUCHE = Object.fromEntries(
 type Vue = 'postes' | 'presence'
 interface Evidence {
   jour: number
-  periode: 'matin' | 'soir'
+  periode: PeriodePresence
 }
 const cleCase = (posteId: number, ligne: LigneBesoin, jour: number) =>
   `${posteId}|${ligne.cle}|${jour}`
@@ -153,7 +154,7 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
     setVueBrute(v)
     if (v === 'presence') setEvidence(null)
   }
-  const ajuster = (jour: number, periode: 'matin' | 'soir') => {
+  const ajuster = (jour: number, periode: PeriodePresence) => {
     setVueBrute('postes')
     setCouche('effectif')
     setEvidence({ jour, periode })

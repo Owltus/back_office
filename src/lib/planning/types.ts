@@ -87,13 +87,16 @@ export interface Salarie {
   suite_de: number | null
 }
 
-/** Combien de personnes le matin ou le soir d'un jour de la semaine type,
+/** Période d'une consigne de présence (la nuit depuis le 2026-10-30). */
+export type PeriodePresence = 'matin' | 'soir' | 'nuit'
+
+/** Combien de personnes le matin, le soir ou la nuit d'un jour de la semaine type,
  * sur les postes qui comptent dans la présence. `maximum` null : pas de
  * plafond. « 3 ou 4 » : minimum 3, maximum 4. */
 export interface Consigne {
   id: number
   jour: number // 0 = lundi
-  periode: 'matin' | 'soir'
+  periode: PeriodePresence
   minimum: number
   maximum: number | null
 }

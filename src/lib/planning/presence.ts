@@ -13,7 +13,20 @@
  */
 
 import { minutes } from '#/lib/planning/temps.ts'
-import type { Besoin, Consigne, Horaire, Poste } from '#/lib/planning/types.ts'
+import type {
+  Besoin,
+  Consigne,
+  Horaire,
+  PeriodePresence,
+  Poste,
+} from '#/lib/planning/types.ts'
+
+/** Ordre d'affichage et de tri des périodes : matin, soir, nuit. */
+export const ORDRE_PERIODES: Readonly<Record<PeriodePresence, number>> = {
+  matin: 0,
+  soir: 1,
+  nuit: 2,
+}
 
 /** Période d'un horaire libre : nuit de 22 h à 5 h, matin avant 12 h 30. */
 export function periodeLibre(debut: string): 'matin' | 'soir' | 'nuit' {
@@ -51,7 +64,7 @@ export function periodeShift(
 /** Une consigne et ce que le planning en fait. */
 export interface PresenceOut {
   jour: number
-  periode: 'matin' | 'soir'
+  periode: PeriodePresence
   compte: number
   minimum: number
   maximum: number | null
@@ -73,10 +86,14 @@ export function ecartConsigne(
  * shifts qui comptent. */
 export function bilanPresence(
   consignes: Consigne[],
-  presents: ReadonlyArray<{ jour: number; periode: 'matin' | 'soir' }>,
+  presents: ReadonlyArray<{ jour: number; periode: PeriodePresence }>,
 ): PresenceOut[] {
   return [...consignes]
-    .sort((a, b) => a.jour - b.jour || (a.periode === 'matin' ? -1 : 1))
+    .sort(
+      (a, b) =>
+        a.jour - b.jour ||
+        ORDRE_PERIODES[a.periode] - ORDRE_PERIODES[b.periode],
+    )
     .map((c) => {
       const compte = presents.filter(
         (p) => p.jour === c.jour && p.periode === c.periode,
@@ -105,7 +122,7 @@ export function libelleConsigne(
 }
 
 /** Clé d'un moment de la semaine type : `5:matin`. */
-export const clePresence = (jour: number, periode: 'matin' | 'soir') =>
+export const clePresence = (jour: number, periode: PeriodePresence) =>
   `${jour}:${periode}`
 
 /** Somme des personnes nécessaires (`effectif`) des besoins qui comptent dans

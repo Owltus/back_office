@@ -127,7 +127,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':M', (select m from t_ids)::text);
 $$;
 
-select plan(48);
+select plan(49);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -296,8 +296,13 @@ select is(pg_temp.essai('gestion', array[
   'err=23514', 'consignes : un plafond sous le minimum est refusé');
 select is(pg_temp.essai('gestion', array[
   'delete from public.planning_consignes',
-  'insert into public.planning_consignes (jour, periode, minimum) values (0, ''nuit'', 1)']),
-  'err=23514', 'consignes : seulement matin et soir');
+  'insert into public.planning_consignes (jour, periode, minimum) values (0, ''nuit'', 1)',
+  'select periode || ''-'' || minimum from public.planning_consignes']),
+  'nuit-1', 'consignes : la nuit est acceptée (2026-10-30)');
+select is(pg_temp.essai('gestion', array[
+  'delete from public.planning_consignes',
+  'insert into public.planning_consignes (jour, periode, minimum) values (0, ''midi'', 1)']),
+  'err=23514', 'consignes : une période inconnue est refusée');
 
 -- ------------------------------ familles des codes horaires (2026-10-28) ---
 select is(pg_temp.essai('gestion', array[

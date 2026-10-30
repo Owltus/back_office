@@ -88,6 +88,7 @@ const shift = (s: Partial<ShiftOut> = {}): ShiftOut => ({
   court: false,
   epinglee: true,
   besoin_id: null,
+  code_demande: null,
   role: 'titulaire',
   alertes: [],
   ...s,

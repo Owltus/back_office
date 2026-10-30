@@ -5,14 +5,15 @@
  * plus ; discret : conforme.
  */
 
-import { Sun, Sunset } from 'lucide-react'
+import { Moon, Sun, Sunset } from 'lucide-react'
 
 import { Tip } from '#/components/shared/Tip.tsx'
 import { libelleConsigne } from '#/lib/planning/presence.ts'
 import type { PresenceOut } from '#/lib/planning/presence.ts'
 import { cn } from '#/lib/utils.ts'
 
-const NOM = { matin: 'Matin', soir: 'Soir' } as const
+const NOM = { matin: 'Matin', soir: 'Soir', nuit: 'Nuit' } as const
+const ICONE = { matin: Sun, soir: Sunset, nuit: Moon } as const
 
 /** « 1 de moins », « 2 de plus ». */
 export function ecartTexte(ecart: number): string {
@@ -24,7 +25,7 @@ export function PastillesPresence({ presence }: { presence: PresenceOut[] }) {
   return (
     <div className="mt-1 flex flex-wrap gap-1">
       {presence.map((p) => {
-        const Icone = p.periode === 'matin' ? Sun : Sunset
+        const Icone = ICONE[p.periode]
         const attendu = libelleConsigne(p.minimum, p.maximum)
         const texte = `${NOM[p.periode]} : ${p.compte} présent${p.compte > 1 ? 's' : ''} pour ${attendu} attendu${p.minimum > 1 ? 's' : ''}${p.ecart ? ` (${ecartTexte(p.ecart)})` : ''}`
         return (

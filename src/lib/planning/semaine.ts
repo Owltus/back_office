@@ -97,6 +97,10 @@ export interface ShiftOut {
   court: boolean
   epinglee: boolean
   besoin_id: number | null
+  /** Code imposé par le besoin quand le shift posé en a un autre du même
+   * cycle (« M6 au lieu de M3 », plan planning-cycles-2026-10-30) ; null
+   * sinon. Ajouté le 2026-10-30 ; absent de l'API du prototype. */
+  code_demande: number | null
   role: Role | null
   alertes: AlerteOut[]
 }
@@ -930,6 +934,7 @@ export function analyser(d: DonneesSemaine): SemaineOut {
       court: a.court,
       epinglee: a.epinglee,
       besoin_id: lien.get(a.id) ?? enSoutien.get(a.id) ?? null,
+      code_demande: null,
       role: sol ? role(sol, String(a.poste_id)) : null,
       alertes,
     })

@@ -16,7 +16,12 @@ import type { RaisonClaire } from '#/lib/planning/raisonsPlaces.ts'
 import type { SemaineOut } from '#/lib/planning/semaine.ts'
 import { ajouterJours } from '#/lib/planning/temps.ts'
 import { JOURS } from '#/lib/planning/types.ts'
-import type { Horaire, Poste, Salarie } from '#/lib/planning/types.ts'
+import type {
+  Horaire,
+  PeriodePresence,
+  Poste,
+  Salarie,
+} from '#/lib/planning/types.ts'
 
 const RAISON_EXTRA = 'extra disponible'
 const SANS_RAISON = 'disponible ce jour-là'
@@ -67,7 +72,7 @@ export interface ShiftAPourvoir {
 export interface EcartPresence {
   cle: string
   date: string
-  periode: 'matin' | 'soir'
+  periode: PeriodePresence
   compte: number
   minimum: number
   maximum: number | null

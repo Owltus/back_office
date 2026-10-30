@@ -5,6 +5,7 @@
  */
 
 import { MINUTES_PAR_JOUR, NUIT_DEBUT, NUIT_FIN } from '#/lib/planning/temps.ts'
+import type { PeriodePresence } from '#/lib/planning/types.ts'
 
 /** Un poste à tenir sur une plage horaire, avec le nombre de personnes. */
 export interface Creneau {
@@ -33,7 +34,11 @@ export interface Creneau {
   /** Empiète sur 22 h → 6 h en heure locale ; null : calculé ici. */
   nuit: boolean | null
   /** Consigne de présence où ce créneau compte (poste et période), ou null. */
-  presence: 'matin' | 'soir' | null
+  presence: PeriodePresence | null
+  /** Créneau remplaçant (`r…`) : id `b…` du besoin qu'il sert, avec un autre
+   * code permis du même cycle (plan planning-cycles-2026-10-30, D13). Null
+   * pour un besoin ou un shift posé hors besoins. */
+  place: string | null
   /** Équité (D15) : un soir (période soir du code). */
   soir: boolean
   /** Équité (D15) : un matin tôt (début à l'heure la plus tôt des matins
@@ -56,6 +61,7 @@ export function creneau(
     presenceMax: null,
     nuit: null,
     presence: null,
+    place: null,
     soir: false,
     matinTot: false,
     ...c,
@@ -233,7 +239,7 @@ export function role(s: SalarieSolveur, poste: string): Role | null {
 /** Consigne de présence d'un jour de la période (`presence.ts`). */
 export interface ConsigneSolveur {
   jour: number
-  periode: 'matin' | 'soir'
+  periode: PeriodePresence
   minimum: number
   maximum: number | null
 }
