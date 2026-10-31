@@ -42,9 +42,14 @@ export function PageAvecEnTete({
       >
         {entete}
       </div>
+      {/* `relative` : la zone est le repère des éléments en position
+          absolue qu'elle contient (textes `sr-only`, badges…). Sans lui, ils
+          se plaçaient par rapport à la PAGE et l'allongeaient : la fenêtre
+          défilait en plus de la zone, deux barres (page Besoins du
+          Planning, 2026-10-31 : 2 768 px pour une fenêtre de 1 080). */}
       <div
         data-page-zone=""
-        className="-mx-4 -mb-4 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pt-1 pb-4 [scrollbar-gutter:stable] md:-mx-6 md:-mb-6 md:px-6 md:pb-6 print:overflow-visible"
+        className="relative -mx-4 -mb-4 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pt-1 pb-4 [scrollbar-gutter:stable] md:-mx-6 md:-mb-6 md:px-6 md:pb-6 print:overflow-visible"
       >
         {children}
       </div>

@@ -278,7 +278,9 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
       onReessayer={() => void ref.refetch()}
     >
       {data && (
-        <>
+        // Largeur bornée (audit UX du 2026-10-31) : étalées sur 1 400 px,
+        // les 7 colonnes de jours obligeaient l'œil à traverser l'écran.
+        <div className="flex w-full max-w-6xl flex-col gap-4">
           <div className="flex flex-col items-start gap-1">
             <Segmente
               etiquette="Ce que montre la page"
@@ -294,14 +296,20 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
                 ? 'Pour chaque poste, une ligne par horaire où il faut du monde, et le nombre de personnes chaque jour. Le planning automatique place les gens sur ces lignes.'
                 : 'Combien de personnes au total le matin, le soir et la nuit, tous postes comptés confondus. Le planning automatique tient ces minimums.'}
             </p>
-            <p className="text-xs text-muted-foreground">
-              Dans quel ordre le planning automatique décide : la loi d'abord,
-              puis les personnes nécessaires et le minimum de chaque cycle, puis
-              le maximum de chaque cycle, puis les contrats, puis un titulaire
-              avant un dépannage, puis le confort (repos groupés, jours
-              habituels, partage des week-ends, des soirs et des matins tôt sur
-              les 4 dernières semaines).
-            </p>
+            {/* Replié (audit UX du 2026-10-31) : toujours affiché, ce
+                paragraphe prenait de la hauteur à chaque visite. */}
+            <details className="text-xs text-muted-foreground">
+              <summary className="cursor-pointer select-none hover:text-foreground">
+                Dans quel ordre le planning automatique décide
+              </summary>
+              <p className="mt-1 max-w-3xl">
+                La loi d'abord, puis les personnes nécessaires et le minimum de
+                chaque cycle, puis le maximum de chaque cycle, puis les
+                contrats, puis un titulaire avant un dépannage, puis le confort
+                (repos groupés, jours habituels, partage des week-ends, des
+                soirs et des matins tôt sur les 4 dernières semaines).
+              </p>
+            </details>
           </div>
 
           {vue === 'presence' ? (
@@ -391,7 +399,7 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
               ))}
             </>
           )}
-        </>
+        </div>
       )}
     </CadreReglages>
   )
@@ -534,15 +542,15 @@ function CartePoste({
           <AjoutHoraire
             poste={poste}
             horaires={aAjouter}
+            aide={
+              restreint
+                ? `Les horaires choisis pour ce poste dans Postes (${possibles.length}).`
+                : `Aucun horaire choisi pour ce poste dans Postes : les ${possibles.length} horaires sont proposés.`
+            }
             onChoisir={(h) => ajouter(`t${h.id}`)}
           />
         )}
       </div>
-      <p className="-mt-1 text-xs text-muted-foreground">
-        {restreint
-          ? `Les horaires proposés sont ceux choisis pour ce poste dans Postes (${possibles.length}).`
-          : `Aucun horaire choisi pour ce poste dans Postes : les ${possibles.length} horaires sont proposés.`}
-      </p>
 
       {lignes.length === 0 ? (
         <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
@@ -620,10 +628,13 @@ function CartePoste({
 function AjoutHoraire({
   poste,
   horaires,
+  aide,
   onChoisir,
 }: {
   poste: Poste
   horaires: Horaire[]
+  /** D'où viennent les horaires proposés (réglage du poste). */
+  aide: string
   onChoisir: (h: Horaire) => void
 }) {
   const [ouvert, setOuvert] = useState(false)
@@ -640,6 +651,7 @@ function AjoutHoraire({
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-1">
+        <p className="px-2 pt-1.5 pb-1 text-xs text-muted-foreground">{aide}</p>
         <ul
           aria-label="Horaires à ajouter"
           className="flex max-h-80 flex-col overflow-y-auto"
@@ -762,9 +774,21 @@ function LigneTableau({
               </p>
             )}
             {ailleurs.length > 0 && (
-              <p className="mt-1 text-xs text-muted-foreground">
-                Réglé aussi : {listeEt(ailleurs)}.
-              </p>
+              // Étiquettes sur UNE ligne (audit UX du 2026-10-31) : la phrase
+              // « Réglé aussi : … » prenait deux lignes sous chaque horaire.
+              <div
+                className="mt-1 flex flex-wrap gap-1"
+                aria-label={`Réglé aussi : ${listeEt(ailleurs)}`}
+              >
+                {ailleurs.map((a) => (
+                  <span
+                    key={a}
+                    className="rounded border px-1.5 text-[10.5px] leading-4 text-muted-foreground"
+                  >
+                    {a.charAt(0).toUpperCase() + a.slice(1)}
+                  </span>
+                ))}
+              </div>
             )}
             {!permise && (
               <p className="mt-1 flex items-start gap-1 text-xs text-amber-500">
