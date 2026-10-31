@@ -463,6 +463,33 @@ export function VueSemaine({
         if (shift) setEdition({ mode: 'modification', shift })
       }),
     fiche: (id) => setFicheId(id),
+    basculer: (salarieId, jour) =>
+      siOuverte(() => {
+        const shift = semaine?.affectations.find(
+          (a) => a.salarie_id === salarieId && a.jour === jour,
+        )
+        const repos =
+          shift || !referentiel
+            ? null
+            : validationRepos(
+                semaine?.bilan.find((b) => b.salarie_id === salarieId),
+                jour,
+                referentiel.motifs,
+              )
+        const valide = shift ? shift.epinglee : repos?.valide
+        if (valide === undefined) return
+        void executer(
+          () =>
+            service.valider(
+              lundi,
+              salarieId,
+              jour,
+              !valide,
+              repos?.deduit && !valide ? [{ salarie_id: salarieId, jour }] : [],
+            ),
+          'Validation impossible',
+        )
+      }),
     validerJour: (jour) =>
       siOuverte(
         () =>
@@ -485,6 +512,7 @@ export function VueSemaine({
       ouvrirShift: (id) => rappelsRef.current?.ouvrirShift(id),
       fiche: (id) => rappelsRef.current?.fiche(id),
       validerJour: (j) => rappelsRef.current?.validerJour(j),
+      basculer: (s, j) => rappelsRef.current?.basculer(s, j),
     }),
     [],
   )

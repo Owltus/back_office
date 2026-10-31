@@ -73,6 +73,7 @@ import type { OuvertureMenu } from '#/components/planning/mois/MenuJour.tsx'
 import {
   caseDe,
   compter,
+  validationDeCase,
   dansLesOuvertes,
   etatSemaine,
   listeSemaines,
@@ -420,6 +421,31 @@ export function VueMois({
         ? { mode: 'modification', shift }
         : { mode: 'creation', salarie_id: salarieId, jour },
     })
+  }
+
+  /** Double-clic sur un shift ou un repos : validé ↔ proposition (demande
+   * utilisateur du 2026-10-31), mêmes gardes qu'au clic. */
+  const basculerValidation = (salarieId: number, date: string) => {
+    const { lundi, jour } = reperer(date)
+    if (!droits.ecrire) return
+    if (etats.get(lundi)?.verrouillee) return notifier(MSG_VERROU, 'attention')
+    if (pasMaintenant()) return
+    const v = validationDeCase(
+      caseDe(semaines, referentiel?.motifs ?? [], salarieId, date),
+    )
+    if (!v) return
+    void executer(
+      lundi,
+      () =>
+        valider(
+          lundi,
+          salarieId,
+          jour,
+          !v.valide,
+          v.deduit && !v.valide ? [{ salarie_id: salarieId, jour }] : [],
+        ),
+      "La validation n'a pas été changée",
+    )
   }
 
   /** Écriture lancée depuis l'éditeur : mêmes gardes qu'à l'ouverture, la
@@ -853,6 +879,7 @@ export function VueMois({
             onSemaine={onSemaine}
             onFiche={setFiche}
             onJour={ouvrirJour}
+            onDouble={droits.ecrire ? basculerValidation : undefined}
             onVerrou={
               droits.gerer
                 ? (l) => {

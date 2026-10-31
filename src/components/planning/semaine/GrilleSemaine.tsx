@@ -57,6 +57,8 @@ export interface RappelsGrille {
   ouvrirShift: (shiftId: number) => void
   fiche: (salarieId: number) => void
   validerJour: (jour: number) => void
+  /** Double-clic sur un shift ou un repos : validé ↔ proposition. */
+  basculer: (salarieId: number, jour: number) => void
 }
 
 export function GrilleSemaine({
@@ -299,6 +301,7 @@ const LigneStaff = memo(function LigneStaff({
               actif={gestes}
               cliquable={cliquable}
               onOuvrir={() => rappels.ouvrirShift(c.shift!.id)}
+              onDouble={cliquable ? () => rappels.basculer(s.id, j) : undefined}
             />
           ) : c.statut ? (
             <CarteStatutDeplacable
@@ -307,6 +310,13 @@ const LigneStaff = memo(function LigneStaff({
               actif={gestes}
               cliquable={cliquable}
               onOuvrir={() => rappels.ajouter(s.id, j)}
+              onDouble={
+                cliquable &&
+                !c.statut.fixe &&
+                (c.statut.genre === 'repos' || c.statut.reposPose)
+                  ? () => rappels.basculer(s.id, j)
+                  : undefined
+              }
             />
           ) : null}
         </Cellule>

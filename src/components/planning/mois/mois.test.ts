@@ -15,6 +15,7 @@ import {
   lundisDe,
   moisDecale,
   placesAPourvoir,
+  validationDeCase,
 } from '#/components/planning/mois/mois.ts'
 
 describe('calendrier du mois', () => {
@@ -82,6 +83,29 @@ describe('cases et compteurs', () => {
     apres: [],
   })
   const semaines = new Map([[lundi, sem]])
+
+  it('double-clic : ce qui se valide dans une case (2026-10-31)', () => {
+    const c = (date: string) => caseDe(semaines, referentiel.motifs, 3, date)
+    // Shift proposé, puis shift validé.
+    expect(validationDeCase(c('2026-10-26'))).toEqual({
+      valide: false,
+      deduit: false,
+    })
+    expect(validationDeCase(c('2026-11-01'))).toEqual({
+      valide: true,
+      deduit: false,
+    })
+    // Case vide, repos fixe, hors contrat : rien à basculer.
+    expect(validationDeCase(c('2026-10-28'))).toBeNull()
+    expect(
+      validationDeCase({ type: 'repos', fixe: true, proposition: false }),
+    ).toBeNull()
+    expect(validationDeCase({ type: 'hors', fixe: true })).toBeNull()
+    // Repos déduit : proposition, écrit en base à la validation.
+    expect(
+      validationDeCase({ type: 'repos', fixe: false, proposition: true }),
+    ).toEqual({ valide: false, deduit: true })
+  })
 
   it('le compteur de validation ne compte que les jours du mois', () => {
     // Les repos en proposition (déduits) comptent avec les shifts proposés,

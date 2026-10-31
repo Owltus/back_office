@@ -60,7 +60,9 @@ import {
   cleBandeau,
   raisonFermee,
   reperer,
+  validationDeCase,
 } from '#/components/planning/mois/mois.ts'
+import { clicOuDoubleClic } from '#/components/planning/doubleClic.ts'
 import type { CaseMois, EtatSemaine } from '#/components/planning/mois/mois.ts'
 
 const fmt = (o: Intl.DateTimeFormatOptions) =>
@@ -114,6 +116,7 @@ export function GrilleMois({
   onSemaine,
   onFiche,
   onJour,
+  onDouble,
   onDeposer,
   onVerrou,
 }: {
@@ -137,6 +140,8 @@ export function GrilleMois({
     y: number,
     clicDroit: boolean,
   ) => void
+  /** Double-clic sur un shift ou un repos : bascule la validation. */
+  onDouble?: (salarieId: number, date: string) => void
   onDeposer: (d: Depot) => void
   /** Gestion : verrouiller ou déverrouiller une semaine d'un clic. */
   onVerrou?: (lundi: string) => void
@@ -424,6 +429,7 @@ export function GrilleMois({
                   indice={indice}
                   onFiche={onFiche}
                   onJour={onJour}
+                  onDouble={onDouble}
                 />
               )),
             ])}
@@ -478,6 +484,7 @@ function LigneMois({
   indice,
   onFiche,
   onJour,
+  onDouble,
 }: {
   personne: Salarie
   mois: string
@@ -498,6 +505,7 @@ function LigneMois({
     y: number,
     clicDroit: boolean,
   ) => void
+  onDouble?: (salarieId: number, date: string) => void
 }) {
   const nom = `${s.prenom} ${s.nom}`.trim()
   const shifts = jours
@@ -508,8 +516,20 @@ function LigneMois({
   const minutes = shifts.reduce((n, c) => n + c.shift.duree, 0)
   const loi = alertes.some((a) => a.nature === 'loi')
   const ouvrir = (date: string, clicDroit: boolean) => (e: MouseEvent) => {
-    if (clicDroit) e.preventDefault()
-    onJour(s.id, date, e.clientX, e.clientY, clicDroit)
+    const { clientX, clientY } = e
+    if (clicDroit) {
+      e.preventDefault()
+      onJour(s.id, date, clientX, clientY, true)
+      return
+    }
+    // Double-clic : bascule la validation d'un shift ou d'un repos.
+    clicOuDoubleClic(
+      e,
+      () => onJour(s.id, date, clientX, clientY, false),
+      onDouble && validationDeCase(lire(s.id, date))
+        ? () => onDouble(s.id, date)
+        : null,
+    )
   }
   const fondJour = (date: string) =>
     cn(

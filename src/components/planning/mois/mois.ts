@@ -132,6 +132,20 @@ export function caseDe(
   return { type: 'repos', fixe, proposition: !fixe && !sem.verrouillee }
 }
 
+/** Ce qui se valide dans une case, comme au clic droit : un shift, un repos
+ * déduit (proposition, écrit en base à la validation) ou posé. Jamais un
+ * repos fixe, une autre absence ou une case vide (null). */
+export function validationDeCase(
+  c: CaseMois | null,
+): { valide: boolean; deduit: boolean } | null {
+  if (!c || c.fixe) return null
+  if (c.type === 'shift') return { valide: c.shift.epinglee, deduit: false }
+  if (c.type === 'repos') return { valide: false, deduit: true }
+  if (c.type === 'absence' && c.motif?.nature === 'repos')
+    return { valide: !c.proposition, deduit: false }
+  return null
+}
+
 /** Clé de bandeau : deux jours voisins de même clé fusionnent (repos de même
  * validation, qu'il soit fixe, déduit ou posé ; même motif et même origine
  * fixe ou posée ; hors contrat). */

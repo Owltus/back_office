@@ -35,6 +35,7 @@ import type { Horaire, Poste } from '#/lib/planning/types.ts'
 import { cn } from '#/lib/utils.ts'
 import { NEUTRE } from '#/components/planning/semaine/edition.ts'
 import type { ContenuStatut } from '#/components/planning/semaine/edition.ts'
+import { clicOuDoubleClic } from '#/components/planning/doubleClic.ts'
 
 export interface ContenuCarte {
   debut: string
@@ -155,6 +156,7 @@ export const CarteShiftDeplacable = memo(function CarteShiftDeplacable({
   actif,
   cliquable,
   onOuvrir,
+  onDouble,
 }: {
   id: string
   c: ContenuCarte
@@ -163,6 +165,8 @@ export const CarteShiftDeplacable = memo(function CarteShiftDeplacable({
   /** Clic permis (droit d'écriture) : en semaine verrouillée, il explique pourquoi rien ne bouge. */
   cliquable: boolean
   onOuvrir: () => void
+  /** Double-clic : bascule la validation (shift, repos validable). */
+  onDouble?: () => void
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id,
@@ -174,7 +178,7 @@ export const CarteShiftDeplacable = memo(function CarteShiftDeplacable({
       <div
         ref={setNodeRef}
         className={cn(
-          'planning-deplacable grid min-h-0 rounded-[7px] outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          'planning-deplacable grid min-h-0 rounded-[7px] outline-none select-none focus-visible:ring-2 focus-visible:ring-ring',
           actif
             ? 'cursor-grab'
             : cliquable
@@ -188,7 +192,11 @@ export const CarteShiftDeplacable = memo(function CarteShiftDeplacable({
         tabIndex={cliquable ? 0 : -1}
         aria-label={libelle.join(', ')}
         aria-disabled={!cliquable}
-        onClick={cliquable ? onOuvrir : undefined}
+        onClick={
+          cliquable
+            ? (e) => clicOuDoubleClic(e, onOuvrir, onDouble ?? null)
+            : undefined
+        }
         onKeyDown={(e) => {
           if (cliquable && (e.key === 'Enter' || e.key === ' ')) {
             e.preventDefault()
@@ -262,12 +270,15 @@ export const CarteStatutDeplacable = memo(function CarteStatutDeplacable({
   actif,
   cliquable,
   onOuvrir,
+  onDouble,
 }: {
   id: string
   s: ContenuStatut
   actif: boolean
   cliquable: boolean
   onOuvrir: () => void
+  /** Double-clic : bascule la validation (shift, repos validable). */
+  onDouble?: () => void
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id,
@@ -279,7 +290,7 @@ export const CarteStatutDeplacable = memo(function CarteStatutDeplacable({
       <div
         ref={setNodeRef}
         className={cn(
-          'grid min-h-0 rounded-[7px] outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          'grid min-h-0 rounded-[7px] outline-none select-none focus-visible:ring-2 focus-visible:ring-ring',
           actif && !s.fixe
             ? 'cursor-grab'
             : actif && s.genre !== 'hors'
@@ -293,7 +304,11 @@ export const CarteStatutDeplacable = memo(function CarteStatutDeplacable({
         tabIndex={cliquable ? 0 : -1}
         aria-label={texte}
         aria-disabled={!cliquable}
-        onClick={cliquable ? onOuvrir : undefined}
+        onClick={
+          cliquable
+            ? (e) => clicOuDoubleClic(e, onOuvrir, onDouble ?? null)
+            : undefined
+        }
         onKeyDown={(e) => {
           if (cliquable && (e.key === 'Enter' || e.key === ' ')) {
             e.preventDefault()
