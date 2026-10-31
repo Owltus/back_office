@@ -215,10 +215,16 @@ export function violationsSalarie(
       for (const [nom, autre] of voisines) {
         const repos = 14 - travailles.size - autre
         if (repos < s.reposDeuxSemaines) {
+          // Sous le minimum de la CONVENTION HCR, mais permis par la loi
+          // tant que chaque semaine garde ses 35 h et 6 jours au plus
+          // (jusqu'à 12 jours d'affilée sur deux semaines) : une alerte, pas
+          // une infraction (décision utilisateur du 2026-10-31 : « possible
+          // à la main avec une alerte »). Le générateur ne le choisit jamais.
           ajoute(
             'R-REPOS-HEBDO-HCR',
-            `${travailles.size + autre} jours travaillés sur deux semaines (avec la semaine ${nom}) : au moins ${s.reposDeuxSemaines} jours de repos`,
+            `${travailles.size + autre} jours travaillés sur deux semaines (avec la semaine ${nom}) : sous le minimum de la convention HCR (${s.reposDeuxSemaines} jours de repos), permis par la loi`,
             semaine,
+            'organisation',
           )
         }
       }

@@ -263,7 +263,7 @@ export function resume(f: Fiche): LigneRegle[] {
     ],
     [
       'R-REPOS-HEBDO-HCR',
-      `2 jours de repos par semaine (${s.joursPreferesSemaine} jours travaillés ; 6 en cas de besoin, avec au moins ${s.reposDeuxSemaines} jours de repos sur deux semaines)`,
+      `2 jours de repos par semaine (${s.joursPreferesSemaine} jours travaillés ; 6 en cas de besoin, avec au moins ${s.reposDeuxSemaines} jours de repos sur deux semaines ; en dessous, permis à la main avec une alerte, jusqu'à 12 jours d'affilée)`,
     ],
   ]
   if (s.reposHebdoMin) {

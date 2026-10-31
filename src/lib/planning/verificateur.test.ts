@@ -250,12 +250,29 @@ describe('jours travaillés, semaines', () => {
     expect(
       messages({ ...s, joursSemaineSuivante: 6 }, six, 'R-REPOS-HEBDO-HCR'),
     ).toEqual([
-      '12 jours travaillés sur deux semaines (avec la semaine suivante) : au moins 3 jours de repos',
+      '12 jours travaillés sur deux semaines (avec la semaine suivante) : sous le minimum de la convention HCR (3 jours de repos), permis par la loi',
     ])
     const avant = sal('a', { reposDeuxSemaines: 3, joursSemainePrecedente: 6 })
     expect(messages(avant, six, 'R-REPOS-HEBDO-HCR')).toEqual([
-      '12 jours travaillés sur deux semaines (avec la semaine précédente) : au moins 3 jours de repos',
+      '12 jours travaillés sur deux semaines (avec la semaine précédente) : sous le minimum de la convention HCR (3 jours de repos), permis par la loi',
     ])
+  })
+
+  it('12 jours d’affilée : une alerte HCR, pas une infraction à la loi (2026-10-31)', () => {
+    // Repos le lundi de la semaine d'avant, puis 6 jours ici : 12 jours
+    // d'affilée, légal (6 par semaine, 35 h chacune), sous la convention.
+    const s = sal('a', { reposDeuxSemaines: 3, joursSemainePrecedente: 6 })
+    const six = range(6).map(jourDe9a17)
+    const v = controle(s, six, 7).filter((x) => x.regle === 'R-REPOS-HEBDO-HCR')
+    expect(v.map((x) => x.nature)).toEqual(['organisation'])
+    expect(controle(s, six, 7).filter((x) => x.nature === 'loi')).toEqual([])
+    // Un 7e jour dans la semaine reste une infraction à la loi.
+    const sept = range(7).map(jourDe9a17)
+    expect(
+      controle(s, sept, 7).some(
+        (x) => x.regle === 'R-SIX-JOURS-MAX' && x.nature === 'loi',
+      ),
+    ).toBe(true)
   })
 
   it('la semaine suivante est comparée à la dernière semaine seulement', () => {
