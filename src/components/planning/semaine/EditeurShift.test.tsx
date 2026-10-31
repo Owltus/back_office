@@ -12,6 +12,7 @@ import {
 import { TooltipProvider } from '#/components/ui/tooltip.tsx'
 import { analyser } from '#/lib/planning/semaine.ts'
 import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
+import { horaireTest } from '#/lib/planning/test/codesTest.ts'
 import {
   DESARMEMENT_MS,
   EditeurShift,
@@ -191,11 +192,11 @@ describe('EditeurShift', () => {
     const tenus = referentiel.salaries
       .find((x) => x.id === 3)!
       .competences.map((c) => c.poste_id)
-    // Codes : une seule liste, chaque code une fois, sans choisir de poste.
+    // Horaires : une seule liste, chaque horaire une fois, sans choisir de poste.
     expect(screen.queryByRole('heading', { name: 'Poste' })).toBeNull()
-    expect(screen.getAllByRole('button', { name: /^M\s*Matin/ })).toHaveLength(
-      1,
-    )
+    expect(
+      screen.getAllByRole('button', { name: /^07:00–15:45/ }),
+    ).toHaveLength(1)
     // Horaire spécifique : le choix du poste revient, mêmes postes.
     fireEvent.click(screen.getByRole('button', { name: /Horaire spécifique/ }))
     expect(screen.getByRole('heading', { name: 'Poste' })).toBeTruthy()
@@ -258,8 +259,7 @@ const reposLe = (jour: number): JourType[] =>
   Array.from({ length: 7 }, (_, j) =>
     j === jour ? { mode: 'repos' } : { mode: 'auto' },
   )
-const idCode = (code: string) =>
-  referentiel.horaires.find((h) => h.code === code)!.id
+const idCode = (code: string) => horaireTest(referentiel.horaires, code).id
 
 function rendreAvec(
   ref: Referentiel,
@@ -353,7 +353,7 @@ describe('EditeurShift : règle des codes', () => {
         .map((x) => x.textContent.trim())
     // Personne 3 : titulaire Réception (2) et Club (3), Réception d'office.
     rendreAvec(referentiel, { mode: 'creation', salarie_id: 3, jour: 2 })
-    expect(pressees().some((t) => /^M\s*Matin/.test(t))).toBe(true)
+    expect(pressees().some((t) => /^07:00–15:45/.test(t))).toBe(true)
     expect(posteChoisi()).toEqual(['Réception'])
     cleanup()
     const { onCreer } = rendreAvec(referentiel, {
@@ -363,7 +363,7 @@ describe('EditeurShift : règle des codes', () => {
       poste_id: 3,
       horaire_id: idCode('AM'),
     })
-    expect(pressees().filter((t) => /^AM/.test(t))).toHaveLength(1)
+    expect(pressees().filter((t) => /^15:00–23:45/.test(t))).toHaveLength(1)
     expect(posteChoisi()).toEqual(['Club'])
     fireEvent.click(principal('Ajouter le shift'))
     expect(onCreer).toHaveBeenCalledWith(
@@ -379,9 +379,9 @@ describe('EditeurShift : règle des codes', () => {
       poste_id: 3,
       horaire_id: idCode('N'),
     })
-    expect(presse().some((t) => /Nuit/.test(t))).toBe(false)
-    // Le premier code permis, sur le poste de la place.
-    expect(presse().some((t) => /^M\s*Matin/.test(t.trim()))).toBe(true)
+    expect(presse().some((t) => /^23:00–07:45/.test(t))).toBe(false)
+    // Le premier horaire permis, sur le poste de la place.
+    expect(presse().some((t) => /^07:00–15:45/.test(t.trim()))).toBe(true)
     fireEvent.click(principal('Ajouter le shift'))
     expect(onCreer).toHaveBeenCalledWith(
       expect.objectContaining({ poste_id: 3, horaire_id: idCode('M') }),
@@ -395,15 +395,15 @@ describe('EditeurShift : règle des codes', () => {
     })
     const matin = () =>
       screen
-        .getByRole('button', { name: /^M\s*Matin/ })
+        .getByRole('button', { name: /^07:00–15:45/ })
         .getAttribute('aria-pressed')
     expect(matin()).toBe('true')
     choisirJour('Vendredi')
     // Vendredi en repos fixe : le Matin n'est plus proposé, rien n'est choisi.
-    expect(screen.queryByRole('button', { name: /^M\s*Matin/ })).toBeNull()
-    expect(presse().filter((t) => /Matin|Horaire spécifique/.test(t))).toEqual(
-      [],
-    )
+    expect(screen.queryByRole('button', { name: /^07:00–15:45/ })).toBeNull()
+    expect(
+      presse().filter((t) => /^07:00–15:45|Horaire spécifique/.test(t)),
+    ).toEqual([])
     expect(principal('Enregistrer').disabled).toBe(true)
     choisirJour('Mercredi')
     expect(matin()).toBe('true')
@@ -448,10 +448,10 @@ describe('EditeurShift : règle des codes', () => {
       },
       { mode: 'creation', salarie_id: 3, jour: 2 },
     )
-    const middle = screen.getByRole('button', { name: /^MI\s*Middle/ })
+    const middle = screen.getByRole('button', { name: /^09:00–17:45/ })
     expect(middle.textContent).not.toMatch(/Club|Réception/)
     expect(
-      screen.getByRole('button', { name: /^M\s*Matin/ }).textContent,
+      screen.getByRole('button', { name: /^07:00–15:45/ }).textContent,
     ).not.toMatch(/Club|Réception/)
     fireEvent.click(middle)
     expect(
@@ -488,13 +488,15 @@ describe('EditeurShift : règle des codes', () => {
       { mode: 'creation', salarie_id: 3, jour: 2 },
       { semaine },
     )
-    const matin = screen.getByRole('button', { name: /^M\s*Matin/ })
+    const matin = screen.getByRole('button', { name: /^07:00–15:45/ })
     expect(matin.textContent).toContain('-11 h de repos')
     expect(matin.hasAttribute('disabled')).toBe(false)
     // Rien d'office qui casse la coupure : l'après-midi est proposé.
     expect(matin.getAttribute('aria-pressed')).toBe('false')
     expect(
-      screen.getByRole('button', { name: /^AM/ }).getAttribute('aria-pressed'),
+      screen
+        .getByRole('button', { name: /^15:00–23:45/ })
+        .getAttribute('aria-pressed'),
     ).toBe('true')
     fireEvent.click(matin)
     fireEvent.click(principal('Ajouter le shift'))

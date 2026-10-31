@@ -4,7 +4,7 @@
  * semaine type, combien de personnes le matin, le soir et la nuit, au moins
  * et au plus (« 3 ou 4 »). Le matin et le soir comptent les personnes
  * autonomes des postes cochés « compte dans la présence », la nuit celles des
- * postes qui ont un code de nuit (D15), selon la période de leur code
+ * postes qui ont un horaire de nuit (D15), selon le moment de leur
  * horaire ; un middle ne compte jamais (D11). Chaque compteur s'enregistre aussitôt,
  * comme les besoins ; les écritures partent l'une après l'autre, chacune
  * avec la consigne RELUE. Depuis le 2026-10-28, on règle « au moins » OU
@@ -150,8 +150,8 @@ export function ConsignesPresence({
           </h2>
           <p className="text-sm">
             Le planning tient ces minimums avant les heures des contrats. Si un
-            code est impossible, il prend un autre code du même cycle. Un middle
-            compte comme présent, mais pas dans ces minimums.
+            horaire est impossible, il en prend un autre du même cycle. Un
+            middle compte comme présent, mais pas dans ces minimums.
           </p>
           <p className="text-sm text-muted-foreground">
             {comptent.length

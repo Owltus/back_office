@@ -1,13 +1,13 @@
 /*
- * La SEULE règle des codes horaires permis (plan
+ * La SEULE règle des horaires horaires permis (plan
  * `planning-coherence-2026-10-28`, étape 2) : « quels codes cette personne
  * peut-elle tenir sur ce poste ce jour-là, et sinon pourquoi ».
  *
  * Trois filtres, toujours dans le même sens, SANS REPLI :
- *   1. le poste : ses codes, ou tous s'il n'en restreint aucun ;
- *   2. la fiche : ses codes, ou tous si elle n'en restreint aucun ;
- *   3. la semaine type : un code fixé ce jour-là réduit la liste à lui seul.
- * Une intersection vide reste vide : le moteur ne tiendrait pas un code que
+ *   1. le poste : ses horaires, ou tous s'il n'en restreint aucun ;
+ *   2. la fiche : ses horaires, ou tous si elle n'en restreint aucun ;
+ *   3. la semaine type : un horaire fixé ce jour-là réduit la liste à lui seul.
+ * Une intersection vide reste vide : le moteur ne tiendrait pas un horaire que
  * le menu aurait proposé par repli.
  *
  * Le moteur (`semaine.ts`, `generateur.ts`, `verificateur.ts`) appelle les
@@ -16,7 +16,7 @@
  * fixe, hors contrat) et coupure de 11 h (12 h pour un mineur) avec les
  * shifts déjà posés la veille ou le lendemain (D16). Les chiffres de repos
  * viennent de `regles.ts`. D16 révisée le 2026-10-30 (décision utilisateur) :
- * en mode manuel, un code `ecartes` pour la coupure reste CHOISISSABLE avec
+ * en mode manuel, un horaire `ecartes` pour la coupure reste CHOISISSABLE avec
  * son alerte (`rubriquesDeLaCase`, `components/planning/codesCase.ts`) ; le
  * générateur ne la passe jamais, le vérificateur signale le shift posé.
  */
@@ -27,7 +27,7 @@ import type { JourType, Poste, Salarie } from '#/lib/planning/types.ts'
 
 // ------------------------------------------------- prédicats du moteur
 
-/** Le poste prévoit-il ce code ? Liste vide = tous ; un shift sans code
+/** Le poste prévoit-il cet horaire ? Liste vide = tous ; un shift sans horaire
  * n'est jamais refusé par le poste. */
 export function codePrevuAuPoste(
   poste: Pick<Poste, 'horaires_autorises'>,
@@ -59,8 +59,8 @@ export function codesImposes(
   return r
 }
 
-/** La fiche permet-elle ce code ? Liste vide = tous ; si elle en restreint,
- * un shift sans code n'en fait pas partie. */
+/** La fiche permet-elle cet horaire ? Liste vide = tous ; si elle en restreint,
+ * un shift sans horaire n'en fait pas partie. */
 export function codeDeLaFiche(
   s: { readonly shiftsAutorises: ReadonlySet<string> },
   code: string | null,

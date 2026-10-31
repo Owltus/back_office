@@ -7,6 +7,7 @@ import {
   codesUniques,
   ligneDe,
   motifsDuJour,
+  heuresEtDuree,
   nomLigneCode,
   posteDeduit,
   rubriquesDeLaCase,
@@ -15,6 +16,7 @@ import {
 import type { SourceCase } from '#/components/planning/codesCase.ts'
 import { analyser } from '#/lib/planning/semaine.ts'
 import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
+import { horaireTest, codeTest } from '#/lib/planning/test/codesTest.ts'
 import type { Competence, Niveau, Salarie } from '#/lib/planning/types.ts'
 
 /*
@@ -28,8 +30,7 @@ import type { Competence, Niveau, Salarie } from '#/lib/planning/types.ts'
 const LUNDI = '2026-11-02'
 const { referentiel, absences } = hotelDemo(LUNDI)
 const idP = (nom: string) => referentiel.postes.find((p) => p.nom === nom)!.id
-const idH = (code: string) =>
-  referentiel.horaires.find((h) => h.code === code)!.id
+const idH = (code: string) => horaireTest(referentiel.horaires, code).id
 const BASE = referentiel.salaries.find((s) => s.id === 3)!
 
 const personne = (champs: Partial<Salarie> = {}): Salarie => ({
@@ -249,7 +250,7 @@ describe('rubriquesDeLaCase', () => {
       source: vide,
       shift,
     })
-    expect(menu.actuel?.horaire.code).toBe('M')
+    expect(codeTest(menu.actuel?.horaire)).toBe('M')
     expect(ligneDe(menu, idP('Réception'), idH('M'))).toBeNull()
     const editeur = rubriquesDeLaCase({
       referentiel,
@@ -389,9 +390,14 @@ describe('codesUniques : chaque code une fois, poste déduit', () => {
       if (c.poste.id === idP('Club')) expect(c.changePoste).toBeNull()
       else expect(c.changePoste?.id).toBe(c.poste.id)
     }
-    const m = u.codes.find((c) => c.horaire.code === 'M')!
+    const m = u.codes.find((c) => codeTest(c.horaire) === 'M')!
     expect(m.changePoste?.nom).toBe('Réception')
     expect(nomLigneCode(m)).toContain(texteChangementPoste(m.changePoste!))
+    // Plus de code depuis le 2026-10-31 : la ligne se lit par ses heures.
+    expect(nomLigneCode(m)).toBe(
+      `07:00–15:45, 8h, ${texteChangementPoste(m.changePoste!)}`,
+    )
+    expect(heuresEtDuree(m.horaire)).toBe('07:00–15:45 · 8h')
     // Aucun shift (case vide) : rien à prévenir.
     const vide = codesUniques(rubriquesDe(p), p, referentiel.postes)
     expect(vide.codes.every((c) => c.changePoste === null)).toBe(true)
@@ -409,7 +415,9 @@ describe('codesUniques : chaque code une fois, poste déduit', () => {
   it('place à pourvoir : son poste d’abord s’il permet le code', () => {
     const r = rubriquesDe(BASE)
     const u = codesUniques(r, BASE, referentiel.postes, idP('Club'))
-    expect(u.codes.find((c) => c.horaire.code === 'AM')?.poste.nom).toBe('Club')
+    expect(u.codes.find((c) => codeTest(c.horaire) === 'AM')?.poste.nom).toBe(
+      'Club',
+    )
   })
 
   it('étiquette seulement hors du métier habituel (poste titulaire de référence)', () => {
@@ -441,7 +449,7 @@ describe('codesUniques : chaque code une fois, poste déduit', () => {
       source: apresMidiMardi,
     })
     const u = codesUniques(r, BASE, referentiel.postes)
-    const matins = u.codes.filter((c) => c.horaire.code === 'M')
+    const matins = u.codes.filter((c) => codeTest(c.horaire) === 'M')
     expect(matins).toHaveLength(1)
     expect(matins[0].alerte).toBe('-11 h de repos')
   })

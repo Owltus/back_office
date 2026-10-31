@@ -197,24 +197,25 @@ describe('FicheSalarie', () => {
     expect(await screen.findByText('Fiche enregistrée')).toBeTruthy()
   })
 
-  it('horaires : Tous dit combien, Seulement démarre tout coché et garde un code', async () => {
+  it('horaires : Tous dit combien, Seulement démarre tout coché et garde un horaire', async () => {
     ouvrir(LUCAS)
     const choix = await screen.findByRole('radiogroup', {
       name: 'Horaires autorisés',
     })
-    expect(screen.getByText('Les 3 codes de ses postes.')).toBeTruthy()
+    expect(screen.getByText('Les 3 horaires de ses postes.')).toBeTruthy()
     fireEvent.click(
       within(choix).getByRole('radio', { name: 'Seulement ceux-ci' }),
     )
-    const code = (nom: string) => screen.getByRole('button', { name: nom })
-    for (const c of ['M Matin', 'MI Middle', 'AM Après-midi'])
-      expect(code(c).getAttribute('aria-pressed')).toBe('true')
-    fireEvent.click(code('AM Après-midi'))
-    fireEvent.click(code('MI Middle'))
-    fireEvent.click(code('M Matin'))
-    expect(code('M Matin').getAttribute('aria-pressed')).toBe('true')
+    // Un horaire se lit par ses heures (M, MI, AM de l'hôtel fictif).
+    const horaire = (nom: string) => screen.getByRole('button', { name: nom })
+    for (const c of ['07:00–15:45', '09:00–17:45', '15:00–23:45'])
+      expect(horaire(c).getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(horaire('15:00–23:45'))
+    fireEvent.click(horaire('09:00–17:45'))
+    fireEvent.click(horaire('07:00–15:45'))
+    expect(horaire('07:00–15:45').getAttribute('aria-pressed')).toBe('true')
     expect(
-      screen.getByText('Gardez au moins un code, ou choisissez Tous.'),
+      screen.getByText('Gardez au moins un horaire, ou choisissez Tous.'),
     ).toBeTruthy()
     await enregistrerEtAttendre()
     expect(service.enregistrerSalarie.mock.calls[0][0]).toMatchObject({
@@ -222,8 +223,9 @@ describe('FicheSalarie', () => {
     })
   })
 
-  describe('la fiche hérite des codes de ses postes', () => {
-    // M=1, MI=2, AM=3, N=4, D=5, T=6 ; Réception=2, Club=3.
+  describe('la fiche hérite des horaires de ses postes', () => {
+    // M=1 (07:00–15:45), MI=2, AM=3 (15:00–23:45), N=4 (23:00–07:45), D=5,
+    // T=6 (08:00–16:45) ; Réception=2, Club=3.
     let avant: typeof demo.referentiel
     beforeEach(() => {
       avant = structuredClone(demo.referentiel)
@@ -233,37 +235,41 @@ describe('FicheSalarie', () => {
     })
     const lucas = () => demo.referentiel.salaries.find((s) => s.id === LUCAS)!
 
-    it('poste restreint à 2 codes : la semaine type ne propose que ces 2 codes', async () => {
+    it('poste restreint à 2 horaires : la semaine type ne propose que ces 2 horaires', async () => {
       for (const p of demo.referentiel.postes)
         if (p.id === 2 || p.id === 3) p.horaires_autorises = [1, 3]
       ouvrir(LUCAS)
       const lignes = await screen.findByRole('list', {
-        name: 'Codes par poste',
+        name: 'Horaires par poste',
       })
-      expect(lignes.textContent).toContain('Réception : les 2 codes du poste')
-      expect(lignes.textContent).toContain('Club : les 2 codes du poste')
+      expect(lignes.textContent).toContain(
+        'Réception : les 2 horaires du poste',
+      )
+      expect(lignes.textContent).toContain('Club : les 2 horaires du poste')
       fireEvent.keyDown(screen.getByLabelText('Horaire du lundi'), {
         key: 'Enter',
       })
       expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
         'Ses horaires',
-        'Matin (07:00-15:45)',
-        'Après-midi (15:00-23:45)',
+        '07:00–15:45',
+        '15:00–23:45',
       ])
     })
 
-    it('code mort : barré, retiré en un clic', async () => {
+    it('horaire mort : barré, retiré en un clic', async () => {
       lucas().shifts_autorises = [1, 6]
       ouvrir(LUCAS)
       const morts = await screen.findByRole('list', {
-        name: 'Codes plus prévus',
+        name: 'Horaires plus prévus',
       })
       expect(morts.textContent).toContain(
-        "Ce code n'est plus prévu pour ses postes.",
+        "Cet horaire n'est plus prévu pour ses postes.",
       )
-      fireEvent.click(within(morts).getByRole('button', { name: 'Retirer T' }))
+      fireEvent.click(
+        within(morts).getByRole('button', { name: 'Retirer 08:00–16:45' }),
+      )
       expect(
-        screen.queryByRole('list', { name: 'Codes plus prévus' }),
+        screen.queryByRole('list', { name: 'Horaires plus prévus' }),
       ).toBeNull()
       await enregistrerEtAttendre()
       expect(service.enregistrerSalarie.mock.calls[0][0]).toMatchObject({
@@ -271,11 +277,11 @@ describe('FicheSalarie', () => {
       })
     })
 
-    it('aucun code utilisable sur un poste : la fiche le dit, le dernier code mort reste', async () => {
+    it('aucun horaire utilisable sur un poste : la fiche le dit, le dernier horaire mort reste', async () => {
       lucas().shifts_autorises = [6]
       ouvrir(LUCAS)
       const lignes = await screen.findByRole('list', {
-        name: 'Codes par poste',
+        name: 'Horaires par poste',
       })
       expect(
         within(lignes).getAllByText(
@@ -284,7 +290,7 @@ describe('FicheSalarie', () => {
       ).toHaveLength(2)
       expect(
         screen
-          .getByRole('button', { name: 'Retirer T' })
+          .getByRole('button', { name: 'Retirer 08:00–16:45' })
           .hasAttribute('disabled'),
       ).toBe(true)
       // L'enregistrement reste permis (D4).
@@ -301,7 +307,7 @@ describe('FicheSalarie', () => {
       ouvrir(LUCAS)
       expect(
         await screen.findByText(
-          "N n'est plus possible pour elle ce jour-là. Choisissez un autre horaire.",
+          "23:00–07:45 n'est plus possible pour elle ce jour-là. Choisissez un autre horaire.",
         ),
       ).toBeTruthy()
       expect(

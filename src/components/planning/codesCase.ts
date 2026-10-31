@@ -10,7 +10,12 @@
  * avec son alerte.
  */
 
-import { trierHoraires } from '#/lib/planning/affichage.ts'
+import {
+  dureeHoraire,
+  heures,
+  libelleHoraire,
+  trierHoraires,
+} from '#/lib/planning/affichage.ts'
 import { codesPermis, posteDeReference } from '#/lib/planning/eligibilite.ts'
 import type { CodesPermis, Voisin } from '#/lib/planning/eligibilite.ts'
 import { estEcole } from '#/lib/planning/semaine.ts'
@@ -361,16 +366,24 @@ export function codesUniques(
   return { codes, texte: r.texte, actuel: r.actuel }
 }
 
-/** Nom accessible d'une ligne de code : code, nom, alertes (le poste
+/** Heures et temps de travail d'un horaire, comme sur la ligne d'un menu :
+ * « 07:00–15:45 · 8h » (pause déduite). */
+export function heuresEtDuree(
+  h: Pick<Horaire, 'debut' | 'fin' | 'pause'>,
+): string {
+  return `${libelleHoraire(h)} · ${heures(dureeHoraire(h.debut, h.fin) - h.pause)}`
+}
+
+/** Nom accessible d'une ligne d'horaire : heures, durée, alertes (le poste
  * seulement quand il change, comme à l'écran). */
 export function nomLigneCode(c: {
-  horaire: { code: string; nom: string }
+  horaire: Pick<Horaire, 'debut' | 'fin' | 'pause'>
   alerte: string | null
   changePoste?: { nom: string } | null
 }): string {
   return [
-    c.horaire.code,
-    c.horaire.nom,
+    libelleHoraire(c.horaire),
+    heures(dureeHoraire(c.horaire.debut, c.horaire.fin) - c.horaire.pause),
     ...(c.alerte ? [c.alerte] : []),
     ...(c.changePoste ? [texteChangementPoste(c.changePoste)] : []),
   ].join(', ')

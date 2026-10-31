@@ -7,21 +7,22 @@
  * bouton.
  *
  * Deux sortes de shifts :
- *   1. SANS code, dont début, fin et pause sont exactement ceux d'un code
- *      permis sur le poste du shift ET par la fiche de la personne
- *      (`codesDuPoste` ∩ `codeDeLaFiche`, sans la semaine type : un shift
- *      déjà posé n'a pas à suivre la semaine type d'aujourd'hui). Un seul
- *      code : « Rattacher au code X ». Plusieurs codes aux mêmes heures :
- *      signalé, sans proposition (on ne choisit pas à la place de
- *      l'utilisateur). Aucun : rien à dire, un shift sans code est permis.
- *   2. Sur un code que son POSTE ne permet pas (`codePrevuAuPoste`). Si la
+ *   1. En horaire SPÉCIFIQUE (aucun horaire de la liste), dont début, fin
+ *      et pause sont exactement ceux d'un horaire permis sur le poste du
+ *      shift ET par la fiche de la personne (`codesDuPoste` ∩
+ *      `codeDeLaFiche`, sans la semaine type : un shift déjà posé n'a pas à
+ *      suivre la semaine type d'aujourd'hui). Un seul horaire : « Rattacher
+ *      à l'horaire 07:00–15:45 ». Plusieurs aux mêmes heures : signalé,
+ *      sans proposition (on ne choisit pas à la place de l'utilisateur).
+ *      Aucun : rien à dire, un horaire spécifique est permis.
+ *   2. Sur un horaire que son POSTE ne permet pas (`codePrevuAuPoste`). Si la
  *      personne tient un autre poste qui le permet : « Passer sur le poste
  *      Y ». Plusieurs postes possibles : celui où elle est titulaire s'il
  *      est seul, sinon signalé sans proposition.
  *
- * Regroupement : une ligne par (sorte, poste, code, correction proposée),
+ * Regroupement : une ligne par (sorte, poste, horaire, correction proposée),
  * avec le nombre de shifts et leurs dates. Le poste proposé dépend de la
- * personne : deux personnes sur le même code peuvent donc donner deux
+ * personne : deux personnes sur le même horaire peuvent donc donner deux
  * lignes (l'une avec proposition, l'autre sans).
  *
  * Semaine verrouillée : jamais modifiée (le trigger refuse, PL423). Ses
@@ -31,6 +32,7 @@
  * incohérents sont dans des semaines verrouillées, les cacher les aurait tus.
  */
 
+import { libelleHoraire } from '#/lib/planning/affichage.ts'
 import type { LienReglage } from '#/lib/planning/coherence.ts'
 import {
   codeDeLaFiche,
@@ -79,7 +81,7 @@ export type Correction =
   | {
       type: 'code'
       horaireId: number
-      /** Garde : encore sans code, aux mêmes heures. */
+      /** Garde : encore en horaire spécifique, aux mêmes heures. */
       debut: string
       fin: string
       pause: number
@@ -87,7 +89,7 @@ export type Correction =
   | {
       type: 'poste'
       posteId: number
-      /** Garde : encore sur l'ancien poste, avec ce code. */
+      /** Garde : encore sur l'ancien poste, avec cet horaire. */
       ancienPosteId: number
       horaireId: number
     }
@@ -97,9 +99,9 @@ export interface GroupeARanger {
   id: string
   sorte: SorteRangement
   poste: Poste
-  /** Code du shift (hors poste) ou code proposé (rattacher). */
+  /** Horaire du shift (hors poste) ou horaire proposé (rattacher). */
   horaire?: Horaire
-  /** Codes aux mêmes heures (heures communes). */
+  /** Horaires aux mêmes heures (heures communes). */
   candidats?: Horaire[]
   /** Poste proposé (hors poste avec correction). */
   posteCible?: Poste
@@ -122,10 +124,8 @@ export const dateShift = (s: Pick<ShiftLu, 'lundi' | 'jour'>) =>
 const pluriel = (n: number, un: string, plusieurs: string) =>
   `${n} ${n > 1 ? plusieurs : un}`
 
-const heures = (h: Pick<Horaire, 'debut' | 'fin'>) => `${h.debut} - ${h.fin}`
-
-/** Les postes tenus par la personne, autres que `sauf`, qui permettent ce
- * code ; un seul retenu (titulaire d'abord), sinon aucun. Un poste tenu en
+/** Les postes tenus par la personne, autres que `sauf`, qui permettent cet
+ * horaire ; un seul retenu (titulaire d'abord), sinon aucun. Un poste tenu en
  * soutien n'est jamais proposé : on n'y compte pas comme une personne du
  * poste, le shift y serait aussi faux qu'avant. */
 function posteAlternatif(
@@ -151,7 +151,7 @@ function posteAlternatif(
   return titulaires.length === 1 ? titulaires[0].poste : null
 }
 
-/** Codes permis sur ce poste par cette fiche, aux heures exactes du shift. */
+/** Horaires permis sur ce poste par cette fiche, aux heures exactes du shift. */
 function codesAuxMemesHeures(
   shift: ShiftLu,
   poste: Poste,
@@ -286,8 +286,8 @@ function rediger(
   if (b.sorte === 'rattacher' && b.horaire) {
     const h = b.horaire
     return {
-      texte: `Poste ${b.poste.nom} : ${nShifts} sans code ${ont} exactement les heures de l'horaire ${h.code} (${heures(h)}).${fige}`,
-      action: `Rattacher au code ${h.code}`,
+      texte: `Poste ${b.poste.nom} : ${nShifts} en horaire spécifique ${ont} exactement les heures de l'horaire ${libelleHoraire(h)}.${fige}`,
+      action: `Rattacher à l'horaire ${libelleHoraire(h)}`,
       correction: {
         type: 'code',
         horaireId: h.id,
@@ -299,9 +299,8 @@ function rediger(
     }
   }
   if (b.sorte === 'heures-communes' && b.candidats) {
-    const codes = b.candidats.map((h) => h.code)
     return {
-      texte: `Poste ${b.poste.nom} : ${nShifts} sans code ${ont} les heures de plusieurs horaires à la fois (${codes.join(', ')}). Choisissez le code dans le planning.${fige}`,
+      texte: `Poste ${b.poste.nom} : ${nShifts} en horaire spécifique ${ont} les heures de ${b.candidats.length} horaires à la fois (${libelleHoraire(b.candidats[0])}). Choisissez l'horaire dans le planning.${fige}`,
       action: null,
       correction: null,
       lien: { page: '/planning/horaires' },
@@ -311,7 +310,7 @@ function rediger(
   if (b.posteCible) {
     const qui = n > 1 ? 'Ces personnes tiennent' : 'Cette personne tient'
     return {
-      texte: `Poste ${b.poste.nom} : ${nShifts} ${sont} sur l'horaire ${h.code}, que ce poste ne permet pas. ${qui} aussi le poste ${b.posteCible.nom}, qui le permet.${fige}`,
+      texte: `Poste ${b.poste.nom} : ${nShifts} ${sont} sur l'horaire ${libelleHoraire(h)}, que ce poste ne permet pas. ${qui} aussi le poste ${b.posteCible.nom}, qui le permet.${fige}`,
       action: `Passer sur le poste ${b.posteCible.nom}`,
       correction: {
         type: 'poste',
@@ -323,7 +322,7 @@ function rediger(
     }
   }
   return {
-    texte: `Poste ${b.poste.nom} : ${nShifts} ${sont} sur l'horaire ${h.code}, que ce poste ne permet pas, et aucun autre poste de ${n > 1 ? 'ces personnes' : 'cette personne'} ne le permet. Autorisez ce code sur le poste, ou changez ces shifts dans le planning.${fige}`,
+    texte: `Poste ${b.poste.nom} : ${nShifts} ${sont} sur l'horaire ${libelleHoraire(h)}, que ce poste ne permet pas, et aucun autre poste de ${n > 1 ? 'ces personnes' : 'cette personne'} ne le permet. Autorisez cet horaire sur le poste, ou changez ces shifts dans le planning.${fige}`,
     action: null,
     correction: null,
     lien: lienPoste,

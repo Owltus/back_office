@@ -388,7 +388,7 @@ export function violations(
     ])
   }
   // Une place se compte avec ses remplaçants (`c.place ?? c.id`) : un
-  // titulaire en M6 sur la place d'un M3 la tient, et l'effectif plus les
+  // titulaire en 08:00–16:45 sur la place d'un 07:00–15:45 la tient, et l'effectif plus les
   // renforts de la place bornent le tout.
   const parPlace = autonomesParPlace(p, affectations)
   for (const [place, n] of parPlace) {
@@ -602,7 +602,7 @@ export interface EcartPresence {
  * générateur : AFFECTATIONS autonomes posées ce jour (`jourDe`) sur
  * un créneau qui compte dans cette période (`Creneau.presence`, posé par
  * l'assemblage : le middle n'y compte jamais, D11 ; la nuit sur un poste qui
- * a des codes de nuit, D15). Remplaçants, shifts posés et épinglés compris.
+ * a des horaires de nuit, D15). Remplaçants, shifts posés et épinglés compris.
  * Une affectation = une présence, comme le moteur (une variable par
  * affectation) et `analyser` (`bilanPresence`, un shift = un) : une même
  * personne sur deux shifts du même cycle compte deux fois partout (cas

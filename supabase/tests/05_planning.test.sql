@@ -70,11 +70,13 @@ select private.planning_lundi(private.planning_aujourdhui()) - 7 as p,
        private.planning_lundi(private.planning_aujourdhui()) + 7 * 300 as f,
        private.planning_lundi(private.planning_aujourdhui()) + 7 * 301 as l;
 
-insert into public.planning_horaires (code, nom, debut, fin, pause, raccourci)
+-- Heures inhabituelles : deux horaires n'ont jamais les mêmes heures
+-- (2026-10-31), et le fichier tourne aussi sur une copie de la prod.
+insert into public.planning_horaires (nom, debut, fin, pause, raccourci)
   overriding system value
-  values ('XM', 'Matin test', '07:00', '15:45', 45, 60);
+  values ('Matin test', '05:05', '13:50', 45, 60);
 create temp table t_ids as select
-  (select id from public.planning_horaires where code = 'XM' and nom = 'Matin test') as h;
+  (select id from public.planning_horaires where nom = 'Matin test') as h;
 insert into public.planning_postes (nom, categorie, horaires_autorises)
   values ('Poste test A', 'reception', array[(select h from t_ids)]),
          ('Poste test B', 'autre', '{}');
@@ -102,11 +104,11 @@ update t_ids set s1 = (select id from public.planning_salaries where prenom = 'T
 
 -- Shifts : F (à venir) — s1 lundi validé, s2 mardi proposé ; L (verrouillée) — s1 lundi.
 insert into public.planning_affectations (lundi, salarie_id, poste_id, jour, horaire_id, debut, fin, epinglee, pause)
-select t_sem.f, t_ids.s1, t_ids.pa, 0, t_ids.h, '07:00', '15:45', true, 45 from t_sem, t_ids
+select t_sem.f, t_ids.s1, t_ids.pa, 0, t_ids.h, '05:05', '13:50', true, 45 from t_sem, t_ids
 union all
-select t_sem.f, t_ids.s2, t_ids.pa, 1, t_ids.h, '07:00', '15:45', false, 45 from t_sem, t_ids
+select t_sem.f, t_ids.s2, t_ids.pa, 1, t_ids.h, '05:05', '13:50', false, 45 from t_sem, t_ids
 union all
-select t_sem.l, t_ids.s1, t_ids.pa, 0, t_ids.h, '07:00', '15:45', true, 45 from t_sem, t_ids;
+select t_sem.l, t_ids.s1, t_ids.pa, 0, t_ids.h, '05:05', '13:50', true, 45 from t_sem, t_ids;
 insert into public.planning_semaines_verrouillees (lundi) select l from t_sem;
 -- P doit être passée mais OUVERTE : sur une base de dev (ou une copie de la
 -- prod), la semaine dernière est souvent verrouillée, et le verrou (PL423)
@@ -127,13 +129,13 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':M', (select m from t_ids)::text);
 $$;
 
-select plan(49);
+select plan(51);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
   '0', 'aucun : ne lit aucune fiche');
 select is(pg_temp.essai('aucun', array['select count(*) from public.planning_horaires']),
-  '0', 'aucun : ne lit aucun code horaire');
+  '0', 'aucun : ne lit aucun horaire');
 select is(pg_temp.essai('lecture', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
   '3', 'lecture : lit les fiches');
 select is(pg_temp.essai('lecture', array[pg_temp.q('select count(*) from public.planning_affectations where salarie_id in (:S1, :S2)')]),
@@ -203,7 +205,7 @@ select is(pg_temp.essai('ecriture', array[
   pg_temp.q('select public.planning_appliquer_generation(:F, public.planning_etat_semaine(:F), 0, false, ''{}'', false, '
     || quote_literal(json_build_array(
          json_build_object('salarie_id', (select s3 from t_ids), 'poste_id', (select pa from t_ids), 'jour', 2,
-                           'horaire_id', (select h from t_ids), 'debut', '07:00', 'fin', '15:45', 'pause', 45))::text) || ')'),
+                           'horaire_id', (select h from t_ids), 'debut', '05:05', 'fin', '13:50', 'pause', 45))::text) || ')'),
   pg_temp.q('select string_agg(salarie_id || ''/'' || jour || ''/'' || epinglee, '','' order by salarie_id, jour) from public.planning_affectations where lundi = :F and salarie_id in (:S1, :S2, :S3)')]),
   (select s1 || '/0/true,' || s3 || '/2/false' from t_ids),
   'génération : la proposition de s2 est remplacée, le validé de s1 reste');
@@ -242,13 +244,13 @@ select is(pg_temp.essai('gestion', array[
   pg_temp.q('update public.planning_salaries set competences = ''[{"poste_id": :PB, "niveau": "titulaire"}]'' where id = :S2')]),
   'err=PL400', 'compétence hors de la catégorie : refusée');
 select is(pg_temp.essai('gestion', array[
-  'update public.planning_horaires set debut = ''06:30'', fin = ''15:15'' where code = ''XM'' and nom = ''Matin test''',
+  'update public.planning_horaires set debut = ''06:30'', fin = ''15:15'' where nom = ''Matin test''',
   pg_temp.q('select string_agg(lundi::text || '' '' || debut || ''-'' || fin, '','' order by lundi) from public.planning_affectations where salarie_id = :S1')]),
-  (select f::text || ' 06:30-15:15,' || l::text || ' 07:00-15:45' from t_sem),
-  'code horaire modifié : les shifts à venir suivent, le réalisé ne change pas');
+  (select f::text || ' 06:30-15:15,' || l::text || ' 05:05-13:50' from t_sem),
+  'horaire modifié : les shifts à venir suivent, le réalisé ne change pas');
 select is(pg_temp.essai('gestion', array[
-  'select public.planning_supprimer_horaire((select id from public.planning_horaires where code = ''XM'' and nom = ''Matin test''))']),
-  'err=PL409', 'code horaire seul permis d''un poste : ne se supprime pas');
+  'select public.planning_supprimer_horaire((select id from public.planning_horaires where nom = ''Matin test''))']),
+  'err=PL409', 'horaire seul permis d''un poste : ne se supprime pas');
 
 -- ------------------------------------- aucune porte dérobée sur le réalisé ---
 -- Contexte sans utilisateur (comme une fonction serveur à la clé service_role) :
@@ -259,15 +261,15 @@ select throws_ok(pg_temp.q('delete from public.planning_affectations where lundi
 select lives_ok(pg_temp.q('update public.planning_affectations set created_by = null where lundi = :L'),
   'verrouillée : l''auteur peut être effacé (suppression d''un compte)');
 
--- ------------------------------------------ heures recalées sur le code ---
+-- --------------------------------------- heures recalées sur l'horaire ---
 select is(pg_temp.essai('ecriture', array[
-  pg_temp.q('insert into public.planning_affectations (lundi, salarie_id, poste_id, jour, horaire_id, debut, fin, court, pause) values (:F, :S3, :PA, 4, (select id from public.planning_horaires where code = ''XM'' and nom = ''Matin test''), ''09:00'', ''10:00'', true, 0)'),
+  pg_temp.q('insert into public.planning_affectations (lundi, salarie_id, poste_id, jour, horaire_id, debut, fin, court, pause) values (:F, :S3, :PA, 4, (select id from public.planning_horaires where nom = ''Matin test''), ''09:00'', ''10:00'', true, 0)'),
   pg_temp.q('select debut || ''-'' || fin || ''/'' || pause || ''/'' || court from public.planning_affectations where lundi = :F and salarie_id = :S3 and jour = 4')]),
-  '07:00-14:45/45/true', 'un shift codé prend les heures de son code (journée courte comprise)');
+  '05:05-12:50/45/true', 'un shift prend les heures de son horaire (journée courte comprise)');
 select is(pg_temp.essai('ecriture', array[
   pg_temp.q('update public.planning_affectations set court = false where lundi = :F and salarie_id = :S1 and jour = 0'),
   pg_temp.q('select debut || ''-'' || fin from public.planning_affectations where lundi = :F and salarie_id = :S1 and jour = 0')]),
-  '07:00-15:45', 'retirer la journée courte remet les heures pleines');
+  '05:05-13:50', 'retirer la journée courte remet les heures pleines');
 
 -- --------------------------------------------------- import du prototype ---
 select is(pg_temp.essai('ecriture', array['select public.planning_importer(''{"format": "planning-prototype-v20"}''::jsonb)']),
@@ -304,18 +306,25 @@ select is(pg_temp.essai('gestion', array[
   'insert into public.planning_consignes (jour, periode, minimum) values (0, ''midi'', 1)']),
   'err=23514', 'consignes : une période inconnue est refusée');
 
--- ------------------------------ familles des codes horaires (2026-10-28) ---
+-- ----------------------------- moments des horaires (2026-10-28) ---
 select is(pg_temp.essai('gestion', array[
-  'update public.planning_horaires set periode = ''middle'' where code = ''XM'' and nom = ''Matin test''',
-  'select periode from public.planning_horaires where code = ''XM'' and nom = ''Matin test''']),
-  'middle', 'familles : un code se range en middle (court de même)');
+  'update public.planning_horaires set periode = ''middle'' where nom = ''Matin test''',
+  'select periode from public.planning_horaires where nom = ''Matin test''']),
+  'middle', 'moments : un horaire se range en middle (court de même)');
 select is(pg_temp.essai('gestion', array[
-  'update public.planning_horaires set periode = ''midi'' where code = ''XM'' and nom = ''Matin test''']),
-  'err=23514', 'familles : une famille inconnue est refusée');
+  'update public.planning_horaires set periode = ''midi'' where nom = ''Matin test''']),
+  'err=23514', 'moments : un moment inconnu est refusé');
 
 -- ------------------------------- journée d'école (révisé le 2026-10-29) ---
 -- Décision utilisateur : un jour d'école compte comme une journée de travail
 -- complète (calcul dans lib/planning/regles.ts). Plus aucune durée réglable.
+-- ------------------------------------ plus de code horaire (2026-10-31) ---
+select hasnt_column('public', 'planning_horaires', 'code',
+  'horaires : plus de code, un horaire se lit par ses heures');
+select is(pg_temp.essai('gestion', array[
+  'insert into public.planning_horaires (nom, debut, fin) values (''Doublon test'', ''05:05'', ''13:50'')']),
+  'err=23505', 'horaires : deux horaires aux mêmes heures sont refusés');
+
 select hasnt_column('public', 'planning_salaries', 'heures_ecole_jour',
   'école : pas de durée réglable par personne');
 

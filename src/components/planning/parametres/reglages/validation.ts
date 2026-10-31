@@ -6,11 +6,14 @@
  */
 
 import { COULEUR_VALIDE } from '#/components/planning/parametres/reglages/controles.tsx'
-import { presence } from '#/lib/planning/temps.ts'
+import { momentPropose, nomHoraire } from '#/lib/planning/affichage.ts'
+import { minutes, presence } from '#/lib/planning/temps.ts'
 import { CATEGORIES } from '#/lib/planning/types.ts'
 import type { Horaire, Motif, Poste } from '#/lib/planning/types.ts'
 
-export type SaisieHoraire = Omit<Horaire, 'id'>
+/** Saisie d'un horaire : ni code (retiré le 2026-10-31) ni nom (écrit par
+ * l'app, `nomHoraire`, à l'enregistrement). */
+export type SaisieHoraire = Omit<Horaire, 'id' | 'nom'>
 export type SaisieMotif = Omit<Motif, 'id'>
 export type SaisiePoste = Omit<Poste, 'id'>
 
@@ -54,11 +57,40 @@ function controlerCouleur(couleur: string, erreurs: string[]) {
   if (!COULEUR_VALIDE.test(couleur)) erreurs.push('Choisissez une couleur.')
 }
 
-/** Erreurs d'un code horaire (vide : valide). */
-export function erreursHoraire(h: SaisieHoraire): string[] {
+/** Heures complètes et utilisables (la proposition du moment, le doublon). */
+function heuresCompletes(h: Pick<SaisieHoraire, 'debut' | 'fin'>): boolean {
+  return heureValide(h.debut) && heureValide(h.fin) && h.debut !== '24:00'
+}
+
+/** Même heure de la journée : une fin à 24:00 vaut une fin à 00:00 (plus
+ * strict que l'index unique de la base, qui compare les valeurs). */
+const memeHeure = (a: string, b: string) =>
+  minutes(a) % (24 * 60) === minutes(b) % (24 * 60)
+
+/** L'horaire déjà enregistré qui a ces heures (hors celui qu'on règle). */
+export function horaireAuxMemesHeures<
+  T extends Pick<Horaire, 'id' | 'debut' | 'fin'>,
+>(
+  h: Pick<SaisieHoraire, 'debut' | 'fin'>,
+  horaires: readonly T[],
+  id: number | null,
+): T | undefined {
+  if (!heuresCompletes(h)) return undefined
+  return horaires.find(
+    (x) =>
+      x.id !== id && memeHeure(x.debut, h.debut) && memeHeure(x.fin, h.fin),
+  )
+}
+
+/** Erreurs d'un horaire (vide : valide). `horaires` et `id` : les horaires
+ * enregistrés et celui qu'on règle (null : nouveau), pour refuser deux
+ * horaires aux mêmes heures avant l'envoi. */
+export function erreursHoraire(
+  h: SaisieHoraire,
+  horaires: ReadonlyArray<Pick<Horaire, 'id' | 'debut' | 'fin'>> = [],
+  id: number | null = null,
+): string[] {
   const erreurs: string[] = []
-  controlerCode(h.code, erreurs)
-  controlerNom(h.nom, "à l'horaire", erreurs)
   const heures = heureValide(h.debut) && heureValide(h.fin)
   if (!heureValide(h.debut)) erreurs.push('Heure de début au format HH:MM.')
   if (!heureValide(h.fin))
@@ -83,8 +115,54 @@ export function erreursHoraire(h: SaisieHoraire): string[] {
       erreurs.push('La journée courte doit garder du temps de travail.')
     }
   }
+  if (horaireAuxMemesHeures(h, horaires, id))
+    erreurs.push('Cet horaire existe déjà.')
   controlerCouleur(h.couleur, erreurs)
   return erreurs
+}
+
+/** Heures d'un nouvel horaire : 09:00-17:45, ou la première heure pleine
+ * suivante qui n'est pas déjà prise (un nouvel horaire ne s'ouvre pas sur
+ * un doublon). */
+export function heuresLibres(
+  horaires: ReadonlyArray<Pick<Horaire, 'id' | 'debut' | 'fin'>>,
+): { debut: string; fin: string } {
+  const hhmm = (m: number) => {
+    const x = ((m % 1440) + 1440) % 1440
+    return `${String(Math.floor(x / 60)).padStart(2, '0')}:${String(x % 60).padStart(2, '0')}`
+  }
+  for (let decalage = 0; decalage < 24; decalage++) {
+    const debut = 9 * 60 + decalage * 60
+    const h = { debut: hhmm(debut), fin: hhmm(debut + 8 * 60 + 45) }
+    if (!horaireAuxMemesHeures(h, horaires, null)) return h
+  }
+  return { debut: '09:00', fin: '17:45' }
+}
+
+/**
+ * Change les heures (ou la pause) d'un horaire en cours de réglage. Tant que
+ * la personne n'a pas choisi le moment elle-même dans ce volet
+ * (`momentChoisi`), il suit les heures : `momentPropose` (décision
+ * utilisateur du 2026-10-31 : proposé d'après les heures, puis modifiable).
+ */
+export function changerHeures(
+  h: SaisieHoraire,
+  maj: Partial<Pick<SaisieHoraire, 'debut' | 'fin' | 'pause'>>,
+  momentChoisi: boolean,
+): Partial<SaisieHoraire> {
+  const suite = { ...h, ...maj }
+  if (momentChoisi || !heuresCompletes(suite) || !Number.isFinite(suite.pause))
+    return maj
+  return { ...maj, periode: momentPropose(suite) }
+}
+
+/** Le moment est-il celui que les heures proposent ? */
+export function momentEstPropose(h: SaisieHoraire): boolean {
+  return (
+    heuresCompletes(h) &&
+    Number.isFinite(h.pause) &&
+    h.periode === momentPropose(h)
+  )
 }
 
 export function erreursMotif(m: SaisieMotif): string[] {
@@ -105,9 +183,10 @@ export function erreursPoste(p: SaisiePoste): string[] {
   return erreurs
 }
 
-/** Ce qui part en base : textes rognés, code en majuscules. */
-export function nettoyerHoraire(h: SaisieHoraire): SaisieHoraire {
-  return { ...h, code: h.code.trim().toUpperCase(), nom: h.nom.trim() }
+/** Ce qui part en base : le nom (obligatoire en base) écrit par l'app
+ * d'après les heures et le moment, jamais saisi. */
+export function nettoyerHoraire(h: SaisieHoraire): Omit<Horaire, 'id'> {
+  return { ...h, nom: nomHoraire(h) }
 }
 
 export function nettoyerMotif(m: SaisieMotif): SaisieMotif {

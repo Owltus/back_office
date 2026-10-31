@@ -9,6 +9,7 @@ import {
   verifierReglages,
 } from '#/lib/planning/coherence.ts'
 import type { PointReglage } from '#/lib/planning/coherence.ts'
+import { avecCode } from '#/lib/planning/test/codesTest.ts'
 import { hotelReel } from '#/lib/planning/test/hotelReel.ts'
 import { SEMAINE_TYPE_VIDE } from '#/lib/planning/types.ts'
 import type {
@@ -38,19 +39,21 @@ function horaire(
   fin: string,
   periode: Horaire['periode'],
 ): Horaire {
-  return {
-    id,
+  return avecCode<Horaire>(
+    {
+      id,
+      nom: code,
+      debut,
+      fin,
+      couleur: '#888888',
+      pause: 0,
+      raccourci: 0,
+      raccourci_debut: 0,
+      periode,
+      code_rouge: false,
+    },
     code,
-    nom: code,
-    debut,
-    fin,
-    couleur: '#888888',
-    pause: 0,
-    raccourci: 0,
-    raccourci_debut: 0,
-    periode,
-    code_rouge: false,
-  }
+  )
 }
 
 function poste(id: number, nom: string, kw: Partial<Poste> = {}): Poste {
@@ -170,7 +173,7 @@ describe('verifierReglages', () => {
       ecran: 'postes',
       lien: { page: '/planning/postes', cible: 'poste-1' },
     })
-    expect(p.texte).toContain('S')
+    expect(p.texte).toContain("l'horaire 15:00–23:00")
     expect(p.texte).toContain(
       'lundi, mardi, mercredi, jeudi, vendredi, samedi et dimanche',
     )
@@ -458,7 +461,7 @@ describe('verifierReglages', () => {
       ecran: 'equipe',
       lien: { page: '/planning/equipe' },
     })
-    expect(p.texte).toContain("l'horaire S")
+    expect(p.texte).toContain("l'horaire 15:00–23:00")
     expect(p.texte).toContain('lundi, mardi')
   })
 
@@ -603,7 +606,7 @@ describe('verifierReglages, points complets (test de mutation)', () => {
       point(
         'bloquant:horaires',
         'horaires',
-        "Aucun code horaire. Créez d'abord les horaires de l'hôtel.",
+        "Aucun horaire. Créez d'abord les horaires de l'hôtel.",
         { page: '/planning/horaires' },
         'bloquant',
       ),
@@ -684,7 +687,7 @@ describe('verifierReglages, points complets (test de mutation)', () => {
       point(
         'besoin-duree:1:06:00-20:00',
         'besoins',
-        "Sur le poste Réception, l'horaire 06:00 - 20:00 dure plus longtemps qu'un service de sa catégorie HCR ne le permet (mercredi). Ces besoins sont ignorés.",
+        "Sur le poste Réception, l'horaire 06:00–20:00 dure plus longtemps qu'un service de sa catégorie HCR ne le permet (mercredi). Ces besoins sont ignorés.",
         { page: '/planning/besoins', cible: 'poste-1' },
       ),
     )
@@ -703,7 +706,7 @@ describe('verifierReglages, points complets (test de mutation)', () => {
       point(
         `periode:${D}`,
         'horaires',
-        "L'horaire D n'a pas de période (matin, soir ou nuit). Il ne compte pas dans le matin et le soir de Réception.",
+        "L'horaire 09:00–17:00 n'a pas de moment (matin, soir ou nuit). Il ne compte pas dans le matin et le soir de Réception.",
         { page: '/planning/horaires', cible: `horaire-${D}` },
       ),
     )
@@ -773,7 +776,7 @@ describe('verifierReglages, points complets (test de mutation)', () => {
       point(
         `besoin-sans-personne:2:${J}`,
         'equipe',
-        "Sur le poste Bar, personne ne peut tenir l'horaire J demandé par les besoins (jeudi) : la fiche de Personne10 Essai ne le permet pas (horaires autorisés ou semaine type).",
+        "Sur le poste Bar, personne ne peut tenir l'horaire 09:00–17:00 demandé par les besoins (jeudi) : la fiche de Personne10 Essai ne le permet pas (horaires autorisés ou semaine type).",
         { page: '/planning/equipe', cible: 'salarie-10.horaires' },
       ),
     )
@@ -783,7 +786,7 @@ describe('verifierReglages, points complets (test de mutation)', () => {
       point(
         `besoin-sans-personne:2:${J}`,
         'equipe',
-        "Sur le poste Bar, personne ne peut tenir l'horaire J demandé par les besoins (jeudi) : aucune fiche de ce poste ne le permet (horaires autorisés ou semaine type).",
+        "Sur le poste Bar, personne ne peut tenir l'horaire 09:00–17:00 demandé par les besoins (jeudi) : aucune fiche de ce poste ne le permet (horaires autorisés ou semaine type).",
         { page: '/planning/equipe' },
       ),
     )
@@ -867,7 +870,7 @@ describe('verifierReglages, points complets (test de mutation)', () => {
       point(
         'code-fixe:12:0',
         'equipe',
-        "Personne12 Essai : l'horaire N fixé le lundi par sa semaine type n'est permis sur aucun de ses postes.",
+        "Personne12 Essai : l'horaire 23:00–07:00 fixé le lundi par sa semaine type n'est permis sur aucun de ses postes.",
         { page: '/planning/equipe', cible: 'salarie-12.semaine' },
       ),
     )
@@ -888,7 +891,7 @@ describe('verifierReglages, points complets (test de mutation)', () => {
       point(
         'code-fixe:10:0',
         'equipe',
-        "Personne10 Essai : l'horaire S est fixé le lundi par sa semaine type, mais aucun besoin ne le demande ce jour-là sur ses postes. Le planning automatique ne pourra pas placer cette personne ce jour-là.",
+        "Personne10 Essai : l'horaire 15:00–23:00 est fixé le lundi par sa semaine type, mais aucun besoin ne le demande ce jour-là sur ses postes. Le planning automatique ne pourra pas placer cette personne ce jour-là.",
         { page: '/planning/equipe', cible: 'salarie-10.semaine' },
       ),
     )

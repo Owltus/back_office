@@ -9,9 +9,9 @@
  * vue ouvre la case choisie (`onPlacer`).
  *
  * Place que rien ne remplit (plan `planning-cycles-2026-10-30`, étape 5) :
- * quand UNE règle bloque tout le monde, sur ce code comme sur les autres
- * codes du même cycle, le panneau le dit franchement (« Je ne peux pas
- * remplir ce M3. », la raison, « Prenez un extra ou changez un shift. ») au
+ * quand UNE règle bloque tout le monde, sur cet horaire comme sur les autres
+ * horaires du même cycle, le panneau le dit franchement (« Je ne peux pas
+ * remplir le 07:00–15:45. », la raison, « Prenez un extra ou changez un shift. ») au
  * lieu des raisons personne par personne. « Placer quelqu'un » reste.
  *
  * Sans routeur : les liens passent par `onAller` (le panneau navigue).
@@ -30,7 +30,7 @@ import type {
 import { Button } from '#/components/ui/button.tsx'
 import type { LienReglage } from '#/lib/planning/coherence.ts'
 import type { RaisonClaire } from '#/lib/planning/raisonsPlaces.ts'
-import { heureAffichee } from '#/lib/planning/temps.ts'
+import { libelleHoraire } from '#/lib/planning/affichage.ts'
 import { cn } from '#/lib/utils.ts'
 
 /** La case à ouvrir : la personne choisie, le jour de la place. `x`, `y` :
@@ -63,10 +63,11 @@ const ROLE: Record<RolePlace, string | null> = {
 /** Ce qu'il reste à faire quand le moteur ne peut pas (D3). */
 export const SOLUTION_HUMAINE = 'Prenez un extra ou changez un shift.'
 
-/** « Je ne peux pas remplir ce M3. » ; sans code : « cette place ». */
-export const jeNePeuxPas = (code: string | null) =>
-  code
-    ? `Je ne peux pas remplir ce ${code}.`
+/** « Je ne peux pas remplir le 07:00–15:45. » ; sans horaire : « cette
+ * place ». */
+export const jeNePeuxPas = (horaire: string | null) =>
+  horaire
+    ? `Je ne peux pas remplir le ${horaire}.`
     : 'Je ne peux pas remplir cette place.'
 
 const LIEN =
@@ -169,9 +170,10 @@ function Groupe({
   onAller: (lien: LienReglage) => void
   onPlacer?: (d: DemandePlacement) => void
 }) {
-  const heures = `${heureAffichee(g.debut)}-${heureAffichee(g.fin)}`
+  // Heures de la place (une journée courte peut différer de l'horaire).
+  const heures = libelleHoraire(g)
   const nom = g.poste?.nom ?? 'Poste'
-  const titre = g.code ? `${nom}, ${g.code}` : `${nom}, ${heures}`
+  const titre = `${nom}, ${g.code ?? heures}`
   const jours = joursDesPlaces(g.places.map((p) => p.date))
   return (
     <li>
@@ -191,7 +193,7 @@ function Groupe({
           <ChevronRight className="ml-auto size-3.5 shrink-0 self-center text-muted-foreground transition-transform group-open/raison:rotate-90" />
         </summary>
         <div className="flex flex-col gap-2 px-3 pb-2 pl-7 text-sm">
-          {g.code && (
+          {g.code && g.code !== heures && (
             <span className="text-xs text-muted-foreground tabular-nums">
               {heures}
             </span>
@@ -257,7 +259,7 @@ function Groupe({
           )}
           {g.autresCodes.map((a) => (
             <span key={a.code} className="text-xs text-muted-foreground">
-              Possible en {a.code} : {enListe(a.noms)}.
+              Possible sur le {a.code} : {enListe(a.noms)}.
             </span>
           ))}
           {onPlacer && (

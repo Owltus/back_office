@@ -23,7 +23,13 @@ import {
 
 import { iconeMotif } from '#/components/planning/iconeMotif.ts'
 import { Tip } from '#/components/shared/Tip.tsx'
-import { couleurShift, heures, ROUGE_CODE } from '#/lib/planning/affichage.ts'
+import {
+  couleurShift,
+  heures,
+  libelleHoraire,
+  libelleMoment,
+  ROUGE_CODE,
+} from '#/lib/planning/affichage.ts'
 import type { AlerteOut } from '#/lib/planning/semaine.ts'
 import { heureAffichee } from '#/lib/planning/temps.ts'
 import type { Horaire, Poste } from '#/lib/planning/types.ts'
@@ -38,7 +44,7 @@ export interface ContenuCarte {
   duree?: number
   poste?: Poste
   horaire?: Horaire
-  /** Code imposé par la place tenue, quand le shift en a un autre du même
+  /** Horaire imposé par la place tenue, quand le shift en a un autre du même
    * cycle (`ShiftOut.code_demande`) ; absent sinon. */
   demande?: Horaire
   epinglee: boolean
@@ -48,8 +54,9 @@ export interface ContenuCarte {
 }
 
 /**
- * « M6 au lieu de M3 » : le shift tient une place prévue pour un autre code
- * du même cycle. Rien si la place n'imposait rien ou le même code. Une seule
+ * « 09:00–17:45 au lieu de 07:00–15:45 » : le shift tient une place prévue
+ * pour un autre horaire du même cycle. Rien si la place n'imposait rien ou
+ * le même horaire. Une seule
  * source pour l'infobulle de la semaine et celle du mois.
  */
 export function ligneAuLieuDe(
@@ -57,12 +64,12 @@ export function ligneAuLieuDe(
   demande: Horaire | undefined,
 ): string | null {
   if (!horaire || !demande || horaire.id === demande.id) return null
-  return `${horaire.code} au lieu de ${demande.code}`
+  return `${libelleHoraire(horaire)} au lieu de ${libelleHoraire(demande)}`
 }
 
 export function texteCarte(c: ContenuCarte): string[] {
   return [
-    `${c.horaire ? `${c.horaire.code} · ${c.horaire.nom}` : 'Horaire spécifique'} · ${heureAffichee(c.debut)}-${heureAffichee(c.fin)}`,
+    `${!c.horaire ? 'Horaire spécifique · ' : c.horaire.periode ? `${libelleMoment(c.horaire.periode)} · ` : ''}${heureAffichee(c.debut)}–${heureAffichee(c.fin)}`,
     ligneAuLieuDe(c.horaire, c.demande),
     c.poste?.nom,
     c.etoile && 'Journée étoile : une heure de moins',

@@ -63,7 +63,6 @@ const salarie = (s: Partial<Salarie> = {}): Salarie => ({
 
 const MATIN: Horaire = {
   id: 5,
-  code: 'M',
   nom: 'Matin',
   debut: '07:00',
   fin: '15:45',

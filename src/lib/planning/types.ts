@@ -14,12 +14,14 @@ export type NatureMotif = 'absence' | 'ecole' | 'repos'
 export type Categorie =
   'reception' | 'veille_nuit' | 'cuisine' | 'administratif_hors_site' | 'autre'
 export type TypeContrat = 'cdi' | 'cdd' | 'extra' | 'stagiaire' | 'apprenti'
-/** Période d'un code horaire (consignes de présence). */
+/** Moment d'un horaire (matin, middle, soir, nuit, court). */
 export type Periode = 'matin' | 'middle' | 'soir' | 'nuit' | 'court'
 
+/** Un horaire se lit par ses heures et son moment : plus de code depuis le
+ * 2026-10-31 (décision utilisateur). Deux horaires n'ont jamais les mêmes
+ * heures. */
 export interface Horaire {
   id: number
-  code: string
   nom: string
   debut: string
   fin: string // fin <= debut : le lendemain
@@ -27,8 +29,8 @@ export interface Horaire {
   pause: number // minutes comprises dans la présence, hors temps de travail
   raccourci: number // minutes en moins en journée courte
   raccourci_debut: number // dont au début : la journée courte commence plus tard
-  periode: Periode | null // null : ni matin ni soir (direction…)
-  code_rouge: boolean // code écrit en rouge (petit shift à part)
+  periode: Periode | null // proposé d'après les heures, modifiable
+  code_rouge: boolean // heures écrites en rouge (petit shift à part)
 }
 
 export interface Motif {

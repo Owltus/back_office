@@ -176,7 +176,7 @@ export function toucheLaNuit(
   return toucheLaNuitMinutes(jour, d, f)
 }
 
-/** Début et fin d'un shift posé avec ce code horaire, en version courte ou
+/** Début et fin d'un shift posé avec cet horaire, en version courte ou
  * non : la version courte commence `raccourci_debut` plus tard et finit le
  * reste plus tôt. La nuit courte de 23:00 commence à « 24:00 » (le lendemain
  * à minuit), comme sur les plannings imprimés. */

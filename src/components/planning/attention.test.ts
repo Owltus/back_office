@@ -239,7 +239,7 @@ describe('portée : un écran ne montre que ce qui le concerne', () => {
   })
 })
 
-describe('places regroupées (même poste, même code, plusieurs jours)', () => {
+describe('places regroupées (même poste, même horaire, plusieurs jours)', () => {
   const place = (
     besoin_id: number,
     jour: number,
@@ -270,16 +270,16 @@ describe('places regroupées (même poste, même code, plusieurs jours)', () => 
       place(3, 3, 41, [repos(1), libre(3)]), // jeudi
       place(1, 0, 41, [repos(1), repos(3)]), // lundi
       place(2, 1, 41, [repos(1), libre(3)]), // mardi
-      place(4, 1, 42, [libre(1)]), // mardi, autre code
-      place(5, 2, null, [], '09:00'), // mercredi, sans code
+      place(4, 1, 42, [libre(1)]), // mardi, autre horaire
+      place(5, 2, null, [], '09:00'), // mercredi, sans horaire
     ],
   })
   const HORAIRES = [
-    { id: 41, code: 'M1' },
-    { id: 42, code: 'S2' },
+    { id: 41, debut: '07:00', fin: '15:00' },
+    { id: 42, debut: '15:00', fin: '23:00' },
   ]
 
-  it('une ligne par poste et code, jours dans l’ordre', () => {
+  it('une ligne par poste et horaire, jours dans l’ordre', () => {
     const p = pointsAttention([S], SALARIES, POSTES)
     const g = regrouperPlaces(
       p.aPourvoir.flatMap((j) => j.shifts),
@@ -292,8 +292,8 @@ describe('places regroupées (même poste, même code, plusieurs jours)', () => 
         joursDesPlaces(x.places.map((y) => y.date)),
       ]),
     ).toEqual([
-      ['Réception', 'M1', 'lundi, mardi et jeudi'],
-      ['Réception', 'S2', 'mardi'],
+      ['Réception', '07:00–15:00', 'lundi, mardi et jeudi'],
+      ['Réception', '15:00–23:00', 'mardi'],
       ['Réception', null, 'mercredi'],
     ])
     // Une raison de TOUS les jours n'a pas de jours ; une raison de certains
@@ -330,7 +330,8 @@ describe('places regroupées (même poste, même code, plusieurs jours)', () => 
       pointsAttention([T], SALARIES, POSTES).aPourvoir.flatMap((j) => j.shifts),
     )
     expect(g.personnes.map((x) => x.nom)).toEqual(['Léa', 'Paul'])
-    // Sans référentiel des horaires : pas de code, les heures suffisent.
+    // Sans référentiel des horaires : pas d'horaire, les heures de la place
+    // suffisent.
     expect(g.code).toBeNull()
   })
 
@@ -493,8 +494,8 @@ describe('place que rien ne remplit', () => {
     raison_commune,
   })
   const HORAIRES = [
-    { id: 41, code: 'M3' },
-    { id: 42, code: 'M6' },
+    { id: 41, debut: '07:00', fin: '15:00' },
+    { id: 42, debut: '09:00', fin: '17:00' },
   ]
   const groupes = (s: SemaineOut) =>
     regrouperPlaces(
@@ -520,11 +521,11 @@ describe('place que rien ne remplit', () => {
       ]),
     ).toEqual([
       [
-        'M3',
+        '07:00–15:00',
         'lundi et mardi',
         "Personne n'a assez de repos avec ses autres shifts.",
       ],
-      ['M3', 'mercredi', null],
+      ['07:00–15:00', 'mercredi', null],
     ])
   })
 
@@ -536,7 +537,7 @@ describe('place que rien ne remplit', () => {
     expect(g.places[0].raisonCommune).toBeNull()
   })
 
-  it('autre code possible : dit, sans les extras ni ceux déjà libres', () => {
+  it('autre horaire possible : dit, sans les extras ni ceux déjà libres', () => {
     const [g] = groupes(
       semaine('2026-11-02', {
         a_pourvoir: [
@@ -554,6 +555,6 @@ describe('place que rien ne remplit', () => {
     )
     // Léa (fermée en M3, libre en M6) ; ni Max (extra), ni Zoé (bloquée en
     // M6, et déjà libre en M3).
-    expect(g.autresCodes).toEqual([{ code: 'M6', noms: ['Léa'] }])
+    expect(g.autresCodes).toEqual([{ code: '09:00–17:00', noms: ['Léa'] }])
   })
 })

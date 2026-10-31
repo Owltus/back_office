@@ -108,8 +108,8 @@ export interface ShiftOut {
   court: boolean
   epinglee: boolean
   besoin_id: number | null
-  /** Code imposé par le besoin quand le shift posé en a un autre du même
-   * cycle (« M6 au lieu de M3 », plan planning-cycles-2026-10-30) ; null
+  /** Horaire imposé par le besoin quand le shift posé en a un autre du même
+   * cycle (« 08:00–16:45 au lieu de 07:00–15:45 », plan planning-cycles-2026-10-30) ; null
    * sinon. Ajouté le 2026-10-30 ; absent de l'API du prototype. */
   code_demande: number | null
   role: Role | null
@@ -134,17 +134,17 @@ export interface APourvoirOut {
   fin: string
   duree: number
   manquant: number
-  /** Pourquoi chacun ne peut pas prendre la place avec le code imposé. */
+  /** Pourquoi chacun ne peut pas prendre la place avec l'horaire imposé. */
   raisons: RaisonOut[]
-  /** Les autres codes du même cycle qui pourraient tenir la place
+  /** Les autres horaires du même cycle qui pourraient tenir la place
    * (`remplacantsDe`), et pourquoi chacun ne peut pas les prendre non plus.
-   * Vide pour un code sans famille ou sans voisin. Ajouté le 2026-10-30
+   * Vide pour un horaire sans moment ou sans voisin. Ajouté le 2026-10-30
    * (plan planning-cycles-2026-10-30, étape 5) ; absent du prototype. */
   remplacants: Array<{ type_shift_id: number; raisons: RaisonOut[] }>
   /** Règle (identifiant, comme `RaisonOut.regles`) qui bloque TOUT LE MONDE,
-   * sur le code imposé comme sur chaque remplaçant : celle de « Je ne peux
-   * pas remplir ce M3 ». Null : personne à qui la poser, ou quelqu'un qu'aucune
-   * règle ne bloque sur au moins un code, ou pas de règle commune. Un extra
+   * sur l'horaire imposé comme sur chaque remplaçant : celle de « Je ne peux
+   * pas remplir le 07:00–15:45 ». Null : personne à qui la poser, ou quelqu'un
+   * qu'aucune règle ne bloque sur au moins un horaire, ou pas de règle commune. Un extra
    * seulement « à appeler » (règle `EXTRA` seule) n'est pas compté. */
   raison_commune: string | null
 }
@@ -246,7 +246,7 @@ export interface Contexte {
   horaires: Map<number, Horaire>
   postes: Map<number, Poste>
   staff: Salarie[]
-  besoins: Besoin[] // horaires déjà résolus depuis leur code
+  besoins: Besoin[] // heures déjà résolues depuis leur horaire
   consignes: Consigne[]
   affectations: Affectation[]
   sansDecompte: Set<number>
@@ -448,7 +448,7 @@ export function fiche(
 
 // --------------------------------------------------------------- créneaux
 
-/** Postes qui listent au moins un code de la famille nuit
+/** Postes qui listent au moins un horaire de la famille nuit
  * (`posteADesCodesDeNuit`, « Tous » exclu) : la nuit n'y compte dans les
  * consignes que là (D15). Calculé une fois par
  * contexte. */
@@ -503,7 +503,7 @@ function debutsMatinTot(ctx: Contexte): Map<number, number> {
 }
 
 /** Équité (D15) : un shift ou un besoin est-il un soir, un matin tôt ? Soir
- * = période soir de son code (sans code : l'heure de début) ; matin tôt =
+ * = période soir de son horaire (sans horaire : l'heure de début) ; matin tôt =
  * un matin qui commence au plus tôt des matins prévus pour ce poste. */
 export function equiteDe(
   ctx: Contexte,
@@ -575,10 +575,10 @@ export function creneauAffectation(ctx: Contexte, a: Affectation): Creneau {
 
 // ------------------------------------------------------------ remplaçants
 
-/** Codes qui peuvent tenir la place d'un besoin à la place de son code
+/** Codes qui peuvent tenir la place d'un besoin à la place de son horaire
  * (plan planning-cycles-2026-10-30, D12) : les AUTRES codes du poste
  * (`codesDuPoste`) du MÊME cycle (`cycleDe`). Un middle ne remplace qu'un
- * middle (même famille, donc même cycle). Un code sans famille
+ * middle (même famille, donc même cycle). Un horaire sans moment
  * (`periode === null` : direction, supervision) n'a jamais de remplaçant et
  * n'en est jamais un ; un besoin en horaire libre non plus. Aucun code n'est
  * créé ni modifié : on choisit parmi ceux qui existent. Triés par id. */
@@ -598,15 +598,15 @@ export function remplacantsDe(
     .sort((a, c) => a.id - c.id)
 }
 
-/** Id du créneau remplaçant d'un besoin pour un code. */
+/** Id du créneau remplaçant d'un besoin pour un horaire. */
 export const idRemplacant = (besoinId: number, horaireId: number) =>
   `r${besoinId}-${horaireId}`
 
-/** Créneau remplaçant (`r<besoin>-<code>`, contrat de la vague 1, §2) : la
- * place du besoin `b<id>` tenue avec un autre code du même cycle. Aucune
+/** Créneau remplaçant (`r<besoin>-<horaire>`, contrat de la vague 1, §2) : la
+ * place du besoin `b<id>` tenue avec un autre horaire du même cycle. Aucune
  * place propre (effectif, facultatif et soutien à 0) : le moteur compte ses
  * autonomes avec ceux de `b<id>` (`place`). Bornes, pause, raccourci et
- * présence sont ceux du code remplaçant, le jour et le poste ceux du
+ * présence sont ceux de l'horaire remplaçant, le jour et le poste ceux du
  * besoin. */
 export function creneauRemplacant(
   ctx: Contexte,
@@ -666,8 +666,9 @@ export interface Correspondances {
   lien: Map<number, number>
   /** shift → besoin dont il tient une place de soutien. */
   soutien: Map<number, number>
-  /** shift rattaché PAR CYCLE (seconde passe) → code imposé par le besoin
-   * (`horaire_id`) : « M6 au lieu de M3 ». Absent : rattaché par son code,
+  /** shift rattaché PAR CYCLE (seconde passe) → horaire imposé par le besoin
+   * (`horaire_id`) : « 08:00–16:45 au lieu de 07:00–15:45 ». Absent : rattaché
+   * par son horaire exact,
    * ou pas rattaché. Sous-ensemble des clés de `lien` et `soutien`. */
   demande: Map<number, number>
 }
@@ -675,17 +676,17 @@ export interface Correspondances {
 /** Rattache chaque shift au besoin qu'il couvre, en deux passes (plan
  * planning-cycles-2026-10-30, D6) :
  *
- * 1. code exact, comme avant : même poste, jour et horaire (l'horaire, c'est
+ * 1. horaire exact, comme avant : même poste, jour et horaire (l'horaire, c'est
  *    le code quand il y en a un : un shift en journée courte couvre le
- *    besoin de son code) ;
+ *    besoin de son horaire) ;
  * 2. les shifts encore libres prennent les places encore libres du MÊME
- *    poste, du MÊME jour et du MÊME cycle, quand leur code est un remplaçant
- *    du code du besoin (`remplacantsDe` : codes du poste, même cycle, un
- *    middle pour un middle, jamais un code sans famille ni un horaire libre).
+ *    poste, du MÊME jour et du MÊME cycle, quand leur horaire est un remplaçant
+ *    de l'horaire du besoin (`remplacantsDe` : codes du poste, même cycle, un
+ *    middle pour un middle, jamais un horaire sans moment ni un horaire libre).
  *    Le début le plus proche d'abord. Marqués dans `demande`.
  *
  * Dans chaque passe, épinglés d'abord ; un profil soutien ne prend qu'une
- * place de soutien. Le code exact passe toujours avant un voisin : la
+ * place de soutien. L'horaire exact passe toujours avant un voisin : la
  * seconde passe ne voit que ce que la première a laissé. */
 export function correspondances(
   ctx: Contexte,
@@ -1072,8 +1073,8 @@ function raisonsOut(raisons: Map<string, Violation[]>): RaisonOut[] {
 }
 
 /** La règle qui bloque tout le monde (étape 5) : présente pour chaque
- * personne sur chaque code essayé (le code imposé, puis chaque remplaçant).
- * Null dès qu'une personne n'a aucune raison sur un code (elle pourrait le
+ * personne sur chaque code essayé (l'horaire imposé, puis chaque remplaçant).
+ * Null dès qu'une personne n'a aucune raison sur un horaire (elle pourrait le
  * prendre), sans personne à qui la poser, ou sans règle commune. Un extra
  * seulement « à appeler » (`EXTRA` seule) est laissé de côté : c'est la
  * solution humaine, pas un blocage. Plusieurs règles communes : la première
@@ -1186,7 +1187,7 @@ export function analyser(d: DonneesSemaine): SemaineOut {
 
   const pourvus = new Map<number, number>()
   for (const id of lien.values()) pourvus.set(id, (pourvus.get(id) ?? 0) + 1)
-  // Places vides : raisons sur le code imposé ET sur chaque remplaçant. Les
+  // Places vides : raisons sur l'horaire imposé ET sur chaque remplaçant. Les
   // créneaux remplaçants ne servent qu'ici : ils restent hors de `p`, donc
   // hors des alertes de la semaine.
   const vides = besoins.filter((b) => b.effectif - (pourvus.get(b.id) ?? 0) > 0)
@@ -1372,8 +1373,9 @@ export interface NouveauShift {
   fin: string
   court: boolean
   pause: number
-  /** Remplaçant seulement : le code imposé par le besoin dont il tient la
-   * place (« M6 au lieu de M3 »). Absent pour un shift au code du besoin.
+  /** Remplaçant seulement : l'horaire imposé par le besoin dont il tient la
+   * place (« 08:00–16:45 au lieu de 07:00–15:45 »). Absent pour un shift à
+   * l'horaire du besoin.
    * Information de l'écran : `planning_appliquer_generation` lit ses clés
    * une à une et ignore celle-ci ; l'analyse la retrouve
    * (`correspondances`, `ShiftOut.code_demande`). */
@@ -1499,7 +1501,7 @@ export function preparerGeneration(
   // Un soutien rattaché par cycle reste un shift posé à part (son créneau
   // `a…`, ses vraies heures) : les remplaçants n'ont pas de place de soutien
   // (contrat de la vague 1, §2), et le poser sur `b…` lui donnerait les
-  // heures du code imposé. Mais il TIENT la place de soutien de son besoin,
+  // heures de l'horaire imposé. Mais il TIENT la place de soutien de son besoin,
   // comme dans `analyser` (`besoin_id`) : cette place est retirée de `b…`,
   // sinon le moteur pouvait y poser un second apprenti (2 pour 1 place).
   const enSoutien = new Map(
@@ -1527,7 +1529,7 @@ export function preparerGeneration(
     ),
   )
   // Remplaçants (`r<besoin>-<code>`, étape 4) : pour une place encore
-  // ouverte, chaque autre code du même cycle ; pour une place pleine, aucun,
+  // ouverte, chaque autre horaire du même cycle ; pour une place pleine, aucun,
   // sauf celui qui porte un shift posé rattaché par cycle (il y est imposé,
   // avec ses vraies heures de code).
   const remplacants = new Map<string, { b: Besoin; h: Horaire }>()

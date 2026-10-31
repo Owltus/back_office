@@ -1,8 +1,8 @@
 /*
  * Paramètres du Planning : les postes (prototype `PostesPage.tsx`, spec §5.1).
  * Une carte par poste : nom, catégorie HCR (qui fixe la durée maximale
- * d'un service, convention HCR), couleur, rangement à part, codes
- * horaires possibles (Tous ou Seulement ceux-ci). Enregistrement explicite par carte ;
+ * d'un service, convention HCR), couleur, rangement à part, horaires
+ * possibles (Tous ou Seulement ceux-ci). Enregistrement explicite par carte ;
  * un nouveau poste est une carte brouillon, créée en base à Enregistrer.
  * Seule la gestion modifie ; lecture et écriture voient les réglages.
  */
@@ -231,13 +231,13 @@ function Etiquette({ children }: { children: ReactNode }) {
   )
 }
 
-/** « 2 codes · 3 personnes » : ce qu'un poste permet et qui le tient. */
+/** « 2 horaires · 3 personnes » : ce qu'un poste permet et qui le tient. */
 function resumePoste(p: Poste, r: Referentiel): string {
-  const codes = p.horaires_autorises.length
+  const nombre = p.horaires_autorises.length
   const personnes = r.salaries.filter(
     (s) => s.actif && s.competences.some((c) => c.poste_id === p.id),
   ).length
-  return `${codes ? `${codes} code${codes > 1 ? 's' : ''}` : 'tous les codes'} · ${personnes} personne${personnes > 1 ? 's' : ''}`
+  return `${nombre ? `${nombre} horaire${nombre > 1 ? 's' : ''}` : 'tous les horaires'} · ${personnes} personne${personnes > 1 ? 's' : ''}`
 }
 
 function CartePoste({
@@ -411,7 +411,7 @@ function CartePoste({
           proposes={referentiel.horaires.map((h) => h.id)}
           onChange={(horaires_autorises) => changer({ horaires_autorises })}
           disabled={!modifiable}
-          texteTous={`Les ${referentiel.horaires.length} codes, y compris ceux créés plus tard.`}
+          texteTous={`Les ${referentiel.horaires.length} horaires, y compris ceux créés plus tard.`}
         >
           {(liste) => (
             <>

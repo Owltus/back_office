@@ -5,10 +5,14 @@ import {
   lignesDuPoste,
 } from '#/components/planning/parametres/reglages/besoins.ts'
 import {
+  changerHeures,
   erreursHoraire,
   erreursMotif,
   erreursPoste,
+  horaireAuxMemesHeures,
   memes,
+  momentEstPropose,
+  nettoyerHoraire,
   normaliserHeure,
 } from '#/components/planning/parametres/reglages/validation.ts'
 import type { SaisieHoraire } from '#/components/planning/parametres/reglages/validation.ts'
@@ -17,8 +21,6 @@ import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
 const referentielDemo = () => hotelDemo('2026-11-02').referentiel
 
 const matin: SaisieHoraire = {
-  code: 'M',
-  nom: 'Matin',
   debut: '07:00',
   fin: '15:45',
   couleur: '#3b82f6',
@@ -41,15 +43,6 @@ describe('contrôles de saisie (miroir des contraintes de la base)', () => {
   })
 
   it('les refus, avec leurs messages', () => {
-    expect(erreursHoraire({ ...matin, code: '' })).toContain(
-      'Le code fait de 1 à 4 caractères.',
-    )
-    expect(erreursHoraire({ ...matin, code: 'ABCDE' })).toContain(
-      'Le code fait de 1 à 4 caractères.',
-    )
-    expect(erreursHoraire({ ...matin, nom: ' ' })).toContain(
-      "Donnez un nom à l'horaire.",
-    )
     expect(erreursHoraire({ ...matin, debut: '7h' })).toContain(
       'Heure de début au format HH:MM.',
     )
@@ -80,6 +73,59 @@ describe('contrôles de saisie (miroir des contraintes de la base)', () => {
     expect(erreursHoraire({ ...matin, couleur: 'bleu' })).toContain(
       'Choisissez une couleur.',
     )
+  })
+
+  it("deux horaires aux mêmes heures : refusé avant l'envoi", () => {
+    const enregistres = [
+      { id: 1, debut: '07:00', fin: '15:45' },
+      { id: 2, debut: '16:00', fin: '00:00' },
+    ]
+    // Nouveau (id null) aux heures d'un horaire existant : refusé.
+    expect(erreursHoraire(matin, enregistres, null)).toContain(
+      'Cet horaire existe déjà.',
+    )
+    // L'horaire lui-même, rouvert : accepté.
+    expect(erreursHoraire(matin, enregistres, 1)).toEqual([])
+    // Mêmes heures de début, autre fin : accepté.
+    expect(
+      erreursHoraire({ ...matin, fin: '15:30' }, enregistres, null),
+    ).toEqual([])
+    // Une fin à 24:00 vaut une fin à minuit.
+    expect(
+      horaireAuxMemesHeures({ debut: '16:00', fin: '24:00' }, enregistres, null)
+        ?.id,
+    ).toBe(2)
+    // Heures incomplètes : rien à comparer (le format est dit à part).
+    expect(
+      horaireAuxMemesHeures({ debut: '07:0', fin: '15:45' }, enregistres, null),
+    ).toBeUndefined()
+  })
+
+  it("le moment suit les heures tant qu'il n'est pas choisi à la main", () => {
+    const nuit = changerHeures(matin, { debut: '23:00', fin: '07:45' }, false)
+    expect(nuit).toEqual({ debut: '23:00', fin: '07:45', periode: 'nuit' })
+    expect(momentEstPropose({ ...matin, ...nuit })).toBe(true)
+    // Choisi à la main : les heures changent, le moment reste.
+    expect(
+      changerHeures(
+        { ...matin, periode: 'middle' },
+        { debut: '23:00', fin: '07:45' },
+        true,
+      ),
+    ).toEqual({ debut: '23:00', fin: '07:45' })
+    // Heure en cours de frappe : pas de proposition.
+    expect(changerHeures(matin, { fin: '15:4' }, false)).toEqual({
+      fin: '15:4',
+    })
+    // La pause compte : moins de 7 h de travail, c'est un horaire court.
+    expect(changerHeures(matin, { pause: 120 }, false).periode).toBe('court')
+    expect(momentEstPropose({ ...matin, periode: 'soir' })).toBe(false)
+  })
+
+  it("le nom rangé en base est écrit par l'app, d'après les heures", () => {
+    const valeurs = nettoyerHoraire({ ...matin, periode: 'matin' })
+    expect(valeurs.nom).toBe('Matin de 7 h à 15 h 45')
+    expect('code' in valeurs).toBe(false)
   })
 
   it('motif et poste', () => {

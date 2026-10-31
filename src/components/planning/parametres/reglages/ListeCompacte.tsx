@@ -1,5 +1,5 @@
 /*
- * Listes compactes des écrans de paramètres (codes horaires, motifs, postes) :
+ * Listes compactes des écrans de paramètres (horaires, motifs, postes) :
  * une carte par groupe, une ligne par élément ; un clic sur la ligne ouvre
  * son réglage dans un volet (refonte du 2026-10-28, demande utilisateur :
  * « un peu chaotique… même style que les autres pages »). Grammaire des
@@ -73,7 +73,8 @@ export function LigneCompacte({
   )
 }
 
-/** Pastille d'un code (horaire ou motif) à sa couleur. */
+/** Pastille d'un code de motif à sa couleur (les horaires n'ont plus de
+ * code depuis le 2026-10-31). */
 export function PastilleCode({
   code,
   couleur,
@@ -81,7 +82,7 @@ export function PastilleCode({
 }: {
   code: string
   couleur: string
-  /** Couleur du texte imposée (code écrit en rouge). */
+  /** Couleur du texte imposée (texte écrit en rouge). */
   texte?: string
 }) {
   return (

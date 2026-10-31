@@ -4,7 +4,12 @@
 
 import { posteEquite } from '#/lib/planning/semaine.ts'
 import type { BilanOut, SemaineOut } from '#/lib/planning/semaine.ts'
-import { ajouterJours, minutes, versJour } from '#/lib/planning/temps.ts'
+import {
+  ajouterJours,
+  heureAffichee,
+  minutes,
+  versJour,
+} from '#/lib/planning/temps.ts'
 import type {
   Groupe,
   Horaire,
@@ -122,7 +127,7 @@ export function couleurShift(
   return horaire?.couleur ?? defaut
 }
 
-/** Couleur du texte d'un code « écrit en rouge » (`code_rouge`). */
+/** Couleur du texte d'un horaire « écrit en rouge » (`code_rouge`). */
 export const ROUGE_CODE = '#dc2626'
 
 /** Texte lisible (noir ou blanc) sur un fond donné. */
@@ -134,10 +139,11 @@ export function texteSur(couleur: string): string {
   return lum > 0.62 ? '#111827' : '#ffffff'
 }
 
-/** Familles de codes, dans l'ordre de la journée, puis « à part » (direction,
- * supervision). Ordre des menus, du volet et de la page Horaires
- * (demande utilisateur du 2026-10-28 : « bien carré, par couleur, par
- * période »). */
+/** Moments des horaires, dans l'ordre de la journée, puis « à part ».
+ * Ordre des menus, du volet et de la page Horaires (demande utilisateur du
+ * 2026-10-28 : « bien carré, par couleur, par période »). Depuis le
+ * 2026-10-31, un horaire n'a plus de code : il se lit par ses heures et
+ * son moment. */
 export const FAMILLES: ReadonlyArray<{
   periode: Periode | null
   libelle: string
@@ -160,23 +166,76 @@ const debutDansLaJournee = (debut: string) => {
   return m < 5 * 60 ? m + 24 * 60 : m
 }
 
-/** Codes rangés : par famille, puis du plus tôt au plus tard, puis du plus
- * court au plus long. */
+/** Horaires rangés : par moment, puis du plus tôt au plus tard, puis du
+ * plus court au plus long. */
 export function trierHoraires<
-  T extends Pick<Horaire, 'periode' | 'debut' | 'fin' | 'code'>,
+  T extends Pick<Horaire, 'id' | 'periode' | 'debut' | 'fin'>,
 >(horaires: readonly T[]): T[] {
   return [...horaires].sort(
     (a, b) =>
       rangFamille(a.periode) - rangFamille(b.periode) ||
       debutDansLaJournee(a.debut) - debutDansLaJournee(b.debut) ||
       dureeHoraire(a.debut, a.fin) - dureeHoraire(b.debut, b.fin) ||
-      a.code.localeCompare(b.code),
+      a.id - b.id,
   )
 }
 
-/** Codes rangés et regroupés par famille (familles vides omises). */
+/** « 07:00–15:45 » : un horaire se lit par ses heures (plus de code depuis
+ * le 2026-10-31, décision utilisateur : « ce qui importe, ce sont les
+ * horaires »). Deux horaires n'ont jamais les mêmes heures (contrainte
+ * `planning_horaires_heures_unique`). */
+export function libelleHoraire(h: Pick<Horaire, 'debut' | 'fin'>): string {
+  return `${heureAffichee(h.debut)}–${heureAffichee(h.fin)}`
+}
+
+/** « 7 h », « 15 h 45 », « minuit » : une heure dans une phrase. */
+function heureEnLettres(h: string): string {
+  const m = minutes(h) % (24 * 60)
+  if (m === 0) return 'minuit'
+  const hh = Math.floor(m / 60)
+  const mm = m % 60
+  return mm ? `${hh} h ${String(mm).padStart(2, '0')}` : `${hh} h`
+}
+
+/** Nom rangé en base (colonne `nom`, obligatoire) : « Matin de 7 h à
+ * 15 h 45 », écrit par l'app, jamais saisi (plus de code ni de nom à
+ * inventer depuis le 2026-10-31). */
+export function nomHoraire(
+  h: Pick<Horaire, 'debut' | 'fin' | 'periode'>,
+): string {
+  return `${libelleMoment(h.periode)} de ${heureEnLettres(h.debut)} à ${heureEnLettres(h.fin)}`
+}
+
+/** Libellé d'un moment (« Matin »…), « À part » sans moment. */
+export function libelleMoment(p: Periode | null | undefined): string {
+  return FAMILLES[rangFamille(p)]?.libelle ?? 'À part'
+}
+
+/**
+ * Moment proposé pour un horaire d'après ses heures (décision utilisateur
+ * du 2026-10-31 : proposé, puis modifiable dans les réglages). Règles,
+ * relevées sur les 35 horaires de l'hôtel (toutes les retrouvent) :
+ * - court : moins de 7 h de travail ;
+ * - nuit : commence à 21 h ou plus tard, ou avant 5 h ;
+ * - soir : finit à 21 h ou plus tard, ou après minuit ;
+ * - matin : commence avant 9 h et finit à 17 h 45 au plus tard ;
+ * - middle : le reste, à cheval sur le matin et le soir.
+ */
+export function momentPropose(
+  h: Pick<Horaire, 'debut' | 'fin' | 'pause'>,
+): Periode {
+  const debut = minutes(h.debut)
+  const fin = minutes(h.fin)
+  if (dureeHoraire(h.debut, h.fin) - h.pause < 7 * 60) return 'court'
+  if (debut >= 21 * 60 || debut < 5 * 60) return 'nuit'
+  if (fin <= debut || fin >= 21 * 60) return 'soir'
+  if (debut < 9 * 60 && fin <= 17 * 60 + 45) return 'matin'
+  return 'middle'
+}
+
+/** Horaires rangés et regroupés par moment (moments vides omis). */
 export function grouperHoraires<
-  T extends Pick<Horaire, 'periode' | 'debut' | 'fin' | 'code'>,
+  T extends Pick<Horaire, 'id' | 'periode' | 'debut' | 'fin'>,
 >(
   horaires: readonly T[],
 ): Array<{ periode: Periode | null; libelle: string; horaires: T[] }> {

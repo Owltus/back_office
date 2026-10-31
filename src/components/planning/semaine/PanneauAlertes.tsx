@@ -161,8 +161,9 @@ export function PanneauAlertes({
   portee?: Portee
   /** Bouclier « règles HCR » : les seules infractions, passé compris. */
   infractionsSeules?: boolean
-  /** Codes des horaires, pour nommer une place (« Club, M1 »). */
-  horaires?: Pick<Horaire, 'id' | 'code'>[]
+  /** Horaires, pour nommer une place par ses heures
+   * (« Club, 07:00–15:45 »). */
+  horaires?: Pick<Horaire, 'id' | 'debut' | 'fin'>[]
   /** « Placer quelqu'un » : la vue ouvre la case choisie. Sans lui (lecture
    * seule), pas de bouton. */
   onPlacer?: (d: DemandePlacement) => void

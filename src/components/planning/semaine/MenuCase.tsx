@@ -2,9 +2,9 @@
  * Menu du clic droit sur une case (prototype `MenuCase.tsx`) : tous les
  * horaires que la personne peut faire sur ses postes, chacun une seule fois,
  * rangés par moment, posés d'un clic sur le poste déduit (jamais affiché :
- * code et horaires seulement) ;
+ * heures seulement) ;
  * valider le shift, la journée étoile ; un repos (en tête) ou une absence
- * (en bas) posés d'un clic comme un code. Le
+ * (en bas) posés d'un clic comme un horaire. Le
  * positionnement au curseur et la fermeture (Échap, clic ailleurs) sont ceux
  * du `ContextMenu` de shadcn.
  */
@@ -19,20 +19,22 @@ import {
   ContextMenuSeparator,
 } from '#/components/ui/context-menu.tsx'
 import {
-  heures,
   grouperHoraires,
-  ROUGE_CODE,
+  libelleHoraire,
   texteSur,
 } from '#/lib/planning/affichage.ts'
 import {
+  heuresEtDuree,
   nomLigneCode,
   texteChangementPoste,
 } from '#/components/planning/codesCase.ts'
 import type { CodesUniquesCase } from '#/components/planning/codesCase.ts'
-import { heureAffichee } from '#/lib/planning/temps.ts'
+import {
+  PastilleHoraire,
+  styleHeures,
+} from '#/components/planning/PastilleHoraire.tsx'
 import { JOURS } from '#/lib/planning/types.ts'
 import type { Horaire, Motif } from '#/lib/planning/types.ts'
-import { travailCode } from '#/components/planning/semaine/edition.ts'
 
 export interface OuvertureMenu {
   salarie_id: number
@@ -41,8 +43,8 @@ export interface OuvertureMenu {
   /** Code horaire actuel du shift de la case, et son poste. */
   actuel: number | null | undefined
   actuelPoste?: number
-  /** Codes permis, chacun une fois avec son poste déduit (règle unique par
-   * poste), et pourquoi s'il n'y en a pas ; le code actuel qui n'est plus
+  /** Horaires permis, chacun une fois avec son poste déduit (règle unique
+   * par poste), et pourquoi s'il n'y en a pas ; l'horaire actuel qui n'est plus
    * permis est montré grisé. */
   codes: CodesUniquesCase
   validation?: { active: boolean; onBasculer: () => void }
@@ -174,19 +176,13 @@ export function MenuCase({
                   if (!estActuel) onHoraire(h, c.poste.id)
                 }}
               >
-                <span
-                  className="min-w-12 shrink-0 rounded px-1.5 py-0.5 text-center text-xs font-semibold"
-                  style={{
-                    background: h.couleur,
-                    color: h.code_rouge ? ROUGE_CODE : texteSur(h.couleur),
-                  }}
-                >
-                  {h.code}
-                </span>
+                <PastilleHoraire couleur={h.couleur} />
                 <span className="grid flex-1 pl-1">
-                  <span className="text-sm whitespace-nowrap tabular-nums">
-                    {heureAffichee(h.debut)}-{heureAffichee(h.fin)} ·{' '}
-                    {heures(travailCode(h))}
+                  <span
+                    className="text-sm whitespace-nowrap tabular-nums"
+                    style={styleHeures(h)}
+                  >
+                    {heuresEtDuree(h)}
                   </span>
                   {c.alerte && (
                     <span className="text-xs text-amber-600 dark:text-amber-400">
@@ -218,10 +214,11 @@ export function MenuCase({
       {horsPermis && (
         <ContextMenuItem
           disabled
-          aria-label={`${horsPermis.horaire.code}, actuel, ${horsPermis.texte}`}
+          aria-label={`${libelleHoraire(horsPermis.horaire)}, actuel, ${horsPermis.texte}`}
         >
-          <span className="min-w-12 shrink-0 rounded border px-1.5 py-0.5 text-center text-xs font-semibold">
-            {horsPermis.horaire.code}
+          <PastilleHoraire couleur={horsPermis.horaire.couleur} />
+          <span className="shrink-0 pl-1 text-sm whitespace-nowrap tabular-nums">
+            {libelleHoraire(horsPermis.horaire)}
           </span>
           <span className="flex-1 pl-1 text-xs">
             actuel · {horsPermis.texte}

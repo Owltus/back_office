@@ -1,7 +1,7 @@
 /*
  * Éditeur d'un shift, en tiroir (prototype `EditeurShift.tsx`) : créer ou
- * modifier un shift (code horaire choisi parmi TOUTES les casquettes de la
- * personne, rangées par poste : le code choisi fixe aussi le poste ; ou
+ * modifier un shift (horaire choisi parmi TOUTES les casquettes de la
+ * personne, rangé par moment : l'horaire choisi fixe aussi le poste ; ou
  * heures libres avec pause et poste, journée courte, personne, jour,
  * validé), ou poser une absence à la place,
  * ou supprimer le shift. Le tiroir se ferme aussitôt l'action lancée : le
@@ -38,6 +38,7 @@ import {
   disponibleLe,
   grouperHoraires,
   heures,
+  libelleHoraire,
   NIVEAUX,
   texteSur,
 } from '#/lib/planning/affichage.ts'
@@ -66,6 +67,10 @@ import {
   motifsDuJour,
   rubriquesDeLaCase,
 } from '#/components/planning/codesCase.ts'
+import {
+  PastilleHoraire,
+  styleHeures,
+} from '#/components/planning/PastilleHoraire.tsx'
 import type {
   RubriquesCase,
   SourceCase,
@@ -76,7 +81,7 @@ export type Edition =
       mode: 'creation'
       salarie_id: number
       jour: number
-      /** Place à pourvoir : son poste et son code, choisis d'office. */
+      /** Place à pourvoir : son poste et son horaire, choisis d'office. */
       poste_id?: number
       horaire_id?: number | null
     }
@@ -599,9 +604,9 @@ export function EditeurShift({
                     <Choix
                       key={h.id}
                       couleur={h.couleur}
-                      code={h.code}
-                      titre={h.nom}
-                      detail={`${heureAffichee(h.debut)}-${heureAffichee(h.fin)}${h.pause > 0 ? ` · ${heures(travailCode(h))} de travail` : ''}`}
+                      titre={libelleHoraire(h)}
+                      rouge={h.code_rouge}
+                      detail={`${heures(travailCode(h))} de travail`}
                       alerte={c.alerte}
                       choisi={enCours && b.horaire_id === h.id}
                       onClick={() => {
@@ -974,6 +979,7 @@ function Choix({
   couleur,
   code,
   titre,
+  rouge = false,
   detail,
   choisi,
   desactive = false,
@@ -981,8 +987,12 @@ function Choix({
   onClick,
 }: {
   couleur: string
-  code: string
+  /** Badge d'un motif (CP, MA…) ou d'un choix à part ; sans badge, une
+   * pastille de la couleur : un horaire se lit par ses heures. */
+  code?: string
   titre: string
+  /** Heures écrites en rouge (`code_rouge`). */
+  rouge?: boolean
   detail: string
   /** Règle passée à la main (coupure de repos) : dite sur la ligne. */
   alerte?: string | null
@@ -1004,14 +1014,28 @@ function Choix({
       )}
       style={{ '--couleur': couleur } as CSSProperties}
     >
-      <span
-        className="inline-grid h-[18px] min-w-6 shrink-0 place-items-center rounded px-1 text-[10.5px] font-bold"
-        style={{ background: couleur, color: texteSur(couleur) }}
-      >
-        {code}
-      </span>
+      {code === undefined ? (
+        <span className="inline-grid h-[18px] min-w-6 shrink-0 place-items-center">
+          <PastilleHoraire couleur={couleur} />
+        </span>
+      ) : (
+        <span
+          className="inline-grid h-[18px] min-w-6 shrink-0 place-items-center rounded px-1 text-[10.5px] font-bold"
+          style={{ background: couleur, color: texteSur(couleur) }}
+        >
+          {code}
+        </span>
+      )}
       <span className="grid min-w-0">
-        <strong className="truncate text-sm font-medium">{titre}</strong>
+        <strong
+          className={cn(
+            'truncate text-sm font-medium',
+            code === undefined && 'tabular-nums',
+          )}
+          style={rouge ? styleHeures({ code_rouge: true }) : undefined}
+        >
+          {titre}
+        </strong>
         <small className="truncate text-xs text-muted-foreground">
           {detail}
         </small>

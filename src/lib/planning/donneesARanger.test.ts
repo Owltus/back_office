@@ -12,6 +12,7 @@ import type {
   Referentiel,
   Salarie,
 } from '#/lib/planning/types.ts'
+import { avecCode, codeTest } from '#/lib/planning/test/codesTest.ts'
 import { SEMAINE_TYPE_VIDE } from '#/lib/planning/types.ts'
 
 /*
@@ -26,19 +27,21 @@ function horaire(
   fin: string,
   pause = 0,
 ): Horaire {
-  return {
-    id,
+  return avecCode<Horaire>(
+    {
+      id,
+      nom: code,
+      debut,
+      fin,
+      couleur: '#000',
+      pause,
+      raccourci: 0,
+      raccourci_debut: 0,
+      periode: 'matin',
+      code_rouge: false,
+    },
     code,
-    nom: code,
-    debut,
-    fin,
-    couleur: '#000',
-    pause,
-    raccourci: 0,
-    raccourci_debut: 0,
-    periode: 'matin',
-    code_rouge: false,
-  }
+  )
 }
 
 function poste(id: number, nom: string, autorises: number[] = []): Poste {
@@ -121,7 +124,7 @@ function shift(p: Partial<ShiftLu>): ShiftLu {
 const recep = (id: number) =>
   salarie(id, [{ poste_id: 10, niveau: 'titulaire' }])
 
-describe('donneesARanger : shifts sans code', () => {
+describe('donneesARanger : shifts en horaire spécifique', () => {
   it('propose le code unique aux mêmes heures, pause comprise', () => {
     const g = donneesARanger(ref([recep(1)]), [
       shift({ jour: 0 }),
@@ -129,7 +132,7 @@ describe('donneesARanger : shifts sans code', () => {
     ])
     expect(g).toHaveLength(1)
     expect(g[0].sorte).toBe('rattacher')
-    expect(g[0].action).toBe('Rattacher au code M')
+    expect(g[0].action).toBe("Rattacher à l'horaire 07:00–15:00")
     expect(g[0].correction).toEqual({
       type: 'code',
       horaireId: 1,
@@ -139,7 +142,7 @@ describe('donneesARanger : shifts sans code', () => {
     })
     expect(g[0].shifts.map((s) => s.jour)).toEqual([0, 1])
     expect(g[0].texte).toBe(
-      "Poste Réception : 2 shifts sans code ont exactement les heures de l'horaire M (07:00 - 15:00).",
+      "Poste Réception : 2 shifts en horaire spécifique ont exactement les heures de l'horaire 07:00–15:00.",
     )
   })
 
@@ -175,8 +178,8 @@ describe('donneesARanger : shifts sans code', () => {
     expect(g[0].sorte).toBe('heures-communes')
     expect(g[0].correction).toBeNull()
     expect(g[0].action).toBeNull()
-    expect(g[0].candidats?.map((h) => h.code)).toEqual(['X', 'Y'])
-    expect(g[0].texte).toContain('(X, Y)')
+    expect(g[0].candidats?.map((h) => codeTest(h))).toEqual(['X', 'Y'])
+    expect(g[0].texte).toContain('2 horaires à la fois (09:00–17:00)')
   })
 })
 
@@ -325,7 +328,7 @@ describe('donneesARanger : textes et ordre (test de mutation)', () => {
     const [g] = donneesARanger(ref([recep(1)]), [shift({ jour: 0 })])
     expect(g.id).toBe('rattacher:10:1')
     expect(g.texte).toBe(
-      "Poste Réception : 1 shift sans code a exactement les heures de l'horaire M (07:00 - 15:00).",
+      "Poste Réception : 1 shift en horaire spécifique a exactement les heures de l'horaire 07:00–15:00.",
     )
     expect(g.lien).toEqual({ page: '/planning/horaires', cible: 'horaire-1' })
   })
@@ -346,7 +349,7 @@ describe('donneesARanger : textes et ordre (test de mutation)', () => {
     )
     expect(g.id).toBe('heures-communes:30:3-4')
     expect(g.texte).toBe(
-      'Poste Libre : 2 shifts sans code ont les heures de plusieurs horaires à la fois (X, Y). Choisissez le code dans le planning.',
+      "Poste Libre : 2 shifts en horaire spécifique ont les heures de 2 horaires à la fois (09:00–17:00). Choisissez l'horaire dans le planning.",
     )
     expect(g.lien).toEqual({ page: '/planning/horaires' })
   })
@@ -361,7 +364,7 @@ describe('donneesARanger : textes et ordre (test de mutation)', () => {
     ])[0]
     expect(un.id).toBe('hors-poste:10:5:20')
     expect(un.texte).toBe(
-      "Poste Réception : 1 shift est sur l'horaire D, que ce poste ne permet pas. Cette personne tient aussi le poste Bureau, qui le permet.",
+      "Poste Réception : 1 shift est sur l'horaire 08:00–18:00, que ce poste ne permet pas. Cette personne tient aussi le poste Bureau, qui le permet.",
     )
     expect(un.lien).toEqual({ page: '/planning/postes', cible: 'poste-10' })
     const deux = donneesARanger(ref([p]), [
@@ -375,7 +378,7 @@ describe('donneesARanger : textes et ordre (test de mutation)', () => {
       }),
     ])[0]
     expect(deux.texte).toBe(
-      "Poste Réception : 2 shifts sont sur l'horaire D, que ce poste ne permet pas. Ces personnes tiennent aussi le poste Bureau, qui le permet.",
+      "Poste Réception : 2 shifts sont sur l'horaire 08:00–18:00, que ce poste ne permet pas. Ces personnes tiennent aussi le poste Bureau, qui le permet.",
     )
   })
 
@@ -383,14 +386,14 @@ describe('donneesARanger : textes et ordre (test de mutation)', () => {
     const un = donneesARanger(ref([recep(1)]), [shift({ horaire_id: 5 })])[0]
     expect(un.id).toBe('hors-poste:10:5:aucun')
     expect(un.texte).toBe(
-      "Poste Réception : 1 shift est sur l'horaire D, que ce poste ne permet pas, et aucun autre poste de cette personne ne le permet. Autorisez ce code sur le poste, ou changez ces shifts dans le planning.",
+      "Poste Réception : 1 shift est sur l'horaire 08:00–18:00, que ce poste ne permet pas, et aucun autre poste de cette personne ne le permet. Autorisez cet horaire sur le poste, ou changez ces shifts dans le planning.",
     )
     const deux = donneesARanger(ref([recep(1)]), [
       shift({ horaire_id: 5 }),
       shift({ jour: 2, horaire_id: 5 }),
     ])[0]
     expect(deux.texte).toBe(
-      "Poste Réception : 2 shifts sont sur l'horaire D, que ce poste ne permet pas, et aucun autre poste de ces personnes ne le permet. Autorisez ce code sur le poste, ou changez ces shifts dans le planning.",
+      "Poste Réception : 2 shifts sont sur l'horaire 08:00–18:00, que ce poste ne permet pas, et aucun autre poste de ces personnes ne le permet. Autorisez cet horaire sur le poste, ou changez ces shifts dans le planning.",
     )
   })
 
@@ -462,7 +465,7 @@ describe('donneesARanger : textes et ordre (test de mutation)', () => {
       shift({ lundi: lundi2, jour: 0 }),
     ])[0]
     expect(un.texte).toBe(
-      "Poste Réception : 2 shifts sans code ont exactement les heures de l'horaire M (07:00 - 15:00). 1 shift est dans une semaine verrouillée, il ne sera pas modifié.",
+      "Poste Réception : 2 shifts en horaire spécifique ont exactement les heures de l'horaire 07:00–15:00. 1 shift est dans une semaine verrouillée, il ne sera pas modifié.",
     )
     const deux = donneesARanger(verrou, [
       shift({ jour: 0 }),

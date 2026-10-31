@@ -2136,6 +2136,23 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   Place impossible : « Je ne peux pas remplir ce M3. » + raison commune
   bloquante + « Prenez un extra ou changez un shift. ». `Creneau.raccourciDebut`
   place la version courte à ses vraies heures (défaut ancien corrigé).
+- **PLUS DE CODE HORAIRE (décision utilisateur du 2026-10-31 : « issu d'une
+  vieille application ; ce qui importe, ce sont les horaires, et savoir si
+  c'est du matin, du soir, de la nuit ou du middle »)**. Migration
+  `20261031110000_planning_horaires_sans_code` : colonne `code` SUPPRIMÉE
+  (SUPPRIMER au clavier à la livraison), index unique
+  `planning_horaires_heures_unique` (debut, fin), Direction et Supervision en
+  middle, 08:00-15:45 et 14:00-22:45 ajoutés (pause 45, postes qui ont des
+  matins ET des soirs), `planning_importer` et `planning_supprimer_horaire`
+  repris sans code. Un horaire se lit par `libelleHoraire` (« 07:00–15:45 »)
+  et son moment (`libelleMoment`) ; `momentPropose` (règles en tête, relevées
+  sur les 35 horaires réels, test qui les rejoue) propose le moment, modifiable
+  dans les réglages (un moment choisi à la main est gardé quand les heures
+  changent) ; `nomHoraire` écrit la colonne `nom`, jamais saisie. Tests :
+  code d'essai HORS du type (`lib/planning/test/codesTest.ts`, `horaireTest`,
+  `codeTest`). Les codes des MOTIFS (CP, MA, R…) restent. La règle ancienne
+  « ne jamais changer ni ajouter de codes horaires » ne s'applique plus : on
+  ajoute des HORAIRES quand l'utilisateur le demande.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), jours fériés (décision utilisateur relayée par le binôme), scénario
   « exclus » à l'écran (retiré du prototype aussi).

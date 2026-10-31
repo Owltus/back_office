@@ -2393,17 +2393,29 @@ function genererClasseurs(
 // arrivent par l'import du prototype (gestion), plan planning-portage D8.
 // ---------------------------------------------------------------------------
 
-/** (code, nom, début, fin, couleur, pause, raccourci) */
+/** (clé, nom, début, fin, couleur, pause, raccourci, moment). Plus de code
+ * horaire depuis le 2026-10-31 : la clé ne sert qu'à relier les lignes du
+ * seed entre elles, elle n'est jamais écrite. Nom et moment comme les écrit
+ * l'app (`nomHoraire`, `momentPropose` de lib/planning/affichage.ts). */
 const PL_HORAIRES: ReadonlyArray<
-  readonly [string, string, string, string, string, number, number]
+  readonly [string, string, string, string, string, number, number, string]
 > = [
-  ['M', 'Matin', '07:00', '15:45', '#f59e0b', 45, 60],
-  ['MI', 'Middle', '09:00', '17:45', '#14b8a6', 45, 60],
-  ['AM', 'Après-midi', '15:00', '23:45', '#6366f1', 45, 60],
-  ['N', 'Nuit', '23:00', '07:45', '#7c3aed', 45, 60],
-  ['D', 'Direction', '08:00', '18:00', '#475569', 60, 0],
-  ['T', 'Technique', '08:00', '16:45', '#f97316', 45, 0],
-  ['TV', 'Technique vendredi', '08:00', '15:45', '#fb923c', 45, 0],
+  ['M', 'Matin de 7 h à 15 h 45', '07:00', '15:45', '#f59e0b', 45, 60, 'matin'],
+  [
+    'MI',
+    'Middle de 9 h à 17 h 45',
+    '09:00',
+    '17:45',
+    '#14b8a6',
+    45,
+    60,
+    'middle',
+  ],
+  ['AM', 'Soir de 15 h à 23 h 45', '15:00', '23:45', '#6366f1', 45, 60, 'soir'],
+  ['N', 'Nuit de 23 h à 7 h 45', '23:00', '07:45', '#7c3aed', 45, 60, 'nuit'],
+  ['D', 'Middle de 8 h à 18 h', '08:00', '18:00', '#475569', 60, 0, 'middle'],
+  ['T', 'Matin de 8 h à 16 h 45', '08:00', '16:45', '#f97316', 45, 0, 'matin'],
+  ['TV', 'Matin de 8 h à 15 h 45', '08:00', '15:45', '#fb923c', 45, 0, 'matin'],
 ]
 /** (code, nom, couleur, compté dans les heures, nature) */
 const PL_MOTIFS: ReadonlyArray<
@@ -2613,28 +2625,28 @@ function genererPlanning(f: Fenetre, tables: Table[], apres: string[]): void {
   const lundi = f.aujourdhui + ((8 - jourSemaine(f.aujourdhui)) % 7 || 7)
   const horaires = table('public.planning_horaires', [
     'id',
-    'code',
     'nom',
     'debut',
     'fin',
     'couleur',
     'pause',
     'raccourci',
+    'periode',
   ])
   horaires.identiteForcee = true
   const idHoraire = new Map<string, number>()
   PL_HORAIRES.forEach(
-    ([code, nom, debut, fin, couleur, pause, raccourci], i) => {
-      idHoraire.set(code, i + 1)
+    ([cle, nom, debut, fin, couleur, pause, raccourci, moment], i) => {
+      idHoraire.set(cle, i + 1)
       horaires.lignes.push([
         i + 1,
-        code,
         nom,
         debut,
         fin,
         couleur,
         pause,
         raccourci,
+        moment,
       ])
     },
   )

@@ -43,6 +43,7 @@ import {
   couleurShift,
   heures,
   journeeEtoile,
+  libelleMoment,
   numeroSemaine,
   parGroupe,
   ROUGE_CODE,
@@ -645,9 +646,10 @@ function LigneMois({
     const h = shift ? horaireDe(shift.type_shift_id) : undefined
     const quand = dateLongue(date)
     const resume = shift
-      ? `${quand} · ${h ? `${h.code} · ${h.nom}` : 'Horaire spécifique'} ${heureAffichee(shift.debut)}–${heureAffichee(shift.fin)}${s.forfait_jours ? '' : ` · ${heures(shift.duree)}`} · ${shift.epinglee ? 'validé' : 'proposition'}`
+      ? `${quand} · ${!h ? 'Horaire spécifique ' : h.periode ? `${libelleMoment(h.periode)} ` : ''}${heureAffichee(shift.debut)}–${heureAffichee(shift.fin)}${s.forfait_jours ? '' : ` · ${heures(shift.duree)}`} · ${shift.epinglee ? 'validé' : 'proposition'}`
       : `${quand} · Non attribué`
-    // « M6 au lieu de M3 » : la place tenue imposait un autre code du cycle.
+    // « 09:00–17:45 au lieu de 07:00–15:45 » : la place tenue imposait un
+    // autre horaire du cycle.
     const auLieuDe = shift
       ? ligneAuLieuDe(h, horaireDe(shift.code_demande ?? null))
       : null

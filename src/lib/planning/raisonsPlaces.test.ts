@@ -129,7 +129,7 @@ describe('raisons des places à pourvoir', () => {
     })
     expect(issue('HORAIRE-PERSO', MESSAGES['HORAIRE-PERSO'][0])).toMatchObject({
       genre: 'lien',
-      action: 'Codes de la fiche',
+      action: 'Horaires de la fiche',
     })
     expect(issue('HORAIRE-PERSO', MESSAGES['HORAIRE-PERSO'][1])).toMatchObject({
       genre: 'lien',
@@ -246,7 +246,7 @@ describe('raisons des places à pourvoir', () => {
     ).toBe(false)
   })
 
-  it('code hors de sa fiche : la seule raison montrée, le reste en découle', () => {
+  it('horaire hors de sa fiche : la seule raison montrée, le reste en découle', () => {
     const regles = [
       'HORAIRE-PERSO',
       'R-JOUR-MAX',
@@ -260,7 +260,9 @@ describe('raisons des places à pourvoir', () => {
       regles,
       regles.map((r) => MESSAGES[r as keyof typeof MESSAGES][0]),
     )
-    expect(l.map((r) => r.phrase)).toEqual(["Ce code n'est pas dans ses codes"])
+    expect(l.map((r) => r.phrase)).toEqual([
+      "Cet horaire n'est pas dans ses horaires",
+    ])
     expect(estPossible(l)).toBe(false)
   })
 
@@ -363,15 +365,15 @@ describe('table complète des raisons (test de mutation)', () => {
       'HORAIRE-PERSO',
       'un autre horaire est prévu ce jour-là',
       'HORAIRE-PERSO:impose',
-      'Un autre code est fixé ce jour-là',
+      'Un autre horaire est fixé ce jour-là',
       lien('semaine', 'Semaine type'),
     ],
     [
       'HORAIRE-PERSO',
       'cet horaire ne fait pas partie des siens',
       'HORAIRE-PERSO:fiche',
-      "Ce code n'est pas dans ses codes",
-      lien('horaires', 'Codes de la fiche'),
+      "Cet horaire n'est pas dans ses horaires",
+      lien('horaires', 'Horaires de la fiche'),
     ],
     [
       'R-JOUR-MAX',

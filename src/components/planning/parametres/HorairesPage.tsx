@@ -1,11 +1,15 @@
 /*
- * Paramètres du Planning : codes horaires et motifs d'absence (prototype
+ * Paramètres du Planning : horaires et motifs d'absence (prototype
  * `HorairesPage.tsx`, spec §5.2). Différence voulue avec le prototype : rien
  * ne part à la frappe (anomalie 12) ; chaque carte s'enregistre par son
  * bouton, après contrôle des mêmes règles que la base (pause plus courte que
- * l'horaire, journée courte qui garde du temps de travail…). Un code horaire
- * modifié fait suivre les shifts à venir (trigger en base), jamais ceux des
- * semaines verrouillées. Seule la gestion modifie.
+ * l'horaire, journée courte qui garde du temps de travail, deux horaires aux
+ * mêmes heures…). Depuis le 2026-10-31 (décision utilisateur), un horaire
+ * n'a plus de code ni de nom à saisir : il se lit par ses heures et son
+ * moment ; le moment est proposé d'après les heures puis modifiable, et le
+ * nom rangé en base est écrit par l'app (`nomHoraire`). Un horaire modifié
+ * fait suivre les shifts à venir (trigger en base), jamais ceux des semaines
+ * verrouillées. Seule la gestion modifie.
  */
 
 import { useState } from 'react'
@@ -48,8 +52,11 @@ import {
   Segmente,
 } from '#/components/planning/parametres/reglages/controles.tsx'
 import {
+  changerHeures,
   erreursHoraire,
   erreursMotif,
+  heuresLibres,
+  momentEstPropose,
   heureValide,
   nettoyerHoraire,
   nettoyerMotif,
@@ -75,6 +82,9 @@ import {
   dureeHoraire,
   grouperHoraires,
   heures,
+  libelleHoraire,
+  libelleMoment,
+  momentPropose,
   ROUGE_CODE,
   texteSur,
 } from '#/lib/planning/affichage.ts'
@@ -127,8 +137,6 @@ const NATURES: ReadonlyArray<{
 ]
 
 const saisieHoraire = (h: Horaire): SaisieHoraire => ({
-  code: h.code,
-  nom: h.nom,
   debut: h.debut,
   fin: h.fin,
   couleur: h.couleur,
@@ -139,7 +147,7 @@ const saisieHoraire = (h: Horaire): SaisieHoraire => ({
   code_rouge: h.code_rouge,
 })
 
-/** Famille d'un code (consignes de présence, couleur) ; « aucune » : à part. */
+/** Moment d'un horaire (consignes de présence, rangement) ; « aucune » : à part. */
 const PERIODES: ReadonlyArray<{
   valeur: Periode | 'aucune'
   libelle: string
@@ -169,8 +177,6 @@ const PERIODES: ReadonlyArray<{
   },
 ]
 
-/** Les codes rangés par période, dans l'ordre de la journée. */
-
 const saisieMotif = (m: Motif): SaisieMotif => ({
   code: m.code,
   nom: m.nom,
@@ -194,7 +200,7 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
     staleTime: 0,
   })
 
-  // Un code ou un motif ouvert dans le volet (id null : nouveau).
+  // Un horaire ou un motif ouvert dans le volet (id null : nouveau).
   const [ouvert, setOuvert] = useState<{
     type: 'horaire' | 'motif'
     id: number | null
@@ -229,16 +235,13 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
 
   const creerHoraire = () => {
     if (!data) return
+    const heuresNeuves = { ...heuresLibres(data.horaires), pause: 45 }
     setNouvelHoraire({
-      code: 'X',
-      nom: 'Nouvel horaire',
-      debut: '09:00',
-      fin: '17:45',
+      ...heuresNeuves,
       couleur: PALETTE[data.horaires.length % PALETTE.length],
-      pause: 45,
       raccourci: 60,
       raccourci_debut: 0,
-      periode: null,
+      periode: momentPropose(heuresNeuves),
       code_rouge: false,
     })
   }
@@ -267,12 +270,12 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
         <>
           <section
             className="flex flex-col gap-4"
-            aria-labelledby="titre-codes-horaires"
+            aria-labelledby="titre-horaires"
           >
-            <div id="titre-codes-horaires">
+            <div id="titre-horaires">
               <EnTeteSection
-                titre="Codes horaires"
-                texte="Rangés par famille, comme dans les menus du planning. Un clic sur un code ouvre son réglage. La pause compte dans la présence mais pas dans les heures ; modifier les heures d'un code met à jour les shifts à venir posés avec lui."
+                titre="Horaires"
+                texte="Rangés par moment, comme dans les menus du planning. Un clic sur un horaire ouvre son réglage. La pause compte dans la présence mais pas dans les heures. Modifier les heures d'un horaire met à jour les shifts à venir posés avec lui."
                 actions={
                   modifiable && (
                     <Button
@@ -284,7 +287,7 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
                       disabled={!!nouvelHoraire}
                     >
                       <Plus />
-                      Nouveau code
+                      Nouvel horaire
                     </Button>
                   )
                 }
@@ -298,7 +301,7 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
                   nombre={g.horaires.length}
                 >
                   {g.horaires.map((h) => (
-                    <LigneCode
+                    <LigneHoraire
                       key={h.id}
                       h={h}
                       onOuvrir={() => setOuvert({ type: 'horaire', id: h.id })}
@@ -383,14 +386,15 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
                       ? 'Nouveau motif'
                       : `Motif ${motifOuvert?.code ?? ''}`
                     : ouvert?.id === null
-                      ? 'Nouveau code horaire'
-                      : `Code ${horaireOuvert?.code ?? ''}`}
+                      ? 'Nouvel horaire'
+                      : `Horaire ${horaireOuvert ? libelleHoraire(horaireOuvert) : ''}`}
                 </SheetTitle>
                 <SheetDescription>
                   {ouvert?.type === 'motif'
                     ? (motifOuvert?.nom ?? 'Absence ou école')
-                    : (horaireOuvert?.nom ??
-                      'Heures, pause, famille et couleur')}
+                    : horaireOuvert
+                      ? libelleMoment(horaireOuvert.periode)
+                      : 'Heures, pause, moment et couleur'}
                 </SheetDescription>
               </SheetHeader>
               <div className="p-4">
@@ -451,19 +455,29 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
 
 // ------------------------------------------------------- listes compactes
 
-function LigneCode({ h, onOuvrir }: { h: Horaire; onOuvrir: () => void }) {
+/** Une ligne : la couleur, les heures (en rouge si demandé), puis le temps
+ * de travail et la pause. */
+function LigneHoraire({ h, onOuvrir }: { h: Horaire; onOuvrir: () => void }) {
+  const libelle = libelleHoraire(h)
   return (
     <LigneCompacte
-      etiquette={`Régler ${h.code}, ${h.nom}`}
+      etiquette={`Régler l'horaire ${libelle}`}
       pastille={
-        <PastilleCode
-          code={h.code}
-          couleur={h.couleur}
-          texte={h.code_rouge ? ROUGE_CODE : undefined}
+        <span
+          aria-hidden
+          className="size-3 shrink-0 rounded-full"
+          style={{ background: h.couleur }}
         />
       }
-      libelle={h.nom}
-      detail={`${heures(dureeHoraire(h.debut, h.fin) - h.pause)}${h.raccourci > 0 ? ' · journée étoile possible' : ''}`}
+      libelle={
+        <span
+          className="font-medium tabular-nums"
+          style={h.code_rouge ? { color: ROUGE_CODE } : undefined}
+        >
+          {libelle}
+        </span>
+      }
+      detail={`${heures(dureeHoraire(h.debut, h.fin) - h.pause)}${h.pause > 0 ? ` · pause ${h.pause} min` : ''}${h.raccourci > 0 ? ' · journée courte' : ''}`}
       onOuvrir={onOuvrir}
     />
   )
@@ -611,7 +625,7 @@ function ChampMinutes({
   )
 }
 
-// ------------------------------------------------------------ codes horaires
+// ------------------------------------------------------------------ horaires
 
 function CarteHoraire({
   id,
@@ -637,8 +651,18 @@ function CarteHoraire({
   } = useBrouillon(enregistre)
   const [envoi, setEnvoi] = useState(false)
   const [suppression, setSuppression] = useState(false)
+  // Le moment suit les heures tant que la personne ne l'a pas choisi
+  // elle-même (décision utilisateur du 2026-10-31). Un horaire existant dont
+  // le moment diffère de la proposition a été choisi à la main : il le garde
+  // quand ses heures changent.
+  const [momentChoisi, setMomentChoisi] = useState(
+    () => id !== null && !momentEstPropose(enregistre),
+  )
   const neuf = id === null
-  const erreurs = erreursHoraire(h)
+  const erreurs = erreursHoraire(h, referentiel.horaires, id)
+  const heuresDe = (
+    maj: Partial<Pick<SaisieHoraire, 'debut' | 'fin' | 'pause'>>,
+  ) => changer(changerHeures(h, maj, momentChoisi))
   const heuresChangees =
     !neuf &&
     (h.debut !== enregistre.debut ||
@@ -653,20 +677,22 @@ function CarteHoraire({
     setEnvoi(true)
     const r = await ecrire(
       () => enregistrerHoraire(valeurs, id),
-      "Le code horaire n'a pas pu être enregistré",
+      "L'horaire n'a pas pu être enregistré.",
     )
     setEnvoi(false)
     if (!r.ok) {
       notifier(r.message, 'danger')
       return
     }
-    adopter(valeurs)
+    adopter(h)
+    setMomentChoisi(!momentEstPropose(h))
+    const libelle = libelleHoraire(valeurs)
     notifier(
       neuf
-        ? `Code horaire ${valeurs.code} créé`
+        ? `Horaire ${libelle} créé.`
         : heuresChangees
-          ? `Code ${valeurs.code} enregistré. Les shifts à venir posés avec ce code ont suivi ; les semaines verrouillées ne changent pas.`
-          : `Code ${valeurs.code} enregistré`,
+          ? `Horaire ${libelle} enregistré. Les shifts à venir posés avec cet horaire ont suivi. Les semaines verrouillées ne changent pas.`
+          : `Horaire ${libelle} enregistré.`,
     )
     onFin?.()
   }
@@ -676,11 +702,11 @@ function CarteHoraire({
     setEnvoi(true)
     const r = await ecrire(
       () => supprimerHoraire(id),
-      `Le code ${enregistre.code} n'a pas pu être supprimé`,
+      `L'horaire ${libelleHoraire(enregistre)} n'a pas pu être supprimé.`,
     )
     setEnvoi(false)
     notifier(
-      r.ok ? `Code ${enregistre.code} supprimé` : r.message,
+      r.ok ? `Horaire ${libelleHoraire(enregistre)} supprimé.` : r.message,
       r.ok ? 'info' : 'danger',
     )
   }
@@ -713,32 +739,10 @@ function CarteHoraire({
   return (
     <CarteReglage
       couleur={h.couleur}
-      etiquette={neuf ? 'Nouveau code horaire' : `Code ${enregistre.code}`}
+      etiquette={
+        neuf ? 'Nouvel horaire' : `Horaire ${libelleHoraire(enregistre)}`
+      }
     >
-      <div className="flex items-center gap-2">
-        <Input
-          aria-label="Code court"
-          value={h.code}
-          maxLength={4}
-          disabled={desactive}
-          onChange={(e) => changer({ code: e.target.value.toUpperCase() })}
-          className="h-9 w-16 shrink-0 border-transparent text-center font-semibold uppercase"
-          style={{
-            background: h.couleur,
-            color: h.code_rouge ? ROUGE_CODE : texteSur(h.couleur),
-          }}
-        />
-        <Input
-          aria-label="Nom de l'horaire"
-          value={h.nom}
-          maxLength={80}
-          disabled={desactive}
-          onChange={(e) => changer({ nom: e.target.value })}
-          onKeyDown={(e) => e.key === 'Enter' && void enregistrer()}
-          className="font-medium"
-        />
-      </div>
-
       <div className="flex flex-wrap items-center gap-2">
         <Input
           aria-label="Début"
@@ -747,8 +751,9 @@ function CarteHoraire({
           inputMode="numeric"
           maxLength={5}
           disabled={desactive}
-          onChange={(e) => changer({ debut: e.target.value })}
-          onBlur={(e) => changer({ debut: normaliserHeure(e.target.value) })}
+          onChange={(e) => heuresDe({ debut: e.target.value })}
+          onBlur={(e) => heuresDe({ debut: normaliserHeure(e.target.value) })}
+          onKeyDown={(e) => e.key === 'Enter' && void enregistrer()}
           className="h-8 w-20 text-center tabular-nums"
         />
         <span className="text-muted-foreground">→</span>
@@ -759,8 +764,9 @@ function CarteHoraire({
           inputMode="numeric"
           maxLength={5}
           disabled={desactive}
-          onChange={(e) => changer({ fin: e.target.value })}
-          onBlur={(e) => changer({ fin: normaliserHeure(e.target.value) })}
+          onChange={(e) => heuresDe({ fin: e.target.value })}
+          onBlur={(e) => heuresDe({ fin: normaliserHeure(e.target.value) })}
+          onKeyDown={(e) => e.key === 'Enter' && void enregistrer()}
           className="h-8 w-20 text-center tabular-nums"
         />
         {heuresOk && travail > 0 && (
@@ -789,7 +795,7 @@ function CarteHoraire({
             max={180}
             pas={5}
             disabled={desactive}
-            onChange={(pause) => changer({ pause })}
+            onChange={(pause) => heuresDe({ pause })}
           />
           min
         </Champ>
@@ -859,15 +865,25 @@ function CarteHoraire({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <span className="text-sm text-muted-foreground">Famille</span>
-        <Segmente
-          etiquette="Famille du code"
-          valeur={h.periode ?? 'aucune'}
-          options={PERIODES}
-          disabled={desactive}
-          onChange={(v) => changer({ periode: v === 'aucune' ? null : v })}
-        />
+      <div className="flex flex-col gap-1.5">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <span className="text-sm text-muted-foreground">Moment</span>
+          <Segmente
+            etiquette="Moment de l'horaire"
+            valeur={h.periode ?? 'aucune'}
+            options={PERIODES}
+            disabled={desactive}
+            onChange={(v) => {
+              setMomentChoisi(true)
+              changer({ periode: v === 'aucune' ? null : v })
+            }}
+          />
+        </div>
+        {!momentChoisi && momentEstPropose(h) && (
+          <span className="text-xs text-muted-foreground">
+            Proposé d'après les heures.
+          </span>
+        )}
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -875,7 +891,7 @@ function CarteHoraire({
         <Nuancier
           valeur={h.couleur}
           disabled={desactive}
-          etiquette="Couleur du code horaire"
+          etiquette="Couleur de l'horaire"
           onChange={(couleur) => changer({ couleur })}
         />
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -883,17 +899,17 @@ function CarteHoraire({
             checked={h.code_rouge}
             disabled={desactive}
             onCheckedChange={(code_rouge) => changer({ code_rouge })}
-            aria-label="Code écrit en rouge"
+            aria-label="Heures écrites en rouge"
           />
-          Code écrit en rouge
+          Heures écrites en rouge
         </label>
       </div>
 
       <ErreursSaisie erreurs={modifiable ? erreurs : []} />
       {modifiable && heuresChangees && erreurs.length === 0 && (
         <p className="text-xs text-amber-500">
-          À l'enregistrement, les shifts déjà posés avec ce code prennent ces
-          heures, sauf dans les semaines verrouillées.
+          À l'enregistrement, les shifts déjà posés avec cet horaire prennent
+          ces heures, sauf dans les semaines verrouillées.
         </p>
       )}
 
@@ -903,7 +919,7 @@ function CarteHoraire({
         modifie={modifie}
         envoi={envoi}
         invalide={erreurs.length > 0}
-        libelleCreer="Créer le code"
+        libelleCreer="Créer l'horaire"
         info={
           utilise
             ? `Utilisé dans ${utilise} besoin${utilise > 1 ? 's' : ''}`
@@ -917,8 +933,8 @@ function CarteHoraire({
       <ConfirmDialog
         open={suppression}
         onOpenChange={setSuppression}
-        title={`Supprimer le code ${enregistre.code} ?`}
-        description="Ses besoins sont supprimés ; les shifts déjà posés gardent leurs heures, sans code. Il est retiré des fiches et des postes. Impossible s'il figure dans un planning réalisé, ou s'il est le seul horaire permis d'une fiche ou d'un poste."
+        title={`Supprimer l'horaire ${libelleHoraire(enregistre)} ?`}
+        description="Ses besoins sont supprimés. Les shifts déjà posés gardent leurs heures. Il est retiré des fiches et des postes. Impossible s'il figure dans un planning réalisé, ou s'il est le seul horaire permis d'une fiche ou d'un poste."
         confirmLabel="Supprimer"
         destructive
         onConfirm={() => void supprimer()}

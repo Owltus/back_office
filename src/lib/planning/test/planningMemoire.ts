@@ -24,6 +24,7 @@ import {
   horaireDe,
   lundiDe,
 } from '#/lib/planning/temps.ts'
+import { horaireTest } from '#/lib/planning/test/codesTest.ts'
 import type { Absence, Affectation, Referentiel } from '#/lib/planning/types.ts'
 
 export interface Pose {
@@ -80,9 +81,7 @@ export class PlanningMemoire {
   }
 
   horaire(code: string) {
-    const h = this.referentiel.horaires.find((x) => x.code === code)
-    if (!h) throw new Error(`code inconnu : ${code}`)
-    return h
+    return horaireTest(this.referentiel.horaires, code)
   }
 
   motif(code: string): number {

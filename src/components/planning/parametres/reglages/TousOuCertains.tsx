@@ -1,6 +1,6 @@
 /*
- * Le choix écrit devant chaque liste de réglages (codes d'un poste, codes
- * d'une personne, postes d'un groupe) : « Tous » ou « Seulement ceux-ci ».
+ * Le choix écrit devant chaque liste de réglages (horaires d'un poste,
+ * horaires d'une personne, postes d'un groupe) : « Tous » ou « Seulement ceux-ci ».
  * « Tous » masque la liste et dit combien sont ouverts ; « Seulement
  * ceux-ci » montre la liste et refuse d'en décocher le dernier. Logique :
  * `tousOuCertains.ts`.
@@ -31,7 +31,7 @@ export function TousOuCertains({
   onChange,
   disabled,
   texteTous,
-  quoi = 'code',
+  quoi = 'horaire',
   children,
 }: {
   /** Ce que règle la liste, pour les lecteurs d'écran. */
@@ -41,10 +41,10 @@ export function TousOuCertains({
   proposes: number[]
   onChange: (choisis: number[]) => void
   disabled?: boolean
-  /** Ce qu'affiche « Tous » à la place de la liste (« Les 7 codes »). */
+  /** Ce qu'affiche « Tous » à la place de la liste (« Les 7 horaires »). */
   texteTous: ReactNode
   /** Le mot de la phrase de refus. */
-  quoi?: 'code' | 'poste'
+  quoi?: 'horaire' | 'poste'
   /** La liste, en mode « Seulement ceux-ci ». */
   children: (liste: ListeGardee) => ReactNode
 }) {
@@ -73,8 +73,8 @@ export function TousOuCertains({
     refus === 'dernier'
       ? `Gardez au moins un ${quoi}, ou choisissez Tous.`
       : refus === 'rien'
-        ? quoi === 'code'
-          ? 'Aucun code à choisir ici : créez des horaires, ou ouvrez-en sur ses postes. La liste reste sur Tous.'
+        ? quoi === 'horaire'
+          ? 'Aucun horaire à choisir ici : créez des horaires, ou ouvrez-en sur ses postes. La liste reste sur Tous.'
           : 'Aucun poste à choisir : créez des postes. La liste reste sur Tous.'
         : ''
 

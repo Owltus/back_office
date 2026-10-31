@@ -29,7 +29,7 @@ import type {
 import { supabase } from '#/lib/supabase.ts'
 
 const COL_HORAIRE =
-  'id, code, nom, debut, fin, couleur, pause, raccourci, raccourci_debut, periode, code_rouge'
+  'id, nom, debut, fin, couleur, pause, raccourci, raccourci_debut, periode, code_rouge'
 const COL_MOTIF = 'id, code, nom, couleur, decompte, nature'
 const COL_POSTE =
   'id, nom, categorie, couleur, horaires_autorises, a_part, presence'

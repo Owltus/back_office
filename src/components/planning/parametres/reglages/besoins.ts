@@ -5,7 +5,7 @@
 
 import type { Besoin, Horaire } from '#/lib/planning/types.ts'
 
-/** Une ligne : un code horaire, ou un horaire spécifique sans code. */
+/** Une ligne : un horaire du référentiel, ou un horaire spécifique. */
 export interface LigneBesoin {
   cle: string
   horaire_id: number | null
@@ -60,8 +60,8 @@ const demande = (b: Besoin) => b.effectif + b.soutien + b.renfort > 0
  * plus ceux que l'utilisateur vient d'ajouter ou de régler dans la séance
  * (`gardees`, clés de ligne : une ligne remise à 0 ne disparaît pas sous ses
  * doigts). Depuis le 2026-10-28, une ligne à 0 partout n'est plus montrée, et
- * les autres codes permis s'ajoutent un par un (`horairesAAjouter`) au lieu
- * d'être tous dépliés. Un code non permis qui porte encore un besoin reste
+ * les autres horaires permis s'ajoutent un par un (`horairesAAjouter`) au lieu
+ * d'être tous dépliés. Un horaire non permis qui porte encore un besoin reste
  * montré, signalé. Horaires spécifiques regroupés par début et fin. Tri par
  * heure de début.
  */
@@ -100,7 +100,8 @@ export function lignesDuPoste(
   )
 }
 
-/** Les codes permis pour le poste qui n'ont pas encore de ligne, par heure. */
+/** Les horaires permis pour le poste qui n'ont pas encore de ligne, par
+ * heure de début, puis de fin. */
 export function horairesAAjouter(
   possibles: Horaire[],
   lignes: LigneBesoin[],
@@ -108,6 +109,9 @@ export function horairesAAjouter(
   return possibles
     .filter((h) => !lignes.some((l) => l.horaire_id === h.id))
     .sort(
-      (a, b) => a.debut.localeCompare(b.debut) || a.code.localeCompare(b.code),
+      (a, b) =>
+        a.debut.localeCompare(b.debut) ||
+        a.fin.localeCompare(b.fin) ||
+        a.id - b.id,
     )
 }

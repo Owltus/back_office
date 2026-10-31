@@ -12,7 +12,7 @@ import type { Referentiel } from '#/lib/planning/types.ts'
 
 /*
  * Postes contre un service simulé. Vérifié : lecture seule sans aucun geste
- * d'écriture ; codes horaires possibles et poste à part envoyés à
+ * d'écriture ; horaires possibles et poste à part envoyés à
  * Enregistrer ; durée maximale de la catégorie affichée ; un refus de la
  * base à la suppression s'affiche en clair.
  */
@@ -120,10 +120,10 @@ describe('Postes', () => {
     ).toBeTruthy()
   })
 
-  it('codes horaires et poste à part envoyés à Enregistrer', async () => {
+  it('horaires possibles et poste à part envoyés à Enregistrer', async () => {
     monter(<PostesPage />)
     const r = carte('Réception')
-    fireEvent.click(r.getByRole('button', { name: 'N Nuit' }))
+    fireEvent.click(r.getByRole('button', { name: '23:00–07:45' }))
     fireEvent.click(
       r.getByRole('switch', {
         name: "Ranger à part dans la liste de l'équipe",
@@ -160,17 +160,21 @@ describe('Postes', () => {
     ).toBe('true')
     fireEvent.click(tous)
     expect(tous.getAttribute('aria-checked')).toBe('true')
-    expect(r.queryByRole('button', { name: 'M Matin' })).toBeNull()
+    expect(r.queryByRole('button', { name: '07:00–15:45' })).toBeNull()
     expect(
-      r.getByText('Les 7 codes, y compris ceux créés plus tard.'),
+      r.getByText('Les 7 horaires, y compris ceux créés plus tard.'),
     ).toBeTruthy()
     // Retour à Seulement : la sélection d'avant revient.
     fireEvent.click(r.getByRole('radio', { name: 'Seulement ceux-ci' }))
     expect(
-      r.getByRole('button', { name: 'M Matin' }).getAttribute('aria-pressed'),
+      r
+        .getByRole('button', { name: '07:00–15:45' })
+        .getAttribute('aria-pressed'),
     ).toBe('true')
     expect(
-      r.getByRole('button', { name: 'N Nuit' }).getAttribute('aria-pressed'),
+      r
+        .getByRole('button', { name: '23:00–07:45' })
+        .getAttribute('aria-pressed'),
     ).toBe('false')
     // Tous s'enregistre comme une liste vide.
     fireEvent.click(r.getByRole('radio', { name: 'Tous' }))
@@ -183,14 +187,14 @@ describe('Postes', () => {
     )
   })
 
-  it('Seulement : le dernier code ne se décoche pas', () => {
+  it('Seulement : le dernier horaire ne se décoche pas', () => {
     monter(<PostesPage />)
     const r = carte('Veille de nuit')
-    const nuit = r.getByRole('button', { name: 'N Nuit' })
+    const nuit = r.getByRole('button', { name: '23:00–07:45' })
     fireEvent.click(nuit)
     expect(nuit.getAttribute('aria-pressed')).toBe('true')
     expect(
-      r.getByText('Gardez au moins un code, ou choisissez Tous.'),
+      r.getByText('Gardez au moins un horaire, ou choisissez Tous.'),
     ).toBeTruthy()
     expect(r.queryByText('Non enregistré')).toBeNull()
     // La famille entière non plus.
@@ -198,11 +202,13 @@ describe('Postes', () => {
     fireEvent.click(r.getByRole('button', { name: 'tout décocher' }))
     expect(nuit.getAttribute('aria-pressed')).toBe('true')
     expect(
-      r.getByRole('button', { name: 'M Matin' }).getAttribute('aria-pressed'),
+      r
+        .getByRole('button', { name: '07:00–15:45' })
+        .getAttribute('aria-pressed'),
     ).toBe('true')
   })
 
-  it('un poste sur Tous passe à Seulement avec tous les codes cochés', () => {
+  it('un poste sur Tous passe à Seulement avec tous les horaires cochés', () => {
     etat.referentiel = {
       ...referentielDemo(),
       postes: referentielDemo().postes.map((p) =>
@@ -211,7 +217,7 @@ describe('Postes', () => {
     }
     monter(<PostesPage />)
     const r = carte('Club')
-    expect(r.getByText(/^Les 7 codes/)).toBeTruthy()
+    expect(r.getByText(/^Les 7 horaires/)).toBeTruthy()
     fireEvent.click(r.getByRole('radio', { name: 'Seulement ceux-ci' }))
     const boutons = within(r.getByRole('group', { name: 'Horaires possibles' }))
       .getAllByRole('button')

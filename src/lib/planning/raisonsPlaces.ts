@@ -121,13 +121,13 @@ export function raisonClaire(
     case 'HORAIRE-PERSO':
       return message.includes('autre horaire')
         ? r(
-            'Un autre code est fixé ce jour-là',
+            'Un autre horaire est fixé ce jour-là',
             fiche(salarieId, 'Semaine type', 'semaine'),
             'HORAIRE-PERSO:impose',
           )
         : r(
-            "Ce code n'est pas dans ses codes",
-            fiche(salarieId, 'Codes de la fiche', 'horaires'),
+            "Cet horaire n'est pas dans ses horaires",
+            fiche(salarieId, 'Horaires de la fiche', 'horaires'),
             'HORAIRE-PERSO:fiche',
           )
     case 'R-JOUR-MAX':
@@ -208,8 +208,8 @@ export function raisonClaire(
 
 /** Raisons DÉCISIVES, par ordre : la première famille présente suffit à
  * dire pourquoi, les autres raisons ne sont que la conséquence d'un shift
- * imaginé là quand même (passage navigateur du 2026-10-29 : « Ce code n'est
- * pas dans ses codes » suivi de cinq limites du même shift). D'abord ce qui
+ * imaginé là quand même (passage navigateur du 2026-10-29 : « Cet horaire
+ * n'est pas dans ses horaires » suivi de cinq limites du même shift). D'abord ce qui
  * se règle dans la fiche ou ferme le jour, puis le fait d'être déjà placé. */
 const DECISIVES: ReadonlyArray<ReadonlySet<string>> = [
   new Set([
@@ -262,7 +262,7 @@ export const estPossible = (raisons: readonly RaisonClaire[]) =>
 
 /** La règle qui bloque TOUT LE MONDE sur une place (`raison_commune` de
  * `analyser`, plan `planning-cycles-2026-10-30` étape 5), dite pour la place
- * entière : « Je ne peux pas remplir ce M3. » puis cette phrase. Seul
+ * entière : « Je ne peux pas remplir le 07:00–15:45. » puis cette phrase. Seul
  * l'identifiant est connu (pas de message) : la phrase reste générale.
  * Une phrase par règle de `REGLES_BLOCAGE` (test exhaustif). */
 const PHRASES_COMMUNES: Record<(typeof REGLES_BLOCAGE)[number], string> = {
@@ -270,7 +270,7 @@ const PHRASES_COMMUNES: Record<(typeof REGLES_BLOCAGE)[number], string> = {
   'HORS-CONTRAT': "Personne n'est sous contrat ce jour-là.",
   ABSENCE: "Tout le monde est absent ou à l'école ce jour-là.",
   'REPOS-FIXE': 'Tout le monde est en repos fixe ce jour-là.',
-  'HORAIRE-PERSO': "Personne n'a ce code ce jour-là.",
+  'HORAIRE-PERSO': "Personne n'a cet horaire ce jour-là.",
   'R-JOUR-MAX': 'La journée serait trop longue pour tout le monde.',
   'R-NUIT-MINEUR': 'Tout le monde est mineur : pas de travail de nuit.',
   'R-REPOS-QUOTIDIEN': "Personne n'a assez de repos avec ses autres shifts.",

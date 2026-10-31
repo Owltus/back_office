@@ -21,6 +21,7 @@ import {
 } from '#/lib/planning/presence.ts'
 import type { Periode } from '#/lib/planning/types.ts'
 import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
+import { codeTest } from '#/lib/planning/test/codesTest.ts'
 import { PlanningMemoire } from '#/lib/planning/test/planningMemoire.ts'
 import { MINUTES_PAR_JOUR } from '#/lib/planning/temps.ts'
 
@@ -381,7 +382,8 @@ describe('une semaine de l’hôtel d’essai', () => {
     for (const p of referentiel.postes)
       p.presence = p.nom === 'Réception' || p.nom === 'Club'
     for (const h of referentiel.horaires)
-      h.periode = h.code === 'AM' ? 'soir' : h.code === 'N' ? 'nuit' : 'matin'
+      h.periode =
+        codeTest(h) === 'AM' ? 'soir' : codeTest(h) === 'N' ? 'nuit' : 'matin'
     referentiel.consignes = [
       { id: 1, jour: 5, periode: 'matin', minimum: 3, maximum: 3 },
       { id: 2, jour: 0, periode: 'soir', minimum: 2, maximum: 2 },
@@ -393,7 +395,7 @@ describe('une semaine de l’hôtel d’essai', () => {
     const postes = new Set(
       referentiel.postes.filter((x) => x.presence).map((x) => x.id),
     )
-    const code = new Map(referentiel.horaires.map((h) => [h.id, h.code]))
+    const code = new Map(referentiel.horaires.map((h) => [h.id, codeTest(h)]))
     const recompte = (jour: number, soir: boolean) =>
       sem.affectations.filter(
         (a) =>

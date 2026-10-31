@@ -10,7 +10,7 @@
  * tiennent sur une ligne.
  */
 
-import { nomsCourts } from '#/lib/planning/affichage.ts'
+import { libelleHoraire, nomsCourts } from '#/lib/planning/affichage.ts'
 import {
   estPossible,
   phraseCommune,
@@ -370,13 +370,15 @@ export interface PersonneGroupe {
   raisons: RaisonGroupe[]
 }
 
-/** Places identiques (même poste, même code, mêmes heures) sur plusieurs
- * jours : une ligne « Club, M1 : lundi, mardi et jeudi ». */
+/** Places identiques (même poste, même horaire, mêmes heures) sur plusieurs
+ * jours : une ligne « Club, 07:00–15:45 : lundi, mardi et jeudi ». */
 export interface GroupePlaces {
   cle: string
   poste: Poste | undefined
   posteId: number
-  /** Code de l'horaire, ou null (place sans code : on montre les heures). */
+  /** Heures de l'horaire demandé (« 07:00–15:45 », `libelleHoraire`), ou
+   * null (place sans horaire, ou horaires non donnés : on montre les heures
+   * de la place). Plus de code depuis le 2026-10-31. */
   code: string | null
   debut: string
   fin: string
@@ -387,8 +389,8 @@ export interface GroupePlaces {
   /** Phrase de la règle qui bloque tout le monde, la même sur toutes les
    * places du groupe (elle entre dans sa clé), ou null. */
   raisonCommune: string | null
-  /** Autres codes possibles (« Possible en M6 : Alba »), toutes places
-   * confondues, code affiché (ou heures si inconnu). */
+  /** Autres horaires possibles (« Possible sur le 09:00–17:45 : Alba »),
+   * toutes places confondues, heures affichées de l'horaire. */
   autresCodes: Array<{ code: string; noms: string[] }>
 }
 
@@ -459,12 +461,13 @@ export function phraseTrou(t: TrouAttention, jour: string): string {
 }
 
 /** Regroupe les places identiques ; groupes dans l'ordre de leur première
- * date, puis de l'heure. `horaires` donne le code affiché. */
+ * date, puis de l'heure. `horaires` donne les heures affichées de
+ * l'horaire (« 07:00–15:45 »). */
 export function regrouperPlaces(
   shifts: readonly ShiftAPourvoir[],
-  horaires: readonly Pick<Horaire, 'id' | 'code'>[] = [],
+  horaires: readonly Pick<Horaire, 'id' | 'debut' | 'fin'>[] = [],
 ): GroupePlaces[] {
-  const codes = new Map(horaires.map((h) => [h.id, h.code]))
+  const codes = new Map(horaires.map((h) => [h.id, libelleHoraire(h)]))
   const groupes = new Map<string, GroupePlaces>()
   const tries = [...shifts].sort(
     (a, b) => a.date.localeCompare(b.date) || a.debut.localeCompare(b.debut),
@@ -495,7 +498,7 @@ export function regrouperPlaces(
       // Fixtures d'avant le 2026-10-30 : pas de champ.
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       for (const a of place.autresCodes ?? []) {
-        const code = codes.get(a.horaireId) ?? `code ${a.horaireId}`
+        const code = codes.get(a.horaireId) ?? `horaire n° ${a.horaireId}`
         const noms = autres.get(code) ?? new Set<string>()
         for (const n of a.noms) noms.add(n)
         autres.set(code, noms)

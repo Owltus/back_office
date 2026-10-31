@@ -14,6 +14,7 @@ import { TooltipProvider } from '#/components/ui/tooltip.tsx'
 import { analyser } from '#/lib/planning/semaine.ts'
 import type { DonneesSemaine } from '#/lib/planning/semaine.ts'
 import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
+import { horaireTest } from '#/lib/planning/test/codesTest.ts'
 import type { Affectation } from '#/lib/planning/types.ts'
 
 /*
@@ -53,7 +54,7 @@ vi.mock('#/components/planning/parametres/FicheSalarie.tsx', () => ({
 function donneesDemo(): DonneesSemaine {
   const { referentiel, absences } = hotelDemo(LUNDI)
   // Karim Benali (veille de nuit), lundi, une proposition du moteur.
-  const nuit = referentiel.horaires.find((h) => h.code === 'N')!
+  const nuit = horaireTest(referentiel.horaires, 'N')
   const poste = referentiel.postes.find((p) => p.nom === 'Veille de nuit')!
   const shift: Affectation = {
     id: 1,
@@ -158,9 +159,7 @@ describe('VueSemaine', () => {
     expect(screen.getByRole('heading', { name: /Semaine 45/ })).toBeTruthy()
     expect(bouton(/Ouvrir la fiche de Karim Benali/)).toBeTruthy()
     // Proposition : la carte porte ses heures et son état.
-    expect(
-      screen.getByRole('button', { name: /Nuit · 23:00-07:45/ }),
-    ).toBeTruthy()
+    expect(screen.getByRole('button', { name: /23:00–07:45/ })).toBeTruthy()
     expect(screen.getByText(/1 proposition/)).toBeTruthy()
   })
 
@@ -180,7 +179,7 @@ describe('VueSemaine', () => {
     expect(
       screen.queryAllByRole('button', { name: /^Valider le / }),
     ).toHaveLength(0)
-    const carte = screen.getByRole('button', { name: /Nuit · 23:00-07:45/ })
+    const carte = screen.getByRole('button', { name: /23:00–07:45/ })
     expect(carte.getAttribute('aria-disabled')).toBe('true')
     fireEvent.click(carte)
     expect(screen.queryByText('Modifier le shift')).toBeNull()
@@ -365,7 +364,7 @@ describe('VueSemaine', () => {
 
   describe('survol d’un remplaçant (code_demande)', () => {
     const horaire = (code: string) =>
-      DONNEES.referentiel.horaires.find((h) => h.code === code)!
+      horaireTest(DONNEES.referentiel.horaires, code)
     /** La semaine de démo, le shift de nuit tenant une place d'un autre code.
      * Seul l'affichage est en jeu : le couple N / M n'a pas à être réaliste. */
     const avecDemande = (id: number | null) => ({
@@ -381,24 +380,24 @@ describe('VueSemaine', () => {
         unobserve() {}
         disconnect() {}
       }
-      const carte = screen.getByRole('button', { name: /Nuit · 23:00-07:45/ })
+      const carte = screen.getByRole('button', { name: /23:00–07:45/ })
       fireEvent.pointerMove(carte, { pointerType: 'mouse' })
       // L'infobulle s'ouvre : sa première ligne apparaît.
-      await screen.findAllByText(
-        /^N · Nuit · 23:00-07:45$/,
-        {},
-        { timeout: 3000 },
-      )
+      await screen.findAllByText(/^23:00–07:45$/, {}, { timeout: 3000 })
       return carte
     }
 
-    it('code_demande différent : « N au lieu de M » dans l’infobulle, rien sur la case', async () => {
+    it('code_demande différent : « 23:00–07:45 au lieu de 07:00–15:45 » dans l’infobulle, rien sur la case', async () => {
       etat.droits = { pret: true, lire: true, ecrire: false, gerer: false }
       vue.semaine = avecDemande(horaire('M').id)
       rendre()
       const carte = await survoler()
-      expect(screen.getAllByText('N au lieu de M').length).toBeGreaterThan(0)
-      expect(carte.getAttribute('aria-label')).toMatch(/, N au lieu de M,/)
+      expect(
+        screen.getAllByText('23:00–07:45 au lieu de 07:00–15:45').length,
+      ).toBeGreaterThan(0)
+      expect(carte.getAttribute('aria-label')).toMatch(
+        /, 23:00–07:45 au lieu de 07:00–15:45,/,
+      )
       // La case elle-même n'affiche rien de plus.
       expect(carte.textContent).not.toMatch(/au lieu de/)
     })
@@ -439,7 +438,7 @@ describe('VueSemaine', () => {
       // La raison est lue sans survol : description accessible.
       const id = completer.getAttribute('aria-describedby')!
       expect(document.getElementById(id)?.textContent).toMatch(
-        /^Génération impossible, un réglage manque : Aucun code horaire/,
+        /^Génération impossible, un réglage manque : Aucun horaire/,
       )
       fireEvent.click(completer)
       expect(etat.generer).not.toHaveBeenCalled()
@@ -452,9 +451,7 @@ describe('VueSemaine', () => {
       expect(screen.queryByRole('heading', { name: 'Pour commencer' })).toBe(
         null,
       )
-      expect(
-        screen.getByRole('button', { name: /Nuit · 23:00-07:45/ }),
-      ).toBeTruthy()
+      expect(screen.getByRole('button', { name: /23:00–07:45/ })).toBeTruthy()
       expect(
         screen
           .getAllByRole('status')

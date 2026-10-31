@@ -1,5 +1,5 @@
 /*
- * Les codes horaires vus depuis la fiche d'une personne (plan
+ * Les horaires vus depuis la fiche d'une personne (plan
  * `planning-coherence-2026-10-28`, étape 4, D5 = A) : la fiche HÉRITE des
  * codes de ses postes et ne peut que les restreindre. Tout passe par la
  * règle unique (`eligibilite.ts`) : rien n'est recopié ici, on compose.

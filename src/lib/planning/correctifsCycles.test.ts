@@ -17,6 +17,7 @@ import {
   raisonCommune,
 } from '#/lib/planning/semaine.ts'
 import type { DonneesSemaine } from '#/lib/planning/semaine.ts'
+import { avecCode } from '#/lib/planning/test/codesTest.ts'
 import type {
   Affectation,
   Besoin,
@@ -58,20 +59,23 @@ const code = (
   fin: string,
   periode: Horaire['periode'],
   kw: Partial<Horaire> = {},
-): Horaire => ({
-  id,
-  code: c,
-  nom: c,
-  debut,
-  fin,
-  couleur: '#888888',
-  pause: 30,
-  raccourci: 0,
-  raccourci_debut: 0,
-  periode,
-  code_rouge: false,
-  ...kw,
-})
+): Horaire =>
+  avecCode<Horaire>(
+    {
+      id,
+      nom: c,
+      debut,
+      fin,
+      couleur: '#888888',
+      pause: 30,
+      raccourci: 0,
+      raccourci_debut: 0,
+      periode,
+      code_rouge: false,
+      ...kw,
+    },
+    c,
+  )
 const M3 = code(1, 'M3', '07:00', '15:00', 'matin')
 const M6 = code(2, 'M6', '08:00', '16:00', 'matin')
 const S4 = code(3, 'S4', '15:00', '23:00', 'soir')

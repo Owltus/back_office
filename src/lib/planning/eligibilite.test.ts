@@ -48,8 +48,7 @@ const LUNDI = '2026-11-02'
 function horaire(id: number, debut: string, fin: string): Horaire {
   return {
     id,
-    code: `C${id}`,
-    nom: `Code ${id}`,
+    nom: `Horaire ${id}`,
     debut,
     fin,
     couleur: '#888888',

@@ -1,7 +1,7 @@
 /*
  * Paramètres du Planning : la semaine type des besoins (prototype
- * `BesoinsPage.tsx`, spec §5.3). Une carte par poste, une ligne par code
- * horaire (ou horaire spécifique), une case par jour. Refait le 2026-10-28
+ * `BesoinsPage.tsx`, spec §5.3). Une carte par poste, une ligne par
+ * horaire (ou horaire spécifique), lue par ses heures, une case par jour. Refait le 2026-10-28
  * (« utile mais mal présenté ») : deux vues (par poste, par cycle : matin,
  * soir et nuit depuis le 2026-10-30), et
  * on choisit CE QU'ON RÈGLE (personnes nécessaires, apprentis et
@@ -11,13 +11,13 @@
  * suite à l'écran ; les écritures partent l'une après l'autre, chacune avec
  * le besoin RELU en base (deux clics rapides ne créent pas deux besoins).
  *
- * Seuls les horaires où il faut du monde sont montrés ; les autres codes
+ * Seuls les horaires où il faut du monde sont montrés ; les autres horaires
  * permis du poste s'ajoutent un par un (« Ajouter un horaire », 2026-10-28,
  * « il y a sûrement une logique mais je ne comprends pas »).
  *
  * Points d'attention, absents du prototype : un besoin plus long que le
  * maximum HCR de la catégorie du poste (`alerteBesoin`), et un besoin sur un
- * code horaire que le poste ne permet pas (le prototype le masquait).
+ * horaire que le poste ne permet pas (le prototype le masquait).
  */
 
 import { useCallback, useMemo, useRef, useState } from 'react'
@@ -60,7 +60,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '#/components/ui/popover.tsx'
-import { heures, listeEt, texteSur } from '#/lib/planning/affichage.ts'
+import {
+  heures,
+  libelleHoraire,
+  libelleMoment,
+  listeEt,
+} from '#/lib/planning/affichage.ts'
 import { codesDuPoste } from '#/lib/planning/eligibilite.ts'
 import { planningKeys } from '#/lib/planning/keys.ts'
 import { besoinsPresence, postesComptes } from '#/lib/planning/coherence.ts'
@@ -71,7 +76,7 @@ import {
 } from '#/lib/planning/presence.ts'
 import { alerteBesoin } from '#/lib/planning/regles.ts'
 import { reglerBesoin } from '#/lib/planning/service.ts'
-import { heureAffichee, presence } from '#/lib/planning/temps.ts'
+import { presence } from '#/lib/planning/temps.ts'
 import { JOURS } from '#/lib/planning/types.ts'
 import type {
   Besoin,
@@ -159,7 +164,7 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
     setVueBrute('postes')
     setCouche('effectif')
     setEvidence({ jour, periode })
-    // Le premier poste compté dans ce cycle (la nuit : un poste à code de
+    // Le premier poste compté dans ce cycle (la nuit : un poste à horaire de
     // nuit, D15).
     const premier = ref.data ? postesComptes(ref.data, periode)[0] : undefined
     if (premier) window.setTimeout(() => allerAuPoste(premier.id), 0)
@@ -536,7 +541,7 @@ function CartePoste({
       <p className="-mt-1 text-xs text-muted-foreground">
         {restreint
           ? `Les horaires proposés sont ceux choisis pour ce poste dans Postes (${possibles.length}).`
-          : `Aucun horaire choisi pour ce poste dans Postes : les ${possibles.length} codes sont proposés.`}
+          : `Aucun horaire choisi pour ce poste dans Postes : les ${possibles.length} horaires sont proposés.`}
       </p>
 
       {lignes.length === 0 ? (
@@ -611,7 +616,7 @@ function CartePoste({
   )
 }
 
-/** Liste des codes permis qui n'ont pas encore de ligne, rangés par heure. */
+/** Liste des horaires permis qui n'ont pas encore de ligne, rangés par heure. */
 function AjoutHoraire({
   poste,
   horaires,
@@ -650,15 +655,16 @@ function AjoutHoraire({
                 }}
               >
                 <span
-                  className="w-10 shrink-0 rounded px-1 text-center text-[11px] font-semibold"
-                  style={{ background: h.couleur, color: texteSur(h.couleur) }}
-                >
-                  {h.code}
-                </span>
+                  aria-hidden
+                  className="size-2.5 shrink-0 rounded-full"
+                  style={{ background: h.couleur }}
+                />
                 <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate">{h.nom}</span>
-                  <span className="text-xs text-muted-foreground tabular-nums">
-                    {heureAffichee(h.debut)} à {heureAffichee(h.fin)}
+                  <span className="truncate font-medium tabular-nums">
+                    {libelleHoraire(h)}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {libelleMoment(h.periode)}
                   </span>
                 </span>
               </button>
@@ -697,10 +703,12 @@ function LigneTableau({
 }) {
   const h = referentiel.horaires.find((x) => x.id === ligne.horaire_id)
   const couleur = h?.couleur ?? '#98a2b3'
+  // La ligne se lit par ses heures (plus de code depuis le 2026-10-31).
+  const nomLigne = libelleHoraire(ligne)
   const trop = alerteBesoin(poste.categorie, presence(ligne.debut, ligne.fin))
   const lundi = affiche(poste.id, ligne, 0)
   // « Ajuster » : la ligne compte pour le moment à compléter (la nuit, sur
-  // un poste à code de nuit, D15).
+  // un poste qui a un horaire de nuit, D15).
   const compte =
     evidence !== null &&
     periodePresence(
@@ -738,15 +746,14 @@ function LigneTableau({
       <td className="px-3 py-2">
         <div className="flex items-start gap-2">
           <span
-            className="mt-0.5 rounded px-1.5 text-[11px] font-semibold"
-            style={{ background: couleur, color: texteSur(couleur) }}
-          >
-            {h?.code ?? '·'}
-          </span>
+            aria-hidden
+            className="mt-1.5 size-2.5 shrink-0 rounded-full"
+            style={{ background: couleur }}
+          />
           <div className="min-w-0">
-            <div className="truncate">{h?.nom ?? 'Horaire spécifique'}</div>
-            <div className="text-xs text-muted-foreground tabular-nums">
-              {heureAffichee(ligne.debut)} à {heureAffichee(ligne.fin)}
+            <div className="truncate font-medium tabular-nums">{nomLigne}</div>
+            <div className="text-xs text-muted-foreground">
+              {h ? libelleMoment(h.periode) : 'Horaire spécifique'}
             </div>
             {trop && (
               <p className="mt-1 flex items-start gap-1 text-xs text-amber-500">
@@ -762,7 +769,7 @@ function LigneTableau({
             {!permise && (
               <p className="mt-1 flex items-start gap-1 text-xs text-amber-500">
                 <TriangleAlert className="mt-px size-3 shrink-0" />
-                Ce code n'est pas dans les horaires possibles du poste.
+                Cet horaire n'est pas dans les horaires possibles du poste.
               </p>
             )}
             {orphelins.length > 0 && (
@@ -777,7 +784,7 @@ function LigneTableau({
                   <button
                     type="button"
                     className="font-medium text-primary underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none"
-                    aria-label={`Retirer les apprentis et stagiaires sans personne à côté, ${h?.nom ?? 'horaire spécifique'}`}
+                    aria-label={`Retirer les apprentis et stagiaires sans personne à côté, ${nomLigne}`}
                     onClick={() =>
                       regler(
                         poste,
@@ -797,7 +804,7 @@ function LigneTableau({
       {JOURS.map((nom, j) => {
         const r = affiche(poste.id, ligne, j)
         const existe = r.effectif > 0 || r.soutien > 0 || r.renfort > 0
-        const libelle = `${nom}, ${h?.nom ?? 'horaire spécifique'}`
+        const libelle = `${nom}, ${nomLigne}`
         const valeur = r[couche]
         // Un apprenti n'est jamais seul : pas de place sans personne
         // nécessaire ou en plus à côté.
@@ -877,7 +884,7 @@ function LigneTableau({
             <Button
               variant="ghost"
               size="icon-sm"
-              aria-label={`Recopier le lundi sur toute la semaine, ${h?.nom ?? 'horaire spécifique'}`}
+              aria-label={`Recopier le lundi sur toute la semaine, ${nomLigne}`}
               onClick={() =>
                 regler(
                   poste,

@@ -8,14 +8,15 @@ import {
   within,
 } from '@testing-library/react'
 
+import { codeTest } from '#/lib/planning/test/codesTest.ts'
 import type { Referentiel } from '#/lib/planning/types.ts'
 
 /*
  * Besoins contre un service simulé. Vérifié : en lecture, aucun compteur
  * actif ; un compteur appelle `reglerBesoin` avec le besoin EXISTANT ; un
  * nouveau besoin ouvre une place de soutien ; « Toute la semaine » recopie
- * le lundi ; les deux points d'attention (trop long pour la catégorie, code
- * non permis pour le poste) ; les totaux du jour.
+ * le lundi ; les deux points d'attention (trop long pour la catégorie,
+ * horaire non permis pour le poste) ; les totaux du jour.
  */
 
 const etat = vi.hoisted(() => ({
@@ -91,7 +92,7 @@ describe('Besoins', () => {
     expect(existant).toBeTruthy()
     fireEvent.click(
       poste('Réception').getByRole('button', {
-        name: 'Personnes nécessaires Lundi, Matin : un de plus',
+        name: 'Personnes nécessaires Lundi, 07:00–15:45 : un de plus',
       }),
     )
     await waitFor(() => expect(service.reglerBesoin).toHaveBeenCalledTimes(1))
@@ -113,18 +114,18 @@ describe('Besoins', () => {
   it('un nouveau besoin ouvre une place de soutien, sans besoin existant', async () => {
     monter(<BesoinsPage />)
     const club = poste('Club')
-    expect(club.queryByText('Middle')).toBeNull()
+    expect(club.queryByText('09:00–17:45')).toBeNull()
     fireEvent.click(
       club.getByRole('button', { name: 'Ajouter un horaire au poste Club' }),
     )
     fireEvent.click(
       within(
         screen.getByRole('list', { name: 'Horaires à ajouter' }),
-      ).getByRole('button', { name: /Middle/ }),
+      ).getByRole('button', { name: /09:00–17:45/ }),
     )
     fireEvent.click(
       club.getByRole('button', {
-        name: 'Personnes nécessaires Mardi, Middle : un de plus',
+        name: 'Personnes nécessaires Mardi, 09:00–17:45 : un de plus',
       }),
     )
     await waitFor(() =>
@@ -161,10 +162,10 @@ describe('Besoins', () => {
     fireEvent.click(
       within(
         screen.getByRole('list', { name: 'Horaires à ajouter' }),
-      ).getByRole('button', { name: /Middle/ }),
+      ).getByRole('button', { name: /09:00–17:45/ }),
     )
     const plus = club.getByRole('button', {
-      name: 'Personnes nécessaires Jeudi, Middle : un de plus',
+      name: 'Personnes nécessaires Jeudi, 09:00–17:45 : un de plus',
     })
     fireEvent.click(plus)
     fireEvent.click(plus)
@@ -182,12 +183,12 @@ describe('Besoins', () => {
     const r = poste('Réception')
     fireEvent.click(
       r.getByRole('button', {
-        name: 'En plus si besoin Lundi, Matin : un de plus',
+        name: 'En plus si besoin Lundi, 07:00–15:45 : un de plus',
       }),
     )
     fireEvent.click(
       r.getByRole('button', {
-        name: 'Recopier le lundi sur toute la semaine, Matin',
+        name: 'Recopier le lundi sur toute la semaine, 07:00–15:45',
       }),
     )
     await waitFor(() => expect(service.reglerBesoin).toHaveBeenCalledTimes(7))
@@ -204,9 +205,9 @@ describe('Besoins', () => {
     ])
   })
 
-  it('signale un besoin trop long pour la catégorie et un code non permis', () => {
+  it('signale un besoin trop long pour la catégorie et un horaire non permis', () => {
     const ref = referentielDemo()
-    const d = ref.horaires.find((h) => h.code === 'D')
+    const d = ref.horaires.find((h) => codeTest(h) === 'D')
     if (d) d.fin = '20:00'
     for (const b of ref.besoins) if (b.horaire_id === d?.id) b.fin = '20:00'
     const reception = ref.postes.find((p) => p.nom === 'Réception')
@@ -220,7 +221,7 @@ describe('Besoins', () => {
     ).toBeTruthy()
     expect(
       poste('Réception').getByText(
-        "Ce code n'est pas dans les horaires possibles du poste.",
+        "Cet horaire n'est pas dans les horaires possibles du poste.",
       ),
     ).toBeTruthy()
   })
@@ -255,7 +256,7 @@ describe('Besoins', () => {
       expect(totaux(d)).toEqual(['0', '0', '0', '0', '0', '0', '0'])
       expect(
         d.getByRole('button', {
-          name: 'En soutien Lundi, Direction : 1 sans personne à côté, retirer',
+          name: 'En soutien Lundi, 08:00–18:00 : 1 sans personne à côté, retirer',
         }),
       ).toBeTruthy()
       expect(d.getByText(/demandés 5 jours sans personne à côté/)).toBeTruthy()
@@ -265,7 +266,7 @@ describe('Besoins', () => {
       const d = orphelins()
       fireEvent.click(
         d.getByRole('button', {
-          name: 'En soutien Mardi, Direction : 1 sans personne à côté, retirer',
+          name: 'En soutien Mardi, 08:00–18:00 : 1 sans personne à côté, retirer',
         }),
       )
       await waitFor(() => expect(service.reglerBesoin).toHaveBeenCalledTimes(1))
@@ -281,7 +282,7 @@ describe('Besoins', () => {
       const d = orphelins()
       fireEvent.click(
         d.getByRole('button', {
-          name: 'Retirer les apprentis et stagiaires sans personne à côté, Direction',
+          name: 'Retirer les apprentis et stagiaires sans personne à côté, 08:00–18:00',
         }),
       )
       await waitFor(() => expect(service.reglerBesoin).toHaveBeenCalledTimes(5))
@@ -303,7 +304,7 @@ describe('Besoins', () => {
       expect(totaux(d)).toEqual(['1', '1', '1', '1', '1', '0', '0'])
       expect(
         d.getByRole('button', {
-          name: 'En soutien Lundi, Direction : un de moins',
+          name: 'En soutien Lundi, 08:00–18:00 : un de moins',
         }),
       ).toBeTruthy()
       expect(d.queryByText(/sans personne à côté/)).toBeNull()
@@ -314,7 +315,7 @@ describe('Besoins', () => {
       fireEvent.click(screen.getByRole('radio', { name: 'En plus si besoin' }))
       fireEvent.click(
         poste('Direction').getByRole('button', {
-          name: 'En plus si besoin Lundi, Direction : un de moins',
+          name: 'En plus si besoin Lundi, 08:00–18:00 : un de moins',
         }),
       )
       await waitFor(() => expect(service.reglerBesoin).toHaveBeenCalledTimes(1))
@@ -352,7 +353,8 @@ describe('Besoins', () => {
     for (const p of ref.postes)
       p.presence = p.nom === 'Réception' || p.nom === 'Club'
     for (const h of ref.horaires) {
-      h.periode = h.code === 'N' ? 'nuit' : h.code === 'M' ? 'matin' : null
+      h.periode =
+        codeTest(h) === 'N' ? 'nuit' : codeTest(h) === 'M' ? 'matin' : null
     }
     ref.consignes = [
       { id: 1, jour: 0, periode: 'nuit', minimum: 2, maximum: null },
@@ -372,7 +374,7 @@ describe('Besoins', () => {
       .filter(
         (b) =>
           b.jour === 0 &&
-          b.horaire_id === ref.horaires.find((h) => h.code === 'N')?.id,
+          b.horaire_id === ref.horaires.find((h) => codeTest(h) === 'N')?.id,
       )
       .reduce((n, b) => n + b.effectif, 0)
     expect(nuitLundi).toBe(1)
@@ -400,7 +402,7 @@ describe('Besoins', () => {
       tr.closest('section')?.querySelector('h2')?.textContent,
       tr.querySelector('td div.truncate')?.textContent,
     ])
-    expect(lignes).toEqual([['Veille de nuit', 'Nuit']])
+    expect(lignes).toEqual([['Veille de nuit', '23:00–07:45']])
   })
 
   it('consignes de présence : au moins et au plus, le plafond suit', async () => {
@@ -488,7 +490,7 @@ describe('Besoins', () => {
         AM: 'soir',
       }
       for (const h of ref.horaires) {
-        h.periode = periodes[h.code] ?? null
+        h.periode = periodes[codeTest(h) ?? ''] ?? null
       }
       ref.consignes = [
         { id: 1, jour: 5, periode: 'matin', minimum: 3, maximum: null },
@@ -579,15 +581,15 @@ describe('Besoins', () => {
         tr.querySelector('td div.truncate')?.textContent,
       ])
       expect(lignes).toEqual([
-        ['Réception', 'Matin'],
-        ['Club', 'Matin'],
+        ['Réception', '07:00–15:45'],
+        ['Club', '07:00–15:45'],
       ])
       expect(document.querySelectorAll('[data-jour-ajuste]')).toHaveLength(2)
       expect(service.reglerBesoin).not.toHaveBeenCalled()
 
       fireEvent.click(
         poste('Réception').getByRole('button', {
-          name: 'Personnes nécessaires Samedi, Matin : un de plus',
+          name: 'Personnes nécessaires Samedi, 07:00–15:45 : un de plus',
         }),
       )
       // Un matin de plus en Réception : la somme (oracle) atteint la consigne.
@@ -610,7 +612,7 @@ describe('Besoins', () => {
       ]
       // Deux personnes nécessaires le lundi matin en Réception : la somme
       // compte les personnes, pas les lignes.
-      const m = ref.horaires.find((h) => h.code === 'M')
+      const m = ref.horaires.find((h) => codeTest(h) === 'M')
       for (const b of ref.besoins) {
         if (b.poste_id === 2 && b.jour === 0 && b.horaire_id === m?.id) {
           b.effectif = 2

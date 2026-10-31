@@ -99,8 +99,8 @@ function monter(onPlacer?: (d: DemandePlacement) => void) {
   const groupes = regrouperPlaces(
     pointsAttention([SEM], SALARIES, POSTES).aPourvoir.flatMap((j) => j.shifts),
     [
-      { id: 41, code: 'M1' },
-      { id: 99, code: 'S9' },
+      { id: 41, debut: '07:00', fin: '15:00' },
+      { id: 99, debut: '15:00', fin: '23:00' },
     ],
   )
   render(
@@ -118,7 +118,9 @@ function monter(onPlacer?: (d: DemandePlacement) => void) {
 describe('PlacesAPourvoir', () => {
   it('une ligne par groupe ; raisons en clair, titulaires d’abord', () => {
     monter()
-    expect(screen.getByText('Club, M1', { selector: 'strong' })).toBeTruthy()
+    expect(
+      screen.getByText('Club, 07:00–15:00', { selector: 'strong' }),
+    ).toBeTruthy()
     expect(screen.getByText(/: lundi et mardi/)).toBeTruthy()
     const raisons = screen.getAllByRole('list', {
       name: 'Pourquoi personne',
@@ -230,8 +232,8 @@ describe('place que rien ne remplit', () => {
               (j) => j.shifts,
             ),
             [
-              { id: 41, code: 'M3' },
-              { id: 42, code: 'M6' },
+              { id: 41, debut: '07:00', fin: '15:00' },
+              { id: 42, debut: '09:00', fin: '17:00' },
             ],
           )}
           onAller={vi.fn()}
@@ -242,18 +244,20 @@ describe('place que rien ne remplit', () => {
 
   it('je ne peux pas, la raison, la solution ; Placer reste', () => {
     monterCommune(vi.fn())
-    const mardi = screen.getByText('Je ne peux pas remplir ce M3.')
+    const mardi = screen.getByText('Je ne peux pas remplir le 07:00–15:00.')
     const bloc = mardi.parentElement!
     expect(bloc.textContent).toBe(
-      "Je ne peux pas remplir ce M3.Personne n'a assez de repos avec ses autres shifts.Prenez un extra ou changez un shift.",
+      "Je ne peux pas remplir le 07:00–15:00.Personne n'a assez de repos avec ses autres shifts.Prenez un extra ou changez un shift.",
     )
     // Une seule place dit « je ne peux pas » : celle de mercredi garde les
-    // raisons par personne, et le code voisin possible.
+    // raisons par personne, et l'horaire voisin possible.
     expect(screen.getAllByText(/Je ne peux pas/)).toHaveLength(1)
     expect(
       screen.getAllByRole('list', { name: 'Pourquoi personne' }),
     ).toHaveLength(1)
-    expect(screen.getByText('Possible en M6 : Céleste.')).toBeTruthy()
+    expect(
+      screen.getByText('Possible sur le 09:00–17:00 : Céleste.'),
+    ).toBeTruthy()
     expect(
       screen.getAllByRole('button', { name: /^Placer quelqu'un le/ }),
     ).toHaveLength(2)

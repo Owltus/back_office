@@ -9,6 +9,7 @@
  */
 
 import { ajouterJours } from '#/lib/planning/temps.ts'
+import { avecCode, horaireTest } from '#/lib/planning/test/codesTest.ts'
 import type {
   Absence,
   Besoin,
@@ -239,21 +240,24 @@ const SEMAINES_ALTERNANCE = 26
 
 export function hotelReel(): { referentiel: Referentiel; absences: Absence[] } {
   const horaires: Horaire[] = HORAIRES.map(
-    ([code, nom, debut, fin, pause, raccourci, rd], i) => ({
-      id: i + 1,
-      code,
-      nom,
-      debut,
-      fin,
-      couleur: '#000000',
-      pause,
-      raccourci,
-      raccourci_debut: rd ?? 0,
-      periode: null,
-      code_rouge: false,
-    }),
+    ([code, nom, debut, fin, pause, raccourci, rd], i) =>
+      avecCode<Horaire>(
+        {
+          id: i + 1,
+          nom,
+          debut,
+          fin,
+          couleur: '#000000',
+          pause,
+          raccourci,
+          raccourci_debut: rd ?? 0,
+          periode: null,
+          code_rouge: false,
+        },
+        code,
+      ),
   )
-  const idH = (c: string) => (horaires.find((h) => h.code === c) as Horaire).id
+  const idH = (c: string) => horaireTest(horaires, c).id
   const motifs: Motif[] = MOTIFS.map(([code, nom, decompte, nature], i) => ({
     id: i + 1,
     code,

@@ -7,15 +7,15 @@
  *
  * - matin, soir : seulement sur un poste qui compte dans la présence
  *   (`Poste.presence`, Réception et Club à l'hôtel) ;
- * - nuit : un code de famille `nuit`, ou un horaire libre qui commence la
- *   nuit (22 h à 5 h), sur un poste qui a au moins un code de nuit
+ * - nuit : un horaire de famille `nuit`, ou un horaire libre qui commence la
+ *   nuit (22 h à 5 h), sur un poste qui a au moins un horaire de nuit
  *   (`nuitComptee`, calculé par l'appelant), que le poste soit coché
  *   « présence » ou non (D15 : la Réception et le Club n'ont pas de code de
  *   nuit, c'est la Veille de nuit qui fait le minimum de nuit) ;
  * - middle : JAMAIS (D11, « il ne compte pas mais il est quand même là » ;
  *   il compte pour les trous entre équipes, ailleurs) ;
  * - court : selon son heure de début, matin ou soir, jamais nuit ;
- * - code sans famille (`periode === null`) : jamais.
+ * - horaire sans moment (`periode === null`) : jamais.
  *
  * `periodeShift` (équité du générateur) garde son ancienne règle : middle et
  * court selon l'heure de début.
@@ -44,8 +44,8 @@ export function periodeLibre(debut: string): 'matin' | 'soir' | 'nuit' {
   return m < 12 * 60 + 30 ? 'matin' : 'soir'
 }
 
-/** Le poste a-t-il des codes de NUIT (D15) ? Seulement s'il les liste
- * EXPLICITEMENT dans `horaires_autorises`. Un poste « Tous les codes »
+/** Le poste a-t-il des horaires de NUIT (D15) ? Seulement s'il les liste
+ * EXPLICITEMENT dans `horaires_autorises`. Un poste « Tous les horaires »
  * (liste vide) n'en a pas au sens de D15 : sinon tout poste « Tous » d'un
  * hôtel qui a une veille de nuit compterait la nuit. SEULE règle, pour
  * l'assemblage (`semaine.ts`) comme pour le contrôle des réglages
@@ -62,7 +62,7 @@ export function posteADesCodesDeNuit(
 }
 
 /** Période d'un shift pour les consignes, ou null s'il n'y compte pas (voir
- * l'en-tête). `nuitComptee` : le poste a au moins un code de famille nuit
+ * l'en-tête). `nuitComptee` : le poste a au moins un horaire de famille nuit
  * (faux par défaut : la nuit ne compte pas). */
 export function periodePresence(
   poste: Pick<Poste, 'presence'> | undefined,
@@ -71,7 +71,7 @@ export function periodePresence(
   nuitComptee = false,
 ): PeriodePresence | null {
   const famille = horaire ? horaire.periode : null
-  // Middle (D11) et code sans famille : jamais.
+  // Middle (D11) et horaire sans moment : jamais.
   if (horaire && (famille === 'middle' || famille === null)) return null
   const p = !horaire || famille === 'court' ? periodeLibre(debut) : famille
   if (p === 'nuit') {
@@ -83,8 +83,8 @@ export function periodePresence(
   return poste?.presence ? p : null
 }
 
-/** Période d'un shift, sur tout poste : celle de son code, ou son heure de
- * début (sans code, ou code « middle » / « court »). Null : nuit ou code
+/** Période d'un shift, sur tout poste : celle de son horaire, ou son heure de
+ * début (sans horaire, ou code « middle » / « court »). Null : nuit ou code
  * sans période. Sert aux consignes et à l'équité du générateur (D15). */
 export function periodeShift(
   horaire: Pick<Horaire, 'periode'> | undefined,
@@ -165,7 +165,7 @@ export const clePresence = (jour: number, periode: PeriodePresence) =>
 
 /** Somme des personnes nécessaires (`effectif`) des besoins qui comptent dans
  * les consignes, par moment (`clePresence`), même règle que `periodePresence`
- * (middle exclu). `postesAvecNuit` : ids des postes qui ont au moins un code
+ * (middle exclu). `postesAvecNuit` : ids des postes qui ont au moins un horaire
  * de nuit ; absent, la nuit ne compte pas (comme avant). Seule source de
  * cette somme : contrôle des réglages (`coherence.ts`) et vue Matin et soir. */
 export function sommeBesoinsPresence(

@@ -51,7 +51,7 @@ export function basculerMode(
 /**
  * Une modification de la liste en mode « Seulement ceux-ci » : refusée
  * (null) si elle ne garde plus aucun élément proposé. Un élément coché qui
- * n'est plus proposé (un code mort) ne compte pas : il ne sert à rien.
+ * n'est plus proposé (un horaire mort) ne compte pas : il ne sert à rien.
  */
 export function modificationPermise(
   suivante: readonly number[],
@@ -60,8 +60,8 @@ export function modificationPermise(
   return suivante.some((id) => proposes.includes(id)) ? [...suivante] : null
 }
 
-/** Cocher ou décocher des éléments d'un coup (un code, ou une famille
- * entière par « tout cocher / tout décocher »). */
+/** Cocher ou décocher des éléments d'un coup (un horaire, ou un moment
+ * entier par « tout cocher / tout décocher »). */
 export function basculerIds(
   choisis: readonly number[],
   ids: readonly number[],

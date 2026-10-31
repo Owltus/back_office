@@ -12,10 +12,11 @@ import {
 import { analyser } from '#/lib/planning/semaine.ts'
 import type { SemaineOut } from '#/lib/planning/semaine.ts'
 import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
+import { horaireTest } from '#/lib/planning/test/codesTest.ts'
 import type { Affectation } from '#/lib/planning/types.ts'
 
 /*
- * Survol d'un shift dans la grille du mois : la ligne « N au lieu de M » vient
+ * Survol d'un shift dans la grille du mois : la ligne « 23:00–07:45 au lieu de 07:00–15:45 » vient
  * de `ShiftOut.code_demande` (code imposé par la place tenue), lu dans le
  * référentiel. Hôtel fictif, semaine du 2 novembre 2026 analysée pour de vrai,
  * puis `code_demande` posé à la main : seul l'affichage est en jeu.
@@ -24,8 +25,7 @@ import type { Affectation } from '#/lib/planning/types.ts'
 const MOIS = '2026-11'
 const LUNDI = '2026-11-02'
 const { referentiel, absences } = hotelDemo(LUNDI)
-const horaire = (code: string) =>
-  referentiel.horaires.find((h) => h.code === code)!
+const horaire = (code: string) => horaireTest(referentiel.horaires, code)
 const nuit = horaire('N')
 const poste = referentiel.postes.find((p) => p.nom === 'Veille de nuit')!
 const shift: Affectation = {
@@ -85,10 +85,10 @@ function rendre(codeDemande: number | null) {
 
 /** La pastille du shift du lundi 2 : on la survole, l'infobulle s'ouvre. */
 async function survoler() {
-  const pastille = screen.getByRole('button', { name: /N · Nuit/ })
+  const pastille = screen.getByRole('button', { name: /23:00–07:45/ })
   fireEvent.pointerMove(pastille, { pointerType: 'mouse' })
   await screen.findAllByText(
-    /N · Nuit/,
+    /23:00–07:45/,
     { selector: 'span' },
     { timeout: 3000 },
   )
@@ -105,14 +105,20 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('GrilleMois : survol d’un remplaçant', () => {
-  it('code_demande différent : « N au lieu de M » dans l’infobulle, rien sur la case', async () => {
+  it('code_demande différent : « 23:00–07:45 au lieu de 07:00–15:45 » dans l’infobulle, rien sur la case', async () => {
     rendre(horaire('M').id)
     const pastille = await survoler()
-    const bulles = screen.getAllByText(/N au lieu de M/, { selector: 'span' })
+    const bulles = screen.getAllByText(/23:00–07:45 au lieu de 07:00–15:45/, {
+      selector: 'span',
+    })
     expect(bulles.length).toBeGreaterThan(0)
     // Une ligne à elle, juste après le résumé.
-    expect(bulles[0].textContent).toMatch(/proposition\nN au lieu de M\n/)
-    expect(pastille.getAttribute('aria-label')).toMatch(/, N au lieu de M/)
+    expect(bulles[0].textContent).toMatch(
+      /proposition\n23:00–07:45 au lieu de 07:00–15:45\n/,
+    )
+    expect(pastille.getAttribute('aria-label')).toMatch(
+      /, 23:00–07:45 au lieu de 07:00–15:45/,
+    )
     expect(pastille.textContent).not.toMatch(/au lieu de/)
   })
 

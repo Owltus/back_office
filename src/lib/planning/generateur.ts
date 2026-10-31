@@ -54,7 +54,7 @@ import type {
  * contrats, puis un titulaire avant un dépannage, puis le confort.
  *
  *   P0  la loi : contraintes DURES (repos de 11 h, 6 jours, 48 h, nuit des
- *       mineurs, soutien jamais seul, code fixé…). Aucun poids ne la passe.
+ *       mineurs, soutien jamais seul, horaire fixé…). Aucun poids ne la passe.
  *   P1  une place « nécessaire » vide : `coutPlaceVide`, DÉRIVÉ des poids
  *       ci-dessous (pas posé à la main) ; une PLACE est le besoin et ses
  *       remplaçants (`coutPlaceVideGroupe`). Au même niveau, une personne
@@ -68,11 +68,11 @@ import type {
  *   P4  le métier d'abord (D13), à heures de contrat égales (un
  *       remplaçant ne compte jamais plus d'heures dues ni moins d'heures en
  *       plus que son besoin, `minutesDues`, `minutesEnPlus`) :
- *         titulaire au code imposé              0
- *       < titulaire avec un autre code du cycle  POIDS_REMPLACANT (2 000)
- *       < dépannage au code imposé              `coutDepannage` (10 / min
+ *         titulaire à l'horaire imposé              0
+ *       < titulaire avec un autre horaire du cycle  POIDS_REMPLACANT (2 000)
+ *       < dépannage à l'horaire imposé              `coutDepannage` (10 / min
  *                                               + PART_FIXE_DEPANNAGE 4 609)
- *       < dépannage avec un autre code          `coutDepannage` + 2 000
+ *       < dépannage avec un autre horaire          `coutDepannage` + 2 000
  *       < place vide                            P1.
  *   P5  le confort : jours habituels, repos accolés, équité.
  *
@@ -80,7 +80,7 @@ import type {
  * coûte au pire, tous termes de l'objectif confondus :
  *     (POIDS_SUR_CONTRAT + POIDS_DEPANNAGE_MINUTE) × durée(c)   heures en plus, dépannage
  *   + PART_FIXE_DEPANNAGE                                       dépannage, part fixe
- *   + POIDS_REMPLACANT (si `c` est un remplaçant)               un autre code du cycle
+ *   + POIDS_REMPLACANT (si `c` est un remplaçant)               un autre horaire du cycle
  *     (pour un remplaçant, durée(c) des heures en plus = la plus longue
  *     de c et de son besoin, `minutesEnPlus`)
  *   + POIDS_SIXIEME_JOUR                                        un jour de plus = au plus un 6e jour
@@ -95,7 +95,7 @@ import type {
  * dit `raisonsBlocage`. L'inégalité tient quels que soient les poids, parce
  * que `coutPlaceVide` les relit. Une place qui a des remplaçants coûte le
  * PIRE de ses créneaux : elle n'est vide que si personne ne peut tenir aucun
- * de ses codes. Le minimum d'une consigne se dérive de même sur les créneaux
+ * de ses horaires. Le minimum d'une consigne se dérive de même sur les créneaux
  * qui y comptent. Ni les trous (ajouter une personne n'en crée pas) ni le
  * minimum (il ne peut que baisser) n'ont à entrer dans le pire coût ; le
  * « max des consignes » ne relit que les MAXIMUMS, sinon le minimum
@@ -120,14 +120,14 @@ import type {
  * heures en plus ou un 6e jour laisse la place au dépannage. P4 sous P1 :
  * une place tenue en dépannage vaut mieux qu'une place vide (D13, D14).
  * Remplaçant (D16, option A) : POIDS_REMPLACANT < PART_FIXE_DEPANNAGE, donc
- * un titulaire change de code plutôt que de laisser la place à un
+ * un titulaire change d'horaire plutôt que de laisser la place à un
  * dépannage ; il est au niveau du confort (jour habituel 2 000), qui peut
- * rarement faire préférer un code voisin (accepté). L'écart d'heures avec
+ * rarement faire préférer un horaire voisin (accepté). L'écart d'heures avec
  * le besoin ne rapporte rien (`minutesDues`, `minutesEnPlus`) : sinon un
  * remplaçant d'une heure plus long rapportait 24 000 d'heures dues et
- * passait devant le code imposé partout (relecture adverse du 2026-10-30) ;
+ * passait devant l'horaire imposé partout (relecture adverse du 2026-10-30) ;
  * ses minutes réelles au-delà du contrat se paient (50 par minute). Sous
- * un trou d'une demi-heure (3 000) : changer de code pour fermer un trou
+ * un trou d'une demi-heure (3 000) : changer d'horaire pour fermer un trou
  * vaut la peine, une heure en plus comprise (3 000 + 2 000 < 6 000).
  *
  * RELÈVE (chevauchement de l'équipe qui arrive et de celle qui part, D4) :
@@ -135,7 +135,7 @@ import type {
  * dépannage est DÉRIVÉE de tout le confort d'un shift : un bonus de relève
  * l'obligeait à grandir (le modèle de toutes les semaines changeait) et
  * demandait une variable par paire de créneaux qui se chevauchent. Le coût
- * des trous pousse déjà les codes à se toucher ; un chevauchement n'est pas
+ * des trous pousse déjà les horaires à se toucher ; un chevauchement n'est pas
  * récompensé de plus.
  *
  * P5 sous P4, pour TOUTE durée de shift : la part fixe du dépannage dépasse
@@ -159,12 +159,12 @@ export const POIDS_EQUITE = 100
 export const POIDS_REPOS_SEPARES = 1_000
 /** Travailler un jour habituel (semaine type « travail »). */
 export const POIDS_JOUR_FIXE = 2_000
-// P4 — titulaire avant dépannage, code imposé avant remplaçant.
+// P4 — titulaire avant dépannage, horaire imposé avant remplaçant.
 export const POIDS_DEPANNAGE_MINUTE = 10
 /** Un shift tenu avec un AUTRE code du même cycle que celui du besoin
  * (créneau remplaçant `r…`, D5, D16 option A). Sous la part fixe d'un
- * dépannage (D13 : titulaire remplaçant avant dépannage au code imposé),
- * au niveau du confort : le confort peut rarement faire préférer un code
+ * dépannage (D13 : titulaire remplaçant avant dépannage à l'horaire imposé),
+ * au niveau du confort : le confort peut rarement faire préférer un horaire
  * voisin (accepté, D16). */
 export const POIDS_REMPLACANT = 2_000
 
@@ -193,8 +193,8 @@ export function minutesDues(c: Creneau, besoin?: Creneau): number {
 /** Minutes d'un shift COMPTÉES dans les heures en plus (au-delà du
  * contrat) : un remplaçant compte au moins les heures du besoin. Un
  * remplaçant plus court n'épargne donc rien ; un plus long paie ses minutes
- * réelles. Avec `minutesDues` : à heures de contrat égales, le code imposé
- * reste TOUJOURS devant, et un remplaçant n'est posé que si le code imposé
+ * réelles. Avec `minutesDues` : à heures de contrat égales, l'horaire imposé
+ * reste TOUJOURS devant, et un remplaçant n'est posé que si l'horaire imposé
  * ne se peut pas, ou pour une raison au-dessus des contrats (P1, P2 :
  * consigne, trou). Les plafonds légaux (48 h, journée) lisent, eux, les
  * minutes réelles. */
@@ -206,7 +206,7 @@ export function minutesEnPlus(c: Creneau, besoin?: Creneau): number {
 
 /** `minutesDues` du shift fait COURT (`raccourci` en moins) : un
  * remplaçant raccourci compte encore au plus les heures du besoin, sur ses
- * minutes réelles (M6 de 8 h fait en 7 h sur un M3 de 7 h : 7 h). */
+ * minutes réelles (un horaire de 8 h fait en 7 h sur la place d'un horaire de 7 h : 7 h). */
 export function minutesDuesCourt(c: Creneau, besoin?: Creneau): number {
   return c.place !== null && besoin
     ? Math.min(travail(c) - c.raccourci, travail(besoin))
@@ -233,7 +233,7 @@ export const POIDS_PRESENCE_MINUTE = 100
 /** Un quart d'heure sans personne autonome sur un poste compté dans la
  * présence, entre le premier et le dernier besoin du jour (trou entre deux
  * équipes, D10) : le prix d'une personne qui manque à une consigne, par
- * minute. Une demi-heure (3 000) vaut un changement de code (2 000), un
+ * minute. Une demi-heure (3 000) vaut un changement d'horaire (2 000), un
  * quart d'heure seul (1 500) non. */
 export const POIDS_TROU_QUART = 15 * POIDS_PRESENCE_MINUTE
 /** Pas de la grille des trous, en minutes réelles (0, 15, 30…). */
@@ -292,7 +292,7 @@ export function coutConsigne(
 }
 
 /** Le pire que coûte l'ajout d'une personne libre sur `c` (voir P1), le
- * changement de code compris quand `c` est un remplaçant. */
+ * changement d'horaire compris quand `c` est un remplaçant. */
 export function pireCoutRemplir(
   c: Creneau,
   presenceLaPlusChere: number,
@@ -328,7 +328,7 @@ export function coutPlaceVide(
 
 /** P1 : une personne qui manque sur une PLACE tenue par le besoin ou l'un
  * de ses remplaçants (`membres`) : au-dessus du pire de chacun, pour que la
- * place ne reste vide que si personne ne peut tenir AUCUN des codes. Sans
+ * place ne reste vide que si personne ne peut tenir AUCUN des horaires. Sans
  * remplaçant, `coutPlaceVide` du besoin, inchangé. */
 export function coutPlaceVideGroupe(
   membres: Creneau[],
@@ -675,7 +675,7 @@ export function construire(
   )
 
   // Couverture, par PLACE : un besoin `b…` et ses remplaçants `r…`
-  // (`place` = id du besoin, même cycle, autre code permis) forment un
+  // (`place` = id du besoin, même cycle, autre horaire permis) forment un
   // groupe. Un seul manque par groupe, au plus effectif + facultatif du
   // besoin au total ; les remplaçants n'ont aucune contrainte propre.
   const groupes = new Map<string, Creneau[]>()
@@ -698,7 +698,7 @@ export function construire(
         else autonomes.push(v)
         // P4 : un dépannage coûte, un titulaire libre passe devant (D13).
         if (r === 'occasionnel') m.cout(coutDepannage(c), v)
-        // P4 : un autre code du cycle coûte, le code imposé passe devant
+        // P4 : un autre horaire du cycle coûte, l'horaire imposé passe devant
         // (D5, D13, D16), en plus du dépannage s'il y a lieu ; l'écart
         // d'heures avec le besoin est rendu (`coutRemplacant`).
         if (c.place !== null) m.cout(coutRemplacant(c), v)
@@ -1437,7 +1437,7 @@ function courteCouvre(c: Creneau, a: number, b: number): boolean {
  * rien en reprendre :
  *   - postes regardés : ceux qui ont au moins un créneau du matin ou du soir
  *     (`presence.ts` ne les donne qu'à un poste coché ; la nuit vient des
- *     codes de nuit et ne dit rien du poste, D15) ;
+ *     horaires de nuit et ne dit rien du poste, D15) ;
  *   - PLAGE d'un poste un jour : du plus petit début au plus grand fin des
  *     besoins `b…` (non posés, `place` nulle, effectif > 0) écrits ce jour ;
  *   - grille des quarts d'heure ABSOLUE en minutes réelles (0, 15, 30…),
@@ -1671,11 +1671,11 @@ const rendre = (
 ): ResultatGeneration => ({ ...r, etapes })
 
 /*
- * CALCUL EN DEUX TEMPS (D5, D13 : « jouer avec les codes » seulement quand
- * le code imposé ne suffit pas). Les créneaux remplaçants (`place !== null`)
+ * CALCUL EN DEUX TEMPS (D5, D13 : « jouer avec les horaires » seulement quand
+ * l'horaire imposé ne suffit pas). Les créneaux remplaçants (`place !== null`)
  * multiplient les variables (~385 par semaine réelle) et le temps de calcul
  * (mesuré sur 8 semaines : 3,3 s en moyenne contre 0,36 s sans), alors que
- * le code exact suffit presque toujours.
+ * l'horaire exact suffit presque toujours.
  *
  * Temps 1 : le même problème SANS les remplaçants non imposés (un shift
  * posé rattaché par cycle reste : c'est un fait), en au plus
@@ -1686,7 +1686,7 @@ const rendre = (
  *   - sinon, temps 2 avec les remplaçants qui peuvent servir (rien d'autre
  *     n'est ajouté) :
  *       · ceux des places tenues en DÉPANNAGE (D13 : un titulaire sur un
- *         autre code du cycle passe devant un dépannage au code imposé).
+ *         autre horaire du cycle passe devant un dépannage à l'horaire imposé).
  *         Mesuré : sur les vraies semaines, ~8 places par semaine sont
  *         tenues par une adjointe ou un superviseur, et le problème complet
  *         n'y pose jamais de remplaçant ; leurs ~50 remplaçants (sur ~385)
@@ -1698,7 +1698,7 @@ const rendre = (
  *         contrat) : `remplacantsPourHeures`. P3 passe devant P4 : 7 h dues
  *         valent 168 000, un remplaçant 2 000. Le jour entier, pour la
  *         chaîne d'un cran : elle prend le remplaçant, OU une autre passe
- *         sur le remplaçant pour lui laisser le code imposé ;
+ *         sur le remplaçant pour lui laisser l'horaire imposé ;
  *   - si aucun des deux, la solution du temps 1 est rendue.
  *
  * Pourquoi c'est sûr. La solution du temps 1 est une solution du problème
@@ -1714,11 +1714,11 @@ const rendre = (
  *     remplaçant un AUTRE jour que celui où il manque des heures à
  *     l'autre), ou à travers quelqu'un qui est pile à son contrat, ou pour
  *     retirer des heures en plus ou un 6e jour à quelqu'un ;
- *   - P2 maximum d'une consigne (un code voisin d'une autre période) ;
+ *   - P2 maximum d'une consigne (un horaire voisin d'une autre période) ;
  *   - P5 confort (repos accolés, équité, jours habituels), plafonné par
  *     shift sous la part fixe d'un dépannage, donc rarement plus de 2 000.
  * Dans ces cas l'optimum du problème complet PEUT différer de celui rendu :
- * « le code exact tant qu'il suffit » ; chaque place reste tenue avec le
+ * « l'horaire exact tant qu'il suffit » ; chaque place reste tenue avec le
  * code demandé, rien n'est vide ni hors la loi, et aucune heure due n'est
  * perdue qu'un remplaçant du même jour aurait donnée.
  * Les poids dérivés (`coutPlaceVideGroupe`, `coutManqueMinimum`, maximum

@@ -14,6 +14,7 @@ import type * as ModPlanning from '#/components/planning/hooks/usePlanning.ts'
 import type * as ModSemaine from '#/lib/planning/semaine.ts'
 import { analyser } from '#/lib/planning/semaine.ts'
 import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
+import { horaireTest } from '#/lib/planning/test/codesTest.ts'
 import type { Affectation, Referentiel } from '#/lib/planning/types.ts'
 
 /*
@@ -318,7 +319,7 @@ describe('VueMois', { timeout: 20_000 }, () => {
     // Clic droit : le menu rapide (le clic ouvre l'éditeur complet).
     fireEvent.contextMenu(
       screen.getByRole('button', {
-        name: /^Lucas Petit, .*16.* · Matin 07:00–15:45/,
+        name: /^Lucas Petit, .*16.* · 07:00–15:45/,
       }),
     )
     fireEvent.click(
@@ -358,7 +359,9 @@ describe('VueMois', { timeout: 20_000 }, () => {
     fireEvent.contextMenu(
       screen.getByRole('button', { name: /^Lucas Petit, .*18.* : Congés/ }),
     )
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'M, Matin' }))
+    fireEvent.click(
+      await screen.findByRole('menuitem', { name: '07:00–15:45, 8h' }),
+    )
     await waitFor(() => expect(service.poserAbsences).toHaveBeenCalledTimes(2))
     expect(service.poserAbsences).toHaveBeenNthCalledWith(
       1,
@@ -404,17 +407,17 @@ describe('VueMois', { timeout: 20_000 }, () => {
     // ligne ; le vérificateur signalera l'infraction sur le shift posé.
     // Une seule liste : chaque code une fois, posé sur le métier habituel.
     const matin = await screen.findByRole('menuitem', {
-      name: 'M, Matin, -11 h de repos',
+      name: '07:00–15:45, 8h, -11 h de repos',
     })
     expect(matin.getAttribute('aria-disabled')).toBeNull()
     expect(
       screen.getByRole('menuitem', {
-        name: 'MI, Middle, -11 h de repos',
+        name: '09:00–17:45, 8h, -11 h de repos',
       }),
     ).toBeTruthy()
     // L'après-midi reste proposé sans alerte, une seule fois.
     expect(
-      screen.getAllByRole('menuitem', { name: 'AM, Après-midi' }),
+      screen.getAllByRole('menuitem', { name: '15:00–23:45, 8h' }),
     ).toHaveLength(1)
     fireEvent.click(matin)
     await waitFor(() =>
@@ -469,7 +472,7 @@ describe('VueMois', { timeout: 20_000 }, () => {
     await charge()
     fireEvent.click(
       screen.getByRole('button', {
-        name: /^Lucas Petit, .*24.* · Matin 07:00–15:45/,
+        name: /^Lucas Petit, .*24.* · 07:00–15:45/,
       }),
     )
     expect(await screen.findByText('Modifier le shift')).toBeTruthy()
@@ -546,7 +549,7 @@ describe('VueMois', { timeout: 20_000 }, () => {
   it('aucun besoin mais des shifts posés : la grille reste, avec le bandeau', async () => {
     droits = { pret: true, lire: true, ecrire: true, gerer: false }
     referentiel = { ...demo.referentiel, besoins: [] }
-    const nuit = referentiel.horaires.find((h) => h.code === 'N')!
+    const nuit = horaireTest(referentiel.horaires, 'N')
     affectations = [
       {
         id: 1,

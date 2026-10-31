@@ -3,11 +3,12 @@
  * utilisateur du 2026-10-30 : « les trois cycles dans la journée : matin,
  * soir, nuit… et les middle, c'est un shift bâtard »). SEULE source du cycle
  * d'un shift ou d'un besoin, pour le rattachement des shifts posés aux
- * besoins (étape 3), les codes remplaçants du moteur (étape 4) et les trous
+ * besoins (étape 3), les horaires remplaçants du moteur (étape 4) et les trous
  * entre deux cycles (étape 6).
  *
- * Cycle = la famille du code (`Horaire.periode`, migration du 2026-10-28).
- * Sans code, ou pour un code sans famille, il se déduit de l'heure de début
+ * Cycle = le moment de l'horaire (`Horaire.periode`, migration du
+ * 2026-10-28). Sans horaire (horaire spécifique), ou pour un horaire sans
+ * moment, il se déduit de l'heure de début
  * comme un horaire libre (`periodeLibre`, `presence.ts`) : nuit de 22 h à
  * 5 h, matin avant 12 h 30, soir ensuite.
  *
@@ -24,7 +25,7 @@ import type { Horaire, Periode } from '#/lib/planning/types.ts'
  * veulent dire « hors cycle » ; `cycleDe` en rend toujours un. */
 export type Cycle = Periode | null
 
-/** Cycle d'un code horaire (sa famille), ou, sans code ou sans famille,
+/** Cycle d'un horaire (son moment), ou, sans horaire ou sans moment,
  * celui de l'heure de début. */
 export function cycleDe(
   horaire: Pick<Horaire, 'periode'> | undefined,
@@ -57,7 +58,7 @@ export function cycleDe(
  * en entier ; un passage de relais au milieu d'un quart d'heure (l'un part à
  * 15 h 05, l'autre arrive à 15 h 05) le laisse donc compté comme un trou.
  * C'est voulu : simple, la même chose qu'une variable par quart d'heure, et
- * les codes de l'hôtel sont tous au quart d'heure.
+ * les horaires de l'hôtel sont tous au quart d'heure.
  */
 
 /** Pas de la grille des trous, en minutes. */
@@ -114,7 +115,7 @@ export function trousDuJour(
 
 /** Postes où les trous comptent, lus sur les créneaux d'un problème : ceux
  * qui ont au moins un créneau compté dans le matin ou le soir. La nuit n'y
- * entre pas (D15 : elle compte sur un poste qui a des codes de nuit, sans
+ * entre pas (D15 : elle compte sur un poste qui a des horaires de nuit, sans
  * regarder `poste.presence`), le middle non plus (D11 : jamais compté). Un
  * poste coché « présence » dont tous les créneaux de la semaine sont des
  * middles ou des nuits n'est donc pas vu : l'appelant qui connaît les

@@ -2,10 +2,10 @@
  * Menu d'un jour de la vue mois (prototype `MenuCase.tsx`), ouvert au clic
  * ou au clic droit sur une case, au curseur : tous les horaires que la
  * personne peut faire sur ses postes, chacun une seule fois, rangés par
- * moment (code et horaires seulement : le poste est déduit sans être
- * affiché), pour changer d'un clic ; valider ou remettre en
+ * moment (heures seulement : le poste est déduit sans être affiché),
+ * pour changer d'un clic ; valider ou remettre en
  * proposition, la journée étoile, un repos ou une absence posés d'un clic
- * comme un code (repos en tête, absences en bas), et l'ouverture de la
+ * comme un horaire (repos en tête, absences en bas), et l'ouverture de la
  * semaine pour le reste.
  */
 
@@ -21,22 +21,24 @@ import {
 } from 'lucide-react'
 
 import {
-  dureeHoraire,
   grouperHoraires,
-  heures,
-  ROUGE_CODE,
+  libelleHoraire,
   texteSur,
 } from '#/lib/planning/affichage.ts'
 import type { ShiftOut } from '#/lib/planning/semaine.ts'
 import {
   codesUniques,
+  heuresEtDuree,
   motifsDuJour,
   nomLigneCode,
   rubriquesDeLaCase,
   texteChangementPoste,
 } from '#/components/planning/codesCase.ts'
 import type { CodeUnique, SourceCase } from '#/components/planning/codesCase.ts'
-import { heureAffichee } from '#/lib/planning/temps.ts'
+import {
+  PastilleHoraire,
+  styleHeures,
+} from '#/components/planning/PastilleHoraire.tsx'
 import type {
   Horaire,
   Motif,
@@ -59,7 +61,7 @@ export interface OuvertureMenu {
   y: number
   /** Place à pourvoir : le menu s'ouvre sur son poste (case sans shift). */
   posteId?: number
-  /** Et sur son code : proposé en tête, sous « Place à pourvoir ». */
+  /** Et sur son horaire : proposé en tête, sous « Place à pourvoir ». */
   horaireId?: number | null
 }
 
@@ -148,7 +150,7 @@ export function MenuJour({
         placePoste,
       )
     : null
-  // Le code de la place à pourvoir, s'il est permis sur son poste : en tête
+  // L'horaire de la place à pourvoir, s'il est permis sur son poste : en tête
   // du menu, pour être posé d'un clic (la vue semaine le choisit d'office).
   // Il n'est pas répété dans la liste.
   const place =
@@ -178,19 +180,13 @@ export function MenuJour({
           if (!actuel) onHoraire(h, poste.id)
         })}
       >
-        <span
-          className="min-w-12 shrink-0 rounded px-1.5 py-0.5 text-center text-xs font-semibold"
-          style={{
-            background: h.couleur,
-            color: h.code_rouge ? ROUGE_CODE : texteSur(h.couleur),
-          }}
-        >
-          {h.code}
-        </span>
+        <PastilleHoraire couleur={h.couleur} />
         <span className="grid flex-1">
-          <span className="text-sm whitespace-nowrap tabular-nums">
-            {heureAffichee(h.debut)}–{heureAffichee(h.fin)} ·{' '}
-            {heures(dureeHoraire(h.debut, h.fin) - h.pause)}
+          <span
+            className="text-sm whitespace-nowrap tabular-nums"
+            style={styleHeures(h)}
+          >
+            {heuresEtDuree(h)}
           </span>
           {alerte && (
             <span className="text-xs text-amber-600 dark:text-amber-400">
@@ -373,11 +369,12 @@ export function MenuJour({
           <div
             role="menuitem"
             aria-disabled="true"
-            aria-label={`${u.actuel.horaire.code}, actuel, ${u.actuel.texte}`}
+            aria-label={`${libelleHoraire(u.actuel.horaire)}, actuel, ${u.actuel.texte}`}
             className="flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground opacity-60"
           >
-            <span className="min-w-12 shrink-0 rounded border px-1.5 py-0.5 text-center text-xs font-semibold">
-              {u.actuel.horaire.code}
+            <PastilleHoraire couleur={u.actuel.horaire.couleur} />
+            <span className="shrink-0 text-sm whitespace-nowrap tabular-nums">
+              {libelleHoraire(u.actuel.horaire)}
             </span>
             <span className="flex-1 text-xs">actuel · {u.actuel.texte}</span>
           </div>

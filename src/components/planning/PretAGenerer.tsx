@@ -69,8 +69,8 @@ export interface EtapeDemarrage {
 }
 
 const AIDE_ETAPE: Record<EcranReglage, string> = {
-  horaires: "Les codes horaires de l'hôtel : matin, soir, nuit.",
-  postes: 'Les postes à tenir et les codes qu’ils utilisent.',
+  horaires: "Les horaires de l'hôtel : matin, soir, nuit.",
+  postes: 'Les postes à tenir et les horaires qu’ils utilisent.',
   equipe: 'Chaque personne et les postes qu’elle tient.',
   besoins: 'Combien de personnes il faut, par poste et par jour.',
 }
@@ -95,7 +95,7 @@ export function etapesDemarrage(
   // Les besoins que le moteur retient, comme le point bloquant.
   const nbBesoins = besoinsDemandes(r).length
   const reglees: Record<EcranReglage, string> = {
-    horaires: pluriel(r.horaires.length, 'code horaire'),
+    horaires: pluriel(r.horaires.length, 'horaire'),
     postes: pluriel(r.postes.length, 'poste'),
     equipe: `${pluriel(nbPlaces, 'personne')} sur un poste`,
     besoins: pluriel(nbBesoins, 'besoin'),

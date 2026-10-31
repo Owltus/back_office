@@ -65,6 +65,6 @@ writeFileSync(sortie, JSON.stringify(d, null, 2))
 const nAbs = d.salaries.reduce((n, s) => n + s.absences.length, 0)
 console.log(
   `Export écrit : ${sortie}. ${d.salaries.length} personnes, ${d.postes.length} postes, ` +
-    `${d.horaires.length} codes horaires, ${d.besoins.length} besoins, ${nAbs} jours d'absence, ` +
+    `${d.horaires.length} horaires, ${d.besoins.length} besoins, ${nAbs} jours d'absence, ` +
     `${d.affectations.length} shifts, ${d.verrous.length} semaines verrouillées.`,
 )

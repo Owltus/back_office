@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  libelleHoraire,
   listeEt,
   messageGeneration,
+  momentPropose,
+  nomHoraire,
   nomsCourts,
   parGroupe,
   resumeEquite,
@@ -129,5 +132,80 @@ describe('listeEt', () => {
     expect(listeEt(['Réception'])).toBe('Réception')
     expect(listeEt(['Réception', 'Club'])).toBe('Réception et Club')
     expect(listeEt(['Bar', 'Réception', 'Club'])).toBe('Bar, Réception et Club')
+  })
+})
+
+describe('horaires sans code (décision utilisateur du 2026-10-31)', () => {
+  // Oracle : les 35 horaires de l'hôtel au 2026-10-31 (heures, pause) et
+  // le moment qu'ils portaient ; Direction (08:00-18:00) et Supervision
+  // (12:00-20:45), sans moment, passent en middle (décision du même jour).
+  const REELS: ReadonlyArray<[string, string, number, string]> = [
+    ['00:00', '07:00', 0, 'nuit'],
+    ['07:00', '10:00', 0, 'court'],
+    ['07:00', '11:45', 45, 'court'],
+    ['07:00', '12:45', 45, 'court'],
+    ['07:00', '14:45', 45, 'matin'],
+    ['07:00', '15:45', 45, 'matin'],
+    ['07:00', '16:45', 45, 'matin'],
+    ['07:00', '17:45', 45, 'matin'],
+    ['07:30', '15:15', 45, 'matin'],
+    ['07:30', '16:15', 45, 'matin'],
+    ['08:00', '13:45', 45, 'court'],
+    ['08:00', '16:45', 45, 'matin'],
+    ['08:00', '18:00', 15, 'middle'],
+    ['09:00', '16:45', 45, 'middle'],
+    ['09:00', '17:45', 45, 'middle'],
+    ['09:30', '18:15', 45, 'middle'],
+    ['10:00', '18:45', 45, 'middle'],
+    ['11:00', '19:45', 45, 'middle'],
+    ['12:00', '19:45', 45, 'middle'],
+    ['12:00', '20:45', 45, 'middle'],
+    ['12:00', '22:45', 45, 'soir'],
+    ['13:00', '20:45', 45, 'middle'],
+    ['13:00', '21:45', 45, 'soir'],
+    ['13:00', '22:45', 45, 'soir'],
+    ['14:00', '21:45', 45, 'soir'],
+    ['14:15', '22:00', 45, 'soir'],
+    ['14:30', '22:15', 45, 'soir'],
+    ['14:30', '23:15', 45, 'soir'],
+    ['14:45', '23:30', 45, 'soir'],
+    ['15:00', '22:45', 45, 'soir'],
+    ['15:15', '00:00', 45, 'soir'],
+    ['16:15', '00:00', 45, 'soir'],
+    ['17:00', '22:00', 45, 'court'],
+    ['19:00', '22:00', 0, 'court'],
+    ['23:00', '07:00', 0, 'nuit'],
+  ]
+  it.each(REELS)('%s-%s (pause %i) : %s', (debut, fin, pause, moment) => {
+    expect(momentPropose({ debut, fin, pause })).toBe(moment)
+  })
+
+  it('les horaires demandés le 2026-10-31 tombent dans le bon moment', () => {
+    expect(momentPropose({ debut: '08:00', fin: '15:45', pause: 45 })).toBe(
+      'matin',
+    )
+    expect(momentPropose({ debut: '14:00', fin: '22:45', pause: 45 })).toBe(
+      'soir',
+    )
+    expect(momentPropose({ debut: '00:00', fin: '07:00', pause: 0 })).toBe(
+      'nuit',
+    )
+  })
+
+  it('un horaire se lit par ses heures, minuit écrit 00:00', () => {
+    expect(libelleHoraire({ debut: '07:00', fin: '15:45' })).toBe('07:00–15:45')
+    expect(libelleHoraire({ debut: '16:15', fin: '24:00' })).toBe('16:15–00:00')
+  })
+
+  it('le nom en base est écrit par l’app', () => {
+    expect(nomHoraire({ debut: '07:00', fin: '15:45', periode: 'matin' })).toBe(
+      'Matin de 7 h à 15 h 45',
+    )
+    expect(nomHoraire({ debut: '00:00', fin: '07:00', periode: 'nuit' })).toBe(
+      'Nuit de minuit à 7 h',
+    )
+    expect(nomHoraire({ debut: '15:15', fin: '24:00', periode: 'soir' })).toBe(
+      'Soir de 15 h 15 à minuit',
+    )
   })
 })

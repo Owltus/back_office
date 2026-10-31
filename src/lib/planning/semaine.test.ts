@@ -38,6 +38,7 @@ import { REGLES_BLOCAGE } from '#/lib/planning/raisonsPlaces.ts'
 import type { DonneesSemaine, SemaineOut } from '#/lib/planning/semaine.ts'
 import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
 import { hotelReel } from '#/lib/planning/test/hotelReel.ts'
+import { avecCode, codeTest } from '#/lib/planning/test/codesTest.ts'
 import { PlanningMemoire } from '#/lib/planning/test/planningMemoire.ts'
 import {
   ajouterJours,
@@ -705,22 +706,24 @@ describe('planning de la semaine (test_api.py)', () => {
     expect(sem.stats.infractions).toBe(0)
   })
 
-  it('ajout manuel d’un besoin et d’un code horaire', () => {
+  it('ajout manuel d’un besoin et d’un horaire', () => {
     const p = demo()
     const ref = p.referentiel
-    const horaire = {
-      id: 100,
-      code: 'C',
-      nom: 'Coupure',
-      debut: '10:00',
-      fin: '14:00',
-      couleur: '#000000',
-      pause: 0,
-      raccourci: 0,
-      raccourci_debut: 0,
-      periode: null,
-      code_rouge: false,
-    }
+    const horaire = avecCode<Horaire>(
+      {
+        id: 100,
+        nom: 'Coupure',
+        debut: '10:00',
+        fin: '14:00',
+        couleur: '#000000',
+        pause: 0,
+        raccourci: 0,
+        raccourci_debut: 0,
+        periode: null,
+        code_rouge: false,
+      },
+      'C',
+    )
     ref.horaires.push(horaire)
     const poste = {
       id: 100,
@@ -1288,19 +1291,23 @@ describe('shift sans code (test_audit_api.py)', () => {
 
   it('un code libre supprimé : le shift garde sa pause et sa durée', () => {
     const p = reel()
-    p.referentiel.horaires.push({
-      id: 100,
-      code: 'Z',
-      nom: 'Z',
-      debut: '08:00',
-      fin: '17:00',
-      couleur: '#000000',
-      pause: 60,
-      raccourci: 0,
-      raccourci_debut: 0,
-      periode: null,
-      code_rouge: false,
-    })
+    p.referentiel.horaires.push(
+      avecCode<Horaire>(
+        {
+          id: 100,
+          nom: 'Z',
+          debut: '08:00',
+          fin: '17:00',
+          couleur: '#000000',
+          pause: 60,
+          raccourci: 0,
+          raccourci_debut: 0,
+          periode: null,
+          code_rouge: false,
+        },
+        'Z',
+      ),
+    )
     const x = p.salarie('Clara')
     let sem = p.poser(LUNDI, x.id, x.competences[0].poste_id, 0, { code: 'Z' })
     const a = siens(sem, x.id).find((s) => s.jour === 0)!
@@ -1338,19 +1345,22 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
     debut: string,
     fin: string,
     periode: Horaire['periode'],
-  ): Horaire => ({
-    id,
-    code: c,
-    nom: c,
-    debut,
-    fin,
-    couleur: '#888888',
-    pause: 30,
-    raccourci: 0,
-    raccourci_debut: 0,
-    periode,
-    code_rouge: false,
-  })
+  ): Horaire =>
+    avecCode<Horaire>(
+      {
+        id,
+        nom: c,
+        debut,
+        fin,
+        couleur: '#888888',
+        pause: 30,
+        raccourci: 0,
+        raccourci_debut: 0,
+        periode,
+        code_rouge: false,
+      },
+      c,
+    )
   const M3 = code(1, 'M3', '07:00', '15:00', 'matin')
   const M6 = code(2, 'M6', '08:00', '16:00', 'matin')
   const S4 = code(3, 'S4', '15:00', '23:00', 'soir')
@@ -1545,7 +1555,8 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
 
   it('remplaçants : même cycle, codes du poste seulement', () => {
     const ctx = contexte(donnees([], []))
-    const ids = (b: Besoin) => remplacantsDe(ctx, b).map((h) => h.code)
+    const nomDe = (h: Horaire) => codeTest(HORAIRES.find((x) => x.id === h.id))
+    const ids = (b: Besoin) => remplacantsDe(ctx, b).map(nomDe)
     // M9 est un matin, mais pas un code de l'Accueil.
     expect(ids(besoin(1, M3))).toEqual(['M6'])
     expect(ids(besoin(2, M6))).toEqual(['M3'])
@@ -1561,10 +1572,7 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
         postes: [{ ...POSTES[0], horaires_autorises: [] }, POSTES[1]],
       },
     })
-    expect(remplacantsDe(tous, besoin(7, M3)).map((h) => h.code)).toEqual([
-      'M6',
-      'M9',
-    ])
+    expect(remplacantsDe(tous, besoin(7, M3)).map(nomDe)).toEqual(['M6', 'M9'])
   })
 
   it('créneau remplaçant : forme du contrat (§2)', () => {

@@ -6,9 +6,9 @@
  * d'enregistrer : seuls les points « bloquants » empêcheront de générer
  * (étape 7, boîte de génération).
  *
- * Aucune règle n'est réécrite ici : les codes permis viennent de
+ * Aucune règle n'est réécrite ici : les horaires permis viennent de
  * `eligibilite.ts`, les besoins écartés de `besoinsValides` (`semaine.ts`),
- * la période d'un code de `presence.ts`, les heures de `modele.ts`.
+ * la période d'un horaire de `presence.ts`, les heures de `modele.ts`.
  *
  * Écart d'heures : un poste est signalé quand les heures de contrat de ses
  * titulaires, comptées EN ENTIER même s'ils tiennent d'autres postes (borne
@@ -20,16 +20,20 @@
  *
  * Correctifs de la relecture adverse (2026-10-29) : besoins tous écartés
  * distingués de « aucun besoin », besoin que personne ne peut tenir (fiche
- * ou semaine type), personne sans poste avec un code fixé.
+ * ou semaine type), personne sans poste avec un horaire fixé.
  *
  * Cycles (plan `planning-cycles-2026-10-30`, étape 7) : la nuit compte sur
- * les postes qui ont un code de nuit (D15, `postesAvecNuit`) ; un minimum par
- * cycle sans aucun code de ce cycle sur les postes comptés est signalé ; un
- * besoin n'est « sans personne » que si personne ne peut tenir ni son code ni
- * un autre code du même cycle (`remplacantsDe`, D12).
+ * les postes qui ont un horaire de nuit (D15, `postesAvecNuit`) ; un minimum par
+ * cycle sans aucun horaire de ce cycle sur les postes comptés est signalé ; un
+ * besoin n'est « sans personne » que si personne ne peut tenir ni son horaire ni
+ * un autre horaire du même cycle (`remplacantsDe`, D12).
  */
 
-import { listeEt, nomComplet } from '#/lib/planning/affichage.ts'
+import {
+  libelleHoraire,
+  listeEt,
+  nomComplet,
+} from '#/lib/planning/affichage.ts'
 import {
   codeDeLaFiche,
   codeImposeRespecte,
@@ -163,7 +167,7 @@ function presentDans(s: Salarie, aujourdhui?: string): boolean {
   return !aujourdhui || !s.date_sortie || s.date_sortie >= aujourdhui
 }
 
-/** Postes qui listent au moins un code de la famille nuit
+/** Postes qui listent au moins un horaire de la famille nuit
  * (`posteADesCodesDeNuit`, un poste « Tous » n'en a pas) : la nuit n'est
  * comptée que là (D15). Même règle que le moteur (`semaine.ts`). */
 export function postesAvecNuit(
@@ -177,7 +181,7 @@ export function postesAvecNuit(
 }
 
 /** Postes comptés dans un cycle : cochés « présence » le matin et le soir,
- * ceux qui ont un code de nuit la nuit (D15). */
+ * ceux qui ont un horaire de nuit la nuit (D15). */
 export function postesComptes(
   r: Pick<Referentiel, 'postes' | 'horaires'>,
   periode: PeriodePresence,
@@ -230,7 +234,7 @@ const contratIndicatif = (s: Salarie) =>
 
 /** La personne peut-elle tenir ce besoin (poste, jour, code) d'après sa
  * fiche et sa semaine type ? Le poste est déjà vérifié par `besoinsValides`.
- * Un besoin sans code ne peut pas être tenu par une fiche qui restreint ses
+ * Un besoin sans horaire ne peut pas être tenu par une fiche qui restreint ses
  * codes (même règle que le moteur). */
 function peutTenir(s: Salarie, b: Besoin): boolean {
   const jourType = s.semaine_type.at(b.jour)
@@ -296,7 +300,7 @@ export function verifierReglages(
       'bloquant:horaires',
       'bloquant',
       'horaires',
-      "Aucun code horaire. Créez d'abord les horaires de l'hôtel.",
+      "Aucun horaire. Créez d'abord les horaires de l'hôtel.",
     )
   }
   if (!r.postes.length) {
@@ -370,7 +374,7 @@ export function verifierReglages(
       `periode:${h.id}`,
       'a-voir',
       'horaires',
-      `L'horaire ${h.code} n'a pas de période (matin, soir ou nuit). Il ne compte pas dans le matin et le soir de ${listeEt(concernes.map((p) => p.nom))}.`,
+      `L'horaire ${libelleHoraire(h)} n'a pas de moment (matin, soir ou nuit). Il ne compte pas dans le matin et le soir de ${listeEt(concernes.map((p) => p.nom))}.`,
       `horaire-${h.id}`,
     )
   }
@@ -402,8 +406,8 @@ export function verifierReglages(
   }
   for (const [cle, g] of groupes) {
     const libelle = g.horaire
-      ? `l'horaire ${g.horaire.code}`
-      : `l'horaire ${g.besoin.debut} - ${g.besoin.fin}`
+      ? `l'horaire ${libelleHoraire(g.horaire)}`
+      : `l'horaire ${libelleHoraire(g.besoin)}`
     const quand = listeJours(g.jours)
     if (!g.poste) continue // poste supprimé : ses besoins partent avec lui
     if (cle.startsWith('code:')) {
@@ -451,7 +455,7 @@ export function verifierReglages(
   }
 
   // Besoin que personne ne peut tenir : le poste a des autonomes, mais
-  // aucun n'a ce code permis ce jour-là (fiche, semaine type), ni un autre
+  // aucun n'a cet horaire permis ce jour-là (fiche, semaine type), ni un autre
   // code du même cycle que le planning prendrait à sa place (`remplacantsDe`,
   // D12). Regroupé par poste et horaire, avec les jours.
   const intenables = new Map<
@@ -487,8 +491,8 @@ export function verifierReglages(
         ? horaires.get(g.besoin.horaire_id)
         : undefined
     const libelle = h
-      ? `l'horaire ${h.code}`
-      : `l'horaire ${g.besoin.debut} - ${g.besoin.fin}`
+      ? `l'horaire ${libelleHoraire(h)}`
+      : `l'horaire ${libelleHoraire(g.besoin)}`
     const seule = g.tenants.length === 1 ? g.tenants[0] : undefined
     ajouter(
       `besoin-sans-personne:${cle}`,
@@ -527,7 +531,7 @@ export function verifierReglages(
         cibleFiche(s.id, 'horaires'),
       )
     } else if (r.horaires.length) {
-      // Sans aucun code, le point bloquant des horaires suffit.
+      // Sans aucun horaire, le point bloquant des horaires suffit.
       const fiche = { shiftsAutorises: codesDeLaFiche(s) }
       for (const { poste } of tenus) {
         const utilisables = codesDuPoste(poste, r.horaires).filter((h) =>
@@ -562,7 +566,7 @@ export function verifierReglages(
       if ((e.mode !== 'auto' && e.mode !== 'travail') || !e.type_shift_id)
         return
       const h = horaires.get(e.type_shift_id)
-      const code = h ? h.code : 'supprimé'
+      const code = h ? libelleHoraire(h) : 'supprimé'
       const id = `code-fixe:${s.id}:${j}`
       const postesPermis = tenus
         .filter(
@@ -698,8 +702,8 @@ export function verifierReglages(
     )
   }
 
-  // Minimum par cycle que rien ne peut tenir : ni un code permis d'un poste,
-  // ni un besoin (horaire libre ou code court compris) que `periodePresence`
+  // Minimum par cycle que rien ne peut tenir : ni un horaire permis d'un poste,
+  // ni un besoin (horaire libre ou horaire court compris) que `periodePresence`
   // range dans ce cycle. MÊME règle que le comptage des consignes : sans
   // elle, un besoin libre du matin tenait le minimum et le cycle était dit
   // intenable en même temps. Un point par cycle, avec les jours.
@@ -746,7 +750,7 @@ export function verifierReglages(
   }
 
   // Par cycle : les personnes nécessaires des postes qui comptent, face à
-  // la consigne du jour (la nuit sur les postes à code de nuit, D15).
+  // la consigne du jour (la nuit sur les postes à horaire de nuit, D15).
   const somme = sommeBesoinsPresence(
     demandes,
     postes,

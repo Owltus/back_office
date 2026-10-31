@@ -159,7 +159,7 @@ export function ImportPrototypeDialog({
               <ul className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-md border bg-muted/40 px-3 py-2">
                 <li>{apercu.personnes} personnes</li>
                 <li>{apercu.postes} postes</li>
-                <li>{apercu.horaires} codes horaires</li>
+                <li>{apercu.horaires} horaires</li>
                 <li>{apercu.besoins} besoins</li>
                 <li>{apercu.shifts} shifts</li>
                 <li>{apercu.verrous} semaines verrouillées</li>

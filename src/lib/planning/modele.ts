@@ -14,7 +14,7 @@ export interface Creneau {
   debut: number
   fin: number
   effectif: number
-  /** Code horaire (id en texte), null pour un horaire libre. */
+  /** Horaire (id en texte), null pour un horaire libre. */
   typeShift: string | null
   /** Places de renfort en plus de l'effectif, pour les profils « soutien ». */
   soutien: number
@@ -22,7 +22,7 @@ export interface Creneau {
   pause: number
   /** Minutes retirées quand le shift est fait en « journée courte ». */
   raccourci: number
-  /** Dont au DÉBUT (`raccourci_debut` du code) : la version courte commence
+  /** Dont au DÉBUT (`raccourci_debut` de l'horaire) : la version courte commence
    * `raccourciDebut` plus tard et finit `raccourci - raccourciDebut` plus
    * tôt (`horaireDe`, `temps.ts`). 0 : toute la journée courte en fin. */
   raccourciDebut: number
@@ -40,10 +40,10 @@ export interface Creneau {
   /** Consigne de présence où ce créneau compte (poste et période), ou null. */
   presence: PeriodePresence | null
   /** Créneau remplaçant (`r…`) : id `b…` du besoin qu'il sert, avec un autre
-   * code permis du même cycle (plan planning-cycles-2026-10-30, D13). Null
+   * horaire permis du même cycle (plan planning-cycles-2026-10-30, D13). Null
    * pour un besoin ou un shift posé hors besoins. */
   place: string | null
-  /** Équité (D15) : un soir (période soir du code). */
+  /** Équité (D15) : un soir (période soir de l'horaire). */
   soir: boolean
   /** Équité (D15) : un matin tôt (début à l'heure la plus tôt des matins
    * du poste). */

@@ -39,7 +39,7 @@ afterEach(cleanup)
 
 /*
  * Oracle : un référentiel VIDE, puis les quatre réglages ajoutés un à un
- * dans l'ordre (un code, un poste, une personne sur ce poste, un besoin) ;
+ * dans l'ordre (un horaire, un poste, une personne sur ce poste, un besoin) ;
  * à chaque pas, la ligne attendue (écrite ici) se coche, et seulement elle.
  */
 
@@ -82,7 +82,6 @@ function apres(n: number): Referentiel {
   if (n >= 1)
     r.horaires.push({
       id: 1,
-      code: 'M',
       nom: 'Matin',
       debut: '07:00',
       fin: '15:00',
@@ -207,8 +206,8 @@ describe('PourCommencer', () => {
 
   it('le compte des besoins vient des besoins retenus par le moteur', () => {
     const r = apres(4)
-    // Un besoin sur un code que le poste ne prévoit pas : ignoré.
-    r.horaires.push({ ...r.horaires[0], id: 2, code: 'S' })
+    // Un besoin sur un horaire que le poste ne prévoit pas : ignoré.
+    r.horaires.push({ ...r.horaires[0], id: 2, debut: '15:00', fin: '23:00' })
     r.postes[0].horaires_autorises = [1]
     r.besoins.push({ ...r.besoins[0], id: 2, horaire_id: 2, jour: 1 })
     const etapes = etapesDemarrage(r, verifierReglages(r))
@@ -288,7 +287,7 @@ describe('GardeDemarrage', () => {
 
   it('semaine vide, besoins tous écartés : grille visible et bandeau', () => {
     const r = apres(4)
-    r.horaires.push({ ...r.horaires[0], id: 2, code: 'S' })
+    r.horaires.push({ ...r.horaires[0], id: 2, debut: '15:00', fin: '23:00' })
     r.postes[0].horaires_autorises = [2]
     garde(r)
     expect(screen.getByText('grille')).toBeTruthy()

@@ -13,9 +13,11 @@ import type { Referentiel } from '#/lib/planning/types.ts'
 /*
  * Horaires et absences contre un service simulé (la base n'est pas touchée).
  * Vérifié : en lecture, rien n'est modifiable ; rien ne part à la frappe ;
- * Enregistrer envoie le code horaire complet ; une pause plus longue que
- * l'horaire est refusée avec le message, sans appel ; un refus de la base à
- * la suppression s'affiche en clair.
+ * Enregistrer envoie l'horaire complet, sans code, avec le nom écrit par
+ * l'app ; le moment est proposé d'après les heures puis gardé s'il est
+ * choisi à la main ; deux horaires aux mêmes heures sont refusés avant
+ * l'envoi ; une pause plus longue que l'horaire est refusée avec le message,
+ * sans appel ; un refus de la base à la suppression s'affiche en clair.
  */
 
 const etat = vi.hoisted(() => ({
@@ -89,7 +91,7 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
-// Les codes et les motifs sont des lignes compactes ; un clic ouvre leur
+// Les horaires et les motifs sont des lignes compactes ; un clic ouvre leur
 // réglage dans un volet (refonte du 2026-10-28).
 const ouvrir = (nom: RegExp) => {
   const ligne = [
@@ -98,9 +100,15 @@ const ouvrir = (nom: RegExp) => {
   if (!ligne) throw new Error(`Aucune ligne ${nom}`)
   fireEvent.click(ligne)
 }
+// L'horaire M de l'hôtel fictif se lit par ses heures.
 const carteMatin = () => {
-  if (!screen.queryByRole('region', { name: 'Code M' })) ouvrir(/^Régler M,/)
-  return screen.getByRole('region', { name: 'Code M' })
+  if (!screen.queryByRole('region', { name: 'Horaire 07:00–15:45' }))
+    ouvrir(/^Régler l'horaire 07:00–15:45$/)
+  return screen.getByRole('region', { name: 'Horaire 07:00–15:45' })
+}
+const carteNouvelle = () => {
+  fireEvent.click(screen.getByRole('button', { name: 'Nouvel horaire' }))
+  return screen.getByRole('region', { name: 'Nouvel horaire' })
 }
 const carteMaladie = () => {
   if (!screen.queryByRole('region', { name: 'Motif Maladie' }))
@@ -129,7 +137,7 @@ describe('Horaires et absences', () => {
     }
   })
 
-  it('rien ne part à la frappe ; Enregistrer envoie le code complet', async () => {
+  it("rien ne part à la frappe ; Enregistrer envoie l'horaire complet, sans code", async () => {
     monter(<HorairesPage />)
     const carte = within(carteMatin())
     fireEvent.change(carte.getByLabelText('Pause en minutes'), {
@@ -139,10 +147,14 @@ describe('Horaires et absences', () => {
       target: { value: '15:30' },
     })
     fireEvent.click(carte.getByRole('radio', { name: 'Matin' }))
-    fireEvent.click(carte.getByRole('switch', { name: 'Code écrit en rouge' }))
+    fireEvent.click(
+      carte.getByRole('switch', { name: 'Heures écrites en rouge' }),
+    )
     expect(service.enregistrerHoraire).not.toHaveBeenCalled()
     expect(
-      carte.getByText(/les shifts déjà posés avec ce code prennent ces heures/),
+      carte.getByText(
+        /les shifts déjà posés avec cet horaire prennent\s+ces heures/,
+      ),
     ).toBeTruthy()
     fireEvent.click(carte.getByRole('button', { name: 'Enregistrer' }))
     await waitFor(() =>
@@ -150,8 +162,7 @@ describe('Horaires et absences', () => {
     )
     expect(service.enregistrerHoraire).toHaveBeenCalledWith(
       {
-        code: 'M',
-        nom: 'Matin',
+        nom: 'Matin de 7 h à 15 h 30',
         debut: '07:00',
         fin: '15:30',
         couleur: '#000000',
@@ -165,7 +176,7 @@ describe('Horaires et absences', () => {
     )
     expect(
       await screen.findByText(
-        /Les shifts à venir posés avec ce code ont suivi/,
+        /Les shifts à venir posés avec cet horaire ont suivi/,
       ),
     ).toBeTruthy()
   })
@@ -219,29 +230,118 @@ describe('Horaires et absences', () => {
     expect(apercu.getByText(/07:00 → 14:45 · 7h de travail/)).toBeTruthy()
   })
 
-  it('un nouveau code est créé à Enregistrer seulement, en majuscules', async () => {
+  it('un nouvel horaire : ni code ni nom à saisir, créé à Enregistrer seulement', async () => {
     monter(<HorairesPage />)
-    fireEvent.click(screen.getByRole('button', { name: 'Nouveau code' }))
-    const carte = within(
-      screen.getByRole('region', { name: 'Nouveau code horaire' }),
-    )
+    const carte = within(carteNouvelle())
     expect(service.enregistrerHoraire).not.toHaveBeenCalled()
-    fireEvent.change(carte.getByLabelText('Code court'), {
-      target: { value: 'soir' },
-    })
-    fireEvent.click(carte.getByRole('button', { name: 'Créer le code' }))
+    expect(carte.queryByLabelText('Code court')).toBeNull()
+    expect(carte.queryByLabelText("Nom de l'horaire")).toBeNull()
+    // 09:00-17:45 est déjà pris dans l'hôtel fictif : la page propose
+    // l'heure pleine suivante, libre.
+    expect(carte.getByLabelText<HTMLInputElement>('Début').value).toBe('10:00')
+    expect(carte.getByLabelText<HTMLInputElement>('Fin').value).toBe('18:45')
+    fireEvent.click(carte.getByRole('button', { name: "Créer l'horaire" }))
     await waitFor(() =>
       expect(service.enregistrerHoraire).toHaveBeenCalledTimes(1),
     )
     const [valeurs, id] = service.enregistrerHoraire.mock.calls[0]
     expect(id).toBeNull()
-    expect(valeurs.code).toBe('SOIR')
+    expect('code' in valeurs).toBe(false)
+    expect(valeurs.periode).toBe('middle')
+    expect(valeurs.nom).toBe('Middle de 10 h à 18 h 45')
+  })
+
+  it("le moment est proposé d'après les heures, puis gardé quand on le choisit", async () => {
+    monter(<HorairesPage />)
+    const carte = within(carteNouvelle())
+    const coche = (nom: string) =>
+      carte.getByRole('radio', { name: nom }).getAttribute('aria-checked')
+    expect(coche('Middle')).toBe('true')
+    expect(carte.getByText("Proposé d'après les heures.")).toBeTruthy()
+    // Les heures changent : le moment suit.
+    fireEvent.change(carte.getByLabelText('Début'), {
+      target: { value: '23:00' },
+    })
+    fireEvent.change(carte.getByLabelText('Fin'), {
+      target: { value: '07:45' },
+    })
+    expect(coche('Nuit')).toBe('true')
+    expect(carte.getByText("Proposé d'après les heures.")).toBeTruthy()
+    // Choisi à la main : la phrase s'en va, et le moment ne bouge plus.
+    fireEvent.click(carte.getByRole('radio', { name: 'Soir' }))
+    expect(carte.queryByText("Proposé d'après les heures.")).toBeNull()
+    fireEvent.change(carte.getByLabelText('Début'), {
+      target: { value: '06:00' },
+    })
+    fireEvent.change(carte.getByLabelText('Fin'), {
+      target: { value: '14:45' },
+    })
+    expect(coche('Soir')).toBe('true')
+    fireEvent.click(carte.getByRole('button', { name: "Créer l'horaire" }))
+    await waitFor(() =>
+      expect(service.enregistrerHoraire).toHaveBeenCalledTimes(1),
+    )
+    expect(service.enregistrerHoraire.mock.calls[0][0].periode).toBe('soir')
+  })
+
+  it('horaire existant : un moment choisi à la main est gardé quand les heures changent', () => {
+    // Oracle : décision utilisateur du 2026-10-31 (proposé, puis modifiable).
+    // 07:00-15:45 est proposé « Matin » ; rangé en Soir, c'est un choix.
+    const avecMoment = (periode: 'matin' | 'soir') => {
+      const ref = referentielDemo()
+      etat.referentiel = {
+        ...ref,
+        horaires: ref.horaires.map((h) => (h.id === 1 ? { ...h, periode } : h)),
+      }
+    }
+    avecMoment('soir')
+    monter(<HorairesPage />)
+    let carte = within(carteMatin())
+    fireEvent.change(carte.getByLabelText('Fin'), {
+      target: { value: '15:30' },
+    })
+    expect(
+      carte.getByRole('radio', { name: 'Soir' }).getAttribute('aria-checked'),
+    ).toBe('true')
+    cleanup()
+
+    // Rangé comme la proposition : il suit les heures.
+    avecMoment('matin')
+    monter(<HorairesPage />)
+    carte = within(carteMatin())
+    fireEvent.change(carte.getByLabelText('Début'), {
+      target: { value: '15:00' },
+    })
+    fireEvent.change(carte.getByLabelText('Fin'), {
+      target: { value: '23:45' },
+    })
+    expect(
+      carte.getByRole('radio', { name: 'Soir' }).getAttribute('aria-checked'),
+    ).toBe('true')
+  })
+
+  it("deux horaires aux mêmes heures : refusé avant l'envoi", () => {
+    monter(<HorairesPage />)
+    const carte = within(carteNouvelle())
+    fireEvent.change(carte.getByLabelText('Début'), {
+      target: { value: '07:00' },
+    })
+    fireEvent.change(carte.getByLabelText('Fin'), {
+      target: { value: '15:45' },
+    })
+    expect(carte.getByText('Cet horaire existe déjà.')).toBeTruthy()
+    const bouton = carte.getByRole<HTMLButtonElement>('button', {
+      name: "Créer l'horaire",
+    })
+    expect(bouton.disabled).toBe(true)
+    fireEvent.click(bouton)
+    expect(service.enregistrerHoraire).not.toHaveBeenCalled()
   })
 
   it('montre le refus de la base à la suppression', async () => {
     service.supprimerHoraire.mockRejectedValue({
       code: 'PL409',
-      message: 'Le code M est le seul horaire permis pour le poste Accueil.',
+      message: 'Cet horaire est le seul permis pour le poste Accueil.',
     })
     monter(<HorairesPage />)
     fireEvent.click(
@@ -253,7 +353,7 @@ describe('Horaires et absences', () => {
     )
     expect(
       await screen.findByText(
-        'Le code M est le seul horaire permis pour le poste Accueil.',
+        'Cet horaire est le seul permis pour le poste Accueil.',
       ),
     ).toBeTruthy()
   })
