@@ -558,7 +558,7 @@ describe('traduction des règles (regles.ts)', () => {
       'Au moins 11 h de repos entre deux services',
     )
     expect(t['R-REPOS-HEBDO-35H']).toBe(
-      "Au moins 35 h de repos d'affilée par semaine",
+      "Au moins 35 h de repos d'affilée par semaine : un jour libre suffit, sans finir tard la veille ni commencer tôt le lendemain",
     )
     expect(textes(fiche({ minutesHebdo: 30 * H }))['R-SEMAINE-MAX']).toBe(
       'Au plus 34 h 59 par semaine',

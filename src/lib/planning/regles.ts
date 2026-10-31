@@ -269,7 +269,10 @@ export function resume(f: Fiche): LigneRegle[] {
   if (s.reposHebdoMin) {
     lignes.push([
       'R-REPOS-HEBDO-35H',
-      `Au moins ${heuresLisibles(s.reposHebdoMin)} de repos d'affilée par semaine`,
+      // Un seul jour libre suffit (24 h + les 11 h du repos quotidien), si
+      // la veille ne finit pas tard et le lendemain ne commence pas tôt
+      // (question utilisateur du 2026-10-31 : ce n'est pas deux jours).
+      `Au moins ${heuresLisibles(s.reposHebdoMin)} de repos d'affilée par semaine : un jour libre suffit, sans finir tard la veille ni commencer tôt le lendemain`,
     ])
   }
   if (f.minutesHebdo < TEMPS_PLEIN && !f.forfaitJours) {
