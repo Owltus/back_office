@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { fc, test } from '@fast-check/vitest'
@@ -16,9 +16,11 @@ import {
   fonctionsModifiees,
   lignesDestructrices,
   lignesJson,
+  lignesQuiBloquent,
   planEnvoi,
   nomsSecrets,
   secretsManquants,
+  TESTS_SUR_COPIE,
 } from './livrer-plan.mjs'
 
 // Oracle : le plan (étape 9) — contrôles avant toute prod, LIVRER exact,
@@ -410,13 +412,14 @@ describe('choixControles', () => {
     expect(c.note).toMatch(/copie de la prod/)
   })
 
-  it('exige les tests de la base dès qu’une migration part', () => {
+  it('une migration part sur une copie de la prod : les tests qui tournent sur une copie, sans db:reset (2026-10-31)', () => {
     const c = choixControles({
       dejaVerifie: false,
       copieDeLaProd: true,
       migrationsModifiees: ['supabase/migrations/20261020000000_x.sql'],
     })
-    expect(c).toEqual({ jouer: true, testsBase: true, note: null })
+    expect(c).toMatchObject({ jouer: true, testsBase: false, testsCopie: true })
+    expect(c.note).toMatch(/copie de la prod/)
   })
 
   it('joue tout sur des données fictives', () => {
@@ -426,7 +429,35 @@ describe('choixControles', () => {
         copieDeLaProd: false,
         migrationsModifiees: [],
       }),
-    ).toEqual({ jouer: true, testsBase: true, note: null })
+    ).toEqual({ jouer: true, testsBase: true, testsCopie: false, note: null })
+  })
+
+  it('les tests sur copie ne visent que des fichiers qui existent', () => {
+    for (const f of TESTS_SUR_COPIE) expect(existsSync(f)).toBe(true)
+  })
+})
+
+// Oracle : demande utilisateur du 2026-10-31 (« plus souple ») — un fichier
+// non suivi qui ne part pas ne bloque plus ; tout ce qui partirait, si.
+describe('lignesQuiBloquent', () => {
+  it('ignore un fichier non suivi hors de supabase/', () => {
+    expect(lignesQuiBloquent('?? notes.txt\n?? plan/x/00-INDEX.md\n')).toEqual(
+      [],
+    )
+  })
+  it('bloque un fichier suivi modifié, et un non suivi sous supabase/', () => {
+    expect(
+      lignesQuiBloquent(
+        ' M src/a.ts\n?? supabase/migrations/2026_x.sql\n?? supabase/functions/f/index.ts\n?? lisezmoi.md',
+      ),
+    ).toEqual([
+      ' M src/a.ts',
+      '?? supabase/migrations/2026_x.sql',
+      '?? supabase/functions/f/index.ts',
+    ])
+  })
+  it('arbre vide : rien ne bloque', () => {
+    expect(lignesQuiBloquent('')).toEqual([])
   })
 })
 
@@ -476,7 +507,15 @@ describe('arretsSansClavier', () => {
   it('arrête sur une migration destructive, config.toml ou le Worker', () => {
     expect(
       arretsSansClavier({ ...rien, destructives: ['1_x.sql'] })[0],
-    ).toMatch(/SUPPRIMER/)
+    ).toMatch(/--supprimer/)
+    // Avec l'accord donné dans le chat (2026-10-31) : plus d'arrêt.
+    expect(
+      arretsSansClavier({
+        ...rien,
+        destructives: ['1_x.sql'],
+        suppressionAcceptee: true,
+      }),
+    ).toEqual([])
     expect(arretsSansClavier({ ...rien, configToml: true })).toHaveLength(1)
     expect(arretsSansClavier({ ...rien, worker: true })).toHaveLength(1)
   })

@@ -404,15 +404,60 @@ export function choixControles(e) {
     return {
       jouer: false,
       testsBase: false,
+      testsCopie: false,
       note: 'Contrôles déjà passés sur ce commit (essai) : non rejoués.',
     }
   if (e.copieDeLaProd && e.migrationsModifiees.length === 0)
     return {
       jouer: true,
       testsBase: false,
+      testsCopie: false,
       note: 'Tests de la base non joués : la base locale porte la copie de la prod et aucune migration ne part.',
     }
-  return { jouer: true, testsBase: true, note: null }
+  // Assoupli le 2026-10-31 (demande utilisateur : « plus souple, moins
+  // bloquant ») : une migration part et la base locale porte la copie de la
+  // prod. Avant, il fallait `pnpm db:reset`, qui efface cette copie ; on
+  // joue désormais les tests qui tournent sur une copie (TESTS_SUR_COPIE).
+  if (e.copieDeLaProd)
+    return {
+      jouer: true,
+      testsBase: false,
+      testsCopie: true,
+      note: 'Base locale = copie de la prod : seuls les tests de la base qui tournent sur une copie sont joués (planning, audits).',
+    }
+  return { jouer: true, testsBase: true, testsCopie: false, note: null }
+}
+
+/** Tests pgTAP qui tournent sur une copie de la prod (aucun compte du seed
+ * attendu : ils créent leurs données dans la transaction). Vérifié le
+ * 2026-10-31 : 82 tests, tous verts sur une copie. */
+export const TESTS_SUR_COPIE = [
+  'supabase/tests/05_planning.test.sql',
+  'supabase/tests/90_audit_fonctions_sql.test.sql',
+  'supabase/tests/91_audit_rls.test.sql',
+  'supabase/tests/92_audit_auth.test.sql',
+]
+
+/**
+ * Lignes de `git status --porcelain` qui empêchent de livrer. Assoupli le
+ * 2026-10-31 : un fichier NON SUIVI ailleurs que sous `supabase/` ne part
+ * pas et ne bloque plus (notes, exports sur le poste). Restent bloquants :
+ * tout fichier suivi modifié (le code vérifié ne serait pas celui commité),
+ * et un fichier non suivi sous `supabase/` (une migration ou une fonction
+ * posée là partirait en prod sans être dans git).
+ *
+ * @param {string} porcelain
+ * @returns {Array<string>}
+ */
+export function lignesQuiBloquent(porcelain) {
+  return porcelain
+    .split(/\r?\n/)
+    .filter((l) => l.trim())
+    .filter((l) => {
+      if (!l.startsWith('??')) return true
+      const chemin = l.slice(3).trim().replace(/^"|"$/g, '').replace(/\\/g, '/')
+      return chemin.startsWith('supabase/')
+    })
 }
 
 /**
@@ -439,9 +484,15 @@ export function descriptionLivraison(e) {
  * `configToml` = un réglage HORS sections [functions.*] a changé ;
  * `reglagesFonctions` = arrêts de `arretsReglagesFonctions`.
  *
+ * Assoupli le 2026-10-31 (demande utilisateur : « plus souple, moins
+ * bloquant ») : une migration qui retire part aussi sans clavier, avec
+ * `--supprimer`, comme le contenu avec `--avec-donnees`. L'assistant ne les
+ * passe qu'après avoir montré le résumé de l'essai et eu l'accord de
+ * l'utilisateur dans le chat.
+ *
  * @param {{ destructives: Array<string>, configToml: boolean, worker: boolean,
  *   avecDonnees?: Array<string>, donneesAcceptees?: boolean,
- *   reglagesFonctions?: Array<string> }} e
+ *   suppressionAcceptee?: boolean, reglagesFonctions?: Array<string> }} e
  */
 export function arretsSansClavier(e) {
   const arrets = []
@@ -449,9 +500,9 @@ export function arretsSansClavier(e) {
     arrets.push(
       `Migration qui écrit du CONTENU (${e.avecDonnees.join(', ')}) : à montrer à l’utilisateur ; avec son accord, relancer avec --avec-donnees.`,
     )
-  if (e.destructives.length)
+  if (e.destructives.length && !e.suppressionAcceptee)
     arrets.push(
-      `Migration qui RETIRE ou CHANGE quelque chose (${e.destructives.join(', ')}) : la confirmation SUPPRIMER se tape au clavier, livrer.bat.`,
+      `Migration qui RETIRE ou CHANGE quelque chose (${e.destructives.join(', ')}) : à montrer à l’utilisateur ; avec son accord, relancer avec --supprimer.`,
     )
   if (e.configToml)
     arrets.push(

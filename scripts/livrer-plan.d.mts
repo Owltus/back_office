@@ -55,7 +55,14 @@ export declare function choixControles(e: {
   dejaVerifie: boolean
   copieDeLaProd: boolean
   migrationsModifiees: Array<string>
-}): { jouer: boolean; testsBase: boolean; note: string | null }
+}): {
+  jouer: boolean
+  testsBase: boolean
+  testsCopie: boolean
+  note: string | null
+}
+export declare const TESTS_SUR_COPIE: ReadonlyArray<string>
+export declare function lignesQuiBloquent(porcelain: string): Array<string>
 export declare function descriptionLivraison(e: {
   head: string
   migrations: Array<string>
@@ -64,6 +71,7 @@ export declare function descriptionLivraison(e: {
 export declare function arretsSansClavier(e: {
   avecDonnees?: Array<string>
   donneesAcceptees?: boolean
+  suppressionAcceptee?: boolean
   destructives: Array<string>
   configToml: boolean
   worker: boolean

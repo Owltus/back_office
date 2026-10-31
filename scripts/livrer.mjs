@@ -41,6 +41,8 @@ import {
   choixControles,
   descriptionLivraison,
   ecartNonCapture,
+  lignesQuiBloquent,
+  TESTS_SUR_COPIE,
   ecartSchema,
   fonctionsModifiees,
   lignesDestructrices,
@@ -231,7 +233,14 @@ function controlesLocaux() {
   // refuse dès que la locale diffère de la distante.
   lancer(['git', 'fetch', 'origin', '--tags', '--force', '--quiet'])
   const branche = lancer(['git', 'rev-parse', '--abbrev-ref', 'HEAD']).sortie
-  const arbrePropre = lancer(['git', 'status', '--porcelain']).sortie === ''
+  // Un fichier non suivi hors de supabase/ ne part pas : il ne bloque plus
+  // (assoupli le 2026-10-31, `lignesQuiBloquent`).
+  const bloquants = lignesQuiBloquent(
+    lancer(['git', 'status', '--porcelain']).sortie,
+  )
+  const arbrePropre = bloquants.length === 0
+  if (!arbrePropre)
+    console.log(`Fichiers à commiter d'abord :\n  ${bloquants.join('\n  ')}`)
   const enRetard =
     Number(lancer(['git', 'rev-list', '--count', 'HEAD..origin/main']).sortie) >
     0
@@ -269,6 +278,14 @@ function controlesLocaux() {
         ['build', ['pnpm', 'build']],
         ...(pkg.scripts?.['test:db'] && choix.testsBase
           ? [['tests de la base (test:db)', ['pnpm', 'test:db']]]
+          : []),
+        ...(choix.testsCopie
+          ? [
+              [
+                'tests de la base (sur la copie de la prod)',
+                ['supabase', 'test', 'db', ...TESTS_SUR_COPIE],
+              ],
+            ]
           : []),
       ]
     : []
@@ -463,11 +480,30 @@ async function livrer() {
   const ecart = ecartSchema(readFileSync(INSTANTANE, 'utf8'), dump('--linked'))
   if (ecart.absentes.length + ecart.ajoutees.length > 0) {
     afficherEcart(ecart, 'disparu', 'apparu ')
-    throw new Error(
-      'Le schéma de la prod diffère de la référence de la dernière livraison. Si c’est une livraison interrompue ou un autre poste : livrer.bat --reprendre-instantane. Sinon, quelqu’un a modifié la prod à la main : capturez ce changement en migration avant de livrer.',
-    )
-  }
-  console.log('Aucune dérive.')
+    // Assoupli le 2026-10-31 (demande utilisateur : « moins bloquant ») :
+    // l'écart est MONTRÉ, puis accepté par `--accepter-derive` (assistant,
+    // après accord dans le chat) ou ACCEPTER au clavier. La référence est
+    // reprise à la fin de la livraison.
+    const message =
+      'La prod a été modifiée hors livraison (ci-dessus). Si c’est voulu (changement fait à la main, autre poste), acceptez-le pour continuer.'
+    if (MODE === 'essai')
+      console.log(
+        `⚠ ${message} Sans clavier : relancez avec --accepter-derive.`,
+      )
+    else if (process.argv.includes('--accepter-derive'))
+      console.log('Écart accepté (--accepter-derive).')
+    else if (CONFIRME === null && process.stdin.isTTY) {
+      if (
+        (
+          await demander(`${message}\nTapez ACCEPTER pour continuer : `)
+        ).trim() !== 'ACCEPTER'
+      )
+        throw new Error('Écart non accepté : rien n’est parti.')
+    } else
+      throw new Error(
+        `${message} Relancez avec --accepter-derive après accord de l’utilisateur.`,
+      )
+  } else console.log('Aucune dérive.')
 
   titre('Ce qui part')
   const enProd = requete(
@@ -600,6 +636,7 @@ async function livrer() {
       worker: workerModifie(changes),
       avecDonnees: migrations.filter((m) => m.donnees.length).map((m) => m.nom),
       donneesAcceptees: process.argv.includes('--avec-donnees'),
+      suppressionAcceptee: process.argv.includes('--supprimer'),
     })
     if (arrets.length)
       throw new Error(`Envoi sans clavier refusé :\n- ${arrets.join('\n- ')}`)
@@ -614,9 +651,12 @@ async function livrer() {
   const confirmationSuppression =
     reponse.trim() === 'LIVRER' &&
     migrations.some((m) => m.destructrices.length)
-      ? await demander(
-          'Une migration RETIRE ou CHANGE quelque chose. Tapez SUPPRIMER pour confirmer : ',
-        )
+      ? CONFIRME !== null
+        ? // Sans clavier : `arretsSansClavier` a déjà exigé --supprimer.
+          'SUPPRIMER'
+        : await demander(
+            'Une migration RETIRE ou CHANGE quelque chose. Tapez SUPPRIMER pour confirmer : ',
+          )
       : null
   const plan = planEnvoi({
     reponse,

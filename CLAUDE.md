@@ -93,6 +93,18 @@ migration new`, ou essais dans Studio puis `supabase db diff --local -f
      (`supabase db diff --local -f <nom>`) ; une migration qui écrit du
      contenu (`insert`/`update`/`delete`/`copy`) est signalée au résumé et
      ne part sans clavier qu'avec `--avec-donnees`, après accord explicite.
+     **ASSOUPLI le 2026-10-31 (demande utilisateur : « plus souple, moins
+     bloquant »)** : (a) une migration qui retire part aussi sans clavier
+     avec `--supprimer` (accord explicite dans le chat après le résumé) ;
+     (b) une prod modifiée hors livraison (dérive) n'arrête plus : l'écart
+     est montré à l'essai, puis accepté par `--accepter-derive` (accord) ou
+     ACCEPTER au clavier ; la référence est reprise après l'envoi ; (c) un
+     fichier NON SUIVI hors de `supabase/` ne bloque plus
+     (`lignesQuiBloquent`) ; un non suivi sous `supabase/` (migration,
+     fonction) bloque toujours, il partirait ; (d) sur une copie de la prod
+     en local, une migration qui part ne demande plus `pnpm db:reset` : les
+     tests pgTAP qui tournent sur une copie (`TESTS_SUR_COPIE` : planning,
+     audits) sont joués.
   3. **Commit = `pnpm commit <fichier-message> [fichiers…]`** : message
      écrit avec Write dans le scratchpad (sujet Conventional Commits, ligne
      vide, corps, puis Co-Authored-By et Claude-Session — exigés quand
