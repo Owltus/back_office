@@ -479,7 +479,7 @@ function renderReportDocument(pdf: jsPDF, data: RepjourPdfData): void {
   y += 0.5
   setText(pdf, GRAY)
   pdf.setFont('helvetica', 'italic').setFontSize(7.5)
-  pdf.text('Montants TTC', RIGHT, y, { align: 'right' })
+  pdf.text('Montants HT', RIGHT, y, { align: 'right' })
   y += 8
 
   // ===== Pied : horodatage d'import =======================================

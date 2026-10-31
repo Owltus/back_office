@@ -215,7 +215,7 @@ export function FormePdj({
  *
  *   cartes de synthèse                78 px   (grille de QUATRE, pas trois)
  *   barre de progression du mois      66 px
- *   tableau KPI                      293 px   (+ mention « Montants TTC »)
+ *   tableau KPI                      293 px   (+ mention « Montants HT »)
  *   bande de synthèse transverse     346 px   (3 blocs de 105 px)
  *   pavé d'import                    194 px   volontairement NON dessiné
  *
@@ -267,7 +267,7 @@ export function FormeRepjour({
       </div>
 
       {/* Tableau KPI : cinq lignes de valeurs dans son cadre, puis la mention
-          « Montants TTC » (25 px) que la silhouette omettait. */}
+          « Montants HT » (25 px) que la silhouette omettait. */}
       <div className="rounded-xl border border-border bg-card p-2 sm:p-3">
         <div className="flex items-center gap-4 px-1 py-2">
           <Skeleton className="h-3.5 w-24" />

@@ -8,17 +8,25 @@ import {
   reportToKPI,
 } from '#/lib/repjour/calc/kpi.ts'
 import { TOTAL_ROOMS } from '#/lib/repjour/constants.ts'
-import type { ComparisonData, DailyReport, ForecastRow } from '#/lib/repjour/types.ts'
+import type {
+  ComparisonData,
+  DailyReport,
+  ForecastRow,
+} from '#/lib/repjour/types.ts'
 
 /*
  * Construit un ComparisonData minimal ; seuls `today`/`mtd` sont lus par
  * `computeRealiseJour`/`computeRealiseMTD`, `totalRevenueHT`/`vat` n'entrent
  * dans aucun calcul testé ici et sont donc mis à 0 sans conséquence.
  */
-function comparison(nuitees: number, revenueTTC: number): ComparisonData {
+function comparison(nuitees: number, revenueHT: number): ComparisonData {
   return {
-    today: { occupiedRoomsExclComp: nuitees, totalRevenueHT: 0, totalRevenueTTC: revenueTTC, vat: 0 },
-    mtd: { occupiedRoomsExclComp: nuitees, totalRevenueHT: 0, totalRevenueTTC: revenueTTC },
+    today: {
+      occupiedRoomsExclComp: nuitees,
+      totalRevenueHT: revenueHT,
+      vat: 0,
+    },
+    mtd: { occupiedRoomsExclComp: nuitees, totalRevenueHT: revenueHT },
   }
 }
 
@@ -56,10 +64,14 @@ describe('computeRealiseJour — RevPAR', () => {
 describe('computeRealiseJour — prix moyen, division protégée', () => {
   it('3a. nuitées > 0 ⇒ prix moyen = CA / nuitées', () => {
     fc.assert(
-      fc.property(fc.integer({ min: 1, max: TOTAL_ROOMS }), arbRevenue, (nuitees, revenue) => {
-        const kpi = computeRealiseJour(comparison(nuitees, revenue))
-        expect(kpi.pm).toBe(revenue / nuitees)
-      }),
+      fc.property(
+        fc.integer({ min: 1, max: TOTAL_ROOMS }),
+        arbRevenue,
+        (nuitees, revenue) => {
+          const kpi = computeRealiseJour(comparison(nuitees, revenue))
+          expect(kpi.pm).toBe(revenue / nuitees)
+        },
+      ),
       { numRuns: 200 },
     )
   })
@@ -78,10 +90,14 @@ describe('computeRealiseJour — prix moyen, division protégée', () => {
 describe('computeRealiseJour — oracle croisé RevPAR = PM × TO / 100', () => {
   it('4. relation vérifiée à l’arrondi flottant près sur des entrées générées', () => {
     fc.assert(
-      fc.property(fc.integer({ min: 1, max: TOTAL_ROOMS }), arbRevenue, (nuitees, revenue) => {
-        const kpi = computeRealiseJour(comparison(nuitees, revenue))
-        expect(kpi.revpar).toBeCloseTo((kpi.pm * kpi.to) / 100, 9)
-      }),
+      fc.property(
+        fc.integer({ min: 1, max: TOTAL_ROOMS }),
+        arbRevenue,
+        (nuitees, revenue) => {
+          const kpi = computeRealiseJour(comparison(nuitees, revenue))
+          expect(kpi.revpar).toBeCloseTo((kpi.pm * kpi.to) / 100, 9)
+        },
+      ),
       { numRuns: 200 },
     )
   })
@@ -95,9 +111,18 @@ describe('computeRealiseMTD — occupation ramenée au nombre de jours écoulés
         arbRevenue,
         fc.integer({ min: 1, max: 31 }),
         (nuitees, revenue, dayOfMonth) => {
-          const kpi = computeRealiseMTD(comparison(nuitees, revenue), dayOfMonth)
-          expect(kpi.to).toBeCloseTo((nuitees / (TOTAL_ROOMS * dayOfMonth)) * 100, 9)
-          expect(kpi.revpar).toBeCloseTo(revenue / (TOTAL_ROOMS * dayOfMonth), 9)
+          const kpi = computeRealiseMTD(
+            comparison(nuitees, revenue),
+            dayOfMonth,
+          )
+          expect(kpi.to).toBeCloseTo(
+            (nuitees / (TOTAL_ROOMS * dayOfMonth)) * 100,
+            9,
+          )
+          expect(kpi.revpar).toBeCloseTo(
+            revenue / (TOTAL_ROOMS * dayOfMonth),
+            9,
+          )
         },
       ),
       { numRuns: 200 },
@@ -178,8 +203,8 @@ describe('reportToKPI — projection des cinq champs par préfixe', () => {
 describe('computeProjeteMois — agrégation forecast', () => {
   it('somme les occ/revenus du mois et applique la même relation croisée', () => {
     const rows: ForecastRow[] = [
-      { date: '2026-09-01', month: 9, year: 2026, occ: 40, revHT: 3600, revTTC: 3960 },
-      { date: '2026-09-02', month: 9, year: 2026, occ: 50, revHT: 4500, revTTC: 4950 },
+      { date: '2026-09-01', month: 9, year: 2026, occ: 40, revHT: 3960 },
+      { date: '2026-09-02', month: 9, year: 2026, occ: 50, revHT: 4950 },
     ]
     const kpi = computeProjeteMois(rows, 30)
     expect(kpi.nuitees).toBe(90)

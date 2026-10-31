@@ -43,8 +43,7 @@ import { Button } from '#/components/ui/button.tsx'
 type ForecastUpdates = {
   occ: number
   rev_ht: number
-  rev_ttc: number
-  adr_ttc: number
+  adr_ht: number
   occ_percent: number
 }
 
@@ -87,8 +86,7 @@ function DayModal({
   const [forecastForm, setForecastForm] = useState<ForecastUpdates>({
     occ: f?.occ ?? 0,
     rev_ht: f?.rev_ht ?? 0,
-    rev_ttc: f?.rev_ttc ?? 0,
-    adr_ttc: f?.adr_ttc ?? 0,
+    adr_ht: f?.adr_ht ?? 0,
     occ_percent: f?.occ_percent ?? 0,
   })
 
@@ -128,8 +126,7 @@ function DayModal({
   const forecastFields = [
     { key: 'occ', label: 'Nuitées' },
     { key: 'rev_ht', label: 'Rev HT', step: '0.01' },
-    { key: 'rev_ttc', label: 'Rev TTC', step: '0.01' },
-    { key: 'adr_ttc', label: 'ADR TTC', step: '0.01' },
+    { key: 'adr_ht', label: 'ADR HT', step: '0.01' },
     { key: 'occ_percent', label: 'Occ %', step: '0.01' },
   ]
 
@@ -297,7 +294,11 @@ export function DataContent({ readOnly = false }: { readOnly?: boolean }) {
 
   const handleDeleteDay = async () => {
     if (!selectedRow) return
-    if (!confirm(`Supprimer toutes les données du ${fmt.dateFr(selectedRow.date)} ?`))
+    if (
+      !confirm(
+        `Supprimer toutes les données du ${fmt.dateFr(selectedRow.date)} ?`,
+      )
+    )
       return
     try {
       await deleteDayData(selectedRow.date)
@@ -314,10 +315,7 @@ export function DataContent({ readOnly = false }: { readOnly?: boolean }) {
     }
   }
 
-  const cell = (
-    v: number | undefined | null,
-    fn: (n: number) => string,
-  ) =>
+  const cell = (v: number | undefined | null, fn: (n: number) => string) =>
     v != null ? (
       <span className="tabular-nums">{fn(v)}</span>
     ) : (
@@ -426,7 +424,7 @@ export function DataContent({ readOnly = false }: { readOnly?: boolean }) {
                   </th>
                   <th className="px-2 py-1.5 text-right text-xs font-medium text-muted-foreground">
                     <span className={readOnly ? 'hidden sm:inline' : ''}>
-                      Rev TTC
+                      Rev HT
                     </span>
                     {readOnly && <span className="sm:hidden">Rev</span>}
                   </th>
@@ -445,7 +443,9 @@ export function DataContent({ readOnly = false }: { readOnly?: boolean }) {
                   return (
                     <tr
                       key={row.date}
-                      onClick={() => !readOnly && hasData && setSelectedRow(row)}
+                      onClick={() =>
+                        !readOnly && hasData && setSelectedRow(row)
+                      }
                       className={`border-b border-border/50 transition-colors ${
                         hasData && !readOnly
                           ? 'cursor-pointer hover:bg-accent/40'
@@ -482,12 +482,12 @@ export function DataContent({ readOnly = false }: { readOnly?: boolean }) {
                         {cell(f?.occ, fmt.nuitees)}
                       </td>
                       <td className="px-2 py-1.5 text-right text-xs">
-                        {cell(f?.rev_ttc, fmt.eurInt)}
+                        {cell(f?.rev_ht, fmt.eurInt)}
                       </td>
                       <td
                         className={`border-r border-border/50 px-2 py-1.5 text-right text-xs ${readOnly ? 'hidden sm:table-cell' : ''}`}
                       >
-                        {cell(f?.adr_ttc, fmt.eur)}
+                        {cell(f?.adr_ht, fmt.eur)}
                       </td>
                     </tr>
                   )

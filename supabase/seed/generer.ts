@@ -669,8 +669,7 @@ function genererRepjour(
     'year',
     'occ',
     'rev_ht',
-    'rev_ttc',
-    'adr_ttc',
+    'adr_ht',
     'occ_percent',
     'imported_at',
   ])
@@ -681,16 +680,15 @@ function genererRepjour(
       j < f.aujourdhui
         ? Math.max(0, Math.min(TOTAL_CHAMBRES, o.n + a.entier(-3, 3)))
         : o.n
+    // Tout en HT (2026-10-31), comme le rapport journalier.
     const ht = n === 0 ? 0 : arrondi2((o.ca / Math.max(o.n, 1)) * n)
-    const ttc = arrondi2(ht * 1.1)
     forecast.lignes.push([
       versIso(j),
       moisDe(j),
       anneeDe(j),
       n,
       ht,
-      ttc,
-      n === 0 ? 0 : arrondi2(ttc / n),
+      n === 0 ? 0 : arrondi2(ht / n),
       arrondi2((n / TOTAL_CHAMBRES) * 100),
       horodatage(f.aujourdhui, 3, 5),
     ])

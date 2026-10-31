@@ -1,7 +1,7 @@
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 
-import { fromTTC, toTTC, VAT_FACTOR } from '#/lib/repjour/constants.ts'
+import { fromTTC, VAT_FACTOR } from '#/lib/repjour/constants.ts'
 
 // Montants au CENTIME, comme ceux de l'app. Un `fc.double` libre tirait des
 // flottants sous-normaux (7,4e-323) : deux voisins y deviennent égaux une fois
@@ -11,34 +11,9 @@ const arbMontant = fc
   .integer({ min: -100_000_000, max: 100_000_000 })
   .map((centimes) => centimes / 100)
 
-describe('toTTC / fromTTC — aller-retour', () => {
-  it('9. fromTTC(toTTC(x)) redonne x, à la tolérance flottante près', () => {
-    // Égalité STRICTE impossible à garantir : `toTTC` multiplie par 1,10 puis
-    // `fromTTC` redivise par 1,10, or 1,10 n'a pas de représentation binaire
-    // exacte en IEEE 754 (double précision) — la multiplication suivie de la
-    // division réintroduit une minuscule erreur d'arrondi (de l'ordre de
-    // 10⁻¹³ à 10⁻¹⁰ selon la grandeur de x). `toBeCloseTo` absorbe cette
-    // erreur ; `toBe` ferait échouer le test sur des cas parfaitement corrects.
-    fc.assert(
-      fc.property(arbMontant, (x) => {
-        expect(fromTTC(toTTC(x))).toBeCloseTo(x, 9)
-      }),
-      { numRuns: 200 },
-    )
-  })
-})
-
-describe('toTTC / fromTTC — monotonie et signe', () => {
-  it('10a. toTTC est strictement croissante (VAT_FACTOR > 1)', () => {
-    fc.assert(
-      fc.property(arbMontant, arbMontant, (a, b) => {
-        fc.pre(a < b)
-        expect(toTTC(a)).toBeLessThan(toTTC(b))
-      }),
-      { numRuns: 200 },
-    )
-  })
-
+// `toTTC` a disparu le 2026-10-31 : le rapport journalier est en HT, plus
+// aucun montant n'y est converti. `fromTTC` reste pour les prix TTC du PDJ.
+describe('fromTTC — monotonie, signe, facteur', () => {
   it('10b. fromTTC est strictement croissante', () => {
     fc.assert(
       fc.property(arbMontant, arbMontant, (a, b) => {
@@ -52,14 +27,14 @@ describe('toTTC / fromTTC — monotonie et signe', () => {
   it('10c. le signe est conservé (positif reste positif, négatif reste négatif, zéro reste zéro)', () => {
     fc.assert(
       fc.property(arbMontant, (x) => {
-        expect(Math.sign(toTTC(x))).toBe(Math.sign(x))
         expect(Math.sign(fromTTC(x))).toBe(Math.sign(x))
       }),
       { numRuns: 200 },
     )
   })
 
-  it('vérifie le facteur exact attendu (TVA 10 % ⇒ ×1,10)', () => {
+  it('fromTTC divise par le facteur exact (TVA 10 % ⇒ ÷1,10)', () => {
     expect(VAT_FACTOR).toBe(1.1)
+    expect(fromTTC(110)).toBeCloseTo(100, 9)
   })
 })

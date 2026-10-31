@@ -378,7 +378,7 @@ export function ImportSection({
   const bothReady = comparison.status === 'ready' && forecast.status === 'ready'
   const canImport = isAdmin ? comparison.status === 'ready' : bothReady
 
-  // Les problèmes de TVA (forecast en HT) sont désormais des ERREURS bloquantes
+  // Les problèmes de TVA (forecast resté en TTC) sont désormais des ERREURS bloquantes
   // (fichier refusé, à réexporter) — plus des avertissements forçables. Les seuls
   // avertissements restants (jours manquants, occupation sans revenu…) sont bénins
   // et forçables par tous : plus de garde `forceRequiresAdmin` à gérer ici.

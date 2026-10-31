@@ -254,7 +254,7 @@ describe('RPC : nom et paramètres', () => {
     etat.rpcReponse = {
       data: {
         rapport: r,
-        forecastTotal: { occ: 10, revTTC: 2000 },
+        forecastTotal: { occ: 10, revHT: 2000 },
         forecastFraicheur: '2026-03-10T03:00:00Z',
         rapportsDuMois: [r],
         datesDisponibles: ['2026-03-10'],
@@ -263,7 +263,7 @@ describe('RPC : nom et paramètres', () => {
     }
     const d = await daily.fetchRepjourDashboard('2026-03-10')
     expect(d.rapport).toEqual(r)
-    expect(d.forecastTotal).toEqual({ occ: 10, revTTC: 2000 })
+    expect(d.forecastTotal).toEqual({ occ: 10, revHT: 2000 })
     expect(d.forecastFraicheur).toBe('2026-03-10T03:00:00Z')
     expect(d.rapportsDuMois).toEqual([r])
     expect(d.datesDisponibles).toEqual(['2026-03-10'])
@@ -469,7 +469,7 @@ describe('prévisions (forecast_days)', () => {
           fc.record({
             month: fc.integer({ min: 2, max: 4 }),
             occ: fc.integer({ min: 0, max: 120 }),
-            rev_ttc: fc.integer({ min: 0, max: 20_000 }),
+            rev_ht: fc.integer({ min: 0, max: 20_000 }),
           }),
           { minLength: 1, maxLength: 40 },
         ),
@@ -483,13 +483,13 @@ describe('prévisions (forecast_days)', () => {
               ? null
               : {
                   occ: mars.reduce((s, l) => s + l.occ, 0),
-                  revTTC: mars.reduce((s, l) => s + l.rev_ttc, 0),
+                  revHT: mars.reduce((s, l) => s + l.rev_ht, 0),
                 }
           expect(await daily.fetchForecastMonthTotal(2026, 3)).toEqual(attendu)
         },
       ),
     )
-    expect(etat.traces.at(-1)).toMatchObject({ colonnes: 'occ, rev_ttc' })
+    expect(etat.traces.at(-1)).toMatchObject({ colonnes: 'occ, rev_ht' })
   })
 
   it('fetchForecastFreshness : dernier imported_at non nul du mois', async () => {
@@ -551,7 +551,7 @@ describe('colonnes demandées', () => {
         'rmtd_room_revenue',
       ].sort(),
     )
-    expect(cols('forecast_days')).toEqual(['month', 'occ', 'rev_ttc'].sort())
+    expect(cols('forecast_days')).toEqual(['month', 'occ', 'rev_ht'].sort())
     expect(etat.traces.every((t) => t.filtres.length > 0)).toBe(true)
   })
 })
@@ -641,8 +641,8 @@ describe('fetchYearAnalytics', () => {
         rapport('2026-02-05', { rj_nuitees: 81 }),
       ],
       forecast_days: [
-        { id: 1, year: 2026, month: 3, occ: 80, rev_ttc: 0 },
-        { id: 2, year: 2026, month: 4, occ: 81, rev_ttc: 0 },
+        { id: 1, year: 2026, month: 3, occ: 80, rev_ht: 0 },
+        { id: 2, year: 2026, month: 4, occ: 81, rev_ht: 0 },
       ],
     })
     const r = await daily.fetchYearAnalytics(2026)
@@ -657,7 +657,7 @@ describe('fetchYearAnalytics', () => {
   it('ne lit que l’année demandée', async () => {
     initialiser({
       daily_reports: [rapport('2025-06-05')],
-      forecast_days: [{ id: 1, year: 2025, month: 7, occ: 5, rev_ttc: 5 }],
+      forecast_days: [{ id: 1, year: 2025, month: 7, occ: 5, rev_ht: 5 }],
     })
     const r = await daily.fetchYearAnalytics(2026)
     expect(r.every((m) => m.source === 'vide')).toBe(true)
@@ -679,7 +679,7 @@ describe('fetchYearAnalytics', () => {
       fc.record({
         month: fc.integer({ min: 1, max: 12 }),
         occ: fc.integer({ min: 0, max: 90 }),
-        rev_ttc: fc.integer({ min: 0, max: 10_000 }),
+        rev_ht: fc.integer({ min: 0, max: 10_000 }),
       }),
       { maxLength: 30 },
     )
@@ -752,7 +752,7 @@ describe('fetchYearAnalytics', () => {
               }
             } else if (fs.length > 0) {
               const occ = fs.reduce((s, p) => s + p.occ, 0)
-              const rev = fs.reduce((s, p) => s + p.rev_ttc, 0)
+              const rev = fs.reduce((s, p) => s + p.rev_ht, 0)
               expect(res.source).toBe('forecast')
               expect(res.daysWithData).toBe(fs.length)
               expect(res.nuitees).toBe(occ)

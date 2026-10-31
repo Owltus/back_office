@@ -519,7 +519,7 @@ Deno.test('forecast : null sans prévision, somme sinon', async () => {
   assertEquals(await sourceSupabase(fauxClient({ data: [], error: null }).client).forecastMois(2026, 10), null)
   assertEquals(
     await sourceSupabase(
-      fauxClient({ data: [{ rev_ttc: 100 }, { rev_ttc: null }, { rev_ttc: 50.5 }], error: null }).client,
+      fauxClient({ data: [{ rev_ht: 100 }, { rev_ht: null }, { rev_ht: 50.5 }], error: null }).client,
     ).forecastMois(2026, 10),
     150.5,
   )

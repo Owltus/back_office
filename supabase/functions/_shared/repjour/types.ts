@@ -78,8 +78,7 @@ export interface ForecastDay {
   year: number;
   occ: number;
   rev_ht: number;
-  rev_ttc: number;
-  adr_ttc: number;
+  adr_ht: number;
   occ_percent: number;
 }
 
@@ -103,13 +102,11 @@ export interface ComparisonData {
   today: {
     occupiedRoomsExclComp: number;
     totalRevenueHT: number;
-    totalRevenueTTC: number;
     vat: number;
   };
   mtd: {
     occupiedRoomsExclComp: number;
     totalRevenueHT: number;
-    totalRevenueTTC: number;
   };
 }
 
@@ -119,5 +116,4 @@ export interface ForecastRow {
   year: number;
   occ: number;
   revHT: number;
-  revTTC: number;
 }

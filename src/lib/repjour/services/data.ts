@@ -138,8 +138,7 @@ export async function updateForecast(
   updates: {
     occ: number
     rev_ht: number
-    rev_ttc: number
-    adr_ttc: number
+    adr_ht: number
     occ_percent: number
   },
 ): Promise<void> {
@@ -182,16 +181,8 @@ export async function deleteMonthData(
 ): Promise<void> {
   await assertWriteRole()
   const [reportsRes, forecastsRes] = await Promise.all([
-    supabase
-      .from('daily_reports')
-      .delete()
-      .eq('year', year)
-      .eq('month', month),
-    supabase
-      .from('forecast_days')
-      .delete()
-      .eq('year', year)
-      .eq('month', month),
+    supabase.from('daily_reports').delete().eq('year', year).eq('month', month),
+    supabase.from('forecast_days').delete().eq('year', year).eq('month', month),
   ])
   if (reportsRes.error) throw reportsRes.error
   if (forecastsRes.error) throw forecastsRes.error

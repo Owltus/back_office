@@ -184,8 +184,8 @@ insert into public.daily_reports (date, month, year, day_of_month, days_in_month
 values (date '2099-01-01', 1, 2099, 1, 31, 1,1,1,1,1, 1,1,1,1,1, 1,1,1,1,1);
 insert into public.budget (year, month, nuitees, taux_occupation, prix_moyen, revpar, room_revenue)
 values (2099, 1, 1, 1, 1, 1, 1);
-insert into public.forecast_days (date, month, year, occ, rev_ht, rev_ttc, adr_ttc, occ_percent)
-values (date '2099-01-01', 1, 2099, 1, 1, 1, 1, 1);
+insert into public.forecast_days (date, month, year, occ, rev_ht, adr_ht, occ_percent)
+values (date '2099-01-01', 1, 2099, 1, 1, 1, 1);
 insert into public.server_report_recipients (email) values ('fixture@exemple.test');
 insert into public.audit_log (table_name, record_id, action) values ('fixture', 'fixture', 'INSERT');
 insert into public.facturation_issuer_denylist (issuer, code) values ('FIXTURE', 'X');
@@ -337,7 +337,7 @@ insert into t_cas (tbl, page, op, cas, regle, sql, prep) values
 ('budget','repjour','delete','-','g', $q$delete from public.budget where year = 2099$q$, null),
 -- 2099 n'est jamais le mois d'import : l'écriture manuelle est fermée.
 ('forecast_days','repjour','select','fixture','r1', $q$select count(*) from public.forecast_days where date = date '2099-01-01'$q$, null),
-('forecast_days','repjour','insert','2099','g', $q$insert into public.forecast_days (date, month, year, occ, rev_ht, rev_ttc, adr_ttc, occ_percent) values (date '2099-01-02', 1, 2099, 1, 1, 1, 1, 1)$q$, null),
+('forecast_days','repjour','insert','2099','g', $q$insert into public.forecast_days (date, month, year, occ, rev_ht, adr_ht, occ_percent) values (date '2099-01-02', 1, 2099, 1, 1, 1, 1)$q$, null),
 ('forecast_days','repjour','update','2099','g', $q$update public.forecast_days set occ = 2 where date = date '2099-01-01'$q$, null),
 ('forecast_days','repjour','delete','2099','g', $q$delete from public.forecast_days where date = date '2099-01-01'$q$, null),
 ('pms_daily_metrics','repjour','select','fixture','r1', $q$select count(*) from public.pms_daily_metrics where id = 'f0000000-0000-4000-8000-000000000022'$q$, null),

@@ -2308,6 +2308,16 @@ poussé. Règles qui en sortent :
 - Table **`postes` : n'existe PAS** → feature volontairement différée, non portée.
 - Hôtel unique : **80 chambres, TVA 10 %** (constantes en dur dans
   `lib/repjour/constants.ts`).
+- **RepJour EN HT depuis le 2026-10-31** (décision utilisateur) : budget,
+  réalisé, projeté, e-mail, PDF, montre. Le Comparison donne déjà le « ROOM
+  REVENUE » en HT (l'app ne le multiplie plus par 1,1) ; le Forecast est
+  exporté SANS « Include Tax », et c'est un forecast resté en TTC (environ
+  10 % au-dessus du réalisé) qui est refusé à l'import manuel. Migration
+  `20261031160000_repjour_ht` : budget 2026 aux chiffres HT fournis, rapports
+  au chiffre HT exact du fichier quand il est gardé (sinon ÷ 1,1),
+  `forecast_days.rev_ttc` retirée, `adr_ttc` → `adr_ht`. `toTTC` n'existe
+  plus ; `fromTTC` ne sert qu'aux prix de carte TTC du PDJ. Ne réintroduire
+  aucune conversion dans le rapport journalier.
 - **Durcissement sécurité vérifié le 2026-07-27** (dashboard `supabase/verif_securite.sql`,
   8/8 OK) : lectures **par page** (un compte sans permission sur une page lit 0 ligne
   de ses tables, PII incluse) ; `anon` **ne peut plus exécuter** `admin_update_password`

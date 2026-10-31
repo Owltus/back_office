@@ -414,13 +414,13 @@ export function DashboardBoard() {
   const fcMoisKPI: KPIBlock | null = forecastMonthTotal
     ? {
         nuitees: forecastMonthTotal.occ,
-        roomRevenue: forecastMonthTotal.revTTC,
+        roomRevenue: forecastMonthTotal.revHT,
         to: (forecastMonthTotal.occ / (TOTAL_ROOMS * daysInMonthPartial)) * 100,
         pm:
           forecastMonthTotal.occ > 0
-            ? forecastMonthTotal.revTTC / forecastMonthTotal.occ
+            ? forecastMonthTotal.revHT / forecastMonthTotal.occ
             : 0,
-        revpar: forecastMonthTotal.revTTC / (TOTAL_ROOMS * daysInMonthPartial),
+        revpar: forecastMonthTotal.revHT / (TOTAL_ROOMS * daysInMonthPartial),
       }
     : null
   const fcEcart = fcMoisKPI && budget ? computeEcart(fcMoisKPI, budget) : null

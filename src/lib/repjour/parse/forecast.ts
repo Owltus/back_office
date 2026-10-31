@@ -1,5 +1,4 @@
 import Papa from 'papaparse'
-import { fromTTC } from '#/lib/repjour/constants.ts'
 import type { ForecastRow } from '#/lib/repjour/types.ts'
 
 // Montant lu d'une cellule REV. L'export StayNTouch écrit « 7500.20 » (point
@@ -124,8 +123,8 @@ export function parseForecastAll(csvText: string): ForecastRow[] {
 
     const occ = parseInt(row[occCol], 10) || 0
     // Montant invalide (vide, texte, Infinity, NaN) → 0, comme une cellule vide.
-    const revTTC = lireMontant(row[revCol]) ?? 0
-    const revHT = fromTTC(revTTC) // REV du forecast est déjà TTC
+    // REV est HT : export sans « Include Tax » depuis le 2026-10-31.
+    const revHT = lireMontant(row[revCol]) ?? 0
 
     rows.push({
       date,
@@ -133,7 +132,6 @@ export function parseForecastAll(csvText: string): ForecastRow[] {
       year,
       occ,
       revHT,
-      revTTC,
     })
   }
 

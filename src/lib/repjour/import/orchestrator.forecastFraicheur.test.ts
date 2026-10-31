@@ -40,8 +40,7 @@ const ligne = (jour: number) => ({
   month: 9,
   year: 2026,
   occ: 60,
-  revHT: 6000,
-  revTTC: 6600,
+  revHT: 6600,
 })
 
 vi.mock('#/lib/repjour/parse/forecast.ts', () => ({
@@ -64,14 +63,12 @@ vi.mock('#/lib/repjour/parse/comparison.ts', () => ({
   parseComparison: () => ({
     today: {
       occupiedRoomsExclComp: 60,
-      totalRevenueHT: 6000,
-      totalRevenueTTC: 6600,
+      totalRevenueHT: 6600,
       vat: 600,
     },
     mtd: {
       occupiedRoomsExclComp: 1600,
-      totalRevenueHT: 160000,
-      totalRevenueTTC: 176000,
+      totalRevenueHT: 176000,
     },
   }),
 }))

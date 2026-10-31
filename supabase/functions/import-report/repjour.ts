@@ -15,17 +15,8 @@ import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2.115.0'
 
 // --- Constantes recopiées de src/lib/repjour/constants.ts ---------------------
 const TOTAL_ROOMS = 80 // 80 chambres (hôtel unique)
-const VAT_RATE = 10 // TVA hébergement France
-const VAT_FACTOR = 1 + VAT_RATE / 100 // = 1,10
-
-/** HT → TTC. */
-function toTTC(ht: number): number {
-  return ht * VAT_FACTOR
-}
-/** TTC → HT. */
-function fromTTC(ttc: number): number {
-  return ttc / VAT_FACTOR
-}
+// Aucune TVA ici depuis le 2026-10-31 : le rapport journalier est en HT, comme
+// les fichiers Comparison et Forecast. Plus aucun montant n'est converti.
 
 // Auteur des imports automatiques. `daily_reports.imported_by` est une FK vers
 // public.profiles(id) (donc vers un VRAI compte auth.users) et est NULLABLE :
@@ -60,13 +51,11 @@ interface ComparisonData {
   today: {
     occupiedRoomsExclComp: number
     totalRevenueHT: number
-    totalRevenueTTC: number
     vat: number
   }
   mtd: {
     occupiedRoomsExclComp: number
     totalRevenueHT: number
-    totalRevenueTTC: number
   }
 }
 
@@ -76,7 +65,6 @@ interface ForecastRow {
   year: number
   occ: number
   revHT: number
-  revTTC: number
 }
 
 interface ComparisonMetricRow {
@@ -93,7 +81,7 @@ interface ComparisonMetricRow {
 }
 
 interface TvaRef {
-  adrTTC: number
+  adrHT: number
   throughDay: number
 }
 
@@ -279,13 +267,11 @@ function parseComparison(csvText: string): ComparisonData {
     today: {
       occupiedRoomsExclComp: occExclCompToday,
       totalRevenueHT: totalRevenueHTToday,
-      totalRevenueTTC: toTTC(totalRevenueHTToday),
       vat: vatToday,
     },
     mtd: {
       occupiedRoomsExclComp: occExclCompMTD,
       totalRevenueHT: totalRevenueHTMTD,
-      totalRevenueTTC: toTTC(totalRevenueHTMTD),
     },
   }
 }
@@ -372,7 +358,7 @@ function parseComparisonMetrics(csvText: string): ComparisonMetricRow[] {
 }
 
 // =============================================================================
-// parse/forecast.ts — parseForecastAll (toutes les lignes, REV = TTC)
+// parse/forecast.ts — parseForecastAll (toutes les lignes, REV = HT)
 // =============================================================================
 // Montant lu d'une cellule REV. MIROIR EXACT de `lireMontant`
 // (src/lib/repjour/parse/forecast.ts), règles documentées là-bas : espaces
@@ -453,8 +439,8 @@ export function parseForecastAll(csvText: string): ForecastRow[] {
 
     const occ = parseInt(row[occCol], 10) || 0
     // Montant invalide (vide, texte, Infinity, NaN) → 0, comme une cellule vide.
-    const revTTC = lireMontant(row[revCol]) ?? 0
-    const revHT = fromTTC(revTTC) // REV du forecast est déjà TTC
+    // REV est HT : export sans « Include Tax » depuis le 2026-10-31.
+    const revHT = lireMontant(row[revCol]) ?? 0
 
     rows.push({
       date,
@@ -462,7 +448,6 @@ export function parseForecastAll(csvText: string): ForecastRow[] {
       year,
       occ,
       revHT,
-      revTTC,
     })
   }
 
@@ -470,11 +455,11 @@ export function parseForecastAll(csvText: string): ForecastRow[] {
 }
 
 // =============================================================================
-// calc/kpi.ts — realiseJour / realiseMTD (TTC, base 80)
+// calc/kpi.ts — realiseJour / realiseMTD (HT, base 80)
 // =============================================================================
 function computeRealiseJour(comparison: ComparisonData): KPIBlock {
   const nuitees = comparison.today.occupiedRoomsExclComp
-  const roomRevenue = comparison.today.totalRevenueTTC
+  const roomRevenue = comparison.today.totalRevenueHT
   return {
     nuitees,
     roomRevenue,
@@ -486,7 +471,7 @@ function computeRealiseJour(comparison: ComparisonData): KPIBlock {
 
 function computeRealiseMTD(comparison: ComparisonData, dayOfMonth: number): KPIBlock {
   const nuitees = comparison.mtd.occupiedRoomsExclComp
-  const roomRevenue = comparison.mtd.totalRevenueTTC
+  const roomRevenue = comparison.mtd.totalRevenueHT
   return {
     nuitees,
     roomRevenue,
@@ -503,17 +488,17 @@ function computeRealiseMTD(comparison: ComparisonData, dayOfMonth: number): KPIB
 const SEUIL_JOURS_REF = 5
 
 function buildTvaRefFrom(
-  roomRevenueTTC: number,
+  roomRevenueHT: number,
   nuitees: number,
   throughDay: number,
 ): TvaRef | null {
-  if (nuitees >= SEUIL_JOURS_REF && roomRevenueTTC > 0 && throughDay > 0) {
-    return { adrTTC: roomRevenueTTC / nuitees, throughDay }
+  if (nuitees >= SEUIL_JOURS_REF && roomRevenueHT > 0 && throughDay > 0) {
+    return { adrHT: roomRevenueHT / nuitees, throughDay }
   }
   return null
 }
 
-/** Référence TTC depuis le dernier daily_report du mois (jour le plus avancé). */
+/** Référence HT depuis le dernier daily_report du mois (jour le plus avancé). */
 function buildTvaRef(latestReport: {
   rmtd_room_revenue: number
   rmtd_nuitees: number
@@ -538,8 +523,8 @@ const MSG = {
     'Sur certains jours, des chambres sont occupées mais leur montant est à zéro. Vérifie le fichier.',
   adrWeird:
     "Le prix moyen par chambre est anormal. Vérifie que c'est le bon fichier.",
-  tvaMissing:
-    "Ce forecast est en HT (montants trop bas d'environ 10%) : la TVA n'a pas été incluse à l'export. Réexporte-le en cochant « Include Tax ».",
+  tvaIncluse:
+    "Ce forecast est en TTC (montants trop hauts d'environ 10 %). Réexporte-le en décochant Include Tax.",
   realNegatives:
     'Le fichier contient des chiffres négatifs. Il a mal été exporté, recommence.',
   tooManyRooms:
@@ -569,7 +554,7 @@ function validateForecast(
   }
 
   const hasImpossible = rows.some(
-    (r) => r.occ < 0 || r.revTTC < 0 || (r.occ === 0 && r.revTTC > 0),
+    (r) => r.occ < 0 || r.revHT < 0 || (r.occ === 0 && r.revHT > 0),
   )
   if (hasImpossible) {
     alerts.push({ type: 'error', message: MSG.impossible })
@@ -585,35 +570,35 @@ function validateForecast(
     alerts.push({ type: 'error', message: MSG.forecastOverCapacity })
   }
 
-  const hasOccNoRev = rows.some((r) => r.occ > 0 && r.revTTC === 0)
+  const hasOccNoRev = rows.some((r) => r.occ > 0 && r.revHT === 0)
   if (hasOccNoRev) {
     alerts.push({ type: 'warning', message: MSG.occNoRev })
   }
 
   const totalOcc = rows.reduce((s, r) => s + r.occ, 0)
-  const totalRev = rows.reduce((s, r) => s + r.revTTC, 0)
+  const totalRev = rows.reduce((s, r) => s + r.revHT, 0)
   const avgADR = totalOcc > 0 ? totalRev / totalOcc : 0
   if (avgADR > 0 && (avgADR < 30 || avgADR > 300)) {
     alerts.push({ type: 'warning', message: MSG.adrWeird })
   }
 
-  // Détection « forecast en HT » : comparaison à périmètre égal (jours ≤ throughDay)
-  // à l'ADR réalisé TTC ; bande tolérante 0,83–0,93 → ERROR bloquante.
-  if (ref && ref.adrTTC > 0) {
+  // Détection « forecast en TTC » : comparaison à périmètre égal (jours ≤ throughDay)
+  // à l'ADR réalisé HT ; bande tolérante 1/0,93–1/0,83 → ERROR bloquante.
+  if (ref && ref.adrHT > 0) {
     let occPast = 0
     let revPast = 0
     for (const r of rows) {
       const day = parseInt(r.date.slice(8, 10), 10)
       if (day <= ref.throughDay) {
         occPast += r.occ
-        revPast += r.revTTC
+        revPast += r.revHT
       }
     }
     const adrPast = occPast > 0 ? revPast / occPast : 0
     if (adrPast > 0) {
-      const ratio = adrPast / ref.adrTTC
-      if (ratio > 0.83 && ratio < 0.93) {
-        alerts.push({ type: 'error', message: MSG.tvaMissing })
+      const ratio = adrPast / ref.adrHT
+      if (ratio > 1 / 0.93 && ratio < 1 / 0.83) {
+        alerts.push({ type: 'error', message: MSG.tvaIncluse })
       }
     }
   }
@@ -749,16 +734,16 @@ export async function importComparison(
       (s: number, f: { occ: number }) => s + f.occ,
       0,
     )
-    const totalRevTTC = existingForecasts.reduce(
-      (s: number, f: { rev_ttc: number }) => s + f.rev_ttc,
+    const totalRevHT = existingForecasts.reduce(
+      (s: number, f: { rev_ht: number }) => s + f.rev_ht,
       0,
     )
     projeteMois = {
       nuitees: totalOCC,
-      roomRevenue: totalRevTTC,
+      roomRevenue: totalRevHT,
       to: (totalOCC / (TOTAL_ROOMS * reportDate.daysInMonth)) * 100,
-      pm: totalOCC > 0 ? totalRevTTC / totalOCC : 0,
-      revpar: totalRevTTC / (TOTAL_ROOMS * reportDate.daysInMonth),
+      pm: totalOCC > 0 ? totalRevHT / totalOCC : 0,
+      revpar: totalRevHT / (TOTAL_ROOMS * reportDate.daysInMonth),
     }
   } else {
     alerts.push({
@@ -851,7 +836,7 @@ export async function importComparison(
  * NI budget.
  *
  * Renvoie le nombre de jours (lignes) écrits. Lève une Error sur validation
- * bloquante (fichier vide, chiffres impossibles, forecast en HT).
+ * bloquante (fichier vide, chiffres impossibles, forecast en TTC).
  */
 export async function importForecast(
   admin: SupabaseClient,
@@ -874,8 +859,8 @@ export async function importForecast(
     monthGroups.get(key)!.push(row)
   }
 
-  // Référence TTC = RÉALISÉ des années concernées (daily_reports). Si pas de réalisé
-  // pour un mois → pas de référence → pas de détection HT (comme le source).
+  // Référence HT = RÉALISÉ des années concernées (daily_reports). Si pas de réalisé
+  // pour un mois → pas de référence → pas de détection TTC (comme le source).
   const years = [...new Set(rows.map((r) => r.year))]
   const { data: reportsAll, error: reportsErr } = await admin
     .from('daily_reports')
@@ -916,11 +901,11 @@ export async function importForecast(
 
   // PIPELINE AUTO : l'export StayNTouch a toujours le même format → on ne BLOQUE
   // que sur des données vraiment corrompues (vide, valeurs impossibles). Les
-  // HEURISTIQUES (« forecast en HT »), utiles en import MANUEL où un humain peut
+  // HEURISTIQUES (« forecast en TTC »), utiles en import MANUEL où un humain peut
   // re-exporter, sont ici seulement LOGUÉES : sinon un faux positif bloquerait
   // tout l'envoi RepJour sans personne pour corriger. (Le manuel = autre code,
   // côté app, garde sa validation complète.)
-  const HEURISTIC_MSGS = new Set<string>([MSG.tvaMissing])
+  const HEURISTIC_MSGS = new Set<string>([MSG.tvaIncluse])
   const seen = new Set<string>()
   const dedup = allErrors.filter((a) => {
     if (seen.has(a.message)) return false
@@ -948,8 +933,7 @@ export async function importForecast(
     year: r.year,
     occ: r.occ,
     rev_ht: r.revHT,
-    rev_ttc: r.revTTC,
-    adr_ttc: r.occ > 0 ? r.revTTC / r.occ : 0,
+    adr_ht: r.occ > 0 ? r.revHT / r.occ : 0,
     occ_percent: (r.occ / TOTAL_ROOMS) * 100,
     imported_at: importedAt,
   }))

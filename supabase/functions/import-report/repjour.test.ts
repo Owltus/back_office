@@ -24,7 +24,7 @@ function adminSansBudget() {
     table === 'budget'
       ? { data: null, error: { message: 'JSON object requested, 0 rows' } }
       : table === 'forecast_days'
-        ? { data: [{ occ: 60, rev_ttc: 6600 }, { occ: 60, rev_ttc: 6600 }], error: null }
+        ? { data: [{ occ: 60, rev_ht: 6600 }, { occ: 60, rev_ht: 6600 }], error: null }
         : { data: null, error: null }
   const admin = {
     from(table: string) {
@@ -93,7 +93,7 @@ Deno.test('Forecast : virgule décimale, milliers, ambiguïté « 1,234 »', () 
   ]
   for (const [cellule, attendu] of cas) assertEquals(lireMontant(cellule), attendu, String(cellule))
   const r = parseForecastAll('DATE;OCC;OCC %;ADR;REV\n01-01-2026;8;10%;100;7500,20\n')
-  assertEquals(r[0].revTTC, 7500.2)
+  assertEquals(r[0].revHT, 7500.2)
 })
 
 Deno.test('Forecast : dates impossibles écartées, 29-02 bissextile seulement', () => {
@@ -105,7 +105,7 @@ Deno.test('Forecast : dates impossibles écartées, 29-02 bissextile seulement',
 
 Deno.test('Forecast : Infinity → 0, jour en double → fichier refusé', () => {
   const r = parseForecastAll([EN_TETE, '01-01-2026,1,,1,Infinity', ''].join('\n'))
-  assertEquals([r[0].revTTC, r[0].revHT], [0, 0])
+  assertEquals(r[0].revHT, 0)
   assertThrows(
     () => parseForecastAll([EN_TETE, '01-01-2026,1,,1,1', '1-1-2026,1,,1,2', ''].join('\n')),
     Error,

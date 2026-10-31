@@ -194,7 +194,7 @@ export interface EntreeRep {
   pmPrecedent: number | null
   /** Cumul du dernier rapport du mois (mode partiel seulement). */
   dernierCumulDuMois: number | null
-  /** Σ forecast_days.rev_ttc du mois, ou null si aucune prévision. */
+  /** Σ forecast_days.rev_ht du mois, ou null si aucune prévision. */
   forecastMois: number | null
   /** budget.room_revenue du mois, ou null si aucune ligne. */
   budgetMois: number | null
@@ -252,7 +252,7 @@ export function resumeRep(e: EntreeRep): ResumeRep {
     chambres: e.rapport ? e.rapport.rj_nuitees : null,
     // Carte « Pris depuis la veille » (DashboardBoard.tsx:339-340) : écart du
     // projeté fin de mois avec le dernier rapport antérieur du MÊME mois ; null
-    // sans rapport du jour ou sans rapport antérieur (1er du mois). En TTC.
+    // sans rapport du jour ou sans rapport antérieur (1er du mois). En HT.
     pris_veille:
       e.rapport && e.pmPrecedent != null
         ? euroEntier(e.rapport.pm_room_revenue - e.pmPrecedent)

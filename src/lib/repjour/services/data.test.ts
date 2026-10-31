@@ -33,7 +33,7 @@ vi.mock('#/lib/supabase.ts', () => ({
 const { updateReport, updateForecast } =
   await import('#/lib/repjour/services/data.ts')
 
-const prevision = { occ: 1, rev_ht: 1, rev_ttc: 1, adr_ttc: 1, occ_percent: 1 }
+const prevision = { occ: 1, rev_ht: 1, adr_ht: 1, occ_percent: 1 }
 
 beforeEach(() => {
   appels.length = 0

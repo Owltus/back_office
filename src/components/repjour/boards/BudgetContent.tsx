@@ -16,7 +16,7 @@ import { Button } from '#/components/ui/button.tsx'
 /*
  * Onglet « Budget » de la gestion — porté de la source BudgetContent.
  *
- * Grille d'édition du budget annuel (TTC) mois par mois : sélection de l'année,
+ * Grille d'édition du budget annuel (HT) mois par mois : sélection de l'année,
  * ajout d'une année, saisie des objectifs (nuitées, TO, PM, RevPAR, room
  * revenue), puis `upsertBudget` (idempotent sur (year, month)) et
  * `deleteYearBudget` (suppression destructive gardée par assertWriteRole + RLS).
@@ -187,7 +187,7 @@ export function BudgetContent({ readOnly = false }: { readOnly?: boolean }) {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-bold text-foreground">
-          Budget annuel (TTC)
+          Budget annuel (HT)
         </h2>
 
         <div className="flex items-center gap-2">

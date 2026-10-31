@@ -120,20 +120,20 @@ function computeEcart(projete: KPIBlock, budget: MonthBudget): Ecart {
   }
 }
 
-/** Projeté du mois recalculé depuis les forecast_days (TTC, base 80). Identique à
+/** Projeté du mois recalculé depuis les forecast_days (HT, base 80). Identique à
  * computeProjeteMois côté client. */
 function computeProjeteMois(
-  forecasts: { occ: number; rev_ttc: number }[],
+  forecasts: { occ: number; rev_ht: number }[],
   daysInMonth: number,
 ): KPIBlock {
   const totalOCC = forecasts.reduce((s, f) => s + f.occ, 0)
-  const totalRevTTC = forecasts.reduce((s, f) => s + f.rev_ttc, 0)
+  const totalRevHT = forecasts.reduce((s, f) => s + f.rev_ht, 0)
   return {
     nuitees: totalOCC,
-    roomRevenue: totalRevTTC,
+    roomRevenue: totalRevHT,
     to: daysInMonth > 0 ? (totalOCC / (TOTAL_ROOMS * daysInMonth)) * 100 : 0,
-    pm: totalOCC > 0 ? totalRevTTC / totalOCC : 0,
-    revpar: daysInMonth > 0 ? totalRevTTC / (TOTAL_ROOMS * daysInMonth) : 0,
+    pm: totalOCC > 0 ? totalRevHT / totalOCC : 0,
+    revpar: daysInMonth > 0 ? totalRevHT / (TOTAL_ROOMS * daysInMonth) : 0,
   }
 }
 
@@ -312,7 +312,7 @@ export async function maybeAutoSendRepjour(
   // 3. Projeté recalculé depuis forecast_days (corrige pm_*=0 si Comparison d'abord).
   const { data: forecasts, error: fcErr2 } = await admin
     .from('forecast_days')
-    .select('occ, rev_ttc')
+    .select('occ, rev_ht')
     .eq('year', candidate.year)
     .eq('month', candidate.month)
   if (fcErr2) {
@@ -320,7 +320,7 @@ export async function maybeAutoSendRepjour(
     return { sent: false, note: 'lecture prévisions échouée', retryable: true }
   }
   const projete = computeProjeteMois(
-    (forecasts ?? []) as { occ: number; rev_ttc: number }[],
+    (forecasts ?? []) as { occ: number; rev_ht: number }[],
     candidate.days_in_month,
   )
 

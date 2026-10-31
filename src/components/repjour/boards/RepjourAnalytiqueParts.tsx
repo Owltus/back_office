@@ -56,7 +56,7 @@ export function RepjourAnalytiqueCards({
       <StatCard
         label="Chiffre d'affaires"
         accent={ACCENT.amber}
-        hint={`Chiffre d'affaires hébergement, TVA comprise, en milliers d'euros. Sur les ${coverage} (hors prévisions).`}
+        hint={`Chiffre d'affaires hébergement, hors taxes, en milliers d'euros. Sur les ${coverage} (hors prévisions).`}
         value={fmt.keur(summary.totalRevenue)}
         sub={caSub}
       />

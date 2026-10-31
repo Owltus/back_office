@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs'
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 
-import { VAT_FACTOR } from '#/lib/repjour/constants.ts'
 import {
   lireMontant,
   parseForecast,
@@ -13,11 +12,11 @@ import type { ForecastRow } from '#/lib/repjour/types.ts'
 /*
  * Oracles utilisés dans ce fichier (jamais une valeur relevée en sortie) :
  * - FORMAT SOURCE : export StayNTouch « Forecast By Date Range », colonnes
- *   DATE (jj-mm-aaaa), OCC (entier), OCC %, ADR, REV (TTC, point décimal),
+ *   DATE (jj-mm-aaaa), OCC (entier), OCC %, ADR, REV (HT, point décimal),
  *   dernière ligne TOTALS ; l'export planifié ajoute un préambule de deux
  *   lignes (Hotel Code…). Voir supabase/tests/fixtures/forecast.eml.
- * - RÈGLE MÉTIER : REV est TTC, la TVA hébergement est de 10 %
- *   (VAT_FACTOR = 1,10, constants.ts) → revHT × 1,10 = revTTC.
+ * - RÈGLE MÉTIER : REV est HT depuis le 2026-10-31 (export sans « Include
+ *   Tax », tout le rapport journalier en HT) → revHT = REV, sans conversion.
  * - CONTRAT DE SORTIE : date ISO aaaa-mm-jj (clé `onConflict: 'date'` de
  *   l'upsert forecast_days), month/year numériques du jour.
  * - MESSAGES D'ERREUR : les trois seules erreurs que l'app sait afficher
@@ -60,7 +59,7 @@ describe('parseForecastAll — fixture du dépôt (export planifié réel, ficti
       .find((l) => l.startsWith('TOTALS'))!
       .split(',')
     const occ = lignes.reduce((s, r) => s + r.occ, 0)
-    const rev = lignes.reduce((s, r) => s + r.revTTC, 0)
+    const rev = lignes.reduce((s, r) => s + r.revHT, 0)
     expect(occ).toBe(Number(totals[1]))
     expect(rev).toBeCloseTo(Number(totals[4]), 2)
   })
@@ -83,19 +82,18 @@ describe('parseForecastAll — cas nominaux', () => {
         month: 3,
         year: 2026,
         occ: 42,
-        revTTC: 5040,
+        revHT: 5040,
       }),
     ])
   })
 
-  it('REV est TTC : revHT × 1,10 = revTTC', () => {
-    // Oracle : règle métier TVA 10 %, REV du forecast déjà TTC.
+  it('REV est HT : relu tel quel, sans TVA retirée ni ajoutée', () => {
+    // Oracle : règle métier du 2026-10-31, REV du forecast déjà HT.
     const [r] = parseForecastAll(
       csv([EN_TETE, '01-01-2026,10,,110.00,1100.00']),
     )
-    expect(r.revTTC).toBe(1100)
-    expect(r.revHT).toBeCloseTo(1000, 9)
-    expect(r.revHT).toBeLessThan(r.revTTC)
+    expect(r.revHT).toBe(1100)
+    expect(Object.keys(r)).not.toContain('revTTC')
   })
 
   it('trouve les colonnes par leur NOM, dans n importe quel ordre', () => {
@@ -104,7 +102,7 @@ describe('parseForecastAll — cas nominaux', () => {
       csv(['REV,ADR,OCC,DATE', '2200.00,110,20,15-06-2026']),
     )
     expect(r).toHaveLength(1)
-    expect(r[0]).toMatchObject({ date: '2026-06-15', occ: 20, revTTC: 2200 })
+    expect(r[0]).toMatchObject({ date: '2026-06-15', occ: 20, revHT: 2200 })
   })
 
   it('en-têtes en minuscules ou entourés d espaces acceptés', () => {
@@ -112,7 +110,7 @@ describe('parseForecastAll — cas nominaux', () => {
     const r = parseForecastAll(
       csv([' date , occ ,adr, rev ', '02-02-2026,3,1,300']),
     )
-    expect(r[0]).toMatchObject({ date: '2026-02-02', occ: 3, revTTC: 300 })
+    expect(r[0]).toMatchObject({ date: '2026-02-02', occ: 3, revHT: 300 })
   })
 
   it('ignore la ligne TOTALS quelle que soit sa casse', () => {
@@ -179,7 +177,7 @@ describe('parseForecastAll — entrées hostiles', () => {
     const r = parseForecastAll(
       csv([EN_TETE, '01-01-2026,,,,', '02-01-2026,abc,,,n/a']),
     )
-    expect(r.map((x) => [x.date, x.occ, x.revTTC, x.revHT])).toEqual([
+    expect(r.map((x) => [x.date, x.occ, x.revHT, x.revHT])).toEqual([
       ['2026-01-01', 0, 0, 0],
       ['2026-01-02', 0, 0, 0],
     ])
@@ -189,7 +187,7 @@ describe('parseForecastAll — entrées hostiles', () => {
     // Oracle : invariant « ne jette que les erreurs attendues ».
     const r = parseForecastAll(csv([EN_TETE, '01-01-2026']))
     expect(r).toEqual([
-      expect.objectContaining({ date: '2026-01-01', occ: 0, revTTC: 0 }),
+      expect.objectContaining({ date: '2026-01-01', occ: 0, revHT: 0 }),
     ])
   })
 
@@ -230,7 +228,7 @@ describe('parseForecastAll — entrées hostiles', () => {
     const r = parseForecastAll(
       csv(['DATE;OCC;OCC %;ADR;REV', '01-01-2026;8;10%;100;800.50']),
     )
-    expect(r[0]).toMatchObject({ date: '2026-01-01', occ: 8, revTTC: 800.5 })
+    expect(r[0]).toMatchObject({ date: '2026-01-01', occ: 8, revHT: 800.5 })
   })
 
   it('virgule décimale française « 7500,20 » lue en entier ou refusée, jamais tronquée', () => {
@@ -246,7 +244,7 @@ describe('parseForecastAll — entrées hostiles', () => {
     } catch {
       return // refus explicite : acceptable
     }
-    expect(r[0].revTTC).toBe(7500.2)
+    expect(r[0].revHT).toBe(7500.2)
   })
 
   it('une date impossible (31-02-2026) n est pas rendue comme une date', () => {
@@ -307,7 +305,7 @@ describe('parseForecastAll — entrées hostiles', () => {
         '05-01-2026,1,,1,' + '9'.repeat(400),
       ]),
     )
-    expect(r.map((x) => [x.revTTC, x.revHT])).toEqual([
+    expect(r.map((x) => [x.revHT, x.revHT])).toEqual([
       [0, 0],
       [0, 0],
       [0, 0],
@@ -315,7 +313,7 @@ describe('parseForecastAll — entrées hostiles', () => {
       [0, 0],
     ])
     for (const x of r) {
-      expect(Number.isFinite(x.revTTC)).toBe(true)
+      expect(Number.isFinite(x.revHT)).toBe(true)
       expect(Number.isFinite(x.revHT)).toBe(true)
     }
   })
@@ -500,7 +498,7 @@ describe('parseForecastAll — propriétés', () => {
   })
 
   it('aller-retour : chaque jour bien formé est relu à l identique, dans l ordre', () => {
-    // Oracle : format source → contrat de sortie, TVA 10 %.
+    // Oracle : format source → contrat de sortie, REV en HT tel quel.
     fc.assert(
       fc.property(joursArb({ maxLength: 40 }), (jours) => {
         const r = parseForecastAll(
@@ -518,9 +516,7 @@ describe('parseForecastAll — propriétés', () => {
           expect(x.month).toBe(j.month)
           expect(x.year).toBe(j.year)
           expect(x.occ).toBe(j.occ)
-          expect(x.revTTC).toBeCloseTo(j.centimes / 100, 9)
-          expect(x.revHT * VAT_FACTOR).toBeCloseTo(x.revTTC, 6)
-          expect(x.revHT).toBeLessThanOrEqual(x.revTTC)
+          expect(x.revHT).toBeCloseTo(j.centimes / 100, 9)
         })
       }),
     )
@@ -569,8 +565,8 @@ describe('parseForecastAll — propriétés', () => {
     )
   })
 
-  it('monotonie : plus de REV TTC donne plus de REV HT', () => {
-    // Oracle : HT = TTC / 1,10, fonction strictement croissante.
+  it('monotonie : plus de REV dans le fichier donne plus de REV HT', () => {
+    // Oracle : REV relu tel quel, donc strictement croissant.
     fc.assert(
       fc.property(
         fc.integer({ min: 0, max: 1_000_000 }),

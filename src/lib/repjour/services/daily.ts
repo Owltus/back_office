@@ -108,24 +108,21 @@ export async function fetchBudget(
   return data
 }
 
-/** Total des prévisions d'un mois (occupation, CA TTC), ou `null` si aucune. */
+/** Total des prévisions d'un mois (occupation, CA HT), ou `null` si aucune. */
 export async function fetchForecastMonthTotal(
   year: number,
   month: number,
-): Promise<{ occ: number; revTTC: number } | null> {
+): Promise<{ occ: number; revHT: number } | null> {
   const { data, error } = await supabase
     .from('forecast_days')
-    .select('occ, rev_ttc')
+    .select('occ, rev_ht')
     .eq('year', year)
     .eq('month', month)
   if (error) throw error
   if (!data || data.length === 0) return null
   return {
     occ: data.reduce((s: number, f: { occ: number }) => s + f.occ, 0),
-    revTTC: data.reduce(
-      (s: number, f: { rev_ttc: number }) => s + f.rev_ttc,
-      0,
-    ),
+    revHT: data.reduce((s: number, f: { rev_ht: number }) => s + f.rev_ht, 0),
   }
 }
 
@@ -223,7 +220,7 @@ export async function fetchLatestReportOfMonth(
 export interface RepjourDashboard {
   rapport: DailyReport | null
   budget: MonthBudget | null
-  forecastTotal: { occ: number; revTTC: number } | null
+  forecastTotal: { occ: number; revHT: number } | null
   forecastFraicheur: string | null
   dernierDuMois: DailyReport | null
   rapportPrecedent: DailyReport | null
@@ -299,7 +296,7 @@ interface AnalyticsReportRow {
 interface AnalyticsForecastRow {
   month: number
   occ: number
-  rev_ttc: number
+  rev_ht: number
 }
 
 /** Années disponibles dans la table budget (pour le sélecteur d'année). */
@@ -348,7 +345,7 @@ export async function fetchYearAnalytics(
       .order('day_of_month', { ascending: false }),
     supabase
       .from('forecast_days')
-      .select('month, occ, rev_ttc')
+      .select('month, occ, rev_ht')
       .eq('year', year),
   ])
 
@@ -381,7 +378,7 @@ export async function fetchYearAnalytics(
       count: 0,
     }
     existing.totalOcc += f.occ
-    existing.totalRev += f.rev_ttc
+    existing.totalRev += f.rev_ht
     existing.count += 1
     forecastByMonth.set(f.month, existing)
     if (f.occ > TOTAL_ROOMS) overcapByMonth.add(f.month)

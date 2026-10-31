@@ -43,7 +43,7 @@ export const COLONNES = {
     'rj_to,rj_nuitees,rj_room_revenue,rmtd_room_revenue,pm_room_revenue',
   precedent: 'pm_room_revenue',
   cumul: 'rmtd_room_revenue',
-  forecast: 'rev_ttc',
+  forecast: 'rev_ht',
   budget: 'room_revenue',
   // Jamais guest_name, company ni vip : seulement ce qui fait les compteurs.
   pdj: 'room,status,guests,breakfasts_included,breakfasts_served,breakfasts_offert,manual_kind,rate_plan,addons',
@@ -124,9 +124,9 @@ export function sourceSupabase(client: ClientLecture): Source {
         .select(COLONNES.forecast)
         .eq('year', annee)
         .eq('month', mois)
-      const l = donnees<{ rev_ttc: number | null }[]>(r, 'forecast_days')
+      const l = donnees<{ rev_ht: number | null }[]>(r, 'forecast_days')
       // Même règle que repjour_dashboard : null si AUCUNE prévision du mois.
-      return l.length === 0 ? null : l.reduce((s, x) => s + (x.rev_ttc ?? 0), 0)
+      return l.length === 0 ? null : l.reduce((s, x) => s + (x.rev_ht ?? 0), 0)
     },
     async budgetMois(annee, mois) {
       const r = await client

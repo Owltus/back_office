@@ -186,7 +186,7 @@ export function KPITable({
         </tbody>
       </table>
       <p className="mt-2 text-right text-[11px] text-muted-foreground">
-        Montants TTC
+        Montants HT
       </p>
     </div>
   )

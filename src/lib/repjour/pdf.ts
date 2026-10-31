@@ -56,7 +56,13 @@ export interface RepjourPdfData {
 }
 
 /** KPI à zéro — repli quand le cumul réalisé est absent (jour projeté seul). */
-const ZERO_KPI: KPIBlock = { nuitees: 0, to: 0, pm: 0, revpar: 0, roomRevenue: 0 }
+const ZERO_KPI: KPIBlock = {
+  nuitees: 0,
+  to: 0,
+  pm: 0,
+  revpar: 0,
+  roomRevenue: 0,
+}
 
 /** Ouvre un PDF déjà rendu dans la fenêtre d'impression, via un iframe caché
  * recyclé (aucun téléchargement). Réservé à la SOURIS depuis la décision D1
@@ -244,7 +250,15 @@ function drawCards(pdf: jsPDF, cards: PdfCard[], y: number): number {
     // Valeur centrée, en gras (réduite si très longue).
     setText(pdf, c.valueColor)
     pdf.setFont('helvetica', 'bold')
-    fitCenteredText(pdf, c.value, mid, c.sub ? y + 11.8 : y + 12.6, usable, 12, 8)
+    fitCenteredText(
+      pdf,
+      c.value,
+      mid,
+      c.sub ? y + 11.8 : y + 12.6,
+      usable,
+      12,
+      8,
+    )
     // Sous-valeur centrée.
     if (c.sub) {
       setText(pdf, c.subColor)
@@ -298,7 +312,8 @@ function renderReportDocument(pdf: jsPDF, data: RepjourPdfData): void {
   const dom = dayOfMonth ?? 0
   const dim = daysInMonth ?? 0
   const pk = typeof pickup === 'number' ? pickup : null
-  const depart = typeof monthStartProjection === 'number' ? monthStartProjection : null
+  const depart =
+    typeof monthStartProjection === 'number' ? monthStartProjection : null
   const {
     remainingDays,
     hasDay,
@@ -376,7 +391,7 @@ function renderReportDocument(pdf: jsPDF, data: RepjourPdfData): void {
   const over = progress > 100
   const maxScale = over ? progress * 1.15 : 100
   const frac = (v: number) =>
-    budget.room_revenue > 0 ? (v / budget.room_revenue) * 100 / maxScale : 0
+    budget.room_revenue > 0 ? ((v / budget.room_revenue) * 100) / maxScale : 0
 
   setText(pdf, GRAY2)
   pdf.setFont('helvetica', 'bold').setFontSize(8)
@@ -412,11 +427,19 @@ function renderReportDocument(pdf: jsPDF, data: RepjourPdfData): void {
   // Répartition : petits carrés + libellé + montant (façon légende rapro).
   const parts: { label: string; amount: string; color: RGB }[] = []
   if (precedent > 0)
-    parts.push({ label: 'Acquis', amount: fmt.eurInt(precedent), color: ACQUIS })
+    parts.push({
+      label: 'Acquis',
+      amount: fmt.eurInt(precedent),
+      color: ACQUIS,
+    })
   if (!partial && caJour > 0)
     parts.push({ label: 'Jour', amount: fmt.eurInt(caJour), color: JOUR })
   if (projete > 0)
-    parts.push({ label: 'Projeté', amount: fmt.eurInt(projete), color: PROJETE })
+    parts.push({
+      label: 'Projeté',
+      amount: fmt.eurInt(projete),
+      color: PROJETE,
+    })
   if (totalv < budget.room_revenue)
     parts.push({
       label: 'Reste',
@@ -488,7 +511,7 @@ function renderReportDocument(pdf: jsPDF, data: RepjourPdfData): void {
   y += 0.5
   setText(pdf, GRAY)
   pdf.setFont('helvetica', 'italic').setFontSize(7.5)
-  pdf.text('Montants TTC', RIGHT, y, { align: 'right' })
+  pdf.text('Montants HT', RIGHT, y, { align: 'right' })
   y += 8
 
   // ===== Pied : horodatage d'import =======================================

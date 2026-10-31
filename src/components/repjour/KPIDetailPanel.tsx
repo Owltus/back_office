@@ -146,7 +146,9 @@ function Section({
     <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
       <div className="border-b border-border px-5 py-4">
         <h3 className="text-base font-bold text-foreground">{title}</h3>
-        <p className="mt-0.5 text-xs text-muted-foreground italic">{subtitle}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground italic">
+          {subtitle}
+        </p>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
           {definition}
         </p>
@@ -207,25 +209,33 @@ export function KPIDetailPanel({
             <div className="rounded-lg border border-border bg-card p-3">
               <SourceBadge source="Comparison" />
               <p className="mt-1.5 text-muted-foreground">
-                {"Fichier « Comparison By Date ». Ce qui s'est réellement passé : chambres vendues, revenus."}
+                {
+                  "Fichier « Comparison By Date ». Ce qui s'est réellement passé : chambres vendues, revenus."
+                }
               </p>
             </div>
             <div className="rounded-lg border border-border bg-card p-3">
               <SourceBadge source="Forecast" />
               <p className="mt-1.5 text-muted-foreground">
-                {'Fichier « Forecast By Date Range ». Ce que le PMS prévoit pour le reste du mois.'}
+                {
+                  'Fichier « Forecast By Date Range ». Ce que le PMS prévoit pour le reste du mois.'
+                }
               </p>
             </div>
             <div className="rounded-lg border border-border bg-card p-3">
               <SourceBadge source="Budget" />
               <p className="mt-1.5 text-muted-foreground">
-                {"Objectif fixé en début d'année. Ne change pas en cours d'exercice."}
+                {
+                  "Objectif fixé en début d'année. Ne change pas en cours d'exercice."
+                }
               </p>
             </div>
           </div>
         </div>
         <p className="text-xs text-muted-foreground">
-          {"Les fichiers CSV donnent des montants HT (hors taxes). L'application ajoute 10% de TVA pour afficher en TTC."}
+          {
+            "Tous les montants sont hors taxes (HT), comme dans les fichiers CSV. Aucune TVA n'est ajoutée."
+          }
         </p>
       </div>
 
@@ -327,7 +337,9 @@ export function KPIDetailPanel({
           <CalcCard
             source="Comparison"
             label="La nuit dernière"
-            rule={"CA chambres d'hier divisé par le nombre de chambres vendues hier"}
+            rule={
+              "CA chambres d'hier divisé par le nombre de chambres vendues hier"
+            }
             a={fmt.eurInt(realiseJour.roomRevenue)}
             op={'÷'}
             b={`${fmt.nuitees(realiseJour.nuitees)} ch.`}
@@ -336,7 +348,9 @@ export function KPIDetailPanel({
           <CalcCard
             source="Comparison"
             label={`Cumul du mois (${dayOfMonth} jours)`}
-            rule={'CA chambres du mois divisé par le total de chambres vendues depuis le 1er'}
+            rule={
+              'CA chambres du mois divisé par le total de chambres vendues depuis le 1er'
+            }
             a={fmt.eurInt(realiseMTD.roomRevenue)}
             op={'÷'}
             b={`${fmt.nuitees(realiseMTD.nuitees)} ch.`}
@@ -411,42 +425,33 @@ export function KPIDetailPanel({
         title={"Chiffre d'affaires hébergement"}
         subtitle="En anglais : Room Revenue"
         definition={
-          "L'argent total encaissé grâce aux chambres, TVA comprise. C'est la ligne du bas : tous les autres indicateurs décrivent comment ce chiffre est construit."
+          "L'argent total encaissé grâce aux chambres, hors taxes. C'est la ligne du bas : tous les autres indicateurs décrivent comment ce chiffre est construit."
         }
-        formula={'Montant HT du CSV × 1,10 = montant TTC affiché'}
+        formula={'Montant HT du CSV, affiché tel quel'}
       >
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <CalcCard
+          <ReadCard
             source="Comparison"
             label="La nuit dernière"
-            rule={'Colonne « ROOM REVENUE » du jour, converti en TTC'}
-            a={'ROOM REV.'}
-            op={'×'}
-            b={'1,10'}
-            result={fmt.eurInt(realiseJour.roomRevenue)}
+            rule={'Colonne « ROOM REVENUE » du jour'}
+            value={fmt.eurInt(realiseJour.roomRevenue)}
           />
-          <CalcCard
+          <ReadCard
             source="Comparison"
             label={`Cumul du mois (${dayOfMonth} jours)`}
-            rule={'Colonne « ROOM REVENUE » cumul du mois, converti en TTC'}
-            a={'ROOM REV. MTD'}
-            op={'×'}
-            b={'1,10'}
-            result={fmt.eurInt(realiseMTD.roomRevenue)}
+            rule={'Colonne « ROOM REVENUE » cumul du mois'}
+            value={fmt.eurInt(realiseMTD.roomRevenue)}
           />
-          <CalcCard
+          <ReadCard
             source="Forecast"
             label={`Projeté fin de mois (${daysInMonth} jours)`}
-            rule={'Somme des revenus prévus (colonne REV) de chaque jour, converti en TTC'}
-            a={'Somme REV'}
-            op={'×'}
-            b={'1,10'}
-            result={fmt.eurInt(projeteMois.roomRevenue)}
+            rule={'Somme des revenus prévus (colonne REV) de chaque jour'}
+            value={fmt.eurInt(projeteMois.roomRevenue)}
           />
           <ReadCard
             source="Budget"
             label="Objectif mensuel"
-            rule={'Déjà en TTC, pas de conversion'}
+            rule={'Saisi en HT'}
             value={fmt.eurInt(budget.room_revenue)}
           />
         </div>

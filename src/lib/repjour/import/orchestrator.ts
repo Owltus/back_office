@@ -3,7 +3,10 @@ import { errorMessage } from '#/lib/errors.ts'
 import { MONTHS, TOTAL_ROOMS } from '#/lib/repjour/constants.ts'
 import { parseComparison } from '#/lib/repjour/parse/comparison.ts'
 import { parseComparisonMetrics } from '#/lib/repjour/parse/metrics.ts'
-import { parseForecast, parseForecastAll } from '#/lib/repjour/parse/forecast.ts'
+import {
+  parseForecast,
+  parseForecastAll,
+} from '#/lib/repjour/parse/forecast.ts'
 import { extractReportDate } from '#/lib/repjour/parse/date.ts'
 import { detectFileType } from '#/lib/repjour/parse/detect.ts'
 import { upsertDailyMetrics } from '#/lib/repjour/services/metrics.ts'
@@ -47,7 +50,7 @@ export interface PreValidationResult {
 
 /**
  * Pré-valide un fichier Forecast SANS écrire en base.
- * Compare avec les données existantes pour détecter les anomalies TTC/HT.
+ * Compare avec les données existantes pour détecter un forecast resté en TTC.
  */
 export async function preValidateForecast(
   forecastFile: File,
@@ -76,8 +79,8 @@ export async function preValidateForecast(
     monthGroups.get(key)!.push(row)
   }
 
-  // Référence TTC = RÉALISÉ des années concernées (daily_reports, en TTC). On en
-  // tire l'ADR réalisé par mois pour juger si le forecast porte bien sa TVA. Pas
+  // Référence HT = RÉALISÉ des années concernées (daily_reports, en HT). On en
+  // tire l'ADR réalisé par mois pour juger si le forecast est bien en HT. Pas
   // de lecture forecast_days ni budget ici : la détection ne s'appuie QUE sur le
   // réalisé (cf. calc/validate.ts).
   const years = [...new Set(allRows.map((r) => r.year))]
@@ -108,7 +111,7 @@ export async function preValidateForecast(
 
   // UN seul message par souci : les alertes sont sans chiffre et identiques d'un
   // mois à l'autre → on dédoublonne par (type, message). Plusieurs mois « pas de
-  // TVA » ne donnent donc qu'UNE ligne.
+  // en TTC » ne donnent donc qu'UNE ligne.
   const seen = new Set<string>()
   const deduped = allAlerts.filter((a) => {
     const k = `${a.type}::${a.message}`
@@ -162,8 +165,7 @@ export async function importForecastDays(
     year: r.year,
     occ: r.occ,
     rev_ht: r.revHT,
-    rev_ttc: r.revTTC,
-    adr_ttc: r.occ > 0 ? r.revTTC / r.occ : 0,
+    adr_ht: r.occ > 0 ? r.revHT / r.occ : 0,
     occ_percent: (r.occ / TOTAL_ROOMS) * 100,
     imported_at: importedAt,
   }))
@@ -172,7 +174,9 @@ export async function importForecastDays(
     .upsert(data, { onConflict: 'date' })
   if (error) {
     console.error('Sauvegarde des prévisions échouée :', error.message)
-    throw new Error("Les prévisions n'ont pas pu être enregistrées. Réessaie dans un instant.")
+    throw new Error(
+      "Les prévisions n'ont pas pu être enregistrées. Réessaie dans un instant.",
+    )
   }
   const monthKeys = new Set(rows.map((r) => `${r.year}-${r.month}`))
   const years = [...new Set(rows.map((r) => r.year))].sort((a, b) => a - b)
@@ -263,16 +267,16 @@ export async function processComparisonOnly(
       (s: number, f: { occ: number }) => s + f.occ,
       0,
     )
-    const totalRevTTC = existingForecasts.reduce(
-      (s: number, f: { rev_ttc: number }) => s + f.rev_ttc,
+    const totalRevHT = existingForecasts.reduce(
+      (s: number, f: { rev_ht: number }) => s + f.rev_ht,
       0,
     )
     finalProjeteMois = {
       nuitees: totalOCC,
-      roomRevenue: totalRevTTC,
+      roomRevenue: totalRevHT,
       to: (totalOCC / (TOTAL_ROOMS * reportDate.daysInMonth)) * 100,
-      pm: totalOCC > 0 ? totalRevTTC / totalOCC : 0,
-      revpar: totalRevTTC / (TOTAL_ROOMS * reportDate.daysInMonth),
+      pm: totalOCC > 0 ? totalRevHT / totalOCC : 0,
+      revpar: totalRevHT / (TOTAL_ROOMS * reportDate.daysInMonth),
     }
   } else {
     alerts.push({
@@ -330,7 +334,9 @@ export async function processComparisonOnly(
 
   if (upsertError) {
     console.error('Sauvegarde du rapport échouée :', upsertError.message)
-    throw new Error("Le rapport n'a pas pu être enregistré. Réessaie dans un instant.")
+    throw new Error(
+      "Le rapport n'a pas pu être enregistré. Réessaie dans un instant.",
+    )
   }
 
   /*
@@ -441,9 +447,9 @@ export async function processImport(
     )
   }
 
-  // Contrôles de cohérence — forecast. Référence TTC = ADR réalisé MTD, pris
+  // Contrôles de cohérence — forecast. Référence HT = ADR réalisé MTD, pris
   // directement du Comparison qu'on importe (le plus frais, déjà en mémoire) : un
-  // forecast en HT ressort ~10 % sous ce réalisé. `null` si trop peu de jours
+  // forecast resté en TTC ressort ~10 % au-dessus de ce réalisé. `null` si trop peu de jours
   // réalisés (début de mois) → pas de détection (cf. validateForecast).
   const ref = buildTvaRefFrom(
     realiseMTD.roomRevenue,
@@ -501,7 +507,9 @@ export async function processImport(
 
   if (upsertError) {
     console.error('Sauvegarde du rapport échouée :', upsertError.message)
-    throw new Error("Le rapport n'a pas pu être enregistré. Réessaie dans un instant.")
+    throw new Error(
+      "Le rapport n'a pas pu être enregistré. Réessaie dans un instant.",
+    )
   }
 
   // UPSERT forecast_days — `imported_at` rafraîchi (voir importForecastDays).
@@ -512,8 +520,7 @@ export async function processImport(
     year: r.year,
     occ: r.occ,
     rev_ht: r.revHT,
-    rev_ttc: r.revTTC,
-    adr_ttc: r.occ > 0 ? r.revTTC / r.occ : 0,
+    adr_ht: r.occ > 0 ? r.revHT / r.occ : 0,
     occ_percent: (r.occ / TOTAL_ROOMS) * 100,
     imported_at: forecastImportedAt,
   }))
@@ -524,7 +531,10 @@ export async function processImport(
       .upsert(forecastData, { onConflict: 'date' })
 
     if (forecastError) {
-      console.error('Sauvegarde des prévisions échouée :', forecastError.message)
+      console.error(
+        'Sauvegarde des prévisions échouée :',
+        forecastError.message,
+      )
       alerts.push({
         type: 'warning',
         message:

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { validateCoherence, validateForecast } from '#/lib/repjour/calc/validate.ts'
+import {
+  validateCoherence,
+  validateForecast,
+} from '#/lib/repjour/calc/validate.ts'
 import { TOTAL_ROOMS } from '#/lib/repjour/constants.ts'
 import type { ForecastRow, KPIBlock } from '#/lib/repjour/types.ts'
 
@@ -11,8 +14,10 @@ function kpi(nuitees: number, roomRevenue: number): KPIBlock {
   return { nuitees, to: 0, pm: 0, revpar: 0, roomRevenue }
 }
 
-const hasError = (alerts: { type: string }[]) => alerts.some((a) => a.type === 'error')
-const hasWarning = (alerts: { type: string }[]) => alerts.some((a) => a.type === 'warning')
+const hasError = (alerts: { type: string }[]) =>
+  alerts.some((a) => a.type === 'error')
+const hasWarning = (alerts: { type: string }[]) =>
+  alerts.some((a) => a.type === 'warning')
 
 describe('validateCoherence — 11. matrice exhaustive des cas et frontières', () => {
   it('nuitées négatives ⇒ erreur (réalNegatives)', () => {
@@ -81,8 +86,7 @@ describe('validateCoherence vs validateForecast — 12. asymétrie assumée sur 
       month: 9,
       year: 2026,
       occ: TOTAL_ROOMS + 5, // surbooking sur l'ensemble du mois
-      revHT: (TOTAL_ROOMS + 5) * 90,
-      revTTC: (TOTAL_ROOMS + 5) * 99,
+      revHT: (TOTAL_ROOMS + 5) * 99,
     }))
     const alerts = validateForecast(rows, 31, null)
     expect(alerts).toEqual([])

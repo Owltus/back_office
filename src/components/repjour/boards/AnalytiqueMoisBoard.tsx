@@ -9,7 +9,10 @@ import {
   RepjourStatsHead,
 } from '#/components/repjour/boards/RepjourAnalytiqueParts.tsx'
 import { subText } from '#/components/analytique/AnalytiqueCards.tsx'
-import { AnalytiqueShell, ToolbarCell } from '#/components/analytique/AnalytiqueShell.tsx'
+import {
+  AnalytiqueShell,
+  ToolbarCell,
+} from '#/components/analytique/AnalytiqueShell.tsx'
 import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { AnalytiqueBackButton } from '#/components/analytique/AnalytiqueBackButton.tsx'
@@ -113,9 +116,9 @@ export function AnalytiqueMoisBoard({
         count++
       } else if (f) {
         totalNuitees += f.occ
-        totalRevenue += f.rev_ttc
+        totalRevenue += f.rev_ht
         toSum += f.occ_percent
-        revparSum += f.rev_ttc / TOTAL_ROOMS
+        revparSum += f.rev_ht / TOTAL_ROOMS
         count++
       }
     }
@@ -175,7 +178,7 @@ export function AnalytiqueMoisBoard({
         revenueReal: hasReport ? r.rj_room_revenue : null,
         revenueProj:
           !hasReport && hasForecast
-            ? f.rev_ttc
+            ? f.rev_ht
             : hasReport && day === lastReportDay
               ? r.rj_room_revenue
               : null,
@@ -222,8 +225,7 @@ export function AnalytiqueMoisBoard({
   const minYear = oldest ? Number(oldest.slice(0, 4)) : nowYear
   const minMonth = oldest ? Number(oldest.slice(5, 7)) : nowMonth
   const prevDisabled = year < minYear || (year === minYear && month <= minMonth)
-  const nextDisabled =
-    year > nowYear || (year === nowYear && month >= nowMonth)
+  const nextDisabled = year > nowYear || (year === nowYear && month >= nowMonth)
 
   const goToMonth = (y: number, m: number) =>
     navigate({
@@ -329,9 +331,9 @@ export function AnalytiqueMoisBoard({
 
             const nuitees = r ? r.rj_nuitees : f ? f.occ : null
             const to = r ? r.rj_to : f ? f.occ_percent : null
-            const pm = r ? r.rj_pm : f && f.occ > 0 ? f.rev_ttc / f.occ : null
-            const revpar = r ? r.rj_revpar : f ? f.rev_ttc / TOTAL_ROOMS : null
-            const ca = r ? r.rj_room_revenue : f ? f.rev_ttc : null
+            const pm = r ? r.rj_pm : f && f.occ > 0 ? f.rev_ht / f.occ : null
+            const revpar = r ? r.rj_revpar : f ? f.rev_ht / TOTAL_ROOMS : null
+            const ca = r ? r.rj_room_revenue : f ? f.rev_ht : null
 
             return (
               <tr
