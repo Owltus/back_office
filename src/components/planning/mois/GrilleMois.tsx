@@ -389,11 +389,9 @@ export function GrilleMois({
                       {Number(d.slice(8))}
                     </span>
                     <PointsPresence
-                      presence={
-                        semaines
-                          .get(reperer(d).lundi)
-                          ?.presence.filter((p) => p.jour === jour) ?? []
-                      }
+                      presence={semaines
+                        .get(reperer(d).lundi)
+                        ?.presence.filter((p) => p.jour === jour)}
                     />
                   </th>
                 )
