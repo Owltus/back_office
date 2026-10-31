@@ -6,6 +6,7 @@ import {
   codesDeLaCase,
   codesUniques,
   ligneDe,
+  motifsDuJour,
   nomLigneCode,
   posteDeduit,
   rubriquesDeLaCase,
@@ -443,5 +444,46 @@ describe('codesUniques : chaque code une fois, poste déduit', () => {
     const matins = u.codes.filter((c) => c.horaire.code === 'M')
     expect(matins).toHaveLength(1)
     expect(matins[0].alerte).toBe('-11 h de repos')
+  })
+})
+
+describe('motifsDuJour', () => {
+  // Oracle : les repos en tête, l'école jamais, l'ordre des réglages gardé.
+  const m = (id: number, code: string, nom: string, nature = 'absence') => ({
+    id,
+    code,
+    nom,
+    nature: nature as 'absence' | 'ecole',
+  })
+  it('repos à part, école retirée, ordre gardé', () => {
+    const r = motifsDuJour(
+      [
+        m(1, 'CP', 'Congé payé'),
+        m(2, 'EC', 'École - CFA', 'ecole'),
+        m(3, 'RP', 'Repos exceptionnel'),
+        m(4, 'MA', 'Maladie'),
+        m(5, 'RF', '  Répos forfait'),
+      ],
+      { forfait_jours: true },
+    )
+    expect(r.repos.map((x) => x.code)).toEqual(['RP', 'RF'])
+    expect(r.autres.map((x) => x.code)).toEqual(['CP', 'MA'])
+  })
+  it('repos forfait réservé au forfait jours (décision du 2026-10-31)', () => {
+    const motifs = [
+      m(3, 'RP', 'Repos exceptionnel'),
+      m(5, 'RF', 'Repos forfait'),
+    ]
+    expect(
+      motifsDuJour(motifs, { forfait_jours: false }).repos.map((x) => x.code),
+    ).toEqual(['RP'])
+    expect(
+      motifsDuJour(motifs, { forfait_jours: true }).repos.map((x) => x.code),
+    ).toEqual(['RP', 'RF'])
+  })
+  it("une école mal typée (code EC) n'est jamais proposée", () => {
+    const r = motifsDuJour([m(1, 'EC', 'Cours')], { forfait_jours: true })
+    expect(r.repos).toEqual([])
+    expect(r.autres).toEqual([])
   })
 })

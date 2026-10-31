@@ -80,6 +80,7 @@ import {
 import { PanneauAlertes } from '#/components/planning/semaine/PanneauAlertes.tsx'
 import {
   codesUniques,
+  motifsDuJour,
   rubriquesDeLaCase,
 } from '#/components/planning/codesCase.ts'
 import {
@@ -619,6 +620,13 @@ export function VueSemaine({
     const st = shift ? null : statutDe(sid, j)
     const absenceRetirable =
       !!st && (st.genre === 'absence' || st.genre === 'ecole') && !st.fixe
+    // Repos et absences posés d'un clic, sauf sur un jour figé par la
+    // semaine type (il se change dans la fiche).
+    const absenceFixe =
+      !!st && (st.genre === 'absence' || st.genre === 'ecole') && st.fixe
+    const motifActuel = shift
+      ? null
+      : (absenceDe(bilanDe(sid), j)?.motif_id ?? null)
     setMenu({
       ...o,
       nom: nomComplet(p),
@@ -680,6 +688,26 @@ export function VueSemaine({
                   ),
               )
           : undefined,
+      absences: absenceFixe
+        ? undefined
+        : {
+            ...motifsDuJour(referentiel.motifs, p),
+            actuel: motifActuel,
+            onPoser: (motifId) =>
+              siOuverte(
+                () =>
+                  void executer(
+                    () =>
+                      service.poserAbsences(
+                        sid,
+                        [ajouterJours(lundi, j)],
+                        motifId,
+                      ),
+                    'Absence non posée',
+                    o,
+                  ),
+              ),
+          },
     })
   }
 

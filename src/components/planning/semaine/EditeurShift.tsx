@@ -63,6 +63,7 @@ import {
   codesDeLaCase,
   codesUniques,
   ligneDe,
+  motifsDuJour,
   rubriquesDeLaCase,
 } from '#/components/planning/codesCase.ts'
 import type {
@@ -161,6 +162,10 @@ export function EditeurShift({
     existant?.salarie_id ??
     (edition.mode === 'creation' ? edition.salarie_id : 0)
   const personne = salaries.find((s) => s.id === salarieInitial)
+  // Repos et absences du volet : mêmes motifs, même ordre que le clic droit.
+  const motifsVolet = motifsDuJour(motifs, {
+    forfait_jours: !!personne?.forfait_jours,
+  })
   const jourInitial =
     existant?.jour ?? (edition.mode === 'creation' ? edition.jour : 0)
   const creation = edition.mode === 'creation' ? edition : null
@@ -681,9 +686,9 @@ export function EditeurShift({
 
             {[
               {
-                titre: 'Ou une absence',
+                titre: 'Ou un repos, une absence',
                 aide: 'pas de travail ce jour-là',
-                liste: motifs.filter((m) => !estEcole(m)),
+                liste: [...motifsVolet.repos, ...motifsVolet.autres],
               },
               {
                 titre: "Ou l'école",

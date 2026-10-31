@@ -3,7 +3,8 @@
  * horaires que la personne peut faire sur ses postes, chacun une seule fois,
  * rangés par moment, posés d'un clic sur le poste déduit (jamais affiché :
  * code et horaires seulement) ;
- * valider le shift, la journée étoile. Le
+ * valider le shift, la journée étoile ; un repos (en tête) ou une absence
+ * (en bas) posés d'un clic comme un code. Le
  * positionnement au curseur et la fermeture (Échap, clic ailleurs) sont ceux
  * du `ContextMenu` de shadcn.
  */
@@ -30,7 +31,7 @@ import {
 import type { CodesUniquesCase } from '#/components/planning/codesCase.ts'
 import { heureAffichee } from '#/lib/planning/temps.ts'
 import { JOURS } from '#/lib/planning/types.ts'
-import type { Horaire } from '#/lib/planning/types.ts'
+import type { Horaire, Motif } from '#/lib/planning/types.ts'
 import { travailCode } from '#/components/planning/semaine/edition.ts'
 
 export interface OuvertureMenu {
@@ -48,6 +49,14 @@ export interface OuvertureMenu {
   etoile?: { active: boolean; onBasculer: () => void }
   /** La case a un shift : la remettre à « Non attribué ». */
   vider?: () => void
+  /** Repos et absences posables (`motifsDuJour`), le motif posé ici, et la
+   * pose d'un clic. Absent quand le jour ne se change pas (semaine type). */
+  absences?: {
+    repos: Motif[]
+    autres: Motif[]
+    actuel: number | null
+    onPoser: (motifId: number) => void
+  }
 }
 
 export function MenuCase({
@@ -58,7 +67,48 @@ export function MenuCase({
   onHoraire: (h: Horaire, posteId: number) => void
 }) {
   if (!ouverture) return null
-  const { codes, actuel, actuelPoste, validation, etoile, vider } = ouverture
+  const { codes, actuel, actuelPoste, validation, etoile, vider, absences } =
+    ouverture
+  const groupeMotifs = (libelle: string, liste: Motif[]) =>
+    absences &&
+    liste.length > 0 && (
+      <>
+        <ContextMenuSeparator />
+        <ContextMenuGroup aria-label={libelle}>
+          <ContextMenuLabel className="pt-1 pb-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+            {libelle}
+          </ContextMenuLabel>
+          {liste.map((m) => {
+            const estActuel = absences.actuel === m.id
+            return (
+              <ContextMenuItem
+                key={m.id}
+                aria-label={`${m.code}, ${m.nom}`}
+                onSelect={() => {
+                  if (!estActuel) absences.onPoser(m.id)
+                }}
+              >
+                <span
+                  className="min-w-12 shrink-0 rounded px-1.5 py-0.5 text-center text-xs font-semibold"
+                  style={{ background: m.couleur, color: texteSur(m.couleur) }}
+                >
+                  {m.code}
+                </span>
+                <span className="flex-1 truncate pl-1 text-sm">{m.nom}</span>
+                {estActuel ? (
+                  <Check
+                    className="size-3.5 text-primary"
+                    aria-label="Motif actuel"
+                  />
+                ) : (
+                  <span className="size-3.5" />
+                )}
+              </ContextMenuItem>
+            )
+          })}
+        </ContextMenuGroup>
+      </>
+    )
   const horsPermis = codes.actuel
   const parId = new Map(codes.codes.map((c) => [c.horaire.id, c]))
   return (
@@ -101,6 +151,7 @@ export function MenuCase({
           </ContextMenuItem>
         </>
       )}
+      {groupeMotifs('Repos', absences?.repos ?? [])}
       <ContextMenuSeparator />
       {grouperHoraires(codes.codes.map((c) => c.horaire)).map((g, i) => (
         <ContextMenuGroup key={g.libelle} aria-label={g.libelle}>
@@ -176,6 +227,7 @@ export function MenuCase({
       {codes.texte && !horsPermis && (
         <ContextMenuItem disabled>{codes.texte}</ContextMenuItem>
       )}
+      {groupeMotifs('Absences', absences?.autres ?? [])}
     </ContextMenuContent>
   )
 }

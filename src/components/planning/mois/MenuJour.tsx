@@ -4,8 +4,9 @@
  * personne peut faire sur ses postes, chacun une seule fois, rangés par
  * moment (code et horaires seulement : le poste est déduit sans être
  * affiché), pour changer d'un clic ; valider ou remettre en
- * proposition, la journée étoile, et l'ouverture de la semaine pour tout
- * modifier (absence, école…).
+ * proposition, la journée étoile, un repos ou une absence posés d'un clic
+ * comme un code (repos en tête, absences en bas), et l'ouverture de la
+ * semaine pour le reste.
  */
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -28,13 +29,27 @@ import {
 import type { ShiftOut } from '#/lib/planning/semaine.ts'
 import {
   codesUniques,
+  motifsDuJour,
   nomLigneCode,
   rubriquesDeLaCase,
   texteChangementPoste,
 } from '#/components/planning/codesCase.ts'
 import type { CodeUnique, SourceCase } from '#/components/planning/codesCase.ts'
 import { heureAffichee } from '#/lib/planning/temps.ts'
-import type { Horaire, Referentiel, Salarie } from '#/lib/planning/types.ts'
+import type {
+  Horaire,
+  Motif,
+  Referentiel,
+  Salarie,
+} from '#/lib/planning/types.ts'
+
+/** Repos et absences posables sur la case : le motif actuel (posé ici),
+ * et la pose d'un clic. Absent quand le jour ne se change pas (absence de
+ * la semaine type). */
+export interface AbsencesDuMenu {
+  actuel: number | null
+  onPoser: (motifId: number) => void
+}
 
 export interface OuvertureMenu {
   salarieId: number
@@ -64,6 +79,7 @@ export function MenuJour({
   validation,
   etoile,
   onVider,
+  absences,
   onSemaine,
   onFermer,
 }: {
@@ -84,6 +100,7 @@ export function MenuJour({
   etoile?: { active: boolean; onBasculer: () => void }
   /** La case a un shift : la remettre à « Non attribué ». */
   onVider?: () => void
+  absences?: AbsencesDuMenu
   onSemaine: () => void
   onFermer: () => void
 }) {
@@ -194,6 +211,47 @@ export function MenuJour({
     )
   }
 
+  const motifs =
+    ecrire && absences ? motifsDuJour(referentiel.motifs, personne) : null
+  const boutonMotif = (m: Motif) => {
+    const actuel = absences?.actuel === m.id
+    return (
+      <button
+        key={`m${m.id}`}
+        type="button"
+        role="menuitem"
+        aria-label={`${m.code}, ${m.nom}`}
+        className={ITEM}
+        onClick={choisir(() => {
+          if (!actuel) absences?.onPoser(m.id)
+        })}
+      >
+        <span
+          className="min-w-12 shrink-0 rounded px-1.5 py-0.5 text-center text-xs font-semibold"
+          style={{ background: m.couleur, color: texteSur(m.couleur) }}
+        >
+          {m.code}
+        </span>
+        <span className="flex-1 truncate text-sm">{m.nom}</span>
+        {actuel ? (
+          <Check className="size-4 shrink-0 text-primary" />
+        ) : (
+          <span className="size-4 shrink-0" />
+        )}
+      </button>
+    )
+  }
+  const groupeMotifs = (libelle: string, liste: Motif[]) =>
+    liste.length > 0 && (
+      <div role="group" aria-label={libelle}>
+        <div className="-mx-1 my-1 h-px bg-border" />
+        <div className="px-2 pt-1 pb-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+          {libelle}
+        </div>
+        {liste.map(boutonMotif)}
+      </div>
+    )
+
   return (
     <>
       <div
@@ -292,6 +350,7 @@ export function MenuJour({
           <CalendarRange className="size-4" />
           <span className="flex-1 font-medium">Ouvrir la semaine</span>
         </button>
+        {motifs && groupeMotifs('Repos', motifs.repos)}
         {grouperHoraires(liste.map((c) => c.horaire)).map((g) => (
           <div key={g.libelle} role="group" aria-label={g.libelle}>
             <div className="-mx-1 my-1 h-px bg-border" />
@@ -301,6 +360,7 @@ export function MenuJour({
             {g.horaires.map((h) => boutonCode(parId.get(h.id)!))}
           </div>
         ))}
+        {motifs && groupeMotifs('Absences', motifs.autres)}
         {u && (u.actuel || u.texte) && (
           <div className="-mx-1 my-1 h-px bg-border" />
         )}

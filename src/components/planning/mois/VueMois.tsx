@@ -907,6 +907,29 @@ export function VueMois({
                     )
                 : undefined
           }
+          absences={
+            absenceMenu?.fixe
+              ? undefined
+              : {
+                  actuel: absenceMenu?.motifId ?? null,
+                  onPoser: (motifId) => {
+                    if (
+                      horsContrat(
+                        reperesMenu.lundi,
+                        menu.salarieId,
+                        reperesMenu.jour,
+                      )
+                    )
+                      return notifier(MSG_HORS, 'attention')
+                    void executer(
+                      reperesMenu.lundi,
+                      () => poserAbsences(menu.salarieId, [menu.date], motifId),
+                      'Absence non posée',
+                      { salarieId: menu.salarieId, jour: reperesMenu.jour },
+                    )
+                  },
+                }
+          }
           onSemaine={() => onSemaine(reperesMenu.lundi)}
           onFermer={fermerMenu}
         />

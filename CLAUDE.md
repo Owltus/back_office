@@ -2084,7 +2084,12 @@ référence des règles (`docs/regles-hcr.md` là-bas).
     remettre). Exception (décision utilisateur du même jour) : un code qui
     ferait CHANGER de poste un shift existant le dit sur sa ligne, « Passe en
     Supervision » (`changePoste`), et le volet « Ce shift passe de Club à
-    Supervision. » ; jamais en silence. Volet : code permis sur plusieurs postes = choix
+    Supervision. » ; jamais en silence. Repos et absences posés d'un clic
+    comme un code (demande utilisateur du 2026-10-31, `motifsDuJour`) :
+    groupe « Repos » en tête du clic droit (motifs dont le nom commence par
+    « Repos »), « Absences » en bas, même ordre dans le volet ; l'école
+    jamais (fiche) ; un motif « forfait » seulement pour le forfait jours
+    (cadres) ; rien sur un jour figé par la semaine type. Volet : code permis sur plusieurs postes = choix
     segmenté « Réception | Club » sous la liste ; section Poste pour
     l'horaire spécifique seulement. Jamais un poste hors fiche, sauf celui du
     shift existant. La coupure de 11 h (12 h mineur) est permise à la main

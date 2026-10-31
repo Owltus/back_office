@@ -17,6 +17,7 @@ import { estEcole } from '#/lib/planning/semaine.ts'
 import type { SemaineOut } from '#/lib/planning/semaine.ts'
 import type {
   Horaire,
+  Motif,
   Niveau,
   Poste,
   Referentiel,
@@ -373,4 +374,27 @@ export function nomLigneCode(c: {
     ...(c.alerte ? [c.alerte] : []),
     ...(c.changePoste ? [texteChangementPoste(c.changePoste)] : []),
   ].join(', ')
+}
+
+/** Repos et absences qu'on pose sur un jour, comme un code (clic droit des
+ * deux vues, volet) : tous les motifs sauf l'école, qui se pose dans la
+ * fiche (calendrier du CFA). Un motif « forfait » (repos forfait) est
+ * réservé aux personnes au forfait jours (cadres), décision utilisateur du
+ * 2026-10-31. Les repos (« Repos exceptionnel », « Repos forfait »…) à
+ * part, pour être en tête ; le reste dans l'ordre des réglages. */
+export function motifsDuJour<M extends Pick<Motif, 'nature' | 'code' | 'nom'>>(
+  motifs: ReadonlyArray<M>,
+  personne: Pick<Salarie, 'forfait_jours'>,
+): { repos: M[]; autres: M[] } {
+  const nom = (m: M) =>
+    m.nom.normalize('NFD').replace(/\p{M}/gu, '').trim().toLowerCase()
+  const estRepos = (m: M) => nom(m).startsWith('repos')
+  const permis = motifs.filter(
+    (m) =>
+      !estEcole(m) && (personne.forfait_jours || !nom(m).includes('forfait')),
+  )
+  return {
+    repos: permis.filter(estRepos),
+    autres: permis.filter((m) => !estRepos(m)),
+  }
 }
