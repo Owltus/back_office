@@ -377,24 +377,28 @@ export function nomLigneCode(c: {
 }
 
 /** Repos et absences qu'on pose sur un jour, comme un code (clic droit des
- * deux vues, volet) : tous les motifs sauf l'école, qui se pose dans la
- * fiche (calendrier du CFA). Un motif « forfait » (repos forfait) est
- * réservé aux personnes au forfait jours (cadres), décision utilisateur du
- * 2026-10-31. Les repos (« Repos exceptionnel », « Repos forfait »…) à
- * part, pour être en tête ; le reste dans l'ordre des réglages. */
+ * deux vues, volet) : le repos (motif de nature « repos », le même jour
+ * sans travail que celui de la semaine type, décision utilisateur du
+ * 2026-10-31) à part, pour être en tête ; puis les absences dans l'ordre
+ * des réglages, l'école jamais (elle se pose dans la fiche). Un motif
+ * « forfait » (repos forfait) est réservé aux personnes au forfait jours. */
 export function motifsDuJour<M extends Pick<Motif, 'nature' | 'code' | 'nom'>>(
   motifs: ReadonlyArray<M>,
   personne: Pick<Salarie, 'forfait_jours'>,
 ): { repos: M[]; autres: M[] } {
-  const nom = (m: M) =>
-    m.nom.normalize('NFD').replace(/\p{M}/gu, '').trim().toLowerCase()
-  const estRepos = (m: M) => nom(m).startsWith('repos')
-  const permis = motifs.filter(
-    (m) =>
-      !estEcole(m) && (personne.forfait_jours || !nom(m).includes('forfait')),
-  )
+  const forfait = (m: M) =>
+    m.nom
+      .normalize('NFD')
+      .replace(/\p{M}/gu, '')
+      .toLowerCase()
+      .includes('forfait')
   return {
-    repos: permis.filter(estRepos),
-    autres: permis.filter((m) => !estRepos(m)),
+    repos: motifs.filter((m) => m.nature === 'repos'),
+    autres: motifs.filter(
+      (m) =>
+        m.nature !== 'repos' &&
+        !estEcole(m) &&
+        (personne.forfait_jours || !forfait(m)),
+    ),
   }
 }

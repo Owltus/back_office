@@ -117,6 +117,13 @@ const NATURES: ReadonlyArray<{
     texte:
       "Jour hors de l'hôtel, compté comme une journée de travail complète. Ce n'est pas une absence.",
   },
+  {
+    valeur: 'repos',
+    libelle: 'Repos',
+    aide: 'Repos : un jour de repos posé à une date, comme celui de la semaine type',
+    texte:
+      'Jour de repos posé à une date. Il ne retire aucune heure : la personne les fait les autres jours.',
+  },
 ]
 
 const saisieHoraire = (h: Horaire): SaisieHoraire => ({
@@ -330,6 +337,7 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
             </div>
             <div className={COLONNES_LISTES}>
               {[
+                { titre: 'Repos', nature: 'repos' as const },
                 { titre: 'Absences', nature: 'absence' as const },
                 { titre: 'École', nature: 'ecole' as const },
               ].map((g) => {

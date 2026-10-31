@@ -227,14 +227,15 @@ export function CarteStatut({
   enVol?: boolean
 }) {
   // Une absence prend l'icône de son motif (palmier pour les congés…).
-  const Icone =
-    s.genre === 'absence'
+  const Icone = s.reposPose
+    ? Coffee
+    : s.genre === 'absence'
       ? iconeMotif({ code: '', nom: s.nom })
       : ICONES[s.genre]
   return (
     <div
       className={cn('planning-statut', enVol && 'planning-carte-vol')}
-      data-repos={s.repos ? '' : undefined}
+      data-repos={s.repos || s.reposPose ? '' : undefined}
       style={{ '--couleur': s.couleur } as CSSProperties}
     >
       <span className="planning-statut-nom">

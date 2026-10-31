@@ -118,6 +118,24 @@ beforeEach(() => {
 })
 
 describe('statutDuJour', () => {
+  it('repos posé à une date : montré comme un repos, retirable (2026-10-31)', () => {
+    const repos: Motif = {
+      id: 9,
+      code: 'R',
+      nom: 'Repos',
+      couleur: '#64748b',
+      decompte: false,
+      nature: 'repos',
+    }
+    expect(
+      statutDuJour(bilan({ absences: { 1: 9 } }), 1, [...MOTIFS, repos]),
+    ).toMatchObject({
+      nom: 'Repos',
+      genre: 'absence',
+      reposPose: true,
+      fixe: false,
+    })
+  })
   it('hors contrat avant tout, fixe', () => {
     const s = statutDuJour(
       bilan({ hors_contrat: [2], absences: { 2: 1 } }),

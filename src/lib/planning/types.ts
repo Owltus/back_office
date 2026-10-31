@@ -10,7 +10,7 @@
 
 export type Niveau = 'titulaire' | 'occasionnel' | 'soutien'
 export type ModeJour = 'auto' | 'travail' | 'repos' | 'absence'
-export type NatureMotif = 'absence' | 'ecole'
+export type NatureMotif = 'absence' | 'ecole' | 'repos'
 export type Categorie =
   'reception' | 'veille_nuit' | 'cuisine' | 'administratif_hors_site' | 'autre'
 export type TypeContrat = 'cdi' | 'cdd' | 'extra' | 'stagiaire' | 'apprenti'

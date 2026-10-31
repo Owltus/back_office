@@ -9,7 +9,7 @@
  * du `ContextMenu` de shadcn.
  */
 
-import { BadgeCheck, Check, Eraser, Star, Undo2 } from 'lucide-react'
+import { BadgeCheck, Check, Coffee, Eraser, Star, Undo2 } from 'lucide-react'
 
 import {
   ContextMenuContent,
@@ -92,7 +92,11 @@ export function MenuCase({
                   className="min-w-12 shrink-0 rounded px-1.5 py-0.5 text-center text-xs font-semibold"
                   style={{ background: m.couleur, color: texteSur(m.couleur) }}
                 >
-                  {m.code}
+                  {m.nature === 'repos' ? (
+                    <Coffee className="mx-auto size-3.5" aria-hidden />
+                  ) : (
+                    m.code
+                  )}
                 </span>
                 <span className="flex-1 truncate pl-1 text-sm">{m.nom}</span>
                 {estActuel ? (

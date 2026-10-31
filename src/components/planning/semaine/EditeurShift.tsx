@@ -302,6 +302,7 @@ export function EditeurShift({
     ? motifs.find((m) => m.id === absence.motif_id)
     : undefined
   const ecoleActuelle = !!absenceActuelle && estEcole(absenceActuelle)
+  const reposActuel = absenceActuelle?.nature === 'repos'
   const motifChoisi = motifs.find((m) => m.id === motif)
 
   // Changer de poste (horaire spécifique), de personne ou de jour : le code
@@ -478,7 +479,9 @@ export function EditeurShift({
     : absence
       ? ecoleActuelle
         ? "Jour d'école"
-        : "Jour d'absence"
+        : reposActuel
+          ? 'Jour de repos'
+          : "Jour d'absence"
       : repos
         ? 'Jour de repos'
         : 'Planifier le jour'
@@ -487,7 +490,9 @@ export function EditeurShift({
     : motif !== null
       ? motifChoisi && estEcole(motifChoisi)
         ? "Poser l'école"
-        : "Poser l'absence"
+        : motifChoisi?.nature === 'repos'
+          ? 'Poser le repos'
+          : "Poser l'absence"
       : existant
         ? 'Enregistrer'
         : 'Ajouter le shift'
@@ -555,7 +560,11 @@ export function EditeurShift({
                   size="sm"
                   onClick={() => onRetirerAbsence(b.salarie_id, b.jour)}
                 >
-                  {ecoleActuelle ? "Retirer l'école" : "Retirer l'absence"}
+                  {ecoleActuelle
+                    ? "Retirer l'école"
+                    : reposActuel
+                      ? 'Retirer le repos'
+                      : "Retirer l'absence"}
                 </Button>
               )}
             </div>

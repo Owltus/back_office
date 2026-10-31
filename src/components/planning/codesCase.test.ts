@@ -448,38 +448,32 @@ describe('codesUniques : chaque code une fois, poste déduit', () => {
 })
 
 describe('motifsDuJour', () => {
-  // Oracle : les repos en tête, l'école jamais, l'ordre des réglages gardé.
-  const m = (id: number, code: string, nom: string, nature = 'absence') => ({
-    id,
-    code,
-    nom,
-    nature: nature as 'absence' | 'ecole',
+  // Oracle : décision utilisateur du 2026-10-31 — le repos (nature
+  // « repos ») à part, en tête ; « Repos exceptionnel » est une absence ;
+  // l'école jamais ; un motif « forfait » pour le forfait jours seulement.
+  const m = (
+    id: number,
+    code: string,
+    nom: string,
+    nature: 'absence' | 'ecole' | 'repos' = 'absence',
+  ) => ({ id, code, nom, nature })
+  const motifs = [
+    m(1, 'CP', 'Congé payé'),
+    m(2, 'EC', 'École - CFA', 'ecole'),
+    m(3, 'RP', 'Repos exceptionnel'),
+    m(4, 'R', 'Repos', 'repos'),
+    m(5, 'RF', 'Repos forfait'),
+    m(6, 'MA', 'Maladie'),
+  ]
+  it('le repos à part, les absences dans l’ordre, l’école retirée', () => {
+    const r = motifsDuJour(motifs, { forfait_jours: true })
+    expect(r.repos.map((x) => x.code)).toEqual(['R'])
+    expect(r.autres.map((x) => x.code)).toEqual(['CP', 'RP', 'RF', 'MA'])
   })
-  it('repos à part, école retirée, ordre gardé', () => {
-    const r = motifsDuJour(
-      [
-        m(1, 'CP', 'Congé payé'),
-        m(2, 'EC', 'École - CFA', 'ecole'),
-        m(3, 'RP', 'Repos exceptionnel'),
-        m(4, 'MA', 'Maladie'),
-        m(5, 'RF', '  Répos forfait'),
-      ],
-      { forfait_jours: true },
-    )
-    expect(r.repos.map((x) => x.code)).toEqual(['RP', 'RF'])
-    expect(r.autres.map((x) => x.code)).toEqual(['CP', 'MA'])
-  })
-  it('repos forfait réservé au forfait jours (décision du 2026-10-31)', () => {
-    const motifs = [
-      m(3, 'RP', 'Repos exceptionnel'),
-      m(5, 'RF', 'Repos forfait'),
-    ]
-    expect(
-      motifsDuJour(motifs, { forfait_jours: false }).repos.map((x) => x.code),
-    ).toEqual(['RP'])
-    expect(
-      motifsDuJour(motifs, { forfait_jours: true }).repos.map((x) => x.code),
-    ).toEqual(['RP', 'RF'])
+  it('repos forfait réservé au forfait jours', () => {
+    const r = motifsDuJour(motifs, { forfait_jours: false })
+    expect(r.repos.map((x) => x.code)).toEqual(['R'])
+    expect(r.autres.map((x) => x.code)).toEqual(['CP', 'RP', 'MA'])
   })
   it("une école mal typée (code EC) n'est jamais proposée", () => {
     const r = motifsDuJour([m(1, 'EC', 'Cours')], { forfait_jours: true })

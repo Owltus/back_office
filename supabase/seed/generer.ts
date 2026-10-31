@@ -2407,12 +2407,13 @@ const PL_HORAIRES: ReadonlyArray<
 ]
 /** (code, nom, couleur, compté dans les heures, nature) */
 const PL_MOTIFS: ReadonlyArray<
-  readonly [string, string, string, boolean, 'absence' | 'ecole']
+  readonly [string, string, string, boolean, 'absence' | 'ecole' | 'repos']
 > = [
   ['CP', 'Congés', '#0ea5e9', true, 'absence'],
   ['EC', 'École', '#a855f7', true, 'ecole'],
   ['MA', 'Maladie', '#ef4444', true, 'absence'],
-  ['RP', 'Repos', '#64748b', true, 'absence'],
+  // Repos posé à une date : ne retire aucune heure due (2026-10-31).
+  ['R', 'Repos', '#64748b', false, 'repos'],
   ['FO', 'Formation', '#84cc16', true, 'absence'],
 ]
 /** (nom, catégorie réglementaire, couleur, codes horaires possibles) */

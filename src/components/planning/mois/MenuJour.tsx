@@ -14,6 +14,7 @@ import {
   BadgeCheck,
   CalendarRange,
   Check,
+  Coffee,
   Eraser,
   Star,
   Undo2,
@@ -230,7 +231,11 @@ export function MenuJour({
           className="min-w-12 shrink-0 rounded px-1.5 py-0.5 text-center text-xs font-semibold"
           style={{ background: m.couleur, color: texteSur(m.couleur) }}
         >
-          {m.code}
+          {m.nature === 'repos' ? (
+            <Coffee className="mx-auto size-3.5" aria-hidden />
+          ) : (
+            m.code
+          )}
         </span>
         <span className="flex-1 truncate text-sm">{m.nom}</span>
         {actuel ? (

@@ -341,9 +341,10 @@ export const sousContrat = (s: Salarie, debut: string, fin: string) =>
   (!s.date_entree || s.date_entree <= fin) &&
   (!s.date_sortie || s.date_sortie >= debut)
 
-/** « École » ou « Absence » : le mot pour un jour de ce motif. */
+/** « École », « Repos » ou « Absence » : le mot pour un jour de ce motif. */
 export function genreMotif(m?: Motif): string {
   if (!m) return 'Absence'
+  if (m.nature === 'repos') return 'Repos'
   return m.nature === 'ecole' ? 'École' : 'Absence'
 }
 

@@ -27,6 +27,9 @@ export interface ContenuStatut {
   fixe: boolean
   /** Repos (ou hors contrat) : pas de motif posé. */
   repos: boolean
+  /** Repos posé à cette date (motif de nature « repos ») : un motif posé,
+   * montré comme le repos de la semaine type. */
+  reposPose?: boolean
   genre: 'repos' | 'ecole' | 'absence' | 'hors'
 }
 
@@ -85,6 +88,15 @@ export function statutDuJour(
   }
   if (jour in bilan.absences) {
     const m = motifs.find((x) => x.id === bilan.absences[jour])
+    if (m?.nature === 'repos')
+      return {
+        nom: 'Repos',
+        couleur: NEUTRE,
+        fixe: bilan.absences_semaine_type.includes(jour),
+        repos: false,
+        reposPose: true,
+        genre: 'absence',
+      }
     return {
       nom: m?.nom ?? 'Absent',
       couleur: m?.couleur ?? NEUTRE,

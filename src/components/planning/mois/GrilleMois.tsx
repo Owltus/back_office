@@ -531,8 +531,14 @@ function LigneMois({
       )
         longueur++
       const couverts = jours.slice(k, k + longueur)
-      const Icone =
-        c.type === 'absence'
+      // Repos posé à une date (motif de nature « repos ») : montré comme le
+      // repos de la semaine type.
+      const commeRepos =
+        c.type === 'repos' ||
+        (c.type === 'absence' && c.motif?.nature === 'repos')
+      const Icone = commeRepos
+        ? Coffee
+        : c.type === 'absence'
           ? c.motif && estEcole(c.motif)
             ? GraduationCap
             : c.motif
@@ -541,13 +547,15 @@ function LigneMois({
           : c.type === 'hors'
             ? UserX
             : Coffee
-      const libelle =
-        c.type === 'absence'
+      const libelle = commeRepos
+        ? 'Repos'
+        : c.type === 'absence'
           ? (c.motif?.nom ?? 'Absent')
           : c.type === 'hors'
             ? 'Hors contrat'
             : 'Repos'
-      const couleur = c.type === 'absence' ? (c.motif?.couleur ?? GRIS) : GRIS
+      const couleur =
+        c.type === 'absence' && !commeRepos ? (c.motif?.couleur ?? GRIS) : GRIS
       const periode =
         longueur > 1
           ? `${dateLongue(couverts[0])} → ${dateLongue(couverts[longueur - 1])}`
@@ -584,13 +592,13 @@ function LigneMois({
               className={cn(
                 'planning-mois-bande @container pointer-events-none absolute inset-0 flex items-center justify-center gap-1.5 overflow-hidden rounded-md px-1 text-[10.5px] font-medium',
                 c.type === 'hors' && 'planning-mois-hors',
-                c.type === 'repos' && 'planning-mois-repos',
+                commeRepos && 'planning-mois-repos',
                 longueur === 1 && 'flex-col gap-0 text-[10px] leading-none',
               )}
               style={{ '--couleur': couleur } as CSSProperties}
             >
               <Icone className={longueur === 1 ? 'size-3' : 'size-3.5'} />
-              {c.type === 'absence' && c.motif?.code ? (
+              {c.type === 'absence' && !commeRepos && c.motif?.code ? (
                 // Pas la place pour « Congé payé » (un jour seul) : son code,
                 // « CP » (demande utilisateur du 2026-10-28). Le bandeau mesure
                 // sa propre largeur (requête de conteneur).

@@ -2086,9 +2086,13 @@ référence des règles (`docs/regles-hcr.md` là-bas).
     Supervision » (`changePoste`), et le volet « Ce shift passe de Club à
     Supervision. » ; jamais en silence. Repos et absences posés d'un clic
     comme un code (demande utilisateur du 2026-10-31, `motifsDuJour`) :
-    groupe « Repos » en tête du clic droit (motifs dont le nom commence par
-    « Repos »), « Absences » en bas, même ordre dans le volet ; l'école
-    jamais (fiche) ; un motif « forfait » seulement pour le forfait jours
+    le REPOS posé à une date est un motif de nature `repos` (migration
+    `20261031100000_planning_motif_repos`, motif « R · Repos », sans
+    décompte : aucune heure due retirée), montré EXACTEMENT comme le repos
+    de la semaine type (tasse, « Repos ») mais retirable ; « Repos
+    exceptionnel » reste une absence. Groupe « Repos » en tête du clic
+    droit, « Absences » en bas, même ordre dans le volet ; l'école jamais
+    (fiche) ; un motif « forfait » seulement pour le forfait jours
     (cadres) ; rien sur un jour figé par la semaine type. Volet : code permis sur plusieurs postes = choix
     segmenté « Réception | Club » sous la liste ; section Poste pour
     l'horaire spécifique seulement. Jamais un poste hors fiche, sauf celui du

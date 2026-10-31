@@ -219,13 +219,23 @@ describe('MenuJour : une seule liste, poste déduit (mode manuel)', () => {
 })
 
 describe('MenuJour : repos et absences posés d’un clic', () => {
-  // Oracle : demande utilisateur du 2026-10-31, « poser un jour de repos
-  // comme un code horaire » — le repos en tête du menu, les autres absences
-  // en bas, l'école jamais (elle se pose dans la fiche).
+  // Oracle : demande utilisateur du 2026-10-31, « poser un repos normal,
+  // comme celui de la semaine type » — le repos (nature « repos ») en tête
+  // du menu, les absences en bas, l'école jamais (elle se pose dans la
+  // fiche).
+  const REPOS = {
+    id: 99,
+    code: 'R',
+    nom: 'Repos',
+    couleur: '#64748b',
+    decompte: false,
+    nature: 'repos' as const,
+  }
+  const ref = { ...referentiel, motifs: [...referentiel.motifs, REPOS] }
   function rendreAvecAbsences(actuel: number | null = null) {
     const semaine = analyser({
       lundi: LUNDI,
-      referentiel,
+      referentiel: ref,
       absences,
       affectations: [],
       avant: [],
@@ -236,8 +246,8 @@ describe('MenuJour : repos et absences posés d’un clic', () => {
       <MenuJour
         ouverture={{ salarieId: 3, date: '2026-11-04', x: 0, y: 0 }}
         titre="Essai"
-        personne={referentiel.salaries.find((s) => s.id === 3)!}
-        referentiel={referentiel}
+        personne={ref.salaries.find((s) => s.id === 3)!}
+        referentiel={ref}
         jour={2}
         source={{ semaine }}
         ecrire
@@ -257,27 +267,26 @@ describe('MenuJour : repos et absences posés d’un clic', () => {
       .map((g) => g.getAttribute('aria-label'))
     expect(groupes[0]).toBe('Repos')
     expect(groupes.at(-1)).toBe('Absences')
-    expect(screen.getByRole('group', { name: 'Repos' }).textContent).toContain(
-      'RP',
-    )
+    expect(
+      screen
+        .getByRole('group', { name: 'Repos' })
+        .querySelectorAll('[role=menuitem]'),
+    ).toHaveLength(1)
     const bas = screen.getByRole('group', { name: 'Absences' }).textContent
     expect(bas).toContain('CP')
-    expect(bas).not.toContain('RP')
+    expect(bas).toContain('RP')
     expect(bas).not.toContain('EC')
   })
 
   it('un clic pose le repos', () => {
     const { onPoser } = rendreAvecAbsences()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'RP, Repos' }))
-    expect(onPoser).toHaveBeenCalledWith(
-      referentiel.motifs.find((m) => m.code === 'RP')!.id,
-    )
+    fireEvent.click(screen.getByRole('menuitem', { name: 'R, Repos' }))
+    expect(onPoser).toHaveBeenCalledWith(REPOS.id)
   })
 
-  it('le motif déjà posé est coché et ne se repose pas', () => {
-    const rp = referentiel.motifs.find((m) => m.code === 'RP')!.id
-    const { onPoser } = rendreAvecAbsences(rp)
-    fireEvent.click(screen.getByRole('menuitem', { name: 'RP, Repos' }))
+  it('le repos déjà posé est coché et ne se repose pas', () => {
+    const { onPoser } = rendreAvecAbsences(REPOS.id)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'R, Repos' }))
     expect(onPoser).not.toHaveBeenCalled()
   })
 
