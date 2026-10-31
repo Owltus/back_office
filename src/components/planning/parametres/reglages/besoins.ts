@@ -30,10 +30,66 @@ export const aUneBase = (r: Reglage) => r.effectif + r.renfort > 0
  * de quoi le retirer, et le total ne le compte pas. */
 export const soutienSansBase = (r: Reglage) => r.soutien > 0 && !aUneBase(r)
 
-/** Ce qu'une case compte dans le total du jour : le chiffre visible et
- * utile, jamais des apprentis qui ne seront jamais placés. */
-export const placesComptees = (r: Reglage, couche: keyof Reglage) =>
-  couche === 'soutien' && !aUneBase(r) ? 0 : r[couche]
+export const RIEN: Reglage = { effectif: 0, soutien: 0, renfort: 0 }
+
+/** La case demande quelque chose (0 / 0 / 0 : rien). */
+export const existe = (r: Reglage) =>
+  r.effectif > 0 || r.soutien > 0 || r.renfort > 0
+
+/**
+ * Nouveau réglage d'une case quand un de ses trois compteurs change. Mêmes
+ * règles que l'écran d'avant le 2026-10-31 :
+ * - une case qui ne demandait rien et reçoit une personne nécessaire ouvre
+ *   aussi une place pour un apprenti ou un stagiaire (la règle de l'hôtel
+ *   fictif du prototype, visible désormais par le repère de la case) ;
+ * - plus personne nécessaire ni en plus : plus de place d'apprenti (il ne
+ *   serait jamais placé, `soutienSansBase`).
+ */
+export function reglerChamp(
+  r: Reglage,
+  champ: keyof Reglage,
+  valeur: number,
+): Reglage {
+  const v = Math.max(0, valeur)
+  if (champ === 'effectif') {
+    const soutien = v + r.renfort === 0 ? 0 : existe(r) ? r.soutien : 1
+    return { effectif: v, soutien, renfort: r.renfort }
+  }
+  if (champ === 'renfort') {
+    return v + r.effectif === 0
+      ? { effectif: r.effectif, soutien: 0, renfort: 0 }
+      : { ...r, renfort: v }
+  }
+  return { ...r, soutien: aUneBase(r) ? v : 0 }
+}
+
+/** Au moins et au plus d'une présence minimum (`maximum` null : sans
+ * limite). Le minimum monte : le plafond suit (et un plafond absent prend la
+ * valeur du minimum, règle de l'écran d'avant, gardée) ; le plafond
+ * descend : le minimum suit. Repris de `ConsignesPresence.tsx` (supprimé le
+ * 2026-10-31). */
+export function nouvellesBornes(
+  avant: { minimum: number; maximum: number | null },
+  champ: 'minimum' | 'maximum',
+  valeur: number,
+): { minimum: number; maximum: number | null } {
+  if (champ === 'minimum') {
+    const maximum =
+      avant.maximum === null || avant.maximum < valeur ? valeur : avant.maximum
+    return { minimum: valeur, maximum }
+  }
+  return { minimum: Math.min(avant.minimum, valeur), maximum: valeur }
+}
+
+/** La somme des besoins ne tient pas la présence voulue : moins que le
+ * minimum, ou plus que le maximum. */
+export function besoinsEnEcart(
+  besoins: number,
+  b: { minimum: number; maximum: number | null },
+): boolean {
+  if (besoins < b.minimum) return true
+  return b.maximum !== null && besoins > b.maximum
+}
 
 export function correspond(b: Besoin, ligne: LigneBesoin): boolean {
   return ligne.horaire_id !== null

@@ -1,28 +1,29 @@
 /*
- * Paramètres du Planning : la semaine type des besoins (prototype
- * `BesoinsPage.tsx`, spec §5.3). Une carte par poste, une ligne par
- * horaire (ou horaire spécifique), lue par ses heures, une case par jour. Refait le 2026-10-28
- * (« utile mais mal présenté ») : deux vues (par poste, par cycle : matin,
- * soir et nuit depuis le 2026-10-30), et
- * on choisit CE QU'ON RÈGLE (personnes nécessaires, apprentis et
- * stagiaires, en plus si besoin) : une case = un seul compteur, au lieu de
- * trois empilés. Chaque compteur s'enregistre aussitôt
- * (`reglerBesoin` : crée, modifie, ou supprime à 0 / 0 / 0), affiché tout de
- * suite à l'écran ; les écritures partent l'une après l'autre, chacune avec
- * le besoin RELU en base (deux clics rapides ne créent pas deux besoins).
+ * Paramètres du Planning : la semaine type des besoins. REFAITE le
+ * 2026-10-31 (demande utilisateur : « très compliquée à comprendre, je
+ * n'arrive pas à savoir ce que tu attends de moi… j'ai cliqué sur le petit
+ * bouton tout à droite et ça a activé le samedi et le dimanche, je ne sais
+ * pas comment revenir »), sur le modèle des besoins en personnel de Skello
+ * ou Planday :
  *
- * Seuls les horaires où il faut du monde sont montrés ; les autres horaires
- * permis du poste s'ajoutent un par un (« Ajouter un horaire », 2026-10-28,
- * « il y a sûrement une logique mais je ne comprends pas »).
+ * - un poste à la fois, en onglets ; une grille horaires × jours, UN chiffre
+ *   par case (les personnes nécessaires) ;
+ * - les places pour apprentis ou stagiaires et en plus si besoin sont des
+ *   options de la case (son panneau), signalées par un repère ;
+ * - recopier sur d'autres jours est un choix explicite du panneau ;
+ * - Annuler et Rétablir (boutons de l'en-tête, Ctrl + Z, Ctrl + Y) sur
+ *   toute action de la page ;
+ * - la présence minimum du matin, du soir et de la nuit sous la grille.
  *
- * Points d'attention, absents du prototype : un besoin plus long que le
- * maximum HCR de la catégorie du poste (`alerteBesoin`), et un besoin sur un
- * horaire que le poste ne permet pas (le prototype le masquait).
+ * Le modèle et les écritures ne changent pas : chaque case s'enregistre
+ * aussitôt (`reglerBesoin` : crée, modifie, ou supprime à 0 / 0 / 0, avec le
+ * besoin RELU en base, les écritures l'une après l'autre), chaque présence
+ * par `reglerConsigne`. L'écran montre tout de suite la valeur voulue.
  */
 
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { ChevronsRight, Plus, TriangleAlert } from 'lucide-react'
+import { Redo2, Undo2 } from 'lucide-react'
 
 import {
   useDroitsPlanning,
@@ -31,21 +32,36 @@ import {
 } from '#/components/planning/hooks/usePlanning.ts'
 import { useNotifier } from '#/components/planning/Messages.tsx'
 import {
+  GrilleBesoins,
+  lignesAffichees,
+  presenceSemaine,
+} from '#/components/planning/parametres/besoins/GrilleBesoins.tsx'
+import type { ActionsGrille } from '#/components/planning/parametres/besoins/GrilleBesoins.tsx'
+import {
+  HISTORIQUE_VIDE,
+  JOURS_COPIE,
+  ajouter,
+  annuler,
+  retablir,
+  sansEffet,
+} from '#/components/planning/parametres/besoins/historique.ts'
+import type {
+  Bornes,
+  Changement,
+  Entree,
+  Historique,
+} from '#/components/planning/parametres/besoins/historique.ts'
+import { PresenceMinimum } from '#/components/planning/parametres/besoins/PresenceMinimum.tsx'
+import {
   idCible,
   useOuvrirCible,
 } from '#/components/planning/parametres/reglages/ouvrirCible.ts'
 import type { PropsOuvrir } from '#/components/planning/parametres/reglages/ouvrirCible.ts'
 import { CadreReglages } from '#/components/planning/parametres/reglages/cadre.tsx'
-import { ConsignesPresence } from '#/components/planning/parametres/reglages/ConsignesPresence.tsx'
 import {
-  Compteur,
-  Segmente,
-} from '#/components/planning/parametres/reglages/controles.tsx'
-import {
-  aUneBase,
-  horairesAAjouter,
-  lignesDuPoste,
-  placesComptees,
+  RIEN,
+  nouvellesBornes,
+  reglerChamp,
   soutienSansBase,
   trouverBesoin,
 } from '#/components/planning/parametres/reglages/besoins.ts'
@@ -56,73 +72,33 @@ import type {
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '#/components/ui/popover.tsx'
-import {
-  heures,
-  libelleHoraire,
-  libelleMoment,
-  listeEt,
-} from '#/lib/planning/affichage.ts'
-import { codesDuPoste } from '#/lib/planning/eligibilite.ts'
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '#/components/ui/tabs.tsx'
+import { heures, libelleHoraire } from '#/lib/planning/affichage.ts'
 import { planningKeys } from '#/lib/planning/keys.ts'
-import { besoinsPresence, postesComptes } from '#/lib/planning/coherence.ts'
-import {
-  clePresence,
-  libelleConsigne,
-  periodePresence,
-} from '#/lib/planning/presence.ts'
-import { alerteBesoin } from '#/lib/planning/regles.ts'
-import { reglerBesoin } from '#/lib/planning/service.ts'
-import { presence } from '#/lib/planning/temps.ts'
+import { reglerBesoin, reglerConsigne } from '#/lib/planning/service.ts'
 import { JOURS } from '#/lib/planning/types.ts'
-import type {
-  Besoin,
-  Consigne,
-  Horaire,
-  PeriodePresence,
-  Poste,
-  Referentiel,
-} from '#/lib/planning/types.ts'
-import { cn } from '#/lib/utils.ts'
+import type { Consigne, Referentiel } from '#/lib/planning/types.ts'
 
-const RIEN: Reglage = { effectif: 0, soutien: 0, renfort: 0 }
+type Periode = Consigne['periode']
 
-type Couche = keyof Reglage
-const COUCHES: ReadonlyArray<{
-  valeur: Couche
-  libelle: string
-  aide: string
-}> = [
-  {
-    valeur: 'effectif',
-    libelle: 'Personnes nécessaires',
-    aide: 'Le minimum de personnes qui tiennent le poste seules. Le planning automatique les place en priorité.',
-  },
-  {
-    valeur: 'soutien',
-    libelle: 'En soutien',
-    aide: 'Les places pour une personne au niveau Soutien sur ce poste, souvent un apprenti ou un stagiaire qui apprend. Elle ne compte pas seule : il faut au moins une personne nécessaire. Un apprenti ou un stagiaire au niveau Titulaire compte comme une personne nécessaire.',
-  },
-  {
-    valeur: 'renfort',
-    libelle: 'En plus si besoin',
-    aide: "Des places facultatives, en renfort. Elles servent si quelqu'un manque d'heures dans sa semaine ou pour tenir le matin, le soir ou la nuit.",
-  },
-]
-const LIBELLE_COUCHE = Object.fromEntries(
-  COUCHES.map((c) => [c.valeur, c.libelle]),
-) as Record<Couche, string>
-
-type Vue = 'postes' | 'presence'
-interface Evidence {
-  jour: number
-  periode: PeriodePresence
-}
 const cleCase = (posteId: number, ligne: LigneBesoin, jour: number) =>
   `${posteId}|${ligne.cle}|${jour}`
+const cleConsigne = (jour: number, periode: Periode) => `${jour}|${periode}`
+const AUCUNE_BORNE: Bornes = { minimum: 0, maximum: null }
+const AUCUNE: ReadonlySet<string> = new Set()
+
+/** Le focus est dans un champ de saisie : Ctrl + Z lui appartient. */
+function dansUnChamp(cible: EventTarget | null): boolean {
+  if (!(cible instanceof HTMLElement)) return false
+  return (
+    cible.isContentEditable ||
+    ['INPUT', 'TEXTAREA', 'SELECT'].includes(cible.tagName)
+  )
+}
 
 export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
   const droits = useDroitsPlanning()
@@ -131,77 +107,59 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
   const ecrire = useEcriture()
   const notifier = useNotifier()
   const qc = useQueryClient()
+  const data = ref.data
 
-  // Réglages affichés avant la relecture (mise à jour immédiate) ; vidés
+  // Valeurs affichées avant la relecture (mise à jour immédiate) ; vidées
   // quand toutes les écritures en cours ont répondu.
   const [locaux, setLocaux] = useState<Map<string, Reglage>>(new Map())
-  const fileRef = useRef<Promise<void>>(Promise.resolve())
+  const [localesConsignes, setLocalesConsignes] = useState<Map<string, Bornes>>(
+    new Map(),
+  )
+  const file = useRef<Promise<void>>(Promise.resolve())
   const enCours = useRef(0)
   const dernier = useRef<Referentiel | undefined>(undefined)
-  dernier.current = ref.data
+  dernier.current = data
 
   // Lignes gardées dans la séance, par poste : ajoutées, ou réglées (une
   // ligne remise à 0 ne disparaît pas sous les doigts).
   const [gardees, setGardees] = useState<Map<number, Set<string>>>(new Map())
-  const garder = useCallback((posteId: number, cle: string) => {
+  const garder = useCallback((posteId: number, cles: string[]) => {
     setGardees((m) => {
-      if (m.get(posteId)?.has(cle)) return m
-      const suite = new Map(m)
-      suite.set(posteId, new Set([...(m.get(posteId) ?? []), cle]))
-      return suite
+      const avant = m.get(posteId)
+      if (cles.every((c) => avant?.has(c))) return m
+      return new Map(m).set(posteId, new Set([...(avant ?? []), ...cles]))
     })
   }, [])
-  const [vue, setVueBrute] = useState<Vue>('postes')
-  const [couche, setCouche] = useState<Couche>('effectif')
-  // « Ajuster » depuis la vue par cycle : le moment dont on complète les
-  // besoins, ses lignes et son jour mis en évidence dans la vue par poste.
-  const [evidence, setEvidence] = useState<Evidence | null>(null)
-  const setVue = (v: Vue) => {
-    setVueBrute(v)
-    if (v === 'presence') setEvidence(null)
-  }
-  const ajuster = (jour: number, periode: PeriodePresence) => {
-    setVueBrute('postes')
-    setCouche('effectif')
-    setEvidence({ jour, periode })
-    // Le premier poste compté dans ce cycle (la nuit : un poste à horaire de
-    // nuit, D15).
-    const premier = ref.data ? postesComptes(ref.data, periode)[0] : undefined
-    if (premier) window.setTimeout(() => allerAuPoste(premier.id), 0)
-  }
-  // Lien d'un point « À vérifier » : la vue par cycle, ou un poste
-  // (réglage des apprentis et stagiaires pour `soutien-<id>`).
+
+  const [posteChoisi, setPosteChoisi] = useState<number | undefined>(undefined)
+  const poste =
+    data?.postes.find((p) => p.id === posteChoisi) ?? data?.postes[0]
+
+  const [historique, setHistorique] = useState<Historique>(HISTORIQUE_VIDE)
+  const historiqueRef = useRef(historique)
+  historiqueRef.current = historique
+
+  // Lien d'un point « À vérifier » : un poste (`poste-<id>`, `soutien-<id>`)
+  // ou la présence minimum (`presence`).
   useOuvrirCible(
     lien,
-    !!ref.data,
+    !!data,
     (cible) => {
       if (cible === 'presence') {
-        setVue('presence')
+        window.setTimeout(() => allerA('besoins-presence'), 0)
         return true
       }
-      const soutien = idCible(cible, 'soutien')
-      const id = soutien ?? idCible(cible, 'poste')
-      if (id === undefined || !ref.data?.postes.some((p) => p.id === id))
+      const id = idCible(cible, 'soutien') ?? idCible(cible, 'poste')
+      if (id === undefined || !data?.postes.some((p) => p.id === id))
         return false
-      setVue('postes')
-      if (soutien !== undefined) setCouche('soutien')
-      // Après le rendu de la vue par poste.
-      window.setTimeout(() => allerAuPoste(id), 0)
+      setPosteChoisi(id)
       return true
     },
     onOuvert,
   )
 
-  /** Le besoin enregistré en base pour cette case, d'après la dernière lecture. */
-  const enBase = useCallback(
-    (posteId: number, ligne: LigneBesoin, jour: number): Besoin | undefined => {
-      const r =
-        qc.getQueryData<Referentiel>(planningKeys.referentiel()) ??
-        dernier.current
-      return r ? trouverBesoin(r.besoins, posteId, ligne, jour) : undefined
-    },
-    [qc],
-  )
+  const relu = () =>
+    qc.getQueryData<Referentiel>(planningKeys.referentiel()) ?? dernier.current
 
   const affiche = (
     posteId: number,
@@ -210,62 +168,217 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
   ): Reglage => {
     const local = locaux.get(cleCase(posteId, ligne, jour))
     if (local) return local
-    const b = ref.data
-      ? trouverBesoin(ref.data.besoins, posteId, ligne, jour)
+    const b = data
+      ? trouverBesoin(data.besoins, posteId, ligne, jour)
       : undefined
     return b
       ? { effectif: b.effectif, soutien: b.soutien, renfort: b.renfort }
       : RIEN
   }
 
-  const regler = (
-    poste: Poste,
-    ligne: LigneBesoin,
-    reglages: Array<{ jour: number } & Reglage>,
-  ) => {
-    if (!modifiable) return
-    garder(poste.id, ligne.cle)
-    setLocaux((m) => {
-      const suite = new Map(m)
-      for (const { jour, effectif, soutien, renfort } of reglages) {
-        suite.set(cleCase(poste.id, ligne, jour), {
-          effectif,
-          soutien,
-          renfort,
-        })
-      }
-      return suite
-    })
+  const afficheConsigne = (jour: number, periode: Periode): Bornes => {
+    const locale = localesConsignes.get(cleConsigne(jour, periode))
+    if (locale) return locale
+    const c = data?.consignes.find(
+      (x) => x.jour === jour && x.periode === periode,
+    )
+    return c ? { minimum: c.minimum, maximum: c.maximum } : AUCUNE_BORNE
+  }
+
+  /** Écrit les valeurs APRÈS des changements, dans l'ordre, l'une après
+   * l'autre : la même écriture pour une action, son annulation et son
+   * rétablissement. */
+  const appliquer = (changements: Changement[]) => {
+    if (!modifiable || !changements.length) return
+    const besoins = changements.filter((c) => c.type === 'besoin')
+    const consignes = changements.filter((c) => c.type === 'consigne')
+    const parPoste = new Map<number, string[]>()
+    for (const c of besoins)
+      parPoste.set(c.posteId, [...(parPoste.get(c.posteId) ?? []), c.ligne.cle])
+    for (const [id, cles] of parPoste) garder(id, cles)
+    if (besoins.length)
+      setLocaux((m) => {
+        const suite = new Map(m)
+        for (const c of besoins)
+          suite.set(cleCase(c.posteId, c.ligne, c.jour), c.apres)
+        return suite
+      })
+    if (consignes.length)
+      setLocalesConsignes((m) => {
+        const suite = new Map(m)
+        for (const c of consignes)
+          suite.set(cleConsigne(c.jour, c.periode), c.apres)
+        return suite
+      })
     enCours.current++
-    fileRef.current = fileRef.current.then(async () => {
-      const r = await ecrire(async () => {
-        for (const { jour, effectif, soutien, renfort } of reglages) {
-          await reglerBesoin(
-            {
-              poste_id: poste.id,
-              jour,
-              horaire_id: ligne.horaire_id,
-              debut: ligne.debut,
-              fin: ligne.fin,
-              effectif,
-              soutien,
-              renfort,
-            },
-            enBase(poste.id, ligne, jour),
-          )
-        }
-      }, "Le besoin n'a pas pu être enregistré")
-      if (!r.ok) notifier(r.message, 'danger')
+    file.current = file.current.then(async () => {
+      if (besoins.length) {
+        const r = await ecrire(async () => {
+          for (const c of besoins) {
+            const enBase = relu()
+            await reglerBesoin(
+              {
+                poste_id: c.posteId,
+                jour: c.jour,
+                horaire_id: c.ligne.horaire_id,
+                debut: c.ligne.debut,
+                fin: c.ligne.fin,
+                ...c.apres,
+              },
+              enBase
+                ? trouverBesoin(enBase.besoins, c.posteId, c.ligne, c.jour)
+                : undefined,
+            )
+          }
+        }, "Le besoin n'a pas pu être enregistré")
+        if (!r.ok) notifier(r.message, 'danger')
+      }
+      if (consignes.length) {
+        const r = await ecrire(async () => {
+          for (const c of consignes) {
+            await reglerConsigne(
+              { jour: c.jour, periode: c.periode, ...c.apres },
+              relu()?.consignes.find(
+                (x) => x.jour === c.jour && x.periode === c.periode,
+              ),
+            )
+          }
+        }, "La présence minimum n'a pas pu être enregistrée")
+        if (!r.ok) notifier(r.message, 'danger')
+      }
       enCours.current--
-      if (enCours.current === 0) setLocaux(new Map())
+      if (enCours.current === 0) {
+        setLocaux(new Map())
+        setLocalesConsignes(new Map())
+      }
     })
   }
 
-  const data = ref.data
-  const sommePresence = useMemo(
-    () => (data ? besoinsPresence(data) : new Map<string, number>()),
-    [data],
-  )
+  /** Une action de l'utilisateur : gardée pour Annuler, puis écrite. Rend
+   * le nombre de cases réellement changées. */
+  const faire = (entree: Entree): number => {
+    const changements = entree.changements.filter((c) => !sansEffet(c))
+    if (!modifiable || !changements.length) return 0
+    setHistorique((h) => ajouter(h, { ...entree, changements }))
+    appliquer(changements)
+    return changements.length
+  }
+
+  const defaire = () => {
+    const { historique: suite, entree } = annuler(historiqueRef.current)
+    if (!entree || !modifiable) return
+    historiqueRef.current = suite
+    setHistorique(suite)
+    appliquer(entree.changements)
+    notifier(`Annulé : ${entree.libelle}.`)
+  }
+  const refaire = () => {
+    const { historique: suite, entree } = retablir(historiqueRef.current)
+    if (!entree || !modifiable) return
+    historiqueRef.current = suite
+    setHistorique(suite)
+    appliquer(entree.changements)
+    notifier(`Rétabli : ${entree.libelle}.`)
+  }
+  const raccourcis = useRef({ defaire, refaire })
+  raccourcis.current = { defaire, refaire }
+  useEffect(() => {
+    if (!modifiable) return
+    const surTouche = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || dansUnChamp(e.target)) return
+      const touche = e.key.toLowerCase()
+      if (touche === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        raccourcis.current.defaire()
+      } else if (touche === 'y' || (touche === 'z' && e.shiftKey)) {
+        e.preventDefault()
+        raccourcis.current.refaire()
+      }
+    }
+    window.addEventListener('keydown', surTouche)
+    return () => window.removeEventListener('keydown', surTouche)
+  }, [modifiable])
+
+  const changementCase = (
+    posteId: number,
+    ligne: LigneBesoin,
+    jour: number,
+    apres: Reglage,
+  ): Changement => ({
+    type: 'besoin',
+    posteId,
+    ligne,
+    jour,
+    avant: affiche(posteId, ligne, jour),
+    apres,
+  })
+
+  const actions: ActionsGrille | undefined = poste && {
+    regler: (ligne, jour, champ, v) => {
+      faire({
+        libelle: `${poste.nom}, ${JOURS[jour].toLowerCase()}, ${libelleHoraire(ligne)}`,
+        changements: [
+          changementCase(
+            poste.id,
+            ligne,
+            jour,
+            reglerChamp(affiche(poste.id, ligne, jour), champ, v),
+          ),
+        ],
+      })
+    },
+    copier: (ligne, jour, cible) => {
+      const source = affiche(poste.id, ligne, jour)
+      const jours = JOURS_COPIE[cible]
+      const n = faire({
+        libelle: `copie sur ${jours.length} jours`,
+        changements: jours.map((j) =>
+          changementCase(poste.id, ligne, j, source),
+        ),
+      })
+      notifier(
+        n
+          ? `Copié sur ${jours.length} jours. Ctrl + Z pour annuler.`
+          : 'Ces jours avaient déjà ces réglages.',
+      )
+    },
+    vider: (ligne) => {
+      const n = faire({
+        libelle: `ligne ${libelleHoraire(ligne)} vidée`,
+        changements: JOURS.map((_, j) =>
+          changementCase(poste.id, ligne, j, RIEN),
+        ),
+      })
+      if (n) notifier('Ligne vidée. Ctrl + Z pour annuler.')
+    },
+    retirerOrphelins: (ligne) => {
+      const n = faire({
+        libelle: "places d'apprentis retirées",
+        changements: JOURS.flatMap((_, j) => {
+          const r = affiche(poste.id, ligne, j)
+          return soutienSansBase(r)
+            ? [changementCase(poste.id, ligne, j, { ...r, soutien: 0 })]
+            : []
+        }),
+      })
+      if (n) notifier('Places retirées. Ctrl + Z pour annuler.')
+    },
+    ajouterLigne: (cle) => garder(poste.id, [cle]),
+  }
+
+  const reglerPresence = (
+    jour: number,
+    periode: Periode,
+    champ: keyof Bornes,
+    v: number,
+  ) => {
+    const avant = afficheConsigne(jour, periode)
+    const apres = nouvellesBornes(avant, champ, v)
+    faire({
+      libelle: `présence du ${JOURS[jour].toLowerCase()} ${periode}`,
+      changements: [{ type: 'consigne', jour, periode, avant, apres }],
+    })
+  }
 
   return (
     <CadreReglages
@@ -276,35 +389,61 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
       chargement={ref.isPending}
       erreur={ref.isError}
       onReessayer={() => void ref.refetch()}
+      actions={
+        modifiable ? (
+          <div className="flex items-center gap-1">
+            <Tip label="Annuler (Ctrl + Z)">
+              <span tabIndex={historique.passe.length ? -1 : 0}>
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  aria-label="Annuler"
+                  disabled={!historique.passe.length}
+                  onClick={defaire}
+                >
+                  <Undo2 />
+                </Button>
+              </span>
+            </Tip>
+            <Tip label="Rétablir (Ctrl + Y)">
+              <span tabIndex={historique.futur.length ? -1 : 0}>
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  aria-label="Rétablir"
+                  disabled={!historique.futur.length}
+                  onClick={refaire}
+                >
+                  <Redo2 />
+                </Button>
+              </span>
+            </Tip>
+          </div>
+        ) : undefined
+      }
     >
       {data && (
         // Largeur bornée (audit UX du 2026-10-31) : étalées sur 1 400 px,
         // les 7 colonnes de jours obligeaient l'œil à traverser l'écran.
-        <div className="flex w-full max-w-6xl flex-col gap-4">
-          <div className="flex flex-col items-start gap-1">
-            <Segmente
-              etiquette="Ce que montre la page"
-              valeur={vue}
-              onChange={setVue}
-              options={[
-                { valeur: 'postes', libelle: 'Par poste' },
-                { valeur: 'presence', libelle: 'Par cycle' },
-              ]}
-            />
-            <p className="text-sm text-muted-foreground">
-              {vue === 'postes'
-                ? 'Pour chaque poste, une ligne par horaire où il faut du monde, et le nombre de personnes chaque jour. Le planning automatique place les gens sur ces lignes.'
-                : 'Combien de personnes au total le matin, le soir et la nuit, tous postes comptés confondus. Le planning automatique tient ces minimums.'}
+        <div className="flex w-full max-w-6xl min-w-0 flex-col gap-6">
+          <div className="flex max-w-3xl flex-col gap-1">
+            <p className="text-sm">
+              Indiquez combien de personnes il faut pour chaque horaire, chaque
+              jour. Le planning automatique s'en sert pour placer l'équipe.
             </p>
-            {/* Replié (audit UX du 2026-10-31) : toujours affiché, ce
-                paragraphe prenait de la hauteur à chaque visite. */}
+            {modifiable && (
+              <p className="text-xs text-muted-foreground">
+                Cliquez sur une case pour la régler. Les places pour apprentis
+                ou stagiaires et en plus si besoin sont dans ses options.
+              </p>
+            )}
             <details className="text-xs text-muted-foreground">
               <summary className="cursor-pointer select-none hover:text-foreground">
                 Dans quel ordre le planning automatique décide
               </summary>
-              <p className="mt-1 max-w-3xl">
+              <p className="mt-1">
                 La loi d'abord, puis les personnes nécessaires et le minimum de
-                chaque cycle, puis le maximum de chaque cycle, puis les
+                chaque moment, puis le maximum de chaque moment, puis les
                 contrats, puis un titulaire avant un dépannage, puis le confort
                 (repos groupés, jours habituels, partage des week-ends, des
                 soirs et des matins tôt sur les 4 dernières semaines).
@@ -312,93 +451,68 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
             </details>
           </div>
 
-          {vue === 'presence' ? (
-            <ConsignesPresence
-              referentiel={data}
-              modifiable={modifiable}
-              onAjuster={ajuster}
-            />
-          ) : !data.postes.length ? (
+          {!poste ? (
             <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
               Aucun poste : créez d'abord les postes de l'hôtel.
             </p>
           ) : (
-            <>
-              {/* Collé en haut de la zone qui défile : le choix reste sous
-                  la main quand on descend dans les postes. */}
-              <div
-                data-barre-besoins
-                className="sticky -top-4 z-10 -mx-4 flex flex-col gap-2 border-b bg-background/95 px-4 py-3 backdrop-blur"
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-medium">Vous réglez :</span>
-                  <Segmente
-                    etiquette="Ce que vous réglez"
-                    valeur={couche}
-                    onChange={setCouche}
-                    options={COUCHES.map(({ valeur, libelle }) => ({
-                      valeur,
-                      libelle,
-                    }))}
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {COUCHES.find((c) => c.valeur === couche)?.aide}
-                </p>
-                {evidence && (
-                  <BandeauAjustement
-                    evidence={evidence}
-                    besoins={
-                      sommePresence.get(
-                        clePresence(evidence.jour, evidence.periode),
-                      ) ?? 0
-                    }
-                    consigne={data.consignes.find(
-                      (c) =>
-                        c.jour === evidence.jour &&
-                        c.periode === evidence.periode,
-                    )}
-                    onFermer={() => setEvidence(null)}
-                  />
-                )}
-                {data.postes.length > 1 && (
-                  <nav
-                    aria-label="Aller à un poste"
-                    className="flex flex-wrap items-center gap-1.5"
+            <Tabs
+              value={String(poste.id)}
+              onValueChange={(v) => setPosteChoisi(Number(v))}
+              className="min-w-0 gap-3"
+            >
+              <TabsList className="max-w-full flex-wrap justify-start group-data-[orientation=horizontal]/tabs:h-auto">
+                {data.postes.map((p) => (
+                  <TabsTrigger
+                    key={p.id}
+                    value={String(p.id)}
+                    className="h-8 flex-none gap-2 px-3"
                   >
-                    {data.postes.map((poste) => (
-                      <button
-                        key={poste.id}
-                        type="button"
-                        className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs transition-colors hover:bg-muted"
-                        onClick={() => allerAuPoste(poste.id)}
-                      >
-                        <span
-                          className="size-2 rounded-full"
-                          style={{ background: poste.couleur }}
-                        />
-                        {poste.nom}
-                      </button>
-                    ))}
-                  </nav>
+                    <span
+                      aria-hidden
+                      className="size-2 shrink-0 rounded-full"
+                      style={{ background: p.couleur }}
+                    />
+                    {p.nom}
+                    <span className="text-xs font-normal text-muted-foreground tabular-nums">
+                      {heures(
+                        presenceSemaine(
+                          p,
+                          lignesAffichees(p, data, gardees.get(p.id) ?? AUCUNE),
+                          affiche,
+                        ),
+                      )}
+                      <span aria-hidden> / sem.</span>
+                      <span className="sr-only"> de présence par semaine</span>
+                    </span>
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+              <TabsContent value={String(poste.id)} className="min-w-0">
+                {actions && (
+                  <GrilleBesoins
+                    poste={poste}
+                    referentiel={data}
+                    lignes={lignesAffichees(
+                      poste,
+                      data,
+                      gardees.get(poste.id) ?? AUCUNE,
+                    )}
+                    modifiable={modifiable}
+                    affiche={affiche}
+                    actions={actions}
+                  />
                 )}
-              </div>
-              {data.postes.map((poste) => (
-                <CartePoste
-                  key={poste.id}
-                  poste={poste}
-                  referentiel={data}
-                  couche={couche}
-                  gardees={gardees.get(poste.id) ?? AUCUNE}
-                  ajouter={(cle) => garder(poste.id, cle)}
-                  modifiable={modifiable}
-                  evidence={evidence}
-                  affiche={affiche}
-                  regler={regler}
-                />
-              ))}
-            </>
+              </TabsContent>
+            </Tabs>
           )}
+
+          <PresenceMinimum
+            referentiel={data}
+            modifiable={modifiable}
+            affiche={afficheConsigne}
+            regler={reglerPresence}
+          />
         </div>
       )}
     </CadreReglages>
@@ -406,12 +520,11 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
 }
 
 /*
- * Défile la SEULE zone de contenu jusqu'au poste, sous la barre collée
- * (`scrollIntoView` faisait aussi défiler la fenêtre, en-tête compris).
+ * Défile la SEULE zone de contenu jusqu'à l'élément (`scrollIntoView`
+ * faisait aussi défiler la fenêtre, en-tête compris).
  */
-function allerAuPoste(posteId: number) {
-  const cible = document.getElementById(`besoins-poste-${posteId}`)
-  const barre = document.querySelector<HTMLElement>('[data-barre-besoins]')
+function allerA(id: string) {
+  const cible = document.getElementById(id)
   let zone = cible?.parentElement ?? null
   while (zone && !/(auto|scroll)/.test(getComputedStyle(zone).overflowY)) {
     zone = zone.parentElement
@@ -421,512 +534,6 @@ function allerAuPoste(posteId: number) {
     cible.getBoundingClientRect().top -
     zone.getBoundingClientRect().top +
     zone.scrollTop -
-    (barre?.offsetHeight ?? 0) -
     8
   zone.scrollTo({ top: haut, behavior: 'smooth' })
-}
-
-const AUCUNE: ReadonlySet<string> = new Set()
-
-/** Rappel en tête de la vue par poste après « Ajuster » : le moment visé,
- * ce que donnent les besoins (recalculé à chaque réglage) et la consigne. */
-function BandeauAjustement({
-  evidence,
-  besoins,
-  consigne,
-  onFermer,
-}: {
-  evidence: Evidence
-  besoins: number
-  consigne: Consigne | undefined
-  onFermer: () => void
-}) {
-  const moment = `${JOURS[evidence.jour]} ${evidence.periode}`
-  const voulu = consigne
-    ? libelleConsigne(consigne.minimum, consigne.maximum)
-    : '0'
-  const tenu =
-    !consigne ||
-    (besoins >= consigne.minimum &&
-      (consigne.maximum === null || besoins <= consigne.maximum))
-  return (
-    <div
-      role="status"
-      aria-label="Moment à ajuster"
-      className={cn(
-        'flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm',
-        tenu ? 'border-border' : 'border-amber-500/60 bg-amber-500/10',
-      )}
-    >
-      <p>
-        {moment} : les besoins donnent {besoins}, la consigne en veut {voulu}.{' '}
-        {tenu
-          ? "C'est bon."
-          : 'Réglez les personnes nécessaires sur les lignes en surbrillance, colonne encadrée.'}
-      </p>
-      <Button variant="outline" size="sm" onClick={onFermer}>
-        Terminé
-      </Button>
-    </div>
-  )
-}
-
-function CartePoste({
-  poste,
-  referentiel,
-  couche,
-  gardees,
-  ajouter,
-  modifiable,
-  evidence,
-  affiche,
-  regler,
-}: {
-  poste: Poste
-  referentiel: Referentiel
-  couche: Couche
-  gardees: ReadonlySet<string>
-  ajouter: (cle: string) => void
-  modifiable: boolean
-  evidence: Evidence | null
-  affiche: (posteId: number, ligne: LigneBesoin, jour: number) => Reglage
-  regler: (
-    poste: Poste,
-    ligne: LigneBesoin,
-    reglages: Array<{ jour: number } & Reglage>,
-  ) => void
-}) {
-  const siens = useMemo(
-    () => referentiel.besoins.filter((b) => b.poste_id === poste.id),
-    [referentiel.besoins, poste.id],
-  )
-  const possibles = codesDuPoste(poste, referentiel.horaires)
-  const lignes = lignesDuPoste(siens, referentiel.horaires, gardees)
-  const aAjouter = horairesAAjouter(possibles, lignes)
-  const restreint = poste.horaires_autorises.length > 0
-
-  // Totaux : présence par semaine (effectif × durée, pause non déduite, comme
-  // le prototype) et, par jour, les personnes demandées.
-  let presenceSemaine = 0
-  const parJour = JOURS.map((_, j) => {
-    let total = 0
-    for (const l of lignes) {
-      const r = affiche(poste.id, l, j)
-      total += placesComptees(r, couche)
-      presenceSemaine += r.effectif * presence(l.debut, l.fin)
-    }
-    return total
-  })
-  const titreId = `besoins-poste-${poste.id}`
-
-  return (
-    <section
-      aria-labelledby={titreId}
-      className="flex min-w-0 flex-col gap-3 rounded-xl border border-t-4 bg-card p-4"
-      style={{ borderTopColor: poste.couleur }}
-    >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span
-            className="size-2.5 shrink-0 rounded-full"
-            style={{ background: poste.couleur }}
-          />
-          <h2 id={titreId} className="text-base font-semibold">
-            {poste.nom}
-          </h2>
-          <span className="text-xs text-muted-foreground tabular-nums">
-            {heures(presenceSemaine)} de présence / semaine
-          </span>
-        </div>
-        {modifiable && aAjouter.length > 0 && (
-          <AjoutHoraire
-            poste={poste}
-            horaires={aAjouter}
-            aide={
-              restreint
-                ? `Les horaires choisis pour ce poste dans Postes (${possibles.length}).`
-                : `Aucun horaire choisi pour ce poste dans Postes : les ${possibles.length} horaires sont proposés.`
-            }
-            onChoisir={(h) => ajouter(`t${h.id}`)}
-          />
-        )}
-      </div>
-
-      {lignes.length === 0 ? (
-        <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
-          {modifiable
-            ? "Ce poste n'a besoin de personne pour l'instant. Ajoutez un horaire pour en demander."
-            : "Ce poste n'a besoin de personne pour l'instant."}
-        </p>
-      ) : (
-        <div className="@container overflow-x-auto rounded-lg border">
-          <table className="w-full min-w-[40rem] table-fixed border-collapse text-sm">
-            <thead className="bg-muted/50 text-xs text-muted-foreground">
-              <tr>
-                <th className="w-[13rem] px-3 py-2 text-left font-medium @min-[62rem]:w-[16rem]">
-                  Horaire
-                </th>
-                {JOURS.map((j) => (
-                  <th key={j} className="px-1 py-2 text-center font-medium">
-                    {j.slice(0, 3)}.
-                  </th>
-                ))}
-                <th className="w-12 px-2 py-2">
-                  <span className="sr-only">Recopier</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {lignes.map((ligne) => (
-                <LigneTableau
-                  key={ligne.cle}
-                  poste={poste}
-                  ligne={ligne}
-                  referentiel={referentiel}
-                  couche={couche}
-                  permise={
-                    ligne.horaire_id === null ||
-                    possibles.some((h) => h.id === ligne.horaire_id)
-                  }
-                  modifiable={modifiable}
-                  evidence={evidence}
-                  affiche={affiche}
-                  regler={regler}
-                />
-              ))}
-            </tbody>
-            <tfoot className="bg-muted/50 text-xs">
-              <tr>
-                <th
-                  scope="row"
-                  className="px-3 py-2 text-left font-medium text-muted-foreground"
-                >
-                  Total du jour
-                </th>
-                {parJour.map((t, j) => (
-                  <td
-                    key={j}
-                    className={cn(
-                      'px-1 py-2 text-center font-semibold tabular-nums',
-                      t === 0 && 'text-muted-foreground/60',
-                    )}
-                  >
-                    {t}
-                  </td>
-                ))}
-                <td />
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      )}
-    </section>
-  )
-}
-
-/** Liste des horaires permis qui n'ont pas encore de ligne, rangés par heure. */
-function AjoutHoraire({
-  poste,
-  horaires,
-  aide,
-  onChoisir,
-}: {
-  poste: Poste
-  horaires: Horaire[]
-  /** D'où viennent les horaires proposés (réglage du poste). */
-  aide: string
-  onChoisir: (h: Horaire) => void
-}) {
-  const [ouvert, setOuvert] = useState(false)
-  return (
-    <Popover open={ouvert} onOpenChange={setOuvert}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          aria-label={`Ajouter un horaire au poste ${poste.nom}`}
-        >
-          <Plus />
-          Ajouter un horaire
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 p-1">
-        <p className="px-2 pt-1.5 pb-1 text-xs text-muted-foreground">{aide}</p>
-        <ul
-          aria-label="Horaires à ajouter"
-          className="flex max-h-80 flex-col overflow-y-auto"
-        >
-          {horaires.map((h) => (
-            <li key={h.id}>
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
-                onClick={() => {
-                  onChoisir(h)
-                  setOuvert(false)
-                }}
-              >
-                <span
-                  aria-hidden
-                  className="size-2.5 shrink-0 rounded-full"
-                  style={{ background: h.couleur }}
-                />
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate font-medium tabular-nums">
-                    {libelleHoraire(h)}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {libelleMoment(h.periode)}
-                  </span>
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </PopoverContent>
-    </Popover>
-  )
-}
-
-function LigneTableau({
-  poste,
-  ligne,
-  referentiel,
-  couche,
-  permise,
-  modifiable,
-  evidence,
-  affiche,
-  regler,
-}: {
-  poste: Poste
-  ligne: LigneBesoin
-  referentiel: Referentiel
-  couche: Couche
-  permise: boolean
-  modifiable: boolean
-  evidence: Evidence | null
-  affiche: (posteId: number, ligne: LigneBesoin, jour: number) => Reglage
-  regler: (
-    poste: Poste,
-    ligne: LigneBesoin,
-    reglages: Array<{ jour: number } & Reglage>,
-  ) => void
-}) {
-  const h = referentiel.horaires.find((x) => x.id === ligne.horaire_id)
-  const couleur = h?.couleur ?? '#98a2b3'
-  // La ligne se lit par ses heures (plus de code depuis le 2026-10-31).
-  const nomLigne = libelleHoraire(ligne)
-  const trop = alerteBesoin(poste.categorie, presence(ligne.debut, ligne.fin))
-  const lundi = affiche(poste.id, ligne, 0)
-  // « Ajuster » : la ligne compte pour le moment à compléter (la nuit, sur
-  // un poste qui a un horaire de nuit, D15).
-  const compte =
-    evidence !== null &&
-    periodePresence(
-      poste,
-      h,
-      ligne.debut,
-      evidence.periode === 'nuit' &&
-        codesDuPoste(poste, referentiel.horaires).some(
-          (x) => x.periode === 'nuit',
-        ),
-    ) === evidence.periode
-  const desactive = !modifiable
-  // Ce qui est réglé dans les AUTRES choix : une ligne à 0 ici n'a pas
-  // l'air d'un oubli quand elle porte des places ailleurs.
-  const ailleurs = COUCHES.filter(
-    (c) =>
-      c.valeur !== couche &&
-      JOURS.some(
-        (_, j) => placesComptees(affiche(poste.id, ligne, j), c.valeur) > 0,
-      ),
-  ).map((c) => c.libelle.toLowerCase())
-  // Apprentis ou stagiaires sans personne nécessaire ni en plus : jamais
-  // placés. Dit sur la ligne, dans chaque choix, avec de quoi les retirer
-  // d'un clic.
-  const orphelins = JOURS.flatMap((_, j) => {
-    const r = affiche(poste.id, ligne, j)
-    return soutienSansBase(r) ? [{ jour: j, ...r }] : []
-  })
-
-  return (
-    <tr
-      className={cn('border-t', compte && 'bg-primary/10')}
-      data-evidence={compte || undefined}
-    >
-      <td className="px-3 py-2">
-        <div className="flex items-start gap-2">
-          <span
-            aria-hidden
-            className="mt-1.5 size-2.5 shrink-0 rounded-full"
-            style={{ background: couleur }}
-          />
-          <div className="min-w-0">
-            <div className="truncate font-medium tabular-nums">{nomLigne}</div>
-            <div className="text-xs text-muted-foreground">
-              {h ? libelleMoment(h.periode) : 'Horaire spécifique'}
-            </div>
-            {trop && (
-              <p className="mt-1 flex items-start gap-1 text-xs text-amber-500">
-                <TriangleAlert className="mt-px size-3 shrink-0" />
-                Trop long : {trop}.
-              </p>
-            )}
-            {ailleurs.length > 0 && (
-              // Étiquettes sur UNE ligne (audit UX du 2026-10-31) : la phrase
-              // « Réglé aussi : … » prenait deux lignes sous chaque horaire.
-              <div
-                className="mt-1 flex flex-wrap gap-1"
-                aria-label={`Réglé aussi : ${listeEt(ailleurs)}`}
-              >
-                {ailleurs.map((a) => (
-                  <span
-                    key={a}
-                    className="rounded border px-1.5 text-[10.5px] leading-4 text-muted-foreground"
-                  >
-                    {a.charAt(0).toUpperCase() + a.slice(1)}
-                  </span>
-                ))}
-              </div>
-            )}
-            {!permise && (
-              <p className="mt-1 flex items-start gap-1 text-xs text-amber-500">
-                <TriangleAlert className="mt-px size-3 shrink-0" />
-                Cet horaire n'est pas dans les horaires possibles du poste.
-              </p>
-            )}
-            {orphelins.length > 0 && (
-              <div className="mt-1 flex flex-wrap items-start gap-x-2 gap-y-1 text-xs text-amber-500">
-                <p className="flex items-start gap-1">
-                  <TriangleAlert className="mt-px size-3 shrink-0" />
-                  {orphelins.length > 1
-                    ? `Apprentis ou stagiaires demandés ${orphelins.length} jours sans personne à côté : ils ne seront jamais placés.`
-                    : 'Apprenti ou stagiaire demandé un jour sans personne à côté : il ne sera jamais placé.'}
-                </p>
-                {modifiable && (
-                  <button
-                    type="button"
-                    className="font-medium text-primary underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none"
-                    aria-label={`Retirer les apprentis et stagiaires sans personne à côté, ${nomLigne}`}
-                    onClick={() =>
-                      regler(
-                        poste,
-                        ligne,
-                        orphelins.map((o) => ({ ...o, soutien: 0 })),
-                      )
-                    }
-                  >
-                    Retirer
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      </td>
-      {JOURS.map((nom, j) => {
-        const r = affiche(poste.id, ligne, j)
-        const existe = r.effectif > 0 || r.soutien > 0 || r.renfort > 0
-        const libelle = `${nom}, ${nomLigne}`
-        const valeur = r[couche]
-        // Un apprenti n'est jamais seul : pas de place sans personne
-        // nécessaire ou en plus à côté.
-        const sansBase = couche === 'soutien' && !aUneBase(r)
-        return (
-          <td
-            key={nom}
-            className={cn(
-              'px-1 py-2 text-center',
-              compte &&
-                j === evidence.jour &&
-                'rounded-md ring-2 ring-primary ring-inset',
-            )}
-            data-jour-ajuste={(compte && j === evidence.jour) || undefined}
-          >
-            {sansBase && r.soutien > 0 ? (
-              <Tip
-                label={
-                  modifiable
-                    ? "Personne n'est prévu à côté : cette place ne sera jamais pourvue. Cliquez pour la retirer."
-                    : "Personne n'est prévu à côté : cette place ne sera jamais pourvue."
-                }
-              >
-                <button
-                  type="button"
-                  disabled={desactive}
-                  aria-label={`${LIBELLE_COUCHE[couche]} ${libelle} : ${r.soutien} sans personne à côté, retirer`}
-                  className="inline-block rounded px-1.5 py-0.5 font-semibold text-amber-500 tabular-nums line-through decoration-amber-500/60 hover:bg-amber-500/10 disabled:no-underline disabled:hover:bg-transparent"
-                  onClick={() =>
-                    regler(poste, ligne, [{ jour: j, ...r, soutien: 0 }])
-                  }
-                >
-                  {r.soutien}
-                </button>
-              </Tip>
-            ) : sansBase ? (
-              <Tip label="Mettez d'abord une personne nécessaire (ou en plus si besoin) sur ce jour">
-                <span
-                  tabIndex={0}
-                  className="inline-block py-0.5 text-muted-foreground/50"
-                >
-                  —
-                </span>
-              </Tip>
-            ) : (
-              <Compteur
-                valeur={valeur}
-                max={couche === 'effectif' ? 20 : 5}
-                attenue={valeur === 0}
-                etiquette={`${LIBELLE_COUCHE[couche]} ${libelle}`}
-                disabled={desactive}
-                onChange={(v) =>
-                  regler(poste, ligne, [
-                    couche === 'effectif'
-                      ? {
-                          jour: j,
-                          effectif: v,
-                          // Un nouveau besoin ouvre par défaut une place de
-                          // soutien ; plus personne à côté : plus de soutien.
-                          soutien:
-                            v + r.renfort === 0 ? 0 : existe ? r.soutien : 1,
-                          renfort: r.renfort,
-                        }
-                      : couche === 'renfort' && v + r.effectif === 0
-                        ? { jour: j, ...r, renfort: 0, soutien: 0 }
-                        : { jour: j, ...r, [couche]: v },
-                  ])
-                }
-              />
-            )}
-          </td>
-        )
-      })}
-      <td className="px-2 py-2">
-        {modifiable && (
-          <Tip label="Recopier le lundi sur toute la semaine (les trois réglages)">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={`Recopier le lundi sur toute la semaine, ${nomLigne}`}
-              onClick={() =>
-                regler(
-                  poste,
-                  ligne,
-                  [1, 2, 3, 4, 5, 6].map((jour) => ({
-                    jour,
-                    effectif: lundi.effectif,
-                    soutien: lundi.soutien,
-                    renfort: lundi.renfort,
-                  })),
-                )
-              }
-            >
-              <ChevronsRight />
-            </Button>
-          </Tip>
-        )}
-      </td>
-    </tr>
-  )
 }

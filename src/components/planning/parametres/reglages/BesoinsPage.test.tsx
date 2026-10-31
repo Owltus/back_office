@@ -9,14 +9,16 @@ import {
 } from '@testing-library/react'
 
 import { codeTest } from '#/lib/planning/test/codesTest.ts'
-import type { Referentiel } from '#/lib/planning/types.ts'
+import type { Besoin, Referentiel } from '#/lib/planning/types.ts'
 
 /*
- * Besoins contre un service simulé. Vérifié : en lecture, aucun compteur
- * actif ; un compteur appelle `reglerBesoin` avec le besoin EXISTANT ; un
- * nouveau besoin ouvre une place de soutien ; « Toute la semaine » recopie
- * le lundi ; les deux points d'attention (trop long pour la catégorie,
- * horaire non permis pour le poste) ; les totaux du jour.
+ * La page Besoins refaite le 2026-10-31, contre un service simulé. Oracle de
+ * chaque test : la demande de l'utilisateur du même jour (« très compliquée
+ * à comprendre… je ne sais pas comment revenir ») et ses décisions : un poste
+ * à la fois en onglets, un chiffre par case (personnes nécessaires), les
+ * apprentis et le « en plus » en options de la case avec un repère, la
+ * copie sur d'autres jours explicite, Annuler et Rétablir, la présence
+ * minimum sous la grille avec un repère vert ou orange.
  */
 
 const etat = vi.hoisted(() => ({
@@ -61,151 +63,313 @@ const { BesoinsPage } =
 const { monter, referentielDemo } =
   await import('#/components/planning/parametres/reglages/test/monter.tsx')
 
+/** La base simulée : une écriture modifie (ou crée) le besoin, que la
+ * relecture suivante rend au référentiel. */
+function baseSimulee() {
+  let n = 10_000
+  service.reglerBesoin.mockImplementation(
+    async (v: Omit<Besoin, 'id'>, existant?: Besoin) => {
+      if (existant) Object.assign(existant, v)
+      else etat.referentiel?.besoins.push({ id: ++n, ...v })
+    },
+  )
+}
+
 beforeEach(() => {
   etat.referentiel = referentielDemo()
   etat.droits = { pret: true, lire: true, ecrire: true, gerer: true }
-  service.reglerBesoin.mockReset().mockResolvedValue(undefined)
+  service.reglerBesoin.mockReset()
   service.reglerConsigne.mockReset().mockResolvedValue(undefined)
+  baseSimulee()
 })
 afterEach(cleanup)
 
-const poste = (nom: string) => within(screen.getByRole('region', { name: nom }))
+const onglet = (nom: string) => {
+  const tab = screen.getByRole('tab', { name: new RegExp(`^${nom}`) })
+  fireEvent.mouseDown(tab, { button: 0 })
+  return tab
+}
+const grille = (nom: string) =>
+  within(screen.getByRole('table', { name: `Besoins du poste ${nom}` }))
+const caseDe = (poste: string, jour: string, horaire: string) =>
+  grille(poste).getByRole('button', {
+    name: new RegExp(`^${poste}, ${jour}, ${horaire} :`),
+  })
+const ouvrirCase = (poste: string, jour: string, horaire: string) => {
+  fireEvent.click(caseDe(poste, jour, horaire))
+  return within(screen.getByRole('dialog'))
+}
+const besoinDe = (
+  ref: Referentiel,
+  posteId: number,
+  code: string,
+  jour: number,
+) =>
+  ref.besoins.find(
+    (b) =>
+      b.poste_id === posteId &&
+      b.jour === jour &&
+      b.horaire_id === ref.horaires.find((h) => codeTest(h) === code)?.id,
+  ) as Besoin
 
 describe('Besoins', () => {
-  it('en écriture (sans gestion) : aucun compteur actif', () => {
-    etat.droits = { pret: true, lire: true, ecrire: true, gerer: false }
+  it('un poste à la fois : les onglets changent la grille', () => {
+    // Oracle : « les postes en onglets en haut ; une seule grille à l'écran ».
     monter(<BesoinsPage />)
-    expect(screen.getByText(/Lecture seule/)).toBeTruthy()
-    for (const b of screen.getAllByRole('button', {
-      name: /un de (plus|moins)$/,
-    })) {
-      expect((b as HTMLButtonElement).disabled).toBe(true)
-    }
+    expect(screen.getAllByRole('tab')).toHaveLength(5)
+    expect(
+      screen.getAllByRole('table', { name: /^Besoins du poste/ }),
+    ).toHaveLength(1)
+    expect(
+      screen.getByRole('table', { name: 'Besoins du poste Direction' }),
+    ).toBeTruthy()
+    const tab = onglet('Réception')
+    expect(tab.getAttribute('aria-selected')).toBe('true')
+    expect(
+      screen.getByRole('table', { name: 'Besoins du poste Réception' }),
+    ).toBeTruthy()
+    expect(
+      screen.queryByRole('table', { name: 'Besoins du poste Direction' }),
+    ).toBeNull()
+    // Heures de présence à côté du nom : M et AM à 1 chaque jour (8h45
+    // chacun), MI à 0 : 7 × 17h30.
+    expect(tab.textContent).toContain('122h30')
+    // Plus de bouton qui recopie le lundi en silence, plus de choix « Vous réglez ».
     expect(screen.queryByRole('button', { name: /Recopier/ })).toBeNull()
+    expect(screen.queryByRole('radio')).toBeNull()
   })
 
-  it('un compteur appelle reglerBesoin avec le besoin existant', async () => {
+  it('un lien vers un poste ouvre son onglet', () => {
+    // Oracle : les points « À vérifier » mènent à `poste-<id>`.
+    monter(<BesoinsPage ouvrir="poste-3" />)
+    expect(
+      screen.getByRole('tab', { name: /^Club/ }).getAttribute('aria-selected'),
+    ).toBe('true')
+  })
+
+  it('la case montre les personnes nécessaires ; + dans le panneau écrit la bonne valeur', async () => {
+    // Oracle : « UN chiffre par case = les personnes nécessaires » ; le
+    // panneau écrit par la même fonction qu'avant, avec le besoin existant.
     monter(<BesoinsPage />)
-    const existant = etat.referentiel?.besoins.find(
-      (b) => b.poste_id === 2 && b.horaire_id === 1 && b.jour === 0,
+    onglet('Réception')
+    const existant = besoinDe(etat.referentiel as Referentiel, 2, 'M', 0)
+    const c = caseDe('Réception', 'lundi', '07:00–15:45')
+    expect(c.getAttribute('aria-label')).toBe(
+      'Réception, lundi, 07:00–15:45 : 1 personne nécessaire, 1 place pour apprenti ou stagiaire',
     )
-    expect(existant).toBeTruthy()
+    const panneau = ouvrirCase('Réception', 'lundi', '07:00–15:45')
+    expect(
+      screen.getByRole('dialog', { name: 'Réception · Lundi · 07:00–15:45' }),
+    ).toBeTruthy()
     fireEvent.click(
-      poste('Réception').getByRole('button', {
-        name: 'Personnes nécessaires Lundi, 07:00–15:45 : un de plus',
+      panneau.getByRole('button', {
+        name: 'Personnes nécessaires : un de plus',
       }),
     )
     await waitFor(() => expect(service.reglerBesoin).toHaveBeenCalledTimes(1))
-    expect(service.reglerBesoin).toHaveBeenCalledWith(
-      {
-        poste_id: 2,
-        jour: 0,
-        horaire_id: 1,
-        debut: '07:00',
-        fin: '15:45',
-        effectif: 2,
-        soutien: 1,
-        renfort: 0,
-      },
-      existant,
-    )
-  })
-
-  it('un nouveau besoin ouvre une place de soutien, sans besoin existant', async () => {
-    monter(<BesoinsPage />)
-    const club = poste('Club')
-    expect(club.queryByText('09:00–17:45')).toBeNull()
+    expect(service.reglerBesoin.mock.calls[0][0]).toEqual({
+      poste_id: 2,
+      jour: 0,
+      horaire_id: 1,
+      debut: '07:00',
+      fin: '15:45',
+      effectif: 2,
+      soutien: 1,
+      renfort: 0,
+    })
+    // Le besoin existant, relu en base (même objet).
+    expect(service.reglerBesoin.mock.calls[0][1]).toBe(existant)
     fireEvent.click(
-      club.getByRole('button', { name: 'Ajouter un horaire au poste Club' }),
-    )
-    fireEvent.click(
-      within(
-        screen.getByRole('list', { name: 'Horaires à ajouter' }),
-      ).getByRole('button', { name: /09:00–17:45/ }),
-    )
-    fireEvent.click(
-      club.getByRole('button', {
-        name: 'Personnes nécessaires Mardi, 09:00–17:45 : un de plus',
+      panneau.getByRole('button', {
+        name: 'Personnes nécessaires : un de moins',
       }),
     )
-    await waitFor(() =>
-      expect(service.reglerBesoin).toHaveBeenCalledWith(
-        {
-          poste_id: 3,
-          jour: 1,
-          horaire_id: 2,
-          debut: '09:00',
-          fin: '17:45',
-          effectif: 1,
-          soutien: 1,
-          renfort: 0,
-        },
-        undefined,
-      ),
-    )
+    await waitFor(() => expect(service.reglerBesoin).toHaveBeenCalledTimes(2))
+    expect(service.reglerBesoin.mock.calls[1][0].effectif).toBe(1)
   })
 
-  it('deux clics rapides : le second part avec le besoin créé par le premier', async () => {
-    let cree: unknown
-    service.reglerBesoin.mockImplementation(async (v) => {
-      // La base crée le besoin ; la relecture le rend au référentiel.
-      if (!cree) {
-        cree = { id: 999, ...v }
-        etat.referentiel?.besoins.push(cree as never)
-      }
+  it('Appliquer à Samedi et dimanche écrit les deux jours avec les trois valeurs', async () => {
+    // Oracle : « copie EXPLICITE des trois valeurs de cette case vers les
+    // jours choisis de la même ligne ».
+    const ref = referentielDemo()
+    Object.assign(besoinDe(ref, 2, 'M', 0), {
+      effectif: 2,
+      soutien: 1,
+      renfort: 1,
     })
+    etat.referentiel = ref
     monter(<BesoinsPage />)
-    const club = poste('Club')
+    onglet('Réception')
+    const panneau = ouvrirCase('Réception', 'lundi', '07:00–15:45')
+    fireEvent.click(panneau.getByRole('button', { name: 'Samedi et dimanche' }))
+    await waitFor(() => expect(service.reglerBesoin).toHaveBeenCalledTimes(2))
+    expect(
+      service.reglerBesoin.mock.calls.map(([v]) => [
+        v.jour,
+        v.effectif,
+        v.soutien,
+        v.renfort,
+      ]),
+    ).toEqual([
+      [5, 2, 1, 1],
+      [6, 2, 1, 1],
+    ])
+    expect(
+      screen.getByText('Copié sur 2 jours. Ctrl + Z pour annuler.'),
+    ).toBeTruthy()
+  })
+
+  it('Annuler remet les valeurs d’avant, Rétablir celles d’après', async () => {
+    // Oracle : « Annuler / Rétablir (indispensable, c'est ce qui a manqué à
+    // l'utilisateur) », par le bouton et par Ctrl + Z / Ctrl + Y.
+    const ref = referentielDemo()
+    Object.assign(besoinDe(ref, 2, 'M', 0), {
+      effectif: 2,
+      soutien: 1,
+      renfort: 1,
+    })
+    etat.referentiel = ref
+    monter(<BesoinsPage />)
+    onglet('Réception')
+    expect(
+      screen.getByRole<HTMLButtonElement>('button', { name: 'Annuler' })
+        .disabled,
+    ).toBe(true)
+    const panneau = ouvrirCase('Réception', 'lundi', '07:00–15:45')
+    fireEvent.click(panneau.getByRole('button', { name: 'Samedi et dimanche' }))
+    await waitFor(() => expect(service.reglerBesoin).toHaveBeenCalledTimes(2))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }))
+    await waitFor(() => expect(service.reglerBesoin).toHaveBeenCalledTimes(4))
+    // Valeurs d'avant : 1 personne, 1 apprenti, 0 en plus (hôtel fictif).
+    expect(
+      service.reglerBesoin.mock.calls
+        .slice(2)
+        .map(([v]) => [v.jour, v.effectif, v.soutien, v.renfort]),
+    ).toEqual([
+      [5, 1, 1, 0],
+      [6, 1, 1, 0],
+    ])
+    expect(caseDe('Réception', 'samedi', '07:00–15:45').textContent).toContain(
+      '1',
+    )
+
+    fireEvent.keyDown(window, { key: 'y', ctrlKey: true })
+    await waitFor(() => expect(service.reglerBesoin).toHaveBeenCalledTimes(6))
+    expect(
+      service.reglerBesoin.mock.calls
+        .slice(4)
+        .map(([v]) => [v.jour, v.effectif, v.renfort]),
+    ).toEqual([
+      [5, 2, 1],
+      [6, 2, 1],
+    ])
+
+    fireEvent.keyDown(window, { key: 'z', ctrlKey: true })
+    await waitFor(() => expect(service.reglerBesoin).toHaveBeenCalledTimes(8))
+    expect(service.reglerBesoin.mock.calls[7][0]).toMatchObject({
+      jour: 6,
+      effectif: 1,
+      renfort: 0,
+    })
+  })
+
+  it('Vider cette ligne met la semaine à 0, et s’annule', async () => {
+    // Oracle : « un menu ⋯ avec Vider cette ligne (toutes les valeurs à 0
+    // sur la semaine) ».
+    monter(<BesoinsPage />)
+    onglet('Réception')
+    fireEvent.pointerDown(
+      grille('Réception').getByRole('button', {
+        name: 'Actions de la ligne 07:00–15:45',
+      }),
+      { button: 0, pointerType: 'mouse' },
+    )
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Vider cette ligne' }))
+    await waitFor(() => expect(service.reglerBesoin).toHaveBeenCalledTimes(7))
+    for (const [v] of service.reglerBesoin.mock.calls) {
+      expect(v).toMatchObject({ effectif: 0, soutien: 0, renfort: 0 })
+    }
+    // La ligne reste à l'écran, à 0.
+    expect(caseDe('Réception', 'lundi', '07:00–15:45').textContent).toBe('–')
+    expect(screen.getByText('Ligne vidée. Ctrl + Z pour annuler.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }))
+    await waitFor(() => expect(service.reglerBesoin).toHaveBeenCalledTimes(14))
+    expect(service.reglerBesoin.mock.calls[7][0]).toMatchObject({
+      effectif: 1,
+      soutien: 1,
+    })
+  })
+
+  it('le repère +1 app. apparaît quand la case a une place d’apprenti', async () => {
+    // Oracle : « une case qui a du soutien ou du en plus montre un petit
+    // repère discret (+1 app., +1 si besoin) ».
+    const ref = referentielDemo()
+    besoinDe(ref, 2, 'M', 0).soutien = 0
+    etat.referentiel = ref
+    monter(<BesoinsPage />)
+    onglet('Réception')
+    const c = () => caseDe('Réception', 'lundi', '07:00–15:45')
+    expect(c().querySelector('[data-repere]')).toBeNull()
+    const panneau = ouvrirCase('Réception', 'lundi', '07:00–15:45')
+    fireEvent.click(panneau.getByRole('button', { name: 'Options' }))
     fireEvent.click(
-      club.getByRole('button', { name: 'Ajouter un horaire au poste Club' }),
+      panneau.getByRole('button', {
+        name: 'Places pour apprentis ou stagiaires : un de plus',
+      }),
+    )
+    expect(c().textContent).toContain('+1 app.')
+    fireEvent.click(
+      panneau.getByRole('button', { name: 'En plus si besoin : un de plus' }),
+    )
+    expect(c().textContent).toContain('+1 si besoin')
+    await waitFor(() => expect(service.reglerBesoin).toHaveBeenCalledTimes(2))
+    expect(service.reglerBesoin.mock.calls[1][0]).toMatchObject({
+      jour: 0,
+      effectif: 1,
+      soutien: 1,
+      renfort: 1,
+    })
+  })
+
+  it('un nouvel horaire : la case crée le besoin, deux clics rapides n’en créent qu’un', async () => {
+    // Oracle : règles d'écriture inchangées (besoin relu avant chaque écriture).
+    monter(<BesoinsPage />)
+    onglet('Club')
+    expect(grille('Club').queryByText('09:00–17:45')).toBeNull()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Ajouter un horaire au poste Club' }),
     )
     fireEvent.click(
       within(
         screen.getByRole('list', { name: 'Horaires à ajouter' }),
-      ).getByRole('button', { name: /09:00–17:45/ }),
+      ).getByRole('button', {
+        name: /09:00–17:45/,
+      }),
     )
-    const plus = club.getByRole('button', {
-      name: 'Personnes nécessaires Jeudi, 09:00–17:45 : un de plus',
+    const panneau = ouvrirCase('Club', 'jeudi', '09:00–17:45')
+    const plus = panneau.getByRole('button', {
+      name: 'Personnes nécessaires : un de plus',
     })
     fireEvent.click(plus)
     fireEvent.click(plus)
     await waitFor(() => expect(service.reglerBesoin).toHaveBeenCalledTimes(2))
     const [premier, second] = service.reglerBesoin.mock.calls
     expect(premier[1]).toBeUndefined()
-    expect(premier[0].effectif).toBe(1)
+    // Un nouveau besoin ouvre une place pour un apprenti (règle gardée).
+    expect(premier[0]).toMatchObject({
+      poste_id: 3,
+      jour: 3,
+      horaire_id: 2,
+      effectif: 1,
+      soutien: 1,
+    })
     expect(second[0].effectif).toBe(2)
-    expect(second[1]).toBe(cree)
+    expect(second[1]).toMatchObject({ poste_id: 3, jour: 3, horaire_id: 2 })
   })
 
-  it('Recopier recopie le lundi sur les six autres jours', async () => {
-    monter(<BesoinsPage />)
-    fireEvent.click(screen.getByRole('radio', { name: 'En plus si besoin' }))
-    const r = poste('Réception')
-    fireEvent.click(
-      r.getByRole('button', {
-        name: 'En plus si besoin Lundi, 07:00–15:45 : un de plus',
-      }),
-    )
-    fireEvent.click(
-      r.getByRole('button', {
-        name: 'Recopier le lundi sur toute la semaine, 07:00–15:45',
-      }),
-    )
-    await waitFor(() => expect(service.reglerBesoin).toHaveBeenCalledTimes(7))
-    const jours = service.reglerBesoin.mock.calls
-      .slice(1)
-      .map(([v]) => [v.jour, v.renfort])
-    expect(jours).toEqual([
-      [1, 1],
-      [2, 1],
-      [3, 1],
-      [4, 1],
-      [5, 1],
-      [6, 1],
-    ])
-  })
-
-  it('signale un besoin trop long pour la catégorie et un horaire non permis', () => {
+  it('signale un horaire trop long et un horaire non permis sur la ligne', () => {
+    // Oracle : « une icône d'alerte avec infobulle et texte accessible ».
     const ref = referentielDemo()
     const d = ref.horaires.find((h) => codeTest(h) === 'D')
     if (d) d.fin = '20:00'
@@ -215,424 +379,144 @@ describe('Besoins', () => {
     etat.referentiel = ref
     monter(<BesoinsPage />)
     expect(
-      poste('Direction').getByText(
+      grille('Direction').getByText(
         /dépasse la durée maximale d'un service pour cette catégorie \(11 h 30/,
       ),
     ).toBeTruthy()
+    onglet('Réception')
     expect(
-      poste('Réception').getByText(
+      grille('Réception').getByText(
         "Cet horaire n'est pas dans les horaires possibles du poste.",
       ),
     ).toBeTruthy()
   })
 
-  it('totaux : présence de la semaine et personnes par jour', () => {
+  it('apprentis sans personne à côté : signalés sur la ligne, retirés par le menu', async () => {
+    // Oracle : `soutienSansBase` (jamais placés), alerte de ligne.
+    const ref = referentielDemo()
+    for (const b of ref.besoins) if (b.poste_id === 1) b.renfort = 0
+    etat.referentiel = ref
     monter(<BesoinsPage />)
-    // Réception : M et AM à 1 chaque jour (8h45 chacun), MI à 0 : 7 × 17h30.
     expect(
-      poste('Réception').getByText('122h30 de présence / semaine'),
+      grille('Direction').getByText(/sans personne à côté, 5 jours/),
     ).toBeTruthy()
-  })
-
-  describe('apprentis sans personne à côté', () => {
-    /** Direction : du lundi au vendredi, 1 apprenti, personne d'autre. */
-    function orphelins() {
-      const ref = referentielDemo()
-      const id = ref.postes.find((p) => p.nom === 'Direction')?.id
-      for (const b of ref.besoins) if (b.poste_id === id) b.renfort = 0
-      etat.referentiel = ref
-      monter(<BesoinsPage />)
-      fireEvent.click(screen.getByRole('radio', { name: 'En soutien' }))
-      return poste('Direction')
-    }
-    const totaux = (r: ReturnType<typeof poste>) =>
-      within(r.getByRole('row', { name: /Total du jour/ }))
-        .getAllByRole('cell')
-        .slice(0, 7)
-        .map((c) => c.textContent)
-
-    it('le total ne compte que ce qui sera placé, la case montre le chiffre', () => {
-      const d = orphelins()
-      expect(totaux(d)).toEqual(['0', '0', '0', '0', '0', '0', '0'])
-      expect(
-        d.getByRole('button', {
-          name: 'En soutien Lundi, 08:00–18:00 : 1 sans personne à côté, retirer',
-        }),
-      ).toBeTruthy()
-      expect(d.getByText(/demandés 5 jours sans personne à côté/)).toBeTruthy()
-    })
-
-    it('un clic sur la case la remet à 0', async () => {
-      const d = orphelins()
-      fireEvent.click(
-        d.getByRole('button', {
-          name: 'En soutien Mardi, 08:00–18:00 : 1 sans personne à côté, retirer',
-        }),
-      )
-      await waitFor(() => expect(service.reglerBesoin).toHaveBeenCalledTimes(1))
-      expect(service.reglerBesoin.mock.calls[0][0]).toMatchObject({
-        jour: 1,
-        effectif: 0,
-        soutien: 0,
-        renfort: 0,
-      })
-    })
-
-    it('Retirer sur la ligne : tous les jours concernés', async () => {
-      const d = orphelins()
-      fireEvent.click(
-        d.getByRole('button', {
-          name: 'Retirer les apprentis et stagiaires sans personne à côté, 08:00–18:00',
-        }),
-      )
-      await waitFor(() => expect(service.reglerBesoin).toHaveBeenCalledTimes(5))
-      expect(
-        service.reglerBesoin.mock.calls.map(([v]) => [v.jour, v.soutien]),
-      ).toEqual([
-        [0, 0],
-        [1, 0],
-        [2, 0],
-        [3, 0],
-        [4, 0],
-      ])
-    })
-
-    it('avec une place en plus à côté : le compteur reste, et compte', () => {
-      monter(<BesoinsPage />)
-      fireEvent.click(screen.getByRole('radio', { name: 'En soutien' }))
-      const d = poste('Direction')
-      expect(totaux(d)).toEqual(['1', '1', '1', '1', '1', '0', '0'])
-      expect(
-        d.getByRole('button', {
-          name: 'En soutien Lundi, 08:00–18:00 : un de moins',
-        }),
-      ).toBeTruthy()
-      expect(d.queryByText(/sans personne à côté/)).toBeNull()
-    })
-
-    it('retirer la dernière place en plus retire aussi l’apprenti', async () => {
-      monter(<BesoinsPage />)
-      fireEvent.click(screen.getByRole('radio', { name: 'En plus si besoin' }))
-      fireEvent.click(
-        poste('Direction').getByRole('button', {
-          name: 'En plus si besoin Lundi, 08:00–18:00 : un de moins',
-        }),
-      )
-      await waitFor(() => expect(service.reglerBesoin).toHaveBeenCalledTimes(1))
-      expect(service.reglerBesoin.mock.calls[0][0]).toMatchObject({
-        effectif: 0,
-        renfort: 0,
-        soutien: 0,
-      })
-    })
-  })
-
-  it('par cycle : les postes qui comptent, dits en français', () => {
-    const ref = referentielDemo()
-    for (const p of ref.postes)
-      if (p.nom === 'Réception' || p.nom === 'Club') p.presence = true
-    etat.referentiel = ref
-    monter(<BesoinsPage />)
-    fireEvent.click(screen.getByRole('radio', { name: 'Par cycle' }))
-    const carte = screen.getByRole('region', { name: 'Personnes par cycle' })
-    expect(carte.textContent).toContain(
-      'Le matin et le soir, comptent les personnes placées en Réception et Club, sauf les apprentis et stagiaires, qui viennent en plus.',
-    )
-    // Aucun code de la famille nuit dans l'hôtel fictif : la nuit ne compte
-    // pas, et c'est dit.
-    expect(carte.textContent).toContain(
-      "La nuit ne compte pas : aucun poste n'a d'horaire de nuit.",
-    )
-    expect(carte.textContent).toContain(
-      'Un middle compte comme présent, mais pas dans ces minimums.',
-    )
-  })
-
-  it('par cycle : la nuit compte la Veille de nuit, et Ajuster la retrouve', () => {
-    const ref = referentielDemo()
-    for (const p of ref.postes)
-      p.presence = p.nom === 'Réception' || p.nom === 'Club'
-    for (const h of ref.horaires) {
-      h.periode =
-        codeTest(h) === 'N' ? 'nuit' : codeTest(h) === 'M' ? 'matin' : null
-    }
-    ref.consignes = [
-      { id: 1, jour: 0, periode: 'nuit', minimum: 2, maximum: null },
-    ]
-    etat.referentiel = ref
-    monter(<BesoinsPage />)
-    fireEvent.click(screen.getByRole('radio', { name: 'Par cycle' }))
-    const carte = within(
-      screen.getByRole('region', { name: 'Personnes par cycle' }),
-    )
-    expect(carte.getByRole('rowheader', { name: 'Nuit' })).toBeTruthy()
-    expect(
-      screen.getByRole('region', { name: 'Personnes par cycle' }).textContent,
-    ).toContain('La nuit, comptent les personnes placées en Veille de nuit.')
-    // Oracle : un besoin N (nuit) par jour en Veille de nuit, effectif 1.
-    const nuitLundi = ref.besoins
-      .filter(
-        (b) =>
-          b.jour === 0 &&
-          b.horaire_id === ref.horaires.find((h) => codeTest(h) === 'N')?.id,
-      )
-      .reduce((n, b) => n + b.effectif, 0)
-    expect(nuitLundi).toBe(1)
-    const cellule = document.querySelector<HTMLElement>(
-      '[data-besoins="0:nuit"]',
-    )
-    expect(cellule?.textContent).toBe('Besoins : 1')
-    expect(cellule?.dataset.ecart).toBe('true')
-    expect(
-      carte.getByRole('button', {
-        name: 'Nuit du lundi : au moins : un de plus',
+    fireEvent.pointerDown(
+      grille('Direction').getByRole('button', {
+        name: 'Actions de la ligne 08:00–18:00',
       }),
-    ).toBeTruthy()
+      { button: 0, pointerType: 'mouse' },
+    )
     fireEvent.click(
-      screen.getByRole('button', { name: 'Ajuster les besoins du lundi nuit' }),
+      screen.getByRole('menuitem', {
+        name: "Retirer les places d'apprentis sans personne à côté",
+      }),
     )
+    await waitFor(() => expect(service.reglerBesoin).toHaveBeenCalledTimes(5))
     expect(
-      screen.getByRole('status', { name: 'Moment à ajuster' }).textContent,
-    ).toContain(
-      'Lundi nuit : les besoins donnent 1, la consigne en veut au moins 2.',
-    )
-    const lignes = [
-      ...document.querySelectorAll<HTMLElement>('tr[data-evidence]'),
-    ].map((tr) => [
-      tr.closest('section')?.querySelector('h2')?.textContent,
-      tr.querySelector('td div.truncate')?.textContent,
+      service.reglerBesoin.mock.calls.map(([v]) => [v.jour, v.soutien]),
+    ).toEqual([
+      [0, 0],
+      [1, 0],
+      [2, 0],
+      [3, 0],
+      [4, 0],
     ])
-    expect(lignes).toEqual([['Veille de nuit', '23:00–07:45']])
   })
 
-  it('consignes de présence : au moins et au plus, le plafond suit', async () => {
-    const lundiSoir = {
-      id: 7,
-      jour: 0,
-      periode: 'soir' as const,
-      minimum: 2,
-      maximum: 2,
-    }
-    etat.referentiel = { ...referentielDemo(), consignes: [lundiSoir] }
-    monter(<BesoinsPage />)
-    fireEvent.click(screen.getByRole('radio', { name: 'Par cycle' }))
-    const carte = within(
-      screen.getByRole('region', { name: 'Personnes par cycle' }),
-    )
-    fireEvent.click(
-      carte.getByRole('button', {
-        name: 'Matin du samedi : au moins : un de plus',
-      }),
-    )
-    await waitFor(() =>
-      expect(service.reglerConsigne).toHaveBeenCalledWith(
-        { jour: 5, periode: 'matin', minimum: 1, maximum: 1 },
-        undefined,
-      ),
-    )
-    fireEvent.click(carte.getByRole('radio', { name: 'Au plus' }))
-    fireEvent.click(
-      carte.getByRole('button', {
-        name: 'Soir du lundi : au plus : un de plus',
-      }),
-    )
-    // Affiché tout de suite, avant la réponse.
-    expect(carte.getByText('2 ou 3')).toBeTruthy()
-    await waitFor(() =>
-      expect(service.reglerConsigne).toHaveBeenLastCalledWith(
-        { jour: 0, periode: 'soir', minimum: 2, maximum: 3 },
-        lundiSoir,
-      ),
-    )
-    // Réponse reçue : la base (simulée, inchangée) fait foi. Le plafond
-    // descend sous le minimum : le minimum suit.
-    await waitFor(() =>
-      expect(carte.getAllByText('2').length).toBeGreaterThan(0),
-    )
-    fireEvent.click(
-      carte.getByRole('button', {
-        name: 'Soir du lundi : au plus : un de moins',
-      }),
-    )
-    await waitFor(() =>
-      expect(service.reglerConsigne).toHaveBeenLastCalledWith(
-        { jour: 0, periode: 'soir', minimum: 1, maximum: 1 },
-        lundiSoir,
-      ),
-    )
-  })
-
-  it('en écriture (sans gestion) : consignes en lecture seule', () => {
-    etat.droits = { pret: true, lire: true, ecrire: true, gerer: false }
-    monter(<BesoinsPage />)
-    fireEvent.click(screen.getByRole('radio', { name: 'Par cycle' }))
-    const carte = within(
-      screen.getByRole('region', { name: 'Personnes par cycle' }),
-    )
-    for (const b of carte.getAllByRole('button', {
-      name: /un de (plus|moins)$/,
-    })) {
-      expect((b as HTMLButtonElement).disabled).toBe(true)
-    }
-  })
-
-  describe('matin et soir face aux besoins', () => {
-    // Réception et Club comptent ; samedi matin, au moins 3.
-    const avecConsigne = (): Referentiel => {
+  describe('présence minimum', () => {
+    // Réception et Club comptent ; M du matin, AM du soir, MI middle.
+    const avecConsignes = (): Referentiel => {
       const ref = referentielDemo()
-      for (const p of ref.postes) {
+      for (const p of ref.postes)
         p.presence = p.nom === 'Réception' || p.nom === 'Club'
-      }
-      // M du matin, AM du soir, MI « middle » (moment lu sur l'heure).
       const periodes: Partial<Record<string, 'matin' | 'middle' | 'soir'>> = {
         M: 'matin',
         MI: 'middle',
         AM: 'soir',
       }
-      for (const h of ref.horaires) {
+      for (const h of ref.horaires)
         h.periode = periodes[codeTest(h) ?? ''] ?? null
-      }
       ref.consignes = [
         { id: 1, jour: 5, periode: 'matin', minimum: 3, maximum: null },
+        { id: 2, jour: 0, periode: 'matin', minimum: 2, maximum: 2 },
       ]
       return ref
     }
-    // Oracle indépendant : un code du matin compte le matin ; un middle
-    // jamais (D11, il est là mais ne compte pas) ; un code sans période
-    // jamais.
-    const sommeAttendue = (ref: Referentiel, jour: number) => {
-      const comptent = new Set(
-        ref.postes.filter((p) => p.presence).map((p) => p.id),
-      )
-      let n = 0
-      for (const b of ref.besoins) {
-        if (b.jour !== jour || !comptent.has(b.poste_id)) continue
-        const h = ref.horaires.find((x) => x.id === b.horaire_id)
-        if (h?.periode === 'matin') n += b.effectif
-      }
-      return n
-    }
-    const caseBesoins = (cle: string) =>
-      document.querySelector<HTMLElement>(`[data-besoins="${cle}"]`)
-    const momentAjuste = () =>
-      screen.getByRole('status', { name: 'Moment à ajuster' }).textContent
+    const casePresence = (cle: string) =>
+      document.querySelector<HTMLElement>(`[data-presence="${cle}"]`)
 
-    it('affiche la somme des besoins et signale le samedi matin', () => {
-      const ref = avecConsigne()
-      etat.referentiel = ref
+    it('orange quand la grille n’atteint pas le minimum, vert sinon', () => {
+      // Oracle indépendant : samedi matin, un M en Réception et un en Club
+      // (effectif 1 chacun) = 2, moins que 3 ; lundi matin 2 = 2.
+      etat.referentiel = avecConsignes()
       monter(<BesoinsPage />)
-      fireEvent.click(screen.getByRole('radio', { name: 'Par cycle' }))
-      expect(
-        screen.getByText(
-          /Le planning tient ces minimums avant les heures des contrats/,
+      const region = screen.getByRole('region', { name: 'Présence minimum' })
+      expect(region.textContent).toContain(
+        'tous postes de présence confondus (Réception et Club)',
+      )
+      expect(region.textContent).toContain(
+        "La nuit ne compte pas : aucun poste n'a d'horaire de nuit.",
+      )
+      expect(casePresence('5:matin')?.dataset.etat).toBe('ecart')
+      expect(casePresence('5:matin')?.getAttribute('aria-label')).toBe(
+        'Matin, samedi : au moins 3. Les besoins donnent 2, le minimum est 3.',
+      )
+      expect(casePresence('0:matin')?.dataset.etat).toBe('ok')
+      expect(casePresence('1:matin')?.dataset.etat).toBe('neutre')
+    })
+
+    it('le panneau règle le minimum, et Annuler le remet', async () => {
+      // Oracle : « un clic ouvre un panneau avec deux compteurs » ; même
+      // écriture qu'avant (le plafond suit le minimum).
+      etat.referentiel = avecConsignes()
+      monter(<BesoinsPage />)
+      fireEvent.click(casePresence('0:soir') as HTMLElement)
+      const panneau = within(
+        screen.getByRole('dialog', { name: 'Soir · Lundi' }),
+      )
+      fireEvent.click(
+        panneau.getByRole('button', { name: 'Au moins : un de plus' }),
+      )
+      await waitFor(() =>
+        expect(service.reglerConsigne).toHaveBeenCalledWith(
+          { jour: 0, periode: 'soir', minimum: 1, maximum: 1 },
+          undefined,
         ),
-      ).toBeTruthy()
-      const attendu = sommeAttendue(ref, 5)
-      expect(attendu).toBe(2)
-      expect(caseBesoins('5:matin')?.textContent).toBe(`Besoins : ${attendu}`)
-      expect(caseBesoins('5:matin')?.dataset.ecart).toBe('true')
-      // Les autres jours n'ont pas de consigne : neutres.
-      for (let j = 0; j < 7; j++) {
-        for (const periode of ['matin', 'soir']) {
-          if (j === 5 && periode === 'matin') continue
-          expect(caseBesoins(`${j}:${periode}`)?.dataset.ecart).toBeUndefined()
-        }
-      }
-      expect(caseBesoins('0:matin')?.textContent).toBe(
-        `Besoins : ${sommeAttendue(ref, 0)}`,
       )
-      expect(
-        screen.getAllByRole('button', { name: /^Ajuster les besoins/ }),
-      ).toHaveLength(1)
+      fireEvent.click(screen.getByRole('button', { name: 'Annuler' }))
+      await waitFor(() =>
+        expect(service.reglerConsigne).toHaveBeenLastCalledWith(
+          { jour: 0, periode: 'soir', minimum: 0, maximum: null },
+          undefined,
+        ),
+      )
     })
+  })
 
-    it('Ajuster ouvre la vue par poste sur le moment ; un besoin de plus efface l écart', async () => {
-      etat.referentiel = avecConsigne()
-      service.reglerBesoin.mockImplementation(async (v) => {
-        // La base crée le besoin ; la relecture rend un nouveau référentiel.
-        const r = etat.referentiel as Referentiel
-        etat.referentiel = { ...r, besoins: [...r.besoins, { id: 999, ...v }] }
-      })
-      monter(<BesoinsPage />)
-      fireEvent.click(screen.getByRole('radio', { name: 'Par cycle' }))
-      fireEvent.click(
-        screen.getByRole('button', {
-          name: 'Ajuster les besoins du samedi matin',
-        }),
-      )
-      expect(
-        screen
-          .getByRole('radio', { name: 'Par poste' })
-          .getAttribute('aria-checked'),
-      ).toBe('true')
-      expect(
-        screen
-          .getByRole('radio', { name: 'Personnes nécessaires' })
-          .getAttribute('aria-checked'),
-      ).toBe('true')
-      expect(momentAjuste()).toContain(
-        'Samedi matin : les besoins donnent 2, la consigne en veut au moins 3.',
-      )
-      // Les lignes du matin des postes qui comptent, rien d'autre.
-      const lignes = [
-        ...document.querySelectorAll<HTMLElement>('tr[data-evidence]'),
-      ].map((tr) => [
-        tr.closest('section')?.querySelector('h2')?.textContent,
-        tr.querySelector('td div.truncate')?.textContent,
-      ])
-      expect(lignes).toEqual([
-        ['Réception', '07:00–15:45'],
-        ['Club', '07:00–15:45'],
-      ])
-      expect(document.querySelectorAll('[data-jour-ajuste]')).toHaveLength(2)
-      expect(service.reglerBesoin).not.toHaveBeenCalled()
-
-      fireEvent.click(
-        poste('Réception').getByRole('button', {
-          name: 'Personnes nécessaires Samedi, 07:00–15:45 : un de plus',
-        }),
-      )
-      // Un matin de plus en Réception : la somme (oracle) atteint la consigne.
-      await waitFor(() => expect(momentAjuste()).toContain("C'est bon"))
-      const somme = sommeAttendue(etat.referentiel, 5)
-      expect(somme).toBeGreaterThanOrEqual(3)
-      expect(momentAjuste()).toContain(`les besoins donnent ${somme}`)
-      fireEvent.click(screen.getByRole('radio', { name: 'Par cycle' }))
-      expect(caseBesoins('5:matin')?.textContent).toBe(`Besoins : ${somme}`)
-      expect(caseBesoins('5:matin')?.dataset.ecart).toBeUndefined()
-      expect(
-        screen.queryByRole('button', { name: /^Ajuster les besoins/ }),
-      ).toBeNull()
-    })
-
-    it('au plus : un dépassement se signale, quel que soit le compteur réglé', () => {
-      const ref = avecConsigne()
-      ref.consignes = [
-        { id: 1, jour: 0, periode: 'matin', minimum: 1, maximum: 2 },
-      ]
-      // Deux personnes nécessaires le lundi matin en Réception : la somme
-      // compte les personnes, pas les lignes.
-      const m = ref.horaires.find((h) => codeTest(h) === 'M')
-      for (const b of ref.besoins) {
-        if (b.poste_id === 2 && b.jour === 0 && b.horaire_id === m?.id) {
-          b.effectif = 2
-        }
-      }
-      etat.referentiel = ref
-      monter(<BesoinsPage />)
-      fireEvent.click(screen.getByRole('radio', { name: 'Par cycle' }))
-      expect(sommeAttendue(ref, 0)).toBe(3)
-      expect(caseBesoins('0:matin')?.textContent).toBe('Besoins : 3')
-      // En « Au moins » (vue par défaut, celle du lien du contrôle), le
-      // plafond dépassé se voit déjà, avec Ajuster.
-      expect(caseBesoins('0:matin')?.dataset.ecart).toBe('true')
-      expect(
-        screen.getByRole('button', {
-          name: 'Ajuster les besoins du lundi matin',
-        }),
-      ).toBeTruthy()
-      fireEvent.click(screen.getByRole('radio', { name: 'Au plus' }))
-      expect(caseBesoins('0:matin')?.dataset.ecart).toBe('true')
-    })
+  it('lecture seule : la case s’ouvre en lecture, rien ne s’écrit, pas d’Annuler', () => {
+    // Oracle : « en lecture seule, les cases s'affichent mais ne s'ouvrent
+    // pas en édition (ou le panneau est en lecture), pas d'Annuler ».
+    etat.droits = { pret: true, lire: true, ecrire: true, gerer: false }
+    monter(<BesoinsPage />)
+    expect(screen.getByText(/Lecture seule/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Annuler' })).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: /^Actions de la ligne/ }),
+    ).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: /^Ajouter un horaire/ }),
+    ).toBeNull()
+    onglet('Réception')
+    const panneau = ouvrirCase('Réception', 'lundi', '07:00–15:45')
+    for (const b of panneau.getAllByRole('button', {
+      name: /un de (plus|moins)$/,
+    })) {
+      expect((b as HTMLButtonElement).disabled).toBe(true)
+    }
+    expect(
+      panneau.queryByRole('button', { name: 'Samedi et dimanche' }),
+    ).toBeNull()
+    fireEvent.keyDown(window, { key: 'z', ctrlKey: true })
+    expect(service.reglerBesoin).not.toHaveBeenCalled()
   })
 })

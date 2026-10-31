@@ -2001,6 +2001,23 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   au moins / au plus) : UN compteur par case, jamais trois empilés ; Équipe en
   tableau par catégorie.
   Mesuré : Horaires 9 300 → 2 700 px. Ne pas revenir à des cartes toujours ouvertes.
+  **Besoins REFAITE le 2026-10-31** (retour utilisateur : « imbitable, je ne
+  sais pas ce que tu attends de moi » ; un clic sur l'ancien bouton « » »
+  avait recopié le lundi sur le week-end dans trois réglages dont deux
+  invisibles, sans retour possible). Modèle des logiciels RH (Skello,
+  Planday) : UN poste à la fois en onglets, grille semaine type (horaires ×
+  jours), UN chiffre par case (personnes nécessaires) ; un clic ouvre le
+  panneau de la case : compteur, « Options » (places apprentis ou
+  stagiaires, en plus si besoin, repérées « +1 app. » / « +1 si besoin »
+  dans la case), « Appliquer à : toute la semaine / lundi au vendredi /
+  samedi et dimanche » (copie EXPLICITE) ; menu « ⋯ » d'une ligne (vider) ;
+  **Annuler / Rétablir** (en-tête, Ctrl + Z / Ctrl + Y,
+  `parametres/besoins/historique.ts`) ; « Présence minimum » sous la grille
+  (matin / soir / nuit × jours, repère vert ou orange). RETIRÉS, ne pas les
+  remettre : sélecteur « Vous réglez » (trois couches), « Par poste / Par
+  cycle », bouton recopier le lundi, barre collée, `ConsignesPresence.tsx`.
+  `PageAvecEnTete` : zone `relative` (un `sr-only` absolu allongeait la page,
+  deux barres de défilement).
 - **École des apprentis** (2026-10-27, décision utilisateur : « pas toujours une
   semaine sur deux, pas toujours stable ») : calendrier JOUR PAR JOUR sur l'année
   scolaire dans la fiche (`equipe/ecole.ts`, `CalendrierEcole.tsx`), samedi compris ;
