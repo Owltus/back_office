@@ -127,14 +127,15 @@ describe('fonctions pures', () => {
     expect(periodePresence(oui, undefined, '11:00')).toBe('matin')
   })
 
-  it('court : selon l’heure de début, jamais la nuit', () => {
+  it('un horaire court compte avec son moment (plus de « court », 2026-10-31)', () => {
+    // Oracle : décision utilisateur, un court se range d'après son début
+    // (07:00-10:00 au matin, 19:00-22:00 au soir) et compte comme tel.
     const oui = { presence: true }
-    expect(periodePresence(oui, { periode: 'court' }, '07:00')).toBe('matin')
-    expect(periodePresence(oui, { periode: 'court' }, '19:00')).toBe('soir')
+    expect(periodePresence(oui, { periode: 'matin' }, '07:00')).toBe('matin')
+    expect(periodePresence(oui, { periode: 'soir' }, '19:00')).toBe('soir')
     expect(
-      periodePresence({ presence: false }, { periode: 'court' }, '07:00'),
+      periodePresence({ presence: false }, { periode: 'matin' }, '07:00'),
     ).toBeNull()
-    expect(periodePresence(oui, { periode: 'court' }, '23:00', true)).toBeNull()
   })
 
   it('nuit : sur un poste qui a un code de nuit, coché ou non (D15)', () => {

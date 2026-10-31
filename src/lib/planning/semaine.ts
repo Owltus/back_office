@@ -8,7 +8,7 @@
  * que l'écran se porte tel quel.
  */
 
-import { cycleDe } from '#/lib/planning/cycles.ts'
+import { cycleDe, estCourt } from '#/lib/planning/cycles.ts'
 import {
   codePrevuAuPoste,
   codesDeLaFiche,
@@ -580,7 +580,9 @@ export function creneauAffectation(ctx: Contexte, a: Affectation): Creneau {
  * (`codesDuPoste`) du MÊME cycle (`cycleDe`). Un middle ne remplace qu'un
  * middle (même famille, donc même cycle). Un horaire sans moment
  * (`periode === null` : direction, supervision) n'a jamais de remplaçant et
- * n'en est jamais un ; un besoin en horaire libre non plus. Aucun code n'est
+ * n'en est jamais un ; un besoin en horaire libre non plus. Un horaire court
+ * (moins de 7 h de travail, `estCourt`) ne remplace qu'un court et n'est
+ * remplacé que par un court. Aucun code n'est
  * créé ni modifié : on choisit parmi ceux qui existent. Triés par id. */
 export function remplacantsDe(
   ctx: Pick<Contexte, 'horaires' | 'postes'>,
@@ -590,10 +592,14 @@ export function remplacantsDe(
   const h = ctx.horaires.get(b.horaire_id)
   if (!h || h.periode === null) return []
   const cycle = cycleDe(h, h.debut)
+  const court = estCourt(h)
   return codesDuPoste(ctx.postes.get(b.poste_id), [...ctx.horaires.values()])
     .filter(
       (c) =>
-        c.id !== h.id && c.periode !== null && cycleDe(c, c.debut) === cycle,
+        c.id !== h.id &&
+        c.periode !== null &&
+        cycleDe(c, c.debut) === cycle &&
+        estCourt(c) === court,
     )
     .sort((a, c) => a.id - c.id)
 }

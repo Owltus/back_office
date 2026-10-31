@@ -17,7 +17,7 @@ import type { Periode } from '#/lib/planning/types.ts'
  * code quand elle existe, sinon `periodeLibre` de l'heure de début.
  */
 
-const FAMILLES: Periode[] = ['matin', 'middle', 'soir', 'nuit', 'court']
+const FAMILLES: Periode[] = ['matin', 'middle', 'soir', 'nuit']
 
 const heure = fc
   .tuple(fc.integer({ min: 0, max: 23 }), fc.integer({ min: 0, max: 59 }))

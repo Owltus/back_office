@@ -141,16 +141,16 @@ describe('horaires sans code (décision utilisateur du 2026-10-31)', () => {
   // (12:00-20:45), sans moment, passent en middle (décision du même jour).
   const REELS: ReadonlyArray<[string, string, number, string]> = [
     ['00:00', '07:00', 0, 'nuit'],
-    ['07:00', '10:00', 0, 'court'],
-    ['07:00', '11:45', 45, 'court'],
-    ['07:00', '12:45', 45, 'court'],
+    ['07:00', '10:00', 0, 'matin'],
+    ['07:00', '11:45', 45, 'matin'],
+    ['07:00', '12:45', 45, 'matin'],
     ['07:00', '14:45', 45, 'matin'],
     ['07:00', '15:45', 45, 'matin'],
     ['07:00', '16:45', 45, 'matin'],
     ['07:00', '17:45', 45, 'matin'],
     ['07:30', '15:15', 45, 'matin'],
     ['07:30', '16:15', 45, 'matin'],
-    ['08:00', '13:45', 45, 'court'],
+    ['08:00', '13:45', 45, 'matin'],
     ['08:00', '16:45', 45, 'matin'],
     ['08:00', '18:00', 15, 'middle'],
     ['09:00', '16:45', 45, 'middle'],
@@ -172,8 +172,8 @@ describe('horaires sans code (décision utilisateur du 2026-10-31)', () => {
     ['15:00', '22:45', 45, 'soir'],
     ['15:15', '00:00', 45, 'soir'],
     ['16:15', '00:00', 45, 'soir'],
-    ['17:00', '22:00', 45, 'court'],
-    ['19:00', '22:00', 0, 'court'],
+    ['17:00', '22:00', 45, 'soir'],
+    ['19:00', '22:00', 0, 'soir'],
     ['23:00', '07:00', 0, 'nuit'],
   ]
   it.each(REELS)('%s-%s (pause %i) : %s', (debut, fin, pause, moment) => {

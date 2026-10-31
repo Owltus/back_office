@@ -2165,6 +2165,13 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   `codeTest`). Les codes des MOTIFS (CP, MA, R…) restent. La règle ancienne
   « ne jamais changer ni ajouter de codes horaires » ne s'applique plus : on
   ajoute des HORAIRES quand l'utilisateur le demande.
+  **Plus de moment « court »** (même jour, migration
+  `20261031120000_planning_sans_court`) : un horaire court se range au
+  matin, au middle ou au soir d'après son début (« s'il commence à 17 h,
+  c'est du soir ») ; `momentPropose` range au soir ce qui commence à 15 h ou
+  plus tard. Sa LONGUEUR reste une règle des remplaçants : moins de 7 h de
+  travail (`estCourt`, cycles.ts), il ne remplace qu'un court et n'est
+  remplacé que par un court (comme quand « court » était son propre cycle).
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), jours fériés (décision utilisateur relayée par le binôme), scénario
   « exclus » à l'écran (retiré du prototype aussi).

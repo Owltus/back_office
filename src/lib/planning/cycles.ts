@@ -19,7 +19,19 @@
 
 import type { Creneau } from '#/lib/planning/modele.ts'
 import { periodeLibre } from '#/lib/planning/presence.ts'
+import { minutes } from '#/lib/planning/temps.ts'
 import type { Horaire, Periode } from '#/lib/planning/types.ts'
+
+/** Moins de 7 h de travail. Le moment « court » a disparu le 2026-10-31
+ * (décision utilisateur : un court se range au matin, au middle ou au soir
+ * d'après son début) ; sa LONGUEUR reste une règle des remplaçants : un
+ * horaire court ne remplace qu'un court, et n'est remplacé que par un court
+ * (comme quand « court » était son propre cycle). */
+export function estCourt(h: Pick<Horaire, 'debut' | 'fin' | 'pause'>): boolean {
+  let duree = minutes(h.fin) - minutes(h.debut)
+  if (duree <= 0) duree += 24 * 60
+  return duree - h.pause < 7 * 60
+}
 
 /** Cycle d'un shift ou d'un besoin. Null : réservé aux appelants qui
  * veulent dire « hors cycle » ; `cycleDe` en rend toujours un. */

@@ -166,11 +166,6 @@ const PERIODES: ReadonlyArray<{
   { valeur: 'soir', libelle: 'Soir', aide: 'Compte dans la présence du soir' },
   { valeur: 'nuit', libelle: 'Nuit', aide: 'Nuit : hors des consignes' },
   {
-    valeur: 'court',
-    libelle: 'Court',
-    aide: 'Moins de 7 h de travail : compte selon son heure de début',
-  },
-  {
     valeur: 'aucune',
     libelle: 'À part',
     aide: 'À part (direction, supervision…) : hors des consignes',

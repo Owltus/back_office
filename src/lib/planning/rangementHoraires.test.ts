@@ -24,13 +24,13 @@ const h = (periode: Periode | null, debut: string, fin: string) => ({
 const HORAIRES = [
   h(null, '12:00', '20:45'),
   h('soir', '14:30', '23:15'),
-  h('court', '07:00', '10:00'),
+  h('matin', '07:00', '10:00'),
   h('nuit', '00:00', '07:00'),
   h('middle', '11:00', '19:45'),
   h('matin', '07:00', '17:45'),
   h('nuit', '23:00', '07:00'),
   h('matin', '07:00', '15:45'),
-  h('court', '19:00', '22:00'),
+  h('soir', '19:00', '22:00'),
   h('matin', '08:00', '16:45'),
   h('soir', '15:15', '00:00'),
 ]
@@ -38,16 +38,16 @@ const HORAIRES = [
 describe('rangement des horaires', () => {
   it('par famille, puis du plus tôt au plus tard, puis du plus court au plus long', () => {
     expect(trierHoraires(HORAIRES).map(libelleHoraire)).toEqual([
+      '07:00–10:00',
       '07:00–15:45',
       '07:00–17:45',
       '08:00–16:45',
       '11:00–19:45',
       '14:30–23:15',
       '15:15–00:00',
+      '19:00–22:00',
       '23:00–07:00',
       '00:00–07:00',
-      '07:00–10:00',
-      '19:00–22:00',
       '12:00–20:45',
     ])
   })
@@ -56,11 +56,10 @@ describe('rangement des horaires', () => {
     expect(
       grouperHoraires(HORAIRES).map((g) => [g.libelle, g.horaires.length]),
     ).toEqual([
-      ['Matin', 3],
+      ['Matin', 4],
       ['Middle', 1],
-      ['Soir', 2],
+      ['Soir', 3],
       ['Nuit', 2],
-      ['Court', 2],
       ['À part', 1],
     ])
     expect(

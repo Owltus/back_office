@@ -129,7 +129,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':M', (select m from t_ids)::text);
 $$;
 
-select plan(51);
+select plan(52);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -310,7 +310,10 @@ select is(pg_temp.essai('gestion', array[
 select is(pg_temp.essai('gestion', array[
   'update public.planning_horaires set periode = ''middle'' where nom = ''Matin test''',
   'select periode from public.planning_horaires where nom = ''Matin test''']),
-  'middle', 'moments : un horaire se range en middle (court de même)');
+  'middle', 'moments : un horaire se range en middle');
+select is(pg_temp.essai('gestion', array[
+  'update public.planning_horaires set periode = ''court'' where nom = ''Matin test''']),
+  'err=23514', 'moments : plus de « court », un horaire court se range d''après son début (2026-10-31)');
 select is(pg_temp.essai('gestion', array[
   'update public.planning_horaires set periode = ''midi'' where nom = ''Matin test''']),
   'err=23514', 'moments : un moment inconnu est refusé');

@@ -14,8 +14,9 @@ export type NatureMotif = 'absence' | 'ecole' | 'repos'
 export type Categorie =
   'reception' | 'veille_nuit' | 'cuisine' | 'administratif_hors_site' | 'autre'
 export type TypeContrat = 'cdi' | 'cdd' | 'extra' | 'stagiaire' | 'apprenti'
-/** Moment d'un horaire (matin, middle, soir, nuit, court). */
-export type Periode = 'matin' | 'middle' | 'soir' | 'nuit' | 'court'
+/** Moment d'un horaire (matin, middle, soir, nuit). Plus de « court »
+ * depuis le 2026-10-31 : un horaire court se range d'après son début. */
+export type Periode = 'matin' | 'middle' | 'soir' | 'nuit'
 
 /** Un horaire se lit par ses heures et son moment : plus de code depuis le
  * 2026-10-31 (décision utilisateur). Deux horaires n'ont jamais les mêmes

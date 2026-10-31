@@ -117,8 +117,9 @@ describe('contrôles de saisie (miroir des contraintes de la base)', () => {
     expect(changerHeures(matin, { fin: '15:4' }, false)).toEqual({
       fin: '15:4',
     })
-    // La pause compte : moins de 7 h de travail, c'est un horaire court.
-    expect(changerHeures(matin, { pause: 120 }, false).periode).toBe('court')
+    // Plus de moment « court » (2026-10-31) : moins de 7 h de travail, il
+    // reste rangé d'après son début.
+    expect(changerHeures(matin, { pause: 120 }, false).periode).toBe('matin')
     expect(momentEstPropose({ ...matin, periode: 'soir' })).toBe(false)
   })
 

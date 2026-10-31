@@ -2077,12 +2077,13 @@ describe('Martin V3-I : remplaçants, propriété', () => {
     'soir',
     'nuit',
     'middle',
-    'court',
     null,
   ]
+  // `long` : 8 h de travail, sinon 6 h (court, moins de 7 h).
   const codeArb = fc.record({
     periode: fc.constantFrom(...familles),
     h: fc.integer({ min: 0, max: 23 }),
+    long: fc.boolean(),
   })
   it('remplacantsDe = autres codes permis du poste, même famille', () => {
     fc.assert(
@@ -2097,7 +2098,7 @@ describe('Martin V3-I : remplaçants, propriété', () => {
             code: `C${i}`,
             nom: `C${i}`,
             debut: `${String(s.h).padStart(2, '0')}:00`,
-            fin: `${String((s.h + 6) % 24).padStart(2, '0')}:00`,
+            fin: `${String((s.h + (s.long ? 8 : 6)) % 24).padStart(2, '0')}:00`,
             couleur: '#888888',
             pause: 0,
             raccourci: 0,
@@ -2134,6 +2135,9 @@ describe('Martin V3-I : remplaçants, propriété', () => {
                     (c) =>
                       c.id !== h.id &&
                       c.periode === h.periode &&
+                      // Un court ne remplace qu'un court (2026-10-31).
+                      specs[horaires.indexOf(c)].long ===
+                        specs[horaires.indexOf(h)].long &&
                       (autorises.length === 0 || autorises.includes(c.id)),
                   )
                   .map((c) => c.id)

@@ -73,28 +73,21 @@ export function periodePresence(
   const famille = horaire ? horaire.periode : null
   // Middle (D11) et horaire sans moment : jamais.
   if (horaire && (famille === 'middle' || famille === null)) return null
-  const p = !horaire || famille === 'court' ? periodeLibre(debut) : famille
-  if (p === 'nuit') {
-    // Un court qui commence la nuit ne compte pas (règle d'avant).
-    if (famille === 'court') return null
-    return nuitComptee ? 'nuit' : null
-  }
+  const p = !horaire ? periodeLibre(debut) : famille
+  if (p === 'nuit') return nuitComptee ? 'nuit' : null
   if (p !== 'matin' && p !== 'soir') return null
   return poste?.presence ? p : null
 }
 
 /** Période d'un shift, sur tout poste : celle de son horaire, ou son heure de
- * début (sans horaire, ou code « middle » / « court »). Null : nuit ou code
- * sans période. Sert aux consignes et à l'équité du générateur (D15). */
+ * début (sans horaire, ou horaire « middle »). Null : nuit ou horaire sans
+ * moment. Sert aux consignes et à l'équité du générateur (D15). */
 export function periodeShift(
   horaire: Pick<Horaire, 'periode'> | undefined,
   debut: string,
 ): 'matin' | 'soir' | null {
   const famille = horaire ? horaire.periode : null
-  const p =
-    !horaire || famille === 'middle' || famille === 'court'
-      ? periodeLibre(debut)
-      : famille
+  const p = !horaire || famille === 'middle' ? periodeLibre(debut) : famille
   return p === 'matin' || p === 'soir' ? p : null
 }
 

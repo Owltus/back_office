@@ -80,7 +80,9 @@ const M3 = code(1, 'M3', '07:00', '15:00', 'matin')
 const M6 = code(2, 'M6', '08:00', '16:00', 'matin')
 const S4 = code(3, 'S4', '15:00', '23:00', 'soir')
 const N = code(9, 'N', '23:00', '07:00', 'nuit')
-const C = code(10, 'C', '07:00', '12:00', 'court')
+// Court (moins de 7 h) : rangé au matin d'après son début depuis le
+// 2026-10-31 ; il ne remplace qu'un court (`estCourt`).
+const C = code(10, 'C', '07:00', '12:00', 'matin')
 const HORAIRES = [M3, M6, S4, N, C]
 const poste = (
   id: number,
