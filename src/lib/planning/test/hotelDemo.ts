@@ -226,7 +226,6 @@ export function hotelDemo(lundi: string): {
           raccourci,
           raccourci_debut: 0,
           periode: null,
-          code_rouge: false,
         },
         code,
       ),

@@ -31,7 +31,6 @@ export interface Horaire {
   raccourci: number // minutes en moins en journée courte
   raccourci_debut: number // dont au début : la journée courte commence plus tard
   periode: Periode | null // proposé d'après les heures, modifiable
-  code_rouge: boolean // heures écrites en rouge (petit shift à part)
 }
 
 export interface Motif {

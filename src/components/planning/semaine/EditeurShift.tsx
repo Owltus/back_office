@@ -67,10 +67,7 @@ import {
   motifsDuJour,
   rubriquesDeLaCase,
 } from '#/components/planning/codesCase.ts'
-import {
-  PastilleHoraire,
-  styleHeures,
-} from '#/components/planning/PastilleHoraire.tsx'
+import { PastilleHoraire } from '#/components/planning/PastilleHoraire.tsx'
 import type {
   RubriquesCase,
   SourceCase,
@@ -605,7 +602,6 @@ export function EditeurShift({
                       key={h.id}
                       couleur={h.couleur}
                       titre={libelleHoraire(h)}
-                      rouge={h.code_rouge}
                       detail={`${heures(travailCode(h))} de travail`}
                       alerte={c.alerte}
                       choisi={enCours && b.horaire_id === h.id}
@@ -979,7 +975,6 @@ function Choix({
   couleur,
   code,
   titre,
-  rouge = false,
   detail,
   choisi,
   desactive = false,
@@ -991,8 +986,6 @@ function Choix({
    * pastille de la couleur : un horaire se lit par ses heures. */
   code?: string
   titre: string
-  /** Heures écrites en rouge (`code_rouge`). */
-  rouge?: boolean
   detail: string
   /** Règle passée à la main (coupure de repos) : dite sur la ligne. */
   alerte?: string | null
@@ -1032,7 +1025,6 @@ function Choix({
             'truncate text-sm font-medium',
             code === undefined && 'tabular-nums',
           )}
-          style={rouge ? styleHeures({ code_rouge: true }) : undefined}
         >
           {titre}
         </strong>

@@ -147,9 +147,8 @@ describe('Horaires et absences', () => {
       target: { value: '15:30' },
     })
     fireEvent.click(carte.getByRole('radio', { name: 'Matin' }))
-    fireEvent.click(
-      carte.getByRole('switch', { name: 'Heures écrites en rouge' }),
-    )
+    // Plus d'option « heures écrites en rouge » (2026-10-31).
+    expect(carte.queryByRole('switch', { name: /rouge/i })).toBeNull()
     expect(service.enregistrerHoraire).not.toHaveBeenCalled()
     expect(
       carte.getByText(
@@ -170,7 +169,6 @@ describe('Horaires et absences', () => {
         raccourci: 60,
         raccourci_debut: 0,
         periode: 'matin',
-        code_rouge: true,
       },
       1,
     )

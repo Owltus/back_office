@@ -28,7 +28,6 @@ const matin: SaisieHoraire = {
   raccourci: 60,
   raccourci_debut: 0,
   periode: null,
-  code_rouge: false,
 }
 
 describe('contrôles de saisie (miroir des contraintes de la base)', () => {

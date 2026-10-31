@@ -16,7 +16,6 @@ import {
   grouperHoraires,
   heures,
   libelleHoraire,
-  ROUGE_CODE,
 } from '#/lib/planning/affichage.ts'
 import type { Horaire } from '#/lib/planning/types.ts'
 import { cn } from '#/lib/utils.ts'
@@ -84,11 +83,7 @@ export function ChoixCodes({
                         className="size-2.5 shrink-0 rounded-full"
                         style={{ background: h.couleur }}
                       />
-                      <span
-                        style={h.code_rouge ? { color: ROUGE_CODE } : undefined}
-                      >
-                        {libelleHoraire(h)}
-                      </span>
+                      <span>{libelleHoraire(h)}</span>
                     </button>
                   </Tip>
                 )

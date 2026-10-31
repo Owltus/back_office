@@ -6,9 +6,6 @@
  * le groupe (Matin, Soir…).
  */
 
-import type { CSSProperties } from 'react'
-
-import { ROUGE_CODE } from '#/lib/planning/affichage.ts'
 import { cn } from '#/lib/utils.ts'
 
 /** Pastille ronde de la couleur de l'horaire (décorative). */
@@ -29,11 +26,4 @@ export function PastilleHoraire({
       style={{ background: couleur }}
     />
   )
-}
-
-/** Style du texte des heures : rouge quand l'horaire est écrit en rouge. */
-export function styleHeures(h: {
-  code_rouge: boolean
-}): CSSProperties | undefined {
-  return h.code_rouge ? { color: ROUGE_CODE } : undefined
 }

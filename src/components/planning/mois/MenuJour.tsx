@@ -35,10 +35,7 @@ import {
   texteChangementPoste,
 } from '#/components/planning/codesCase.ts'
 import type { CodeUnique, SourceCase } from '#/components/planning/codesCase.ts'
-import {
-  PastilleHoraire,
-  styleHeures,
-} from '#/components/planning/PastilleHoraire.tsx'
+import { PastilleHoraire } from '#/components/planning/PastilleHoraire.tsx'
 import type {
   Horaire,
   Motif,
@@ -182,10 +179,7 @@ export function MenuJour({
       >
         <PastilleHoraire couleur={h.couleur} />
         <span className="grid flex-1">
-          <span
-            className="text-sm whitespace-nowrap tabular-nums"
-            style={styleHeures(h)}
-          >
+          <span className="text-sm whitespace-nowrap tabular-nums">
             {heuresEtDuree(h)}
           </span>
           {alerte && (

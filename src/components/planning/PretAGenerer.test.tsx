@@ -90,7 +90,6 @@ function apres(n: number): Referentiel {
       raccourci: 0,
       raccourci_debut: 0,
       periode: 'matin',
-      code_rouge: false,
     })
   if (n >= 2)
     r.postes.push({

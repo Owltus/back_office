@@ -38,7 +38,6 @@ function horaire(
       raccourci: 0,
       raccourci_debut: 0,
       periode: 'matin',
-      code_rouge: false,
     },
     code,
   )

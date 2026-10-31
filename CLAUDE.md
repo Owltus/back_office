@@ -2018,7 +2018,7 @@ référence des règles (`docs/regles-hcr.md` là-bas).
 - **Consignes de présence matin / soir** (2026-10-27, demande utilisateur :
   « lundi 2 et 2… samedi 3 ou 4 le matin ») : table `planning_consignes`
   (jour, période, minimum, maximum), `planning_horaires.periode`
-  (matin / soir / nuit / null) et `code_rouge`, `planning_postes.presence`
+  (matin / soir / nuit / null) (`code_rouge` RETIRÉ le 2026-10-31 : plus de rouge), `planning_postes.presence`
   (Réception et Club). Compte les personnes AUTONOMES (pas les soutiens) des
   postes cochés, selon la période du code (sans code : heure de début,
   `presence.ts`). Générateur : contrainte souple des deux côtés,

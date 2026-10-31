@@ -56,7 +56,6 @@ function horaire(id: number, debut: string, fin: string): Horaire {
     raccourci: 0,
     raccourci_debut: 0,
     periode: null,
-    code_rouge: false,
   }
 }
 

@@ -46,7 +46,6 @@ import {
   libelleMoment,
   numeroSemaine,
   parGroupe,
-  ROUGE_CODE,
 } from '#/lib/planning/affichage.ts'
 import { estEcole } from '#/lib/planning/semaine.ts'
 import type { AlerteOut, SemaineOut, ShiftOut } from '#/lib/planning/semaine.ts'
@@ -695,10 +694,7 @@ function LigneMois({
                 </span>
               )}
               <span />
-              <span
-                className="grid justify-items-end"
-                style={h?.code_rouge ? { color: ROUGE_CODE } : undefined}
-              >
+              <span className="grid justify-items-end">
                 <span>{heureAffichee(shift.debut)}</span>
                 <span className="opacity-80">{heureAffichee(shift.fin)}</span>
               </span>

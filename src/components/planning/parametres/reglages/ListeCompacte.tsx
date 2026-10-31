@@ -78,17 +78,14 @@ export function LigneCompacte({
 export function PastilleCode({
   code,
   couleur,
-  texte,
 }: {
   code: string
   couleur: string
-  /** Couleur du texte imposée (texte écrit en rouge). */
-  texte?: string
 }) {
   return (
     <span
       className="min-w-12 shrink-0 rounded px-1.5 py-0.5 text-center text-xs font-semibold"
-      style={{ background: couleur, color: texte ?? texteSur(couleur) }}
+      style={{ background: couleur, color: texteSur(couleur) }}
     >
       {code}
     </span>

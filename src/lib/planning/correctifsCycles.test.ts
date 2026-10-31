@@ -71,7 +71,6 @@ const code = (
       raccourci: 0,
       raccourci_debut: 0,
       periode,
-      code_rouge: false,
       ...kw,
     },
     c,

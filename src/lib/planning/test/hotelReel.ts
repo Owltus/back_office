@@ -252,7 +252,6 @@ export function hotelReel(): { referentiel: Referentiel; absences: Absence[] } {
           raccourci,
           raccourci_debut: rd ?? 0,
           periode: null,
-          code_rouge: false,
         },
         code,
       ),

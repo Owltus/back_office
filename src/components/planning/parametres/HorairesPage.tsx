@@ -85,7 +85,6 @@ import {
   libelleHoraire,
   libelleMoment,
   momentPropose,
-  ROUGE_CODE,
   texteSur,
 } from '#/lib/planning/affichage.ts'
 import {
@@ -144,7 +143,6 @@ const saisieHoraire = (h: Horaire): SaisieHoraire => ({
   raccourci: h.raccourci,
   raccourci_debut: h.raccourci_debut,
   periode: h.periode,
-  code_rouge: h.code_rouge,
 })
 
 /** Moment d'un horaire (consignes de présence, rangement) ; « aucune » : à part. */
@@ -237,7 +235,6 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
       raccourci: 60,
       raccourci_debut: 0,
       periode: momentPropose(heuresNeuves),
-      code_rouge: false,
     })
   }
   const creerMotif = () => {
@@ -450,7 +447,7 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
 
 // ------------------------------------------------------- listes compactes
 
-/** Une ligne : la couleur, les heures (en rouge si demandé), puis le temps
+/** Une ligne : la couleur, les heures, puis le temps
  * de travail et la pause. */
 function LigneHoraire({ h, onOuvrir }: { h: Horaire; onOuvrir: () => void }) {
   const libelle = libelleHoraire(h)
@@ -464,14 +461,7 @@ function LigneHoraire({ h, onOuvrir }: { h: Horaire; onOuvrir: () => void }) {
           style={{ background: h.couleur }}
         />
       }
-      libelle={
-        <span
-          className="font-medium tabular-nums"
-          style={h.code_rouge ? { color: ROUGE_CODE } : undefined}
-        >
-          {libelle}
-        </span>
-      }
+      libelle={<span className="font-medium tabular-nums">{libelle}</span>}
       detail={`${heures(dureeHoraire(h.debut, h.fin) - h.pause)}${h.pause > 0 ? ` · pause ${h.pause} min` : ''}${h.raccourci > 0 ? ' · journée courte' : ''}`}
       onOuvrir={onOuvrir}
     />
@@ -889,15 +879,6 @@ function CarteHoraire({
           etiquette="Couleur de l'horaire"
           onChange={(couleur) => changer({ couleur })}
         />
-        <label className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Switch
-            checked={h.code_rouge}
-            disabled={desactive}
-            onCheckedChange={(code_rouge) => changer({ code_rouge })}
-            aria-label="Heures écrites en rouge"
-          />
-          Heures écrites en rouge
-        </label>
       </div>
 
       <ErreursSaisie erreurs={modifiable ? erreurs : []} />

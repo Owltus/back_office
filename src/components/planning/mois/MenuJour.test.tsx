@@ -238,21 +238,14 @@ describe('MenuJour : une seule liste, poste déduit (mode manuel)', () => {
 })
 
 describe('MenuJour : un horaire se lit par ses heures (2026-10-31)', () => {
-  it('pastille de couleur et heures, jamais de code ; rouge si écrit en rouge', () => {
-    const am = horaireTest(referentiel.horaires, 'AM')
-    rendre({
-      ...referentiel,
-      horaires: referentiel.horaires.map((h) =>
-        h === am ? { ...h, code_rouge: true } : h,
-      ),
-    })
+  it('pastille de couleur et heures, jamais de code ni de rouge', () => {
+    // Oracle : décisions utilisateur du 2026-10-31 (plus de code, plus
+    // d'« heures écrites en rouge »).
+    rendre(referentiel)
     const ligne = screen.getByRole('menuitem', { name: '15:00–23:45, 8h' })
-    const texte = within(ligne).getByText('15:00–23:45 · 8h')
-    expect(texte.style.color).toBe('rgb(220, 38, 38)')
     // Aucun badge de code : le texte de la ligne n'est que ses heures.
     expect(ligne.textContent).toBe('15:00–23:45 · 8h')
-    const matin = screen.getByRole('menuitem', { name: '07:00–15:45, 8h' })
-    expect(within(matin).getByText('07:00–15:45 · 8h').style.color).toBe('')
+    expect(within(ligne).getByText('15:00–23:45 · 8h').style.color).toBe('')
   })
 })
 

@@ -720,7 +720,6 @@ describe('planning de la semaine (test_api.py)', () => {
         raccourci: 0,
         raccourci_debut: 0,
         periode: null,
-        code_rouge: false,
       },
       'C',
     )
@@ -1303,7 +1302,6 @@ describe('shift sans code (test_audit_api.py)', () => {
           raccourci: 0,
           raccourci_debut: 0,
           periode: null,
-          code_rouge: false,
         },
         'Z',
       ),
@@ -1357,7 +1355,6 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
         raccourci: 0,
         raccourci_debut: 0,
         periode,
-        code_rouge: false,
       },
       c,
     )
@@ -2104,7 +2101,6 @@ describe('Martin V3-I : remplaçants, propriété', () => {
             raccourci: 0,
             raccourci_debut: 0,
             periode: s.periode,
-            code_rouge: false,
           }))
           const autorises = horaires
             .filter((_, i) => permis[i])
