@@ -338,6 +338,7 @@ export function buildReportHtml(
     </tr>
     ${tableRows}
   </table>
+  <div style="padding: 6px 12px 8px 12px; text-align: right; font-size: 11px; color: #9CA3AF;">Montants HT</div>
 </div>`
 
   const barBlock = `<div style="${card} padding: 10px 16px 16px 16px;">

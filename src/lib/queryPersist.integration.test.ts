@@ -24,7 +24,7 @@ vi.hoisted(() => {
  * `pg_stat_statements` qui répondait sans rien mesurer).
  */
 
-const CLE = 'bo.query.cache.v3'
+const CLE = 'bo.query.cache.v4'
 
 function clientNeuf() {
   return new QueryClient({

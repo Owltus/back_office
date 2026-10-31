@@ -53,14 +53,22 @@ import { cleSession, proprietaireCache } from '#/lib/environnement.ts'
  *                   (`version_majeure`/`version_mineure`) : un cache v2,
  *                   restauré pendant une panne, aurait affiché et IMPRIMÉ
  *                   « V 1.0 » pour tous (audit du 2026-10-04).
+ *   v4  2026-10-31  le rapport journalier passe en HT : `forecastTotal.revTTC`
+ *                   devient `revHT`, `rev_ttc`/`adr_ttc` disparaissent des
+ *                   prévisions. Un cache v3 restauré afficherait des NaN, ou
+ *                   d'anciens montants TTC sous « Montants HT ».
  */
-const VERSION_CACHE = 'v3'
+const VERSION_CACHE = 'v4'
 
 const CLE_STOCKAGE = `bo.query.cache.${VERSION_CACHE}`
 
 /** Clés des versions précédentes, à effacer au branchement : un cache que plus
  * personne ne lit n'a rien à faire sur un poste partagé. */
-const CLES_PERIMEES = ['bo.query.cache.v1', 'bo.query.cache.v2']
+const CLES_PERIMEES = [
+  'bo.query.cache.v1',
+  'bo.query.cache.v2',
+  'bo.query.cache.v3',
+]
 
 /**
  * Durée au-delà de laquelle un cache restauré est jeté.

@@ -44,6 +44,15 @@ describe('buildReportHtml', () => {
     expect(html.length).toBeGreaterThan(0)
   })
 
+  it('dit que les montants sont HT, à l’écran comme dans l’e-mail (2026-10-31)', () => {
+    // Oracle : décision utilisateur, tout le rapport journalier est en HT ;
+    // le corps de l'e-mail ne disait pas l'unité, ses lecteurs y voyaient du TTC.
+    for (const rendu of [html, buildReportHtml(DATA, { forEmail: true })]) {
+      expect(rendu).toContain('Montants HT')
+      expect(rendu).not.toContain('TTC')
+    }
+  })
+
   it('rend un tableau avec ses six colonnes', () => {
     expect(html).toContain('<table')
     for (const th of ['Jour', 'Cumul', 'Projeté', 'Budget', 'Écart']) {

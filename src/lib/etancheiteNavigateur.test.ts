@@ -18,7 +18,7 @@ const LOCALE = 'http://127.0.0.1:54321'
 const PROD = `https://${REF_PROD}.supabase.co`
 const CLE_PROD = `sb-${REF_PROD}-auth-token`
 const CLE_LOCALE = 'sb-127-auth-token'
-const CLE_CACHE = 'bo.query.cache.v3'
+const CLE_CACHE = 'bo.query.cache.v4'
 const CLE_PROPRIETAIRE = 'bo.query.cache.proprietaire'
 
 const session = (id: string) =>

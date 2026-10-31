@@ -2315,7 +2315,10 @@ poussé. Règles qui en sortent :
   10 % au-dessus du réalisé) qui est refusé à l'import manuel. Migration
   `20261031160000_repjour_ht` : budget 2026 aux chiffres HT fournis, rapports
   au chiffre HT exact du fichier quand il est gardé (sinon ÷ 1,1),
-  `forecast_days.rev_ttc` retirée, `adr_ttc` → `adr_ht`. `toTTC` n'existe
+  `forecast_days.rev_ttc` retirée, `adr_ttc` → `adr_ht` ; une reprise
+  ancienne (janvier à juin 2026) portait du HT dans `rev_ttc` : un mois
+  complet dont cette somme égale le réalisé HT prend `rev_ht = rev_ttc`.
+  Cache persisté passé en v4 (forme des prévisions changée). `toTTC` n'existe
   plus ; `fromTTC` ne sert qu'aux prix de carte TTC du PDJ. Ne réintroduire
   aucune conversion dans le rapport journalier.
 - **Durcissement sécurité vérifié le 2026-07-27** (dashboard `supabase/verif_securite.sql`,

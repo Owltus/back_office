@@ -209,9 +209,7 @@ export function buildReportHtml(
   // pastille et le texte sont centrés verticalement (`vertical-align: middle`), sans
   // le `margin-top: 13px` de compensation html2canvas qui, dans un vrai mail, poussait
   // la pastille vers le bas et la désalignait du texte.
-  const dotAlign = forEmail
-    ? 'vertical-align: middle;'
-    : 'margin-top: 13px;'
+  const dotAlign = forEmail ? 'vertical-align: middle;' : 'margin-top: 13px;'
   const legendCellAlign = forEmail ? 'vertical-align: middle;' : ''
   const legendTextLine = forEmail ? '' : 'line-height: 8px;'
   const legendCell = (color: string, text: string, textColor = '#6B7280') =>
@@ -322,9 +320,7 @@ export function buildReportHtml(
   // Valeurs dérivées de `monthPace` : SOURCE UNIQUE partagée avec `SummaryCards`
   // (écran) et `pdf.ts` — le mail colle donc toujours à la page. L'image html2canvas
   // ne les affiche pas (elle reçoit un rapport « nu ») → bloc omis hors e-mail.
-  const cardsBlock = forEmail
-    ? buildCards(data, ecartColor)
-    : ''
+  const cardsBlock = forEmail ? buildCards(data, ecartColor) : ''
 
   const tableBlock = `<div style="${card} padding: 0;">
   <table cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse;">
@@ -338,6 +334,7 @@ export function buildReportHtml(
     </tr>
     ${tableRows}
   </table>
+  <div style="padding: 6px 12px 8px 12px; text-align: right; font-size: 11px; color: #9CA3AF;">Montants HT</div>
 </div>`
 
   const barBlock = `<div style="${card} padding: 10px 16px 16px 16px;">

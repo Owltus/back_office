@@ -18,8 +18,15 @@
 --      l'app (`calc/kpi.ts`), vérifiées identiques aux valeurs stockées (écart
 --      maximal 0,005 = l'arrondi) avant d'écrire cette migration.
 --      Nuitées, TO, dates, auteur, alertes : inchangés.
---   3. forecast_days : `rev_ht` existait déjà (et faisait foi : TTC ÷ 1,1 à
---      l'import) ; `adr_ttc` devient `adr_ht` (recalculé), `rev_ttc` est
+--   3. forecast_days : `rev_ht` existait déjà (TTC ÷ 1,1 à l'import) et fait
+--      foi, SAUF pour une reprise ancienne (janvier à juin 2026 sur la copie
+--      de la prod, trouvée par une relecture adverse) dont la colonne
+--      « rev_ttc » portait en réalité du HT : sa somme × 1,1 retombe sur le
+--      CA TTC réalisé du mois, et son `rev_ht` était donc divisé deux fois.
+--      Un mois COMPLET (une prévision par jour, rapport du dernier jour) dont
+--      la somme de `rev_ttc` égale le CA HT réalisé à 0,5 % près prend
+--      `rev_ht = rev_ttc` ; un mois en vrai TTC en est à 10 %, il ne bouge
+--      pas. Puis `adr_ttc` devient `adr_ht` (recalculé) et `rev_ttc` est
 --      RETIRÉE (accord explicite de l'utilisateur, livraison du 2026-10-31).
 --   4. les deux fonctions qui sommaient `rev_ttc` lisent `rev_ht` ; le tableau
 --      de bord rend `revHT` au lieu de `revTTC` (lu par services/daily.ts).
@@ -106,6 +113,23 @@ set rj_pm = case when rj_nuitees > 0 then round(rj_room_revenue / rj_nuitees, 2)
     pm_revpar = case when days_in_month > 0 then round(pm_room_revenue / (80 * days_in_month), 2) else 0 end;
 
 -- 3. Prévisions --------------------------------------------------------------
+-- Comparé au CA réalisé déjà passé en HT (section 2) : rapport du dernier jour
+-- du mois, donc mois complet. Un seul rapport par date (contrainte unique).
+update public.forecast_days f
+set rev_ht = f.rev_ttc
+from (
+  select fd.year, fd.month
+  from public.forecast_days fd
+  join public.daily_reports d
+    on d.year = fd.year and d.month = fd.month
+   and d.day_of_month = d.days_in_month
+  group by fd.year, fd.month, d.days_in_month, d.rmtd_room_revenue
+  having count(*) = d.days_in_month
+     and d.rmtd_room_revenue > 0
+     and abs(sum(fd.rev_ttc) - d.rmtd_room_revenue) <= 0.005 * d.rmtd_room_revenue
+) m
+where f.year = m.year and f.month = m.month;
+
 alter table public.forecast_days rename column adr_ttc to adr_ht;
 update public.forecast_days
 set adr_ht = case when occ > 0 then round(rev_ht / occ, 2) else 0 end;
