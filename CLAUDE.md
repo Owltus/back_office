@@ -1988,7 +1988,13 @@ référence des règles (`docs/regles-hcr.md` là-bas).
 - **Écrans** (`components/planning/`) : vue mois (défaut, comme le prototype), vue
   semaine, paramètres en sous-routes (`/planning/equipe|postes|horaires|besoins`),
   fil de messages propre à la page (`Messages.tsx`, le back office n'a pas de
-  toasts). Horaires fixes posés à l'ouverture d'une semaine à venir (écriture).
+  toasts). Horaires fixes posés à l'ouverture d'une semaine à venir (écriture) :
+  personnel à jours fixes sans shift dans la semaine, OU avec un jour
+  « Travaille » à venir resté vide (`joursFixesManquants`, demande
+  utilisateur du 2026-10-31 : une semaine commencée par un ancien calcul est
+  complétée ; ajoute sans rien retirer). Un shift retiré exprès sur un jour
+  « Travaille » revient donc à la réouverture : y poser un repos ou une
+  absence.
 - **Paramètres (audit UI/UX du 2026-10-28, « des scroll bars dans tous les sens »)** :
   les quatre écrans sont dans `PageAvecEnTete` (déplacé du Classeur vers
   `components/shared/`) : en-tête fixe, UNE zone qui défile, barre au bord droit,

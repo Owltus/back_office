@@ -1663,7 +1663,11 @@ export function preparerGeneration(
 }
 
 /** Personnes à jours fixes à poser d'avance (prototype `poser_fixes`) :
- * actives, à jours fixes, sans aucun shift cette semaine, sous contrat. */
+ * actives, à jours fixes, sous contrat, et sans aucun shift cette semaine
+ * OU avec un jour « Travaille » de la fiche resté vide (`joursFixesManquants`).
+ * Le second cas (demande utilisateur du 2026-10-31 : « complète les jours
+ * manquants à l'ouverture ») reprend une semaine commencée par un ancien
+ * calcul : la pose ajoute sans rien retirer, le validé ne bouge pas. */
 export function aPoserFixes(
   d: DonneesSemaine,
   aujourdhui: string,
@@ -1672,15 +1676,43 @@ export function aPoserFixes(
   if (lundi < lundiDe(aujourdhui) || d.referentiel.verrous.includes(lundi))
     return new Set()
   const deja = new Set(d.affectations.map((a) => a.salarie_id))
+  const absences = indexerAbsences(d.absences)
   return new Set(
     d.referentiel.salaries
       .filter(
         (x) =>
           x.actif &&
           aJoursFixes(x) &&
-          !deja.has(x.id) &&
-          joursHorsContrat(x, lundi).size < 7,
+          joursHorsContrat(x, lundi).size < 7 &&
+          (!deja.has(x.id) ||
+            joursFixesManquants(x, d, aujourdhui, absences).length > 0),
       )
       .map((x) => x.id),
+  )
+}
+
+/** Jours « Travaille » de la fiche encore à venir (aujourd'hui compris) qui
+ * n'ont ni shift, ni absence, ni repos posé, et sont sous contrat. */
+export function joursFixesManquants(
+  x: Salarie,
+  d: DonneesSemaine,
+  aujourdhui: string,
+  absences: Map<number, Map<string, number>> = indexerAbsences(d.absences),
+): number[] {
+  const lundi = lundiDe(d.lundi)
+  const depuis = Math.max(0, ecartJours(lundi, aujourdhui))
+  const pris = new Set(
+    d.affectations.filter((a) => a.salarie_id === x.id).map((a) => a.jour),
+  )
+  const absents = joursAbsents(x, lundi, absences)
+  const hors = joursHorsContrat(x, lundi)
+  return x.semaine_type.flatMap((e, j) =>
+    e.mode === 'travail' &&
+    j >= depuis &&
+    !pris.has(j) &&
+    !absents.has(j) &&
+    !hors.has(j)
+      ? [j]
+      : [],
   )
 }

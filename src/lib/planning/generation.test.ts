@@ -6,10 +6,12 @@ import type { Highs } from '#/lib/planning/generateur.ts'
 import {
   analyser,
   aPoserFixes,
+  joursFixesManquants,
   preparerGeneration,
 } from '#/lib/planning/semaine.ts'
 import type { DonneesSemaine, NouveauShift } from '#/lib/planning/semaine.ts'
 import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
+import { ajouterJours } from '#/lib/planning/temps.ts'
 import type { Affectation } from '#/lib/planning/types.ts'
 
 /*
@@ -122,6 +124,65 @@ describe('génération bout à bout (hôtel fictif)', () => {
     const nouveaux = g.traduire(generer(g.probleme, highs))
     expect(nouveaux.length).toBeGreaterThan(0)
     for (const n of nouveaux) expect(seulement.has(n.salarie_id)).toBe(true)
+  })
+
+  it('une semaine commencée : les jours « Travaille » restés vides sont complétés (2026-10-31)', () => {
+    const poserFixes = (d: DonneesSemaine) =>
+      preparerGeneration(d, {
+        aujourdhui: AUJOURDHUI,
+        seulement: aPoserFixes(d, AUJOURDHUI),
+        sansEffacer: true,
+        titulairesSeulement: true,
+      })
+    const vide = donnees()
+    const g = poserFixes(vide)
+    const poses = poser(LUNDI, g.traduire(generer(g.probleme, highs)))
+    const complete = donnees(poses)
+    // Un ancien calcul a laissé un de ses jours « Travaille » vide.
+    const x = vide.referentiel.salaries.find(
+      (s) =>
+        joursFixesManquants(s, vide, AUJOURDHUI).length > 0 &&
+        joursFixesManquants(s, complete, AUJOURDHUI).length === 0,
+    )
+    expect(x).toBeDefined()
+    if (!x) return
+    expect(aPoserFixes(complete, AUJOURDHUI).has(x.id)).toBe(false)
+    const retire = poses.find(
+      (a) =>
+        a.salarie_id === x.id && x.semaine_type.at(a.jour)?.mode === 'travail',
+    ) as Affectation
+    const incomplete = donnees(poses.filter((a) => a !== retire))
+    expect(joursFixesManquants(x, incomplete, AUJOURDHUI)).toEqual([
+      retire.jour,
+    ])
+    expect(aPoserFixes(incomplete, AUJOURDHUI).has(x.id)).toBe(true)
+    const g2 = poserFixes(incomplete)
+    const ajoutes = g2.traduire(generer(g2.probleme, highs))
+    // Le jour manquant est rempli ; les shifts déjà là ne sont pas reposés.
+    expect(
+      ajoutes.some((n) => n.salarie_id === x.id && n.jour === retire.jour),
+    ).toBe(true)
+    expect(
+      ajoutes.filter((n) => n.salarie_id === x.id).map((n) => n.jour),
+    ).toEqual([retire.jour])
+    // Absent ce jour-là : ce n'est plus un jour manquant.
+    const absent = {
+      ...incomplete,
+      absences: [
+        ...incomplete.absences,
+        {
+          id: 999,
+          salarie_id: x.id,
+          jour: ajouterJours(LUNDI, retire.jour),
+          motif_id: vide.referentiel.motifs[0].id,
+        },
+      ],
+    }
+    expect(joursFixesManquants(x, absent, AUJOURDHUI)).toEqual([])
+    // Jour passé de la semaine en cours : jamais repris.
+    expect(
+      joursFixesManquants(x, incomplete, ajouterJours(LUNDI, retire.jour + 1)),
+    ).toEqual([])
   })
 
   it('on ne crée jamais les jours passés de la semaine en cours', () => {
