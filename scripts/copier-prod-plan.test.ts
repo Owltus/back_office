@@ -14,11 +14,34 @@ import {
   insertionComptes,
   lectureComptes,
   migrationsNonLivrees,
+  viderNosTables,
 } from './copier-prod-plan.mjs'
 
 // Oracle : le plan (étape 14, D21-D23) — sessions et jetons jamais copiés,
 // comptes copiés, prod seulement LUE, rien ne commence sans base locale,
 // sans Mailpit ni sur un arbre sale.
+
+describe('vidage avant chargement', () => {
+  // Oracle : incident du 2026-10-31 — une migration avait posé des
+  // périodicités, le COPY de la prod butait sur la clé unique.
+  it('vide nos seuls schémas, jamais auth ni storage', () => {
+    const sql = viderNosTables()
+    for (const s of SCHEMAS) expect(sql).toContain(`'${s}'`)
+    expect(sql).not.toMatch(/'auth'|'storage'/)
+    expect(sql).toMatch(/truncate table/)
+  })
+
+  it('le chargement vide avant de copier, dans la même transaction', () => {
+    const script = readFileSync(
+      new URL('./copier-prod.mjs', import.meta.url),
+      'utf8',
+    )
+    const vide = script.indexOf('viderNosTables(),')
+    const copie = script.indexOf("readFileSync(join(travail, 'donnees.sql')")
+    expect(vide).toBeGreaterThan(-1)
+    expect(vide).toBeLessThan(copie)
+  })
+})
 
 describe('ce qui est copié', () => {
   it('le planning du staff est copié tel quel, vrais noms compris (décision du 2026-10-27)', () => {

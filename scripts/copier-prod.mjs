@@ -32,6 +32,7 @@ import {
   insertionComptes,
   lectureComptes,
   migrationsNonLivrees,
+  viderNosTables,
 } from './copier-prod-plan.mjs'
 import { ecartNonCapture, lignesJson } from './livrer-plan.mjs'
 
@@ -320,6 +321,7 @@ try {
     [
       'set session_replication_role = replica;',
       ...comptes.map((c) => insertionComptes(c.table, c.json)),
+      viderNosTables(),
       readFileSync(join(travail, 'donnees.sql'), 'utf8'),
       anonymiser,
       'set session_replication_role = origin;',

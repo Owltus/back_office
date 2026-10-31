@@ -59,6 +59,27 @@ export function insertionComptes(table, json, etiquette = 'c') {
 /** Tables de nos schémas jamais copiées (aucune à ce jour). */
 export const EXCLUES = []
 
+/**
+ * Vide nos tables avant le chargement, dans la même transaction. La base
+ * vient d'être rejouée sans seed, mais une migration peut poser des données
+ * de référence (périodicités du Classeur, 2026-10-30) : la copie de la prod
+ * les contient aussi, et le COPY butait sur la clé unique. La copie fait foi.
+ */
+export function viderNosTables() {
+  const schemas = SCHEMAS.map((s) => `'${s}'`).join(', ')
+  const exclues = EXCLUES.map((t) => `'${t}'`).join(', ')
+  return [
+    `do $vide$ declare t text; begin`,
+    `  select string_agg(format('%I.%I', schemaname, tablename), ', ') into t`,
+    `  from pg_tables where schemaname in (${schemas})`,
+    exclues
+      ? `    and schemaname || '.' || tablename not in (${exclues});`
+      : `  ;`,
+    `  if t is not null then execute 'truncate table ' || t || ' cascade'; end if;`,
+    `end $vide$;`,
+  ].join('\n')
+}
+
 /** Buckets dont les FICHIERS sont copiés (leurs lignes `storage.objects`
  *  naissent de l'envoi des fichiers dans le stockage local). */
 export const BUCKETS = ['classeur-images']

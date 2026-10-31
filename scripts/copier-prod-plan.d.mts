@@ -9,6 +9,7 @@ export declare function insertionComptes(
   json: string,
   etiquette?: string,
 ): string
+export declare function viderNosTables(): string
 export declare const BUCKETS: ReadonlyArray<string>
 export declare function derniereMigration(
   versionsProd: ReadonlyArray<string>,
