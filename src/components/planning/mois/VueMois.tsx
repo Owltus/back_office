@@ -92,6 +92,7 @@ import { PanneauAlertes } from '#/components/planning/semaine/PanneauAlertes.tsx
 import {
   absenceDe,
   etoileProposee,
+  reposAValider,
   reposDe,
   poserHoraire as poserHoraireCase,
 } from '#/components/planning/semaine/edition.ts'
@@ -637,7 +638,8 @@ export function VueMois({
           onClick: () =>
             surLeMois(
               'Validation du mois',
-              (l) => valider(l, null, null, true),
+              (l) =>
+                valider(l, null, null, true, reposAValider(semaines.get(l))),
               'Propositions du mois validées',
             ),
         },
@@ -733,6 +735,16 @@ export function VueMois({
       : null
   const absenceMenu = caseMenu?.type === 'absence' ? caseMenu : null
   const reposMenu = caseMenu?.type === 'repos' ? caseMenu : null
+  // Repos qui se valide comme un shift (2026-10-31) : déduit (proposition,
+  // écrit en base à la validation) ou posé ; jamais un repos fixe.
+  const reposAValiderMenu =
+    reposMenu && !reposMenu.fixe
+      ? { valide: false, deduit: true }
+      : absenceMenu &&
+          !absenceMenu.fixe &&
+          absenceMenu.motif?.nature === 'repos'
+        ? { valide: !absenceMenu.proposition, deduit: false }
+        : null
   // Même écriture que la semaine : une seule journée étoile, et début et fin
   // recalculés à chaque bascule (la base enregistre les heures telles quelles).
   const etoile =
@@ -873,21 +885,48 @@ export function VueMois({
             poserHoraire(menu.salarieId, menu.date, h, posteId)
           }
           validation={
-            shiftMenu && {
-              active: shiftMenu.epinglee,
-              onBasculer: () =>
-                void executer(
-                  reperesMenu.lundi,
-                  () =>
-                    valider(
+            shiftMenu
+              ? {
+                  active: shiftMenu.epinglee,
+                  onBasculer: () =>
+                    void executer(
                       reperesMenu.lundi,
-                      shiftMenu.salarie_id,
-                      shiftMenu.jour,
-                      !shiftMenu.epinglee,
+                      () =>
+                        valider(
+                          reperesMenu.lundi,
+                          shiftMenu.salarie_id,
+                          shiftMenu.jour,
+                          !shiftMenu.epinglee,
+                        ),
+                      "La validation n'a pas été changée",
                     ),
-                  "La validation n'a pas été changée",
-                ),
-            }
+                }
+              : reposAValiderMenu
+                ? {
+                    active: reposAValiderMenu.valide,
+                    repos: true,
+                    onBasculer: () =>
+                      void executer(
+                        reperesMenu.lundi,
+                        () =>
+                          valider(
+                            reperesMenu.lundi,
+                            menu.salarieId,
+                            reperesMenu.jour,
+                            !reposAValiderMenu.valide,
+                            reposAValiderMenu.deduit
+                              ? [
+                                  {
+                                    salarie_id: menu.salarieId,
+                                    jour: reperesMenu.jour,
+                                  },
+                                ]
+                              : [],
+                          ),
+                        "La validation n'a pas été changée",
+                      ),
+                  }
+                : undefined
           }
           etoile={etoileMenu}
           onVider={

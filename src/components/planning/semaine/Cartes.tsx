@@ -238,6 +238,7 @@ export function CarteStatut({
     <div
       className={cn('planning-statut', enVol && 'planning-carte-vol')}
       data-repos={s.repos || s.reposPose ? '' : undefined}
+      data-proposition={s.proposition ? '' : undefined}
       style={{ '--couleur': s.couleur } as CSSProperties}
     >
       <span className="planning-statut-nom">

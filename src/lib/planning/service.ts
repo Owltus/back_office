@@ -41,7 +41,7 @@ const COL_BESOIN =
   'id, poste_id, jour, horaire_id, debut, fin, effectif, soutien, renfort'
 const COL_AFFECTATION =
   'id, lundi, salarie_id, poste_id, jour, horaire_id, debut, fin, epinglee, court, pause, updated_at'
-const COL_ABSENCE = 'id, salarie_id, jour, motif_id'
+const COL_ABSENCE = 'id, salarie_id, jour, motif_id, epinglee'
 
 function verifier<T>(r: { data: T | null; error: unknown }): T {
   if (r.error) throw r.error
@@ -276,18 +276,23 @@ export async function supprimerShift(id: number): Promise<void> {
   )
 }
 
+/** Valide (ou remet en proposition) les shifts et les repos posés ; `repos` :
+ * repos DÉDUITS à écrire validés (jour 0 à 6), ignorés pour une remise en
+ * proposition (2026-10-31). */
 export async function valider(
   lundi: string,
   salarieId: number | null,
   jour: number | null,
   epinglee: boolean,
+  repos: ReadonlyArray<{ salarie_id: number; jour: number }> = [],
 ): Promise<number> {
   return verifier(
-    await supabase.rpc('planning_valider', {
+    await supabase.rpc('planning_valider_avec_repos', {
       p_lundi: lundi,
       p_salarie: salarieId,
       p_jour: jour,
       p_epinglee: epinglee,
+      p_repos: repos,
     }),
   ) as number
 }

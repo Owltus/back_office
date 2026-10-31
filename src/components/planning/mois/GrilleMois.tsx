@@ -593,6 +593,7 @@ function LigneMois({
                 'planning-mois-bande @container pointer-events-none absolute inset-0 flex items-center justify-center gap-1.5 overflow-hidden rounded-md px-1 text-[10.5px] font-medium',
                 c.type === 'hors' && 'planning-mois-hors',
                 commeRepos && 'planning-mois-repos',
+                commeRepos && c.proposition && 'planning-mois-proposition',
                 longueur === 1 && 'flex-col gap-0 text-[10px] leading-none',
               )}
               style={{ '--couleur': couleur } as CSSProperties}

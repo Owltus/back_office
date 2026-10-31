@@ -44,7 +44,7 @@ export interface OuvertureMenu {
    * par poste), et pourquoi s'il n'y en a pas ; l'horaire actuel qui n'est plus
    * permis est montré grisé. */
   codes: CodesUniquesCase
-  validation?: { active: boolean; onBasculer: () => void }
+  validation?: { active: boolean; onBasculer: () => void; repos?: boolean }
   etoile?: { active: boolean; onBasculer: () => void }
   /** La case a un shift : la remettre à « Non attribué ». */
   vider?: () => void
@@ -137,7 +137,9 @@ export function MenuCase({
             <span className="font-medium">
               {validation.active
                 ? 'Remettre en proposition'
-                : 'Valider ce shift'}
+                : validation.repos
+                  ? 'Valider ce repos'
+                  : 'Valider ce shift'}
             </span>
           </ContextMenuItem>
         </>

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { analyser } from '#/lib/planning/semaine.ts'
 import type { SemaineOut } from '#/lib/planning/semaine.ts'
+import { reposProposesParJour } from '#/components/planning/semaine/edition.ts'
 import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
 import type { Affectation } from '#/lib/planning/types.ts'
 import {
@@ -83,10 +84,17 @@ describe('cases et compteurs', () => {
   const semaines = new Map([[lundi, sem]])
 
   it('le compteur de validation ne compte que les jours du mois', () => {
+    // Les repos en proposition (déduits) comptent avec les shifts proposés,
+    // jour par jour (2026-10-31).
+    const repos = reposProposesParJour(sem)
     const c = compter('2026-11', [sem])
-    expect(c).toMatchObject({ propositions: 0, valides: 1, verrouilles: 0 })
+    expect(c).toMatchObject({
+      propositions: repos[6],
+      valides: 1,
+      verrouilles: 0,
+    })
     expect(compter('2026-10', [sem])).toMatchObject({
-      propositions: 1,
+      propositions: 1 + repos.slice(0, 6).reduce((a, b) => a + b, 0),
       valides: 0,
     })
   })
@@ -98,7 +106,13 @@ describe('cases et compteurs', () => {
     // Lucas a des shifts cette semaine, mais pas sa semaine complète : ses
     // autres jours restent « non attribués » (un repos n'est pas posé).
     expect(caseDe(semaines, referentiel.motifs, 3, '2026-10-28')).toBeNull()
-    expect(cleBandeau({ type: 'repos', fixe: false })).toBe('repos')
+    expect(cleBandeau({ type: 'repos', fixe: true, proposition: false })).toBe(
+      'repos',
+    )
+    // Repos déduit : une proposition, son bandeau à part (2026-10-31).
+    expect(cleBandeau({ type: 'repos', fixe: false, proposition: true })).toBe(
+      'repos-proposition',
+    )
     expect(
       cleBandeau(caseDe(semaines, referentiel.motifs, 3, '2026-10-26')),
     ).toBeNull()

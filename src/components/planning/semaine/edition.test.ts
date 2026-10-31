@@ -19,6 +19,9 @@ vi.mock('#/lib/planning/service.ts', () => service)
 
 const {
   compteurs,
+  reposAValider,
+  reposProposesParJour,
+  validationRepos,
   etoileProposee,
   indiceDe,
   poserHoraire,
@@ -39,6 +42,7 @@ const bilan = (b: Partial<BilanOut> = {}): BilanOut => ({
   repos_fixes: [],
   hors_contrat: [],
   repos_deduits: [],
+  repos_proposes: [],
   ...b,
 })
 
@@ -170,6 +174,89 @@ describe('statutDuJour', () => {
   })
 })
 
+describe('repos validés comme les shifts (2026-10-31)', () => {
+  const repos: Motif = {
+    id: 9,
+    code: 'R',
+    nom: 'Repos',
+    couleur: '#64748b',
+    decompte: false,
+    nature: 'repos',
+  }
+  const motifs = [...MOTIFS, repos]
+  it('repos fixe : toujours validé, rien à basculer', () => {
+    expect(validationRepos(bilan({ repos_fixes: [3] }), 3, motifs)).toBeNull()
+    expect(statutDuJour(bilan({ repos_fixes: [3] }), 3, motifs)).toMatchObject({
+      proposition: false,
+    })
+  })
+  it('repos déduit : une proposition, à écrire en base pour la valider', () => {
+    expect(validationRepos(bilan({ repos_deduits: [3] }), 3, motifs)).toEqual({
+      valide: false,
+      deduit: true,
+    })
+    expect(
+      statutDuJour(bilan({ repos_deduits: [3] }), 3, motifs),
+    ).toMatchObject({ proposition: true })
+    // Semaine verrouillée : le planning est réalisé, rien n'est proposé.
+    expect(
+      statutDuJour(bilan({ repos_deduits: [3] }), 3, motifs, true),
+    ).toMatchObject({ proposition: false })
+  })
+  it('repos posé : validé ou en proposition', () => {
+    expect(validationRepos(bilan({ absences: { 1: 9 } }), 1, motifs)).toEqual({
+      valide: true,
+      deduit: false,
+    })
+    expect(
+      validationRepos(
+        bilan({ absences: { 1: 9 }, repos_proposes: [1] }),
+        1,
+        motifs,
+      ),
+    ).toEqual({ valide: false, deduit: false })
+    expect(
+      statutDuJour(
+        bilan({ absences: { 1: 9 }, repos_proposes: [1] }),
+        1,
+        motifs,
+      ),
+    ).toMatchObject({ reposPose: true, proposition: true })
+  })
+  it('ni une absence, ni un repos de la semaine type, ni rien', () => {
+    expect(validationRepos(bilan({ absences: { 1: 1 } }), 1, motifs)).toBeNull()
+    expect(
+      validationRepos(
+        bilan({ absences: { 1: 9 }, absences_semaine_type: [1] }),
+        1,
+        motifs,
+      ),
+    ).toBeNull()
+    expect(validationRepos(bilan(), 1, motifs)).toBeNull()
+  })
+  it('repos à valider et compteurs : déduits et posés en proposition', () => {
+    const semaine = {
+      affectations: [shift({ epinglee: false })],
+      bilan: [
+        bilan({ salarie_id: 1, repos_deduits: [5, 6] }),
+        bilan({ salarie_id: 2, repos_deduits: [6], repos_proposes: [2] }),
+      ],
+      verrouillee: false,
+    } as unknown as SemaineOut
+    expect(reposAValider(semaine)).toEqual([
+      { salarie_id: 1, jour: 5 },
+      { salarie_id: 1, jour: 6 },
+      { salarie_id: 2, jour: 6 },
+    ])
+    expect(reposAValider(semaine, 6, 2)).toEqual([{ salarie_id: 2, jour: 6 }])
+    expect(reposProposesParJour(semaine)).toEqual([0, 0, 1, 0, 0, 1, 2])
+    expect(compteurs(semaine)).toMatchObject({ propositions: 5, valides: 0 })
+    const verrouillee = { ...semaine, verrouillee: true } as SemaineOut
+    expect(reposAValider(verrouillee)).toEqual([])
+    expect(reposProposesParJour(verrouillee)).toEqual([0, 0, 0, 0, 0, 0, 0])
+  })
+})
+
 describe('reposDe', () => {
   it('repos fixé ou déduit ; ni une absence, ni hors contrat, ni rien', () => {
     expect(reposDe(bilan({ repos_fixes: [3] }), 3)).toEqual({ fixe: true })
@@ -247,6 +334,7 @@ describe('colonne Heures et compteurs', () => {
   it('en semaine verrouillée, tout est verrouillé', () => {
     const s = {
       affectations: [shift(), shift({ id: 2, epinglee: false })],
+      bilan: [] as BilanOut[],
       verrouillee: false,
     }
     expect(compteurs(s as SemaineOut)).toEqual({

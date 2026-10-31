@@ -89,10 +89,12 @@ import {
   etoileProposee,
   indiceDe,
   poserHoraire,
+  reposAValider,
   reposDe,
   shiftDe,
   statutDuJour,
   trous,
+  validationRepos,
 } from '#/components/planning/semaine/edition.ts'
 import type {
   CaseJour,
@@ -286,7 +288,7 @@ export function VueSemaine({
     for (const s of visibles) {
       const bilan = affichee.bilan.find((b) => b.salarie_id === s.id)
       const siens = affichee.affectations.filter((a) => a.salarie_id === s.id)
-      const cle = JSON.stringify([s, bilan, siens])
+      const cle = JSON.stringify([s, bilan, siens, affichee.verrouillee])
       const deja = cache.get(s.id)
       if (deja && deja.cle === cle) {
         lignes.set(s.id, deja.ligne)
@@ -304,7 +306,12 @@ export function VueSemaine({
               }
             : {
                 shift: null,
-                statut: statutDuJour(bilan, j, referentiel.motifs),
+                statut: statutDuJour(
+                  bilan,
+                  j,
+                  referentiel.motifs,
+                  affichee.verrouillee,
+                ),
               }
         }),
       }
@@ -460,7 +467,14 @@ export function VueSemaine({
       siOuverte(
         () =>
           void executer(
-            () => service.valider(lundi, null, jour, true),
+            () =>
+              service.valider(
+                lundi,
+                null,
+                jour,
+                true,
+                reposAValider(semaine, jour),
+              ),
             'Validation impossible',
           ),
       ),
@@ -624,6 +638,10 @@ export function VueSemaine({
     // semaine type (il se change dans la fiche).
     const absenceFixe =
       !!st && (st.genre === 'absence' || st.genre === 'ecole') && st.fixe
+    // Repos qui se valide comme un shift (2026-10-31), jamais un repos fixe.
+    const reposValidable = shift
+      ? null
+      : validationRepos(bilanDe(sid), j, referentiel.motifs)
     const motifActuel = shift
       ? null
       : (absenceDe(bilanDe(sid), j)?.motif_id ?? null)
@@ -656,7 +674,29 @@ export function VueSemaine({
                   ),
               ),
           }
-        : undefined,
+        : reposValidable
+          ? {
+              active: reposValidable.valide,
+              repos: true,
+              onBasculer: () =>
+                siOuverte(
+                  () =>
+                    void executer(
+                      () =>
+                        service.valider(
+                          lundi,
+                          sid,
+                          j,
+                          !reposValidable.valide,
+                          reposValidable.deduit
+                            ? [{ salarie_id: sid, jour: j }]
+                            : [],
+                        ),
+                      'Validation impossible',
+                    ),
+                ),
+            }
+          : undefined,
       etoile: etoile && {
         active: etoile.active,
         onBasculer: () =>
@@ -764,7 +804,14 @@ export function VueSemaine({
           onFullAuto: () => setConfirmation('fullauto'),
           onValiderSemaine: (epinglee) =>
             action(
-              () => service.valider(lundi, null, null, epinglee),
+              () =>
+                service.valider(
+                  lundi,
+                  null,
+                  null,
+                  epinglee,
+                  epinglee ? reposAValider(semaine) : [],
+                ),
               epinglee
                 ? 'Validation impossible'
                 : 'Remise en proposition impossible',

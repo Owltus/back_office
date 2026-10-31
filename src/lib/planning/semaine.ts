@@ -187,6 +187,10 @@ export interface BilanOut {
   repos_fixes: number[]
   hors_contrat: number[]
   repos_deduits: number[]
+  /** Repos POSÉS de la semaine (motif de nature repos) encore en
+   * proposition : la génération les efface (2026-10-31). Un repos déduit
+   * est toujours une proposition, un repos fixe toujours validé. */
+  repos_proposes: number[]
 }
 
 export interface SemaineOut {
@@ -253,6 +257,8 @@ export interface Contexte {
   ecole: Set<number>
   /** salarié → (date → motif) */
   absences: Map<number, Map<string, number>>
+  /** Repos posés encore en proposition : « salarié|date ». */
+  reposProposes: Set<string>
 }
 
 export function estEcole(m: Pick<Motif, 'nature' | 'code' | 'nom'>): boolean {
@@ -305,6 +311,11 @@ export function contexte(d: DonneesSemaine): Contexte {
     ),
     ecole: new Set(d.referentiel.motifs.filter(estEcole).map((m) => m.id)),
     absences: indexerAbsences(d.absences),
+    reposProposes: new Set(
+      d.absences
+        .filter((a) => a.epinglee === false)
+        .map((a) => `${a.salarie_id}|${a.jour}`),
+    ),
   }
 }
 
@@ -1299,6 +1310,9 @@ export function analyser(d: DonneesSemaine): SemaineOut {
       repos_fixes: [...sol.reposFixes].sort((a, b) => a - b),
       hors_contrat: [...sol.horsContrat].sort((a, b) => a - b),
       repos_deduits: reposDeduits(x, sol, siens, lundi, ctx.absences, remplie),
+      repos_proposes: [0, 1, 2, 3, 4, 5, 6].filter((j) =>
+        ctx.reposProposes.has(`${x.id}|${ajouterJours(lundi, j)}`),
+      ),
     })
   }
 
@@ -1443,7 +1457,20 @@ export function preparerGeneration(
           a.jour < depuis ||
           (!o.tout && a.epinglee && !exclus.has(a.salarie_id)),
       )
-  const d2: DonneesSemaine = { ...d, affectations: restants }
+  // Un repos en proposition des jours à venir est effacé par la RPC avec les
+  // shifts en proposition (2026-10-31) : le calcul ne le voit plus.
+  const premierJour = ajouterJours(lundi, depuis)
+  const dernierJour = ajouterJours(lundi, 6)
+  const absences =
+    o.sansEffacer || verrouillee
+      ? d.absences
+      : d.absences.filter(
+          (a) =>
+            a.epinglee !== false ||
+            a.jour < premierJour ||
+            a.jour > dernierJour,
+        )
+  const d2: DonneesSemaine = { ...d, affectations: restants, absences }
   const ctx = contexte(d2)
   const { valides: besoins } = besoinsValides(ctx)
   let salaries = new Map(

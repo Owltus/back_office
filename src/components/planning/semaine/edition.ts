@@ -30,6 +30,9 @@ export interface ContenuStatut {
   /** Repos posé à cette date (motif de nature « repos ») : un motif posé,
    * montré comme le repos de la semaine type. */
   reposPose?: boolean
+  /** Repos encore en proposition (déduit, ou posé non validé) : pointillés,
+   * comme un shift proposé (2026-10-31). */
+  proposition?: boolean
   genre: 'repos' | 'ecole' | 'absence' | 'hors'
 }
 
@@ -75,6 +78,8 @@ export function statutDuJour(
   bilan: BilanOut | undefined,
   jour: number,
   motifs: Motif[],
+  /** Semaine verrouillée (planning réalisé) : rien n'y est une proposition. */
+  verrouillee = false,
 ): ContenuStatut | null {
   if (!bilan) return null
   if (bilan.hors_contrat.includes(jour)) {
@@ -95,6 +100,10 @@ export function statutDuJour(
         fixe: bilan.absences_semaine_type.includes(jour),
         repos: false,
         reposPose: true,
+        proposition:
+          !verrouillee &&
+          !bilan.absences_semaine_type.includes(jour) &&
+          bilan.repos_proposes.includes(jour),
         genre: 'absence',
       }
     return {
@@ -107,13 +116,59 @@ export function statutDuJour(
   }
   // Repos seulement s'il est sûr (fiche, semaine complète) : sinon « non attribué ».
   if (!jourDeRepos(bilan, jour)) return null
+  const fixe = bilan.repos_fixes.includes(jour)
   return {
     nom: 'Repos',
     couleur: NEUTRE,
-    fixe: bilan.repos_fixes.includes(jour),
+    fixe,
     repos: true,
+    proposition: !fixe && !verrouillee,
     genre: 'repos',
   }
+}
+
+/** Validation d'un repos (demande utilisateur du 2026-10-31 : « les repos
+ * fonctionnent comme les shifts »). Repos fixe de la semaine type : toujours
+ * validé, rien à basculer (null). Repos déduit d'une semaine remplie : une
+ * proposition, que « Valider » écrit en base. Repos posé : validé ou en
+ * proposition. null : ce n'est pas un repos qui se valide. */
+export function validationRepos(
+  bilan: BilanOut | undefined,
+  jour: number,
+  motifs: Motif[],
+): { valide: boolean; deduit: boolean } | null {
+  const st = statutDuJour(bilan, jour, motifs)
+  if (!st || st.fixe) return null
+  if (st.reposPose) return { valide: !st.proposition, deduit: false }
+  if (st.genre === 'repos') return { valide: false, deduit: true }
+  return null
+}
+
+/** Repos déduits à écrire validés par « Valider » : toute la semaine, ou un
+ * jour, ou une personne. Rien sur une semaine verrouillée. */
+export function reposAValider(
+  semaine: SemaineOut | null | undefined,
+  jour: number | null = null,
+  salarieId: number | null = null,
+): Array<{ salarie_id: number; jour: number }> {
+  if (!semaine || semaine.verrouillee) return []
+  return semaine.bilan.flatMap((b) =>
+    salarieId !== null && b.salarie_id !== salarieId
+      ? []
+      : b.repos_deduits
+          .filter((j) => jour === null || j === jour)
+          .map((j) => ({ salarie_id: b.salarie_id, jour: j })),
+  )
+}
+
+/** Repos en proposition d'une semaine (déduits et posés non validés), par
+ * jour 0 à 6 : ils comptent avec les shifts proposés. */
+export function reposProposesParJour(semaine: SemaineOut): number[] {
+  const n = [0, 0, 0, 0, 0, 0, 0]
+  if (semaine.verrouillee) return n
+  for (const b of semaine.bilan)
+    for (const j of [...b.repos_deduits, ...b.repos_proposes]) n[j]++
+  return n
 }
 
 /** Pendant un glisser : la case convient-elle (purement visuel, la base tranche). */
@@ -270,7 +325,8 @@ export function compteurs(semaine: SemaineOut) {
   if (semaine.verrouillee)
     return { propositions: 0, valides: 0, verrouilles: total }
   const valides = semaine.affectations.filter((a) => a.epinglee).length
-  return { propositions: total - valides, valides, verrouilles: 0 }
+  const repos = reposProposesParJour(semaine).reduce((a, b) => a + b, 0)
+  return { propositions: total - valides + repos, valides, verrouilles: 0 }
 }
 
 /** Places à pourvoir après une génération. */

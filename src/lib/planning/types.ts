@@ -109,6 +109,9 @@ export interface Absence {
   salarie_id: number
   jour: string // AAAA-MM-JJ
   motif_id: number
+  /** Repos validé (true) ou proposition (false) ; toujours validé hors motif
+   * de nature repos (trigger `planning_absences_epinglee`). Absent : validé. */
+  epinglee?: boolean
 }
 
 export interface Besoin {

@@ -2119,7 +2119,16 @@ référence des règles (`docs/regles-hcr.md` là-bas).
     `20261031100000_planning_motif_repos`, motif « R · Repos », sans
     décompte : aucune heure due retirée), montré EXACTEMENT comme le repos
     de la semaine type (tasse, « Repos ») mais retirable ; « Repos
-    exceptionnel » reste une absence. Groupe « Repos » en tête du clic
+    exceptionnel » reste une absence. **Un repos se valide comme un shift**
+    (demande utilisateur du même jour, migration
+    `20261031140000_planning_repos_valides`) : repos FIXE = toujours validé
+    (rien à basculer) ; repos DÉDUIT = proposition (pointillés), « Valider »
+    l'écrit en base (motif repos, validé) ; repos POSÉ = colonne
+    `planning_absences.epinglee` (posé à la main : validé). Un repos en
+    proposition part avec les shifts proposés (génération,
+    `preparerGeneration`, et Effacer) ; il compte dans les propositions.
+    RPC `planning_valider_avec_repos` (l'ancienne `planning_valider` y
+    renvoie). Semaine verrouillée : rien en pointillés. Groupe « Repos » en tête du clic
     droit, « Absences » en bas, même ordre dans le volet ; l'école jamais
     (fiche) ; un motif « forfait » seulement pour le forfait jours
     (cadres) ; rien sur un jour figé par la semaine type. Volet : code permis sur plusieurs postes = choix

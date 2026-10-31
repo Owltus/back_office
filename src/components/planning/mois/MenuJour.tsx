@@ -96,7 +96,7 @@ export function MenuJour({
   repos?: { fixe: boolean } | null
   ecrire: boolean
   onHoraire: (h: Horaire, posteId: number) => void
-  validation?: { active: boolean; onBasculer: () => void }
+  validation?: { active: boolean; onBasculer: () => void; repos?: boolean }
   etoile?: { active: boolean; onBasculer: () => void }
   /** La case a un shift : la remettre à « Non attribué ». */
   onVider?: () => void
@@ -315,7 +315,9 @@ export function MenuJour({
               <span className="flex-1 font-medium">
                 {validation.active
                   ? 'Remettre en proposition'
-                  : 'Valider ce shift'}
+                  : validation.repos
+                    ? 'Valider ce repos'
+                    : 'Valider ce shift'}
               </span>
             </button>
           </>

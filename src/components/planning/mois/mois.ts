@@ -12,6 +12,7 @@
 import type { BilanOut, ShiftOut, SemaineOut } from '#/lib/planning/semaine.ts'
 import { ajouterJours, ecartJours, lundiDe } from '#/lib/planning/temps.ts'
 import { jourDeRepos } from '#/lib/planning/affichage.ts'
+import { reposProposesParJour } from '#/components/planning/semaine/edition.ts'
 import type { Motif, Salarie } from '#/lib/planning/types.ts'
 
 /** « 2026-11 » → les dates du 1er au dernier jour. */
@@ -88,8 +89,10 @@ export type CaseMois =
       motif: Motif | undefined
       motifId: number | null
       fixe: boolean
+      /** Repos posé encore en proposition (2026-10-31). */
+      proposition: boolean
     }
-  | { type: 'repos'; fixe: boolean }
+  | { type: 'repos'; fixe: boolean; proposition: boolean }
 
 /** Ce qu'il y a dans la case d'une personne un jour donné (null : rien). */
 export function caseDe(
@@ -112,26 +115,32 @@ export function caseDe(
   if (bilan.hors_contrat.includes(jour)) return { type: 'hors', fixe: true }
   if (jour in bilan.absences) {
     const motifId = bilan.absences[jour]
+    const fixe = bilan.absences_semaine_type.includes(jour)
     return {
       type: 'absence',
       motif: motifs.find((m) => m.id === motifId),
       motifId,
-      fixe: bilan.absences_semaine_type.includes(jour),
+      fixe,
+      proposition:
+        !fixe && !sem.verrouillee && bilan.repos_proposes.includes(jour),
     }
   }
-  return jourDeRepos(bilan, jour)
-    ? { type: 'repos', fixe: bilan.repos_fixes.includes(jour) }
-    : null
+  if (!jourDeRepos(bilan, jour)) return null
+  const fixe = bilan.repos_fixes.includes(jour)
+  // Déduit d'une semaine remplie : une proposition, comme un shift proposé.
+  // Semaine verrouillée (planning réalisé) : plus rien n'est proposé.
+  return { type: 'repos', fixe, proposition: !fixe && !sem.verrouillee }
 }
 
-/** Clé de bandeau : deux jours voisins de même clé fusionnent (repos ; même
- * motif et même origine fixe ou posée ; hors contrat). */
+/** Clé de bandeau : deux jours voisins de même clé fusionnent (repos de même
+ * validation, qu'il soit fixe, déduit ou posé ; même motif et même origine
+ * fixe ou posée ; hors contrat). */
 export function cleBandeau(c: CaseMois | null): string | null {
   if (!c || c.type === 'shift') return null
   if (c.type === 'hors') return 'hors'
-  if (c.type === 'absence')
+  if (c.type === 'absence' && c.motif?.nature !== 'repos')
     return `motif-${c.motifId ?? 0}-${c.fixe ? 'fixe' : 'pose'}`
-  return 'repos'
+  return c.proposition ? 'repos-proposition' : 'repos'
 }
 
 /** Personnes affichées : sous contrat un jour du mois, et actives ou ayant
@@ -215,6 +224,10 @@ export function compter(mois: string, semaines: SemaineOut[]): Compteurs {
       else if (a.epinglee) valides++
       else propositions++
     }
+    // Les repos en proposition comptent avec les shifts proposés.
+    reposProposesParJour(s).forEach((n, j) => {
+      if (ajouterJours(s.lundi, j).slice(0, 7) === mois) propositions += n
+    })
   }
   return {
     propositions,
@@ -246,6 +259,7 @@ export function dansLesOuvertes(semaines: SemaineOut[], ouvertes: string[]) {
       if (a.epinglee) valides++
       else propositions++
     }
+    propositions += reposProposesParJour(s).reduce((a, b) => a + b, 0)
   }
   return { propositions, valides }
 }

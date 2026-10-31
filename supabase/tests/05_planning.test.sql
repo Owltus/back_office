@@ -90,6 +90,9 @@ update t_ids set g = (select id from public.planning_groupes where nom = 'Groupe
 insert into public.planning_motifs (code, nom) values ('XC', 'Congé test');
 alter table t_ids add column m bigint;
 update t_ids set m = (select id from public.planning_motifs where nom = 'Congé test');
+insert into public.planning_motifs (code, nom, nature, decompte) values ('XR', 'Repos test', 'repos', false);
+alter table t_ids add column r bigint;
+update t_ids set r = (select id from public.planning_motifs where nom = 'Repos test');
 insert into public.planning_salaries (prenom, nom, groupe_id, competences, semaine_type)
 select 'Test' || n, 'PLANNING', (select g from t_ids),
        jsonb_build_array(jsonb_build_object('poste_id', (select pa from t_ids), 'niveau', 'titulaire'),
@@ -117,7 +120,7 @@ insert into public.planning_semaines_verrouillees (lundi) select l from t_sem;
 delete from public.planning_semaines_verrouillees where lundi = (select p from t_sem);
 
 create function pg_temp.q(p text) returns text language sql as $$
-  select replace(replace(replace(replace(replace(replace(replace(replace(replace(p,
+  select replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(p,
     ':PA', (select pa from t_ids)::text),
     ':PB', (select pb from t_ids)::text),
     ':F', quote_literal((select f from t_sem))),
@@ -126,10 +129,11 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':S1', (select s1 from t_ids)::text),
     ':S2', (select s2 from t_ids)::text),
     ':S3', (select s3 from t_ids)::text),
-    ':M', (select m from t_ids)::text);
+    ':M', (select m from t_ids)::text),
+    ':R', (select r from t_ids)::text);
 $$;
 
-select plan(52);
+select plan(60);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -330,6 +334,40 @@ select is(pg_temp.essai('gestion', array[
 
 select hasnt_column('public', 'planning_salaries', 'heures_ecole_jour',
   'école : pas de durée réglable par personne');
+
+-- ------------------------- repos validés comme les shifts (2026-10-31) ---
+select is(pg_temp.essai('ecriture', array[pg_temp.q(
+  'insert into public.planning_absences (salarie_id, jour, motif_id, epinglee) values (:S3, :F::date + 3, :R, false)'),
+  pg_temp.q('select epinglee::text from public.planning_absences where salarie_id = :S3 and jour = :F::date + 3')]),
+  'false', 'repos : un repos posé peut rester en proposition');
+select is(pg_temp.essai('ecriture', array[pg_temp.q(
+  'insert into public.planning_absences (salarie_id, jour, motif_id, epinglee) values (:S3, :F::date + 3, :M, false)'),
+  pg_temp.q('select epinglee::text from public.planning_absences where salarie_id = :S3 and jour = :F::date + 3')]),
+  'true', 'repos : une autre absence est toujours validée');
+select is(pg_temp.essai('ecriture', array[pg_temp.q(
+  'select public.planning_valider_avec_repos(:F, :S1, 2, true, jsonb_build_array(jsonb_build_object(''salarie_id'', :S1, ''jour'', 2)))'),
+  pg_temp.q('select count(*) from public.planning_absences ab join public.planning_motifs m on m.id = ab.motif_id where ab.salarie_id = :S1 and ab.jour = :F::date + 2 and ab.epinglee and m.nature = ''repos''')]),
+  '1', 'repos : valider un repos déduit l''écrit en base, validé');
+select is(pg_temp.essai('ecriture', array[pg_temp.q(
+  'select public.planning_valider_avec_repos(:F, :S1, 0, true, jsonb_build_array(jsonb_build_object(''salarie_id'', :S1, ''jour'', 0)))'),
+  pg_temp.q('select count(*) from public.planning_absences where salarie_id = :S1 and jour = :F::date')]),
+  '0', 'repos : un jour qui a un shift ne devient pas un repos');
+select is(pg_temp.essai('ecriture', array[pg_temp.q(
+  'insert into public.planning_absences (salarie_id, jour, motif_id) values (:S3, :F::date + 4, :R)'),
+  pg_temp.q('select public.planning_valider_avec_repos(:F, null, null, false, null)'),
+  pg_temp.q('select epinglee::text from public.planning_absences where salarie_id = :S3 and jour = :F::date + 4')]),
+  'false', 'repos : tout remettre en proposition touche aussi les repos posés');
+select is(pg_temp.essai('ecriture', array[pg_temp.q(
+  'insert into public.planning_absences (salarie_id, jour, motif_id, epinglee) values (:S3, :F::date + 3, :R, false), (:S3, :F::date + 4, :R, true)'),
+  pg_temp.q('select public.planning_vider(:F, true)'),
+  pg_temp.q('select string_agg((jour - :F::date)::text, '','') from public.planning_absences where salarie_id = :S3 and jour between :F::date and :F::date + 6')]),
+  '4', 'repos : effacer les propositions retire le repos proposé, garde le validé');
+select is(pg_temp.essai('ecriture', array[pg_temp.q(
+  'select public.planning_valider_avec_repos(:L, :S2, 3, true, jsonb_build_array(jsonb_build_object(''salarie_id'', :S2, ''jour'', 3)))')]),
+  'err=PL423', 'repos : pas de repos validé sur une semaine verrouillée');
+select is(pg_temp.essai('lecture', array[pg_temp.q(
+  'select public.planning_valider_avec_repos(:F, null, null, true, null)')]),
+  'err=42501', 'repos : la lecture ne valide rien');
 
 select * from finish();
 rollback;

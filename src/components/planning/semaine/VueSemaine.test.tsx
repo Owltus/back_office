@@ -160,7 +160,8 @@ describe('VueSemaine', () => {
     expect(bouton(/Ouvrir la fiche de Karim Benali/)).toBeTruthy()
     // Proposition : la carte porte ses heures et son état.
     expect(screen.getByRole('button', { name: /23:00–07:45/ })).toBeTruthy()
-    expect(screen.getByText(/1 proposition/)).toBeTruthy()
+    // Le compteur compte aussi les repos déduits, en proposition (2026-10-31).
+    expect(screen.getByText(/\d+ propositions?/)).toBeTruthy()
   })
 
   it('lecture : aucun geste d’écriture actif', () => {
@@ -307,7 +308,13 @@ describe('VueSemaine', () => {
     rendre()
     fireEvent.click(bouton('Valider le lundi'))
     await waitFor(() =>
-      expect(service.valider).toHaveBeenCalledWith(LUNDI, null, 0, true),
+      expect(service.valider).toHaveBeenCalledWith(
+        LUNDI,
+        null,
+        0,
+        true,
+        expect.any(Array),
+      ),
     )
   })
 
