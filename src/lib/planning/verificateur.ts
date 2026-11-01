@@ -6,6 +6,7 @@
  */
 
 import {
+  nuitDeLaVeille,
   POSTE_ACCUEIL,
   postesAPresence,
   trousAccueilDuJour,
@@ -619,13 +620,13 @@ export function trousAccueil(
   p: Probleme,
   affectations: AffectationSolveur[],
 ): Trou[] {
-  const candidats = p.creneaux.filter(
-    (c) =>
-      c.accueil &&
-      (c.presence.includes('matin') || c.presence.includes('soir')),
-  )
+  const candidats = p.creneaux.filter((c) => c.accueil)
   if (!candidats.length) return []
   const postes = new Set(candidats.map((c) => c.poste))
+  const nuitDemandee = (j: number) =>
+    p.consignes.some(
+      (k) => k.jour === j && k.periode === 'nuit' && k.minimum > 0,
+    )
   const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
   const salaries = new Map(p.salaries.map((s) => [s.id, s]))
   const presences: PresencePoste[] = []
@@ -652,6 +653,7 @@ export function trousAccueil(
       candidats.filter((c) => jourDe(c) === jour),
       demandes,
       presences,
+      nuitDeLaVeille(candidats, jourDe, jour, nuitDemandee),
     ))
       r.push({ poste: POSTE_ACCUEIL, jour, debut: t.debut, fin: t.fin })
   }

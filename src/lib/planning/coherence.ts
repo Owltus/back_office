@@ -60,6 +60,7 @@ import { travail } from '#/lib/planning/modele.ts'
 import {
   accueilActif,
   chiffreAccueil,
+  estPosteAccueil,
   ORDRE_PERIODES,
   posteADesCodesDeNuit,
   sommeBesoinsPresence,
@@ -236,8 +237,9 @@ export function besoinsPresence(r: Referentiel): Map<string, number> {
   )
 }
 
-/** Besoins valides qui demandent au moins une personne autonome : ceux que
- * compte « N besoins » de Pour commencer, comme le point bloquant. */
+/** Besoins que le moteur lit (ceux de l'accueil sont ignorés, D13) et qui
+ * demandent au moins une personne autonome : ceux que compte « N besoins »
+ * de Pour commencer, comme le point bloquant. */
 export function besoinsDemandes(r: Referentiel): Besoin[] {
   const ctx = contexte({
     lundi: LUNDI_TYPE,
@@ -247,7 +249,14 @@ export function besoinsDemandes(r: Referentiel): Besoin[] {
     avant: [],
     apres: [],
   })
-  return besoinsValides(ctx).valides.filter((b) => b.effectif > 0)
+  return besoinsDuMoteur(ctx).valides.filter((b) => b.effectif > 0)
+}
+
+/** Moments du tableau de l'accueil où quelqu'un est demandé (0 si le
+ * tableau n'est pas en service). */
+export function momentsAccueilDemandes(r: Referentiel): number {
+  if (!accueilActif(r.postes)) return 0
+  return r.consignes.filter((c) => chiffreAccueil(c) > 0).length
 }
 
 const autonome = (n: string) => n === 'titulaire' || n === 'occasionnel'
@@ -383,7 +392,9 @@ export function verifierReglages(
         'bloquant:besoins',
         'bloquant',
         'besoins',
-        'Aucun besoin. Indiquez combien de personnes il faut sur chaque poste.',
+        accueil
+          ? "Rien n'est demandé. Remplissez le tableau Accueil, puis les besoins des autres postes."
+          : 'Aucun besoin. Indiquez combien de personnes il faut sur chaque poste.',
       )
     }
   }
@@ -748,10 +759,68 @@ export function verifierReglages(
       'accueil-sans-poste',
       'a-voir',
       'besoins',
-      "Le tableau de l'accueil demande du monde, mais aucun poste ne compte dans la présence du matin et du soir. Réglez-le dans Postes.",
+      "Le tableau de l'accueil demande du monde, mais aucun poste n'est un poste de l'accueil. Dans Postes, activez Poste de l'accueil sur Réception et Club.",
       undefined,
       PAGE_ECRAN.postes,
     )
+  }
+  // 24 h sur 24 (audit du 2026-11-01) : un moment sans personne demandée
+  // laisse l'hôtel vide. Un point par moment, avec ses jours.
+  if (accueil) {
+    for (const periode of ['matin', 'soir', 'nuit'] as const) {
+      const vides = [0, 1, 2, 3, 4, 5, 6].filter(
+        (j) => !chiffres.some((c) => c.jour === j && c.periode === periode),
+      )
+      if (!vides.length) continue
+      ajouter(
+        `accueil-vide:${periode}`,
+        'a-voir',
+        'besoins',
+        `${majuscule(momentDesJours(vides, periode))} : personne de demandé à l'accueil. L'hôtel peut rester sans personne à ce moment.`,
+        'presence',
+      )
+    }
+  }
+  // Heures de l'accueil contre les contrats de ceux qui le tiennent : un
+  // moment compte pour l'horaire le plus courant parmi les siens.
+  if (chiffres.length) {
+    let demandees = 0
+    for (const c of chiffres) {
+      const du = candidats.filter(
+        (x) => x.jourPlanning === c.jour && x.presence.includes(c.periode),
+      )
+      const purs = du.filter((x) => x.presence.length === 1)
+      const durees = (purs.length ? purs : du)
+        .map((x) => travail(x))
+        .sort((a, b) => a - b)
+      if (!durees.length) continue
+      demandees += chiffreAccueil(c) * durees[Math.floor(durees.length / 2)]
+    }
+    const deLAccueil = (k: { poste_id: number }) =>
+      estPosteAccueil(postes.get(k.poste_id), accueil)
+    const contrats = equipe
+      .filter(
+        (s) =>
+          !contratIndicatif(s) &&
+          s.competences.some(
+            (k) =>
+              deLAccueil(k) &&
+              (k.niveau === 'titulaire' || k.niveau === 'soutien'),
+          ) &&
+          !s.competences.some(
+            (k) => !deLAccueil(k) && k.niveau === 'titulaire',
+          ),
+      )
+      .reduce((t, s) => t + minutesContrat(s), 0)
+    if (demandees - contrats > demandees * SEUIL_HEURES) {
+      ajouter(
+        'heures:accueil',
+        'a-voir',
+        'besoins',
+        `L'accueil demande environ ${heuresTexte(demandees)} par semaine ; les contrats des personnes de l'accueil en font ${heuresTexte(contrats)}. Il manque ${heuresTexte(demandees - contrats)} : le planning prendra des extras ou laissera des places vides.`,
+        'presence',
+      )
+    }
   }
   const sansHoraire = new Map<PeriodePresence, number[]>()
   const capacites: Array<{

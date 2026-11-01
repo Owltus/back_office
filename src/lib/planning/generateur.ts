@@ -22,7 +22,11 @@
  * `max(plafond, fige)` qui évitent un modèle impossible.
  */
 
-import { plageAccueil, POSTE_ACCUEIL } from '#/lib/planning/cycles.ts'
+import {
+  nuitDeLaVeille,
+  plageAccueil,
+  POSTE_ACCUEIL,
+} from '#/lib/planning/cycles.ts'
 import {
   codeDeLaFiche,
   codeImposeRespecte,
@@ -1713,15 +1717,16 @@ function trousEntreEquipes(
     }
   }
   // Accueil entier (D15) : Réception et Club ensemble, du premier au dernier
-  // moment demandé du jour (`plageAccueil`, la même définition que l'oracle).
-  const candidats = p.creneaux.filter(
-    (c) =>
-      c.accueil &&
-      (c.presence.includes('matin') || c.presence.includes('soir')),
-  )
+  // moment demandé du jour, d'un veilleur à l'autre quand la nuit est
+  // demandée (`plageAccueil`, la même définition que l'oracle).
+  const candidats = p.creneaux.filter((c) => c.accueil)
   if (candidats.length) {
     const postesAccueil = new Set(candidats.map((c) => c.poste))
     const tenus = p.creneaux.filter((c) => postesAccueil.has(c.poste))
+    const nuitDemandee = (j: number) =>
+      p.consignes.some(
+        (k) => k.jour === j && k.periode === 'nuit' && k.minimum > 0,
+      )
     const jours = [...new Set(candidats.map(jourDe))].sort((a, b) => a - b)
     for (const jour of jours) {
       const demandes = new Set(
@@ -1732,6 +1737,7 @@ function trousEntreEquipes(
       const plage = plageAccueil(
         candidats.filter((c) => jourDe(c) === jour),
         demandes,
+        nuitDeLaVeille(candidats, jourDe, jour, nuitDemandee),
       )
       if (!plage) continue
       r.push(

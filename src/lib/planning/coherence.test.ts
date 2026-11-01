@@ -3,10 +3,11 @@ import { describe, expect, it } from 'vitest'
 import {
   aDesBloquants,
   besoinsDemandes,
+  momentsAccueilDemandes,
   grouperPoints,
   listeJours,
   ordonnerPoints,
-  verifierReglages,
+  verifierReglages as verifierTout,
 } from '#/lib/planning/coherence.ts'
 import type { PointReglage } from '#/lib/planning/coherence.ts'
 import { avecCode } from '#/lib/planning/test/codesTest.ts'
@@ -147,6 +148,11 @@ function propre(): Referentiel {
 }
 
 const ids = (p: PointReglage[]) => p.map((x) => x.id)
+/** Les points, sans « moment vide de l'accueil » (audit du 2026-11-01) : les
+ * référentiels de ce fichier ne remplissent qu'un jour du tableau ; ce point
+ * a ses propres tests (`verifierTout`, « 24 h sur 24 »). */
+const verifierReglages = (...a: Parameters<typeof verifierTout>) =>
+  verifierTout(...a).filter((x) => !x.id.startsWith('accueil-vide:'))
 /** Un chiffre au tableau de l'accueil (2026-11-01) : un hôtel dont le seul
  * poste est de l'accueil a ainsi quelque chose à faire. */
 const LUNDI_MATIN_1 = {
@@ -1035,6 +1041,23 @@ describe('verifierReglages, points complets (test de mutation)', () => {
     ]
     expect(besoinsDemandes(r).map((b) => b.jour)).toEqual([0])
   })
+
+  it('Pour commencer ne compte pas les besoins d’un poste de l’accueil (D13)', () => {
+    const r = propre()
+    r.besoins = [besoin(1, 0, hM)]
+    // Accepté : poste à part, son besoin compte ; pas de tableau en service.
+    expect(besoinsDemandes(r)).toHaveLength(1)
+    expect(momentsAccueilDemandes(r)).toBe(0)
+    // Refusé : le poste devient de l'accueil, le moteur ignore son besoin ;
+    // ce sont les cases du tableau qui comptent.
+    r.postes = [{ ...r.postes[0], presence: true }]
+    r.consignes = [
+      LUNDI_MATIN_1,
+      { ...LUNDI_MATIN_1, id: 2, periode: 'soir', minimum: 0, maximum: 0 },
+    ]
+    expect(besoinsDemandes(r)).toHaveLength(0)
+    expect(momentsAccueilDemandes(r)).toBe(1)
+  })
 })
 
 describe('ordonnerPoints et aDesBloquants', () => {
@@ -1238,6 +1261,70 @@ describe("verifierReglages, tableau de l'accueil", () => {
 
   it('propre : aucun point', () => {
     expect(verifierReglages(accueil())).toEqual([])
+  })
+
+  /** Le tableau rempli : `n` à chaque moment de chaque jour. */
+  const plein = (r: Referentiel, n: number) => {
+    r.consignes = [0, 1, 2, 3, 4, 5, 6].flatMap((jour, i) =>
+      (['matin', 'soir', 'nuit'] as const).map((periode, k) => ({
+        id: 100 + 3 * i + k,
+        jour,
+        periode,
+        minimum: periode === 'nuit' ? 1 : n,
+        maximum: periode === 'nuit' ? 1 : n,
+      })),
+    )
+    return r
+  }
+
+  it('24 h sur 24 : un moment sans personne demandée est signalé', () => {
+    // Accepté : tout le tableau rempli, aucun moment vide.
+    expect(
+      ids(verifierTout(plein(accueil(), 1))).filter((x) =>
+        x.startsWith('accueil-vide'),
+      ),
+    ).toEqual([])
+    // Refusé : le lundi seul ; un point par moment, avec ses jours.
+    const vides = verifierTout(accueil()).filter((x) =>
+      x.id.startsWith('accueil-vide'),
+    )
+    expect(vides).toEqual([
+      capacite(
+        'accueil-vide:matin',
+        "Mardi, mercredi, jeudi, vendredi, samedi et dimanche matin : personne de demandé à l'accueil. L'hôtel peut rester sans personne à ce moment.",
+      ),
+      capacite(
+        'accueil-vide:soir',
+        "Mardi, mercredi, jeudi, vendredi, samedi et dimanche soir : personne de demandé à l'accueil. L'hôtel peut rester sans personne à ce moment.",
+      ),
+      capacite(
+        'accueil-vide:nuit',
+        "La nuit de mardi, mercredi, jeudi, vendredi, samedi et dimanche : personne de demandé à l'accueil. L'hôtel peut rester sans personne à ce moment.",
+      ),
+    ])
+    // Refusé : une seule nuit à 0, le dimanche.
+    const r = plein(accueil(), 1)
+    r.consignes = r.consignes.filter(
+      (c) => !(c.jour === 6 && c.periode === 'nuit'),
+    )
+    expect(
+      ids(verifierTout(r)).filter((x) => x.startsWith('accueil-vide')),
+    ).toEqual(['accueil-vide:nuit'])
+  })
+
+  it('heures de l’accueil contre les contrats de ceux qui le tiennent', () => {
+    // Accepté : 1 personne par moment, les contrats suffisent.
+    expect(ids(verifierTout(plein(accueil(), 1)))).not.toContain(
+      'heures:accueil',
+    )
+    // Refusé : 3 le matin et 3 le soir chaque jour, il manque des heures.
+    const p = verifierTout(plein(accueil(), 3)).find(
+      (x) => x.id === 'heures:accueil',
+    )
+    expect(p?.texte).toMatch(
+      /^L'accueil demande environ .* par semaine ; les contrats des personnes de l'accueil en font .*\. Il manque .* : le planning prendra des extras ou laissera des places vides\.$/,
+    )
+    expect(p?.lien).toEqual(VERS_PRESENCE)
   })
 
   it('capacité : 5 peuvent venir le matin, accepté à 5, refusé à 6', () => {
@@ -1452,7 +1539,7 @@ describe("verifierReglages, tableau de l'accueil", () => {
       gravite: 'a-voir',
       ecran: 'besoins',
       texte:
-        "Le tableau de l'accueil demande du monde, mais aucun poste ne compte dans la présence du matin et du soir. Réglez-le dans Postes.",
+        "Le tableau de l'accueil demande du monde, mais aucun poste n'est un poste de l'accueil. Dans Postes, activez Poste de l'accueil sur Réception et Club.",
       lien: { page: '/planning/postes' },
     })
     r.consignes = r.consignes.map((c) => ({ ...c, minimum: 0, maximum: 0 }))

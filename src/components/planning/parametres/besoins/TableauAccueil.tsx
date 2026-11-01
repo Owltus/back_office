@@ -65,12 +65,15 @@ export function TableauAccueil({
         <p className="text-sm text-muted-foreground">
           {jour.length
             ? `Combien de personnes il faut, chaque jour. Le matin et le soir : ${listeEt(jour)} ensemble, l'app répartit et choisit les horaires.`
-            : "Aucun poste de l'accueil : cochez-les dans Postes."}{' '}
-          {nuit.length ? `La nuit : ${listeEt(nuit)}.` : ''}
+            : "Aucun poste de l'accueil : dans Postes, activez Poste de l'accueil sur Réception et Club."}{' '}
+          {nuit.length
+            ? `La nuit : ${listeEt(nuit)}.`
+            : 'Aucun poste de nuit : dans Postes, donnez la catégorie Veille de nuit au poste des veilleurs.'}
         </p>
         <p className="text-xs text-muted-foreground">
           Une personne en milieu de journée compte le matin et le soir. Les
-          apprentis comptent, jamais seuls.
+          apprentis comptent, jamais seuls. Une case vide, en orange : personne
+          n'est demandé, l'hôtel peut rester vide à ce moment.
         </p>
       </div>
       <div className="overflow-x-auto rounded-xl border bg-card">
@@ -149,7 +152,7 @@ function CaseAccueil({
   const titre = `${libelle} · ${nomJour}`
   const dit = nombre
     ? `${nombre} personne${nombre > 1 ? 's' : ''}`
-    : 'personne de demandé'
+    : "personne de demandé, l'hôtel peut rester vide"
   return (
     <Popover open={ouvert} onOpenChange={setOuvert}>
       <PopoverTrigger asChild>
@@ -165,7 +168,7 @@ function CaseAccueil({
           <span
             className={cn(
               'text-sm font-semibold tabular-nums',
-              !nombre && 'text-muted-foreground/40',
+              !nombre && 'text-amber-500',
             )}
           >
             {nombre || '–'}
@@ -185,7 +188,9 @@ function CaseAccueil({
             />
           </div>
           <p className="text-xs text-muted-foreground">
-            Exactement ce nombre. S'il manque du monde, l'app vous le dit.
+            {nombre
+              ? "Exactement ce nombre. S'il manque du monde, l'app vous le dit."
+              : "Personne de demandé : l'hôtel peut rester sans personne à ce moment."}
           </p>
         </div>
       </PopoverContent>

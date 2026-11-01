@@ -46,6 +46,7 @@ import {
   ORDRE_ECRANS,
   PAGE_ECRAN,
   besoinsDemandes,
+  momentsAccueilDemandes,
   ordonnerPoints,
 } from '#/lib/planning/coherence.ts'
 import type {
@@ -72,7 +73,8 @@ const AIDE_ETAPE: Record<EcranReglage, string> = {
   horaires: "Les horaires de l'hôtel : matin, soir, nuit.",
   postes: 'Les postes à tenir et les horaires qu’ils utilisent.',
   equipe: 'Chaque personne et les postes qu’elle tient.',
-  besoins: 'Combien de personnes il faut, par poste et par jour.',
+  besoins:
+    "Combien de personnes il faut à l'accueil, le matin, le soir et la nuit, et sur les autres postes.",
 }
 
 const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? 's' : ''}`
@@ -94,11 +96,14 @@ export function etapesDemarrage(
   ).size
   // Les besoins que le moteur retient, comme le point bloquant.
   const nbBesoins = besoinsDemandes(r).length
+  const nbMoments = momentsAccueilDemandes(r)
   const reglees: Record<EcranReglage, string> = {
     horaires: pluriel(r.horaires.length, 'horaire'),
     postes: pluriel(r.postes.length, 'poste'),
     equipe: `${pluriel(nbPlaces, 'personne')} sur un poste`,
-    besoins: pluriel(nbBesoins, 'besoin'),
+    besoins: nbMoments
+      ? `${pluriel(nbMoments, 'moment')} à l'accueil, ${pluriel(nbBesoins, 'besoin')} sur les autres postes`
+      : pluriel(nbBesoins, 'besoin'),
   }
   return ORDRE_ECRANS.map((ecran, i) => {
     const bloquant = points.find(

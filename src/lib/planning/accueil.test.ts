@@ -3,6 +3,7 @@ import highsLoader from 'highs'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import {
+  nuitDeLaVeille,
   plageAccueil,
   POSTE_ACCUEIL,
   trousAccueilDuJour,
@@ -752,4 +753,84 @@ describe('assemblage d’une semaine (semaine.ts)', () => {
     const analyse = analyser(p.donnees(LUNDI))
     expect(analyse.presence).toEqual(sem.presence)
   }, 60_000)
+})
+
+// ------------------------------------------------- 24 h sur 24 (audit)
+
+describe('d’un veilleur à l’autre (audit du 2026-11-01)', () => {
+  // Oracle : quand la nuit est demandée, la journée de l'accueil est tenue
+  // du départ du veilleur de la veille (07:00) à l'arrivée du veilleur du
+  // soir (23:00) ; un vide entre les deux est un trou.
+  const nuit = (id: string, jour: number) =>
+    cand(id, 'veille', jour, 23, 31, ['nuit'])
+  const tout = new Set(['matin', 'soir', 'nuit'] as const)
+
+  it('plage : de la fin de la nuit d’avant au début de la nuit du jour', () => {
+    const cs = [
+      cand('m', 'rec', 1, 7, 15, ['matin']),
+      cand('s1', 'club', 1, 14, 22.75, ['soir']),
+      cand('s2', 'rec', 1, 15, 23.25, ['soir']),
+      nuit('n', 1),
+    ]
+    const veille = [{ debut: 23 * H, fin: J + 7 * H }]
+    expect(plageAccueil(cs, tout, veille)).toEqual({
+      debut: J + 7 * H,
+      fin: J + 23 * H,
+    })
+    // Refusé : sans nuit demandée, la plage s'arrête au soir le plus court.
+    expect(plageAccueil(cs, new Set(['matin', 'soir'] as const))).toEqual({
+      debut: J + 7 * H,
+      fin: J + 22.75 * H,
+    })
+  })
+
+  it('le lundi, la veille est le dimanche d’avant', () => {
+    const cs = [nuit('n6', 6), nuit('n0', 0)]
+    const oui = () => true
+    expect(nuitDeLaVeille(cs, jourDe, 0, oui)).toEqual([
+      { debut: 6 * J + 23 * H - 7 * J, fin: 6 * J + 31 * H - 7 * J },
+    ])
+    expect(nuitDeLaVeille(cs, jourDe, 1, oui)).toEqual([
+      { debut: 23 * H, fin: 31 * H },
+    ])
+    // Refusé : la nuit de la veille n'est pas demandée.
+    expect(nuitDeLaVeille(cs, jourDe, 1, () => false)).toEqual([])
+  })
+
+  const consignes = [
+    chiffre(0, 'matin', 1),
+    chiffre(0, 'soir', 1),
+    chiffre(0, 'nuit', 1),
+  ]
+  const salaries = [
+    sal('a'),
+    sal('b'),
+    sal('v', { postes: new Set(['veille']) }),
+  ]
+  const base = [
+    matin('rm'),
+    cand('cs', 'club', 0, 14, 22.75, ['soir']),
+    nuit('n', 0),
+  ]
+
+  it('accepté : le moteur prend le soir qui va jusqu’au veilleur', () => {
+    const r = gen(
+      probleme({
+        salaries,
+        creneaux: [...base, cand('rs', 'rec', 0, 15, 23.25, ['soir'])],
+        consignes,
+        nbJours: 1,
+      }),
+    )
+    expect(r.trous).toEqual([])
+    expect(qui(r)).toContain('v@n')
+    expect(qui(r).some((x) => x.endsWith('@rs'))).toBe(true)
+  })
+
+  it('refusé : si le soir finit à 22:45, le quart d’heure avant le veilleur est un trou', () => {
+    const r = gen(probleme({ salaries, creneaux: base, consignes, nbJours: 1 }))
+    expect(r.trous).toEqual([
+      { poste: POSTE_ACCUEIL, jour: 0, debut: 22.75 * H, fin: 23 * H },
+    ])
+  })
 })

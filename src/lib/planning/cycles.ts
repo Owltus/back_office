@@ -154,7 +154,14 @@ export function postesAPresence(
  * Les trous se cherchent sur l'accueil ENTIER d'un jour (Réception et Club
  * ensemble : une personne autonome sur l'un OU l'autre tient le quart
  * d'heure), du premier au dernier moment DEMANDÉ du jour (chiffre > 0, matin
- * et soir seulement : la nuit est la Veille, un autre poste).
+ * et soir).
+ *
+ * 24 h sur 24 (audit du 2026-11-01) : quand la nuit est demandée, la journée
+ * est tenue d'un veilleur à l'autre. La plage COMMENCE au départ de la nuit
+ * de la veille (la fin la plus tardive de ses horaires : 07:00) et FINIT à
+ * l'arrivée de la nuit du jour (le début le plus tôt : 23:00). Un vide entre
+ * 22:45 et 23:00, ou entre 07:00 et le premier matin, est donc un trou. La
+ * nuit elle-même n'est pas découpée : son chiffre la tient.
  *
  * Bornes d'un moment : celles qui tiennent QUEL QUE SOIT l'horaire choisi.
  * Début de la plage = le début le PLUS TARD des horaires du premier moment
@@ -170,11 +177,14 @@ export function postesAPresence(
  */
 
 /** Plage de l'accueil d'un jour : `candidats` = créneaux candidats de
- * l'accueil écrits ce jour (leurs moments dans `presence`) ; `demandes` =
- * moments au chiffre > 0 ce jour. Null : rien à tenir. */
+ * l'accueil écrits ce jour (leurs moments dans `presence`, nuits comprises) ;
+ * `demandes` = moments au chiffre > 0 ce jour ; `nuitVeille` = candidats de
+ * la nuit de la veille quand elle est demandée (`nuitDeLaVeille`). Null :
+ * rien à tenir (ni matin ni soir demandé). */
 export function plageAccueil(
   candidats: ReadonlyArray<Pick<Creneau, 'debut' | 'fin' | 'presence'>>,
   demandes: ReadonlySet<'matin' | 'soir' | 'nuit'>,
+  nuitVeille: ReadonlyArray<Pick<Creneau, 'debut' | 'fin'>> = [],
 ): PlageMinutes | null {
   const premier = demandes.has('matin')
     ? 'matin'
@@ -195,12 +205,41 @@ export function plageAccueil(
       ? purs
       : candidats.filter((c) => c.presence.includes(moment))
   }
+  const nuits = demandes.has('nuit')
+    ? candidats.filter((c) => c.presence.includes('nuit'))
+    : []
   const ouvrent = du(premier)
   const ferment = du(dernier)
-  if (!ouvrent.length || !ferment.length) return null
-  const debut = Math.max(...ouvrent.map((c) => c.debut))
-  const fin = Math.min(...ferment.map((c) => c.fin))
+  if (!ouvrent.length && !nuitVeille.length) return null
+  if (!ferment.length && !nuits.length) return null
+  const debut = nuitVeille.length
+    ? Math.max(...nuitVeille.map((c) => c.fin))
+    : Math.max(...ouvrent.map((c) => c.debut))
+  const fin = nuits.length
+    ? Math.min(...nuits.map((c) => c.debut))
+    : Math.min(...ferment.map((c) => c.fin))
   return fin > debut ? { debut, fin } : null
+}
+
+/** Candidats de la nuit de la VEILLE de `jour`, si elle est demandée
+ * (`nuitDemandee`). Le lundi, la veille est le dimanche d'avant : on prend
+ * les nuits du dimanche de la semaine, reculées de 7 jours (le tableau est le
+ * même chaque semaine). */
+export function nuitDeLaVeille<
+  C extends Pick<Creneau, 'debut' | 'fin' | 'presence'>,
+>(
+  candidats: ReadonlyArray<C>,
+  jourDuCandidat: (c: C) => number,
+  jour: number,
+  nuitDemandee: (jour: number) => boolean,
+): Array<Pick<Creneau, 'debut' | 'fin'>> {
+  const veille = (jour + 6) % 7
+  if (!nuitDemandee(veille)) return []
+  const nuits = candidats.filter(
+    (c) => jourDuCandidat(c) === veille && c.presence.includes('nuit'),
+  )
+  const recul = jour === 0 ? 7 * 24 * 60 : 0
+  return nuits.map((c) => ({ debut: c.debut - recul, fin: c.fin - recul }))
 }
 
 /** Trous de l'accueil un jour : `trousDuJour` sur la plage de l'accueil,
@@ -209,8 +248,9 @@ export function trousAccueilDuJour(
   candidats: ReadonlyArray<Pick<Creneau, 'debut' | 'fin' | 'presence'>>,
   demandes: ReadonlySet<'matin' | 'soir' | 'nuit'>,
   presences: ReadonlyArray<PresencePoste>,
+  nuitVeille: ReadonlyArray<Pick<Creneau, 'debut' | 'fin'>> = [],
 ): PlageMinutes[] {
-  const plage = plageAccueil(candidats, demandes)
+  const plage = plageAccueil(candidats, demandes, nuitVeille)
   return plage ? trousDuJour([plage], presences) : []
 }
 

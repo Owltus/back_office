@@ -162,7 +162,7 @@ export function PostesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
                     <span className="flex min-w-0 items-center gap-2">
                       <span className="truncate font-medium">{p.nom}</span>
                       {p.a_part && <Etiquette>rangé à part</Etiquette>}
-                      {p.presence && <Etiquette>présence</Etiquette>}
+                      {p.presence && <Etiquette>accueil</Etiquette>}
                     </span>
                   }
                   detail={resumePoste(p, ref.data)}
@@ -393,13 +393,16 @@ function CartePoste({
           checked={p.presence}
           disabled={!modifiable}
           onCheckedChange={(presence) => changer({ presence })}
-          aria-label="Compte dans la présence matin et soir"
+          aria-label="Poste de l'accueil"
           className="mt-0.5"
         />
         <span className="text-muted-foreground">
+          <span className="font-medium text-foreground">
+            Poste de l'accueil.
+          </span>{' '}
           {p.presence
-            ? 'Compte dans la présence du matin et du soir (consignes des besoins).'
-            : 'Ne compte pas dans la présence du matin et du soir.'}
+            ? 'Ses effectifs se règlent dans le tableau Accueil de la page Besoins, le matin et le soir, avec les autres postes de l’accueil.'
+            : 'Il a sa propre grille dans la page Besoins.'}
         </span>
       </label>
 

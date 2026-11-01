@@ -11,7 +11,12 @@
  * que l'écran se porte tel quel.
  */
 
-import { cycleDe, estCourt, trousAccueilDuJour } from '#/lib/planning/cycles.ts'
+import {
+  cycleDe,
+  estCourt,
+  nuitDeLaVeille,
+  trousAccueilDuJour,
+} from '#/lib/planning/cycles.ts'
 import type { PresencePoste } from '#/lib/planning/cycles.ts'
 import {
   codePrevuAuPoste,
@@ -1537,7 +1542,8 @@ export function analyser(d: DonneesSemaine): SemaineOut {
     for (const a of ctx.affectations) {
       const poste = ctx.postes.get(a.poste_id)
       const sol = salaries.get(a.salarie_id)
-      if (!poste?.presence || !sol) continue
+      // La veille de nuit compte aussi : elle tient le soir jusqu'à 23:00.
+      if (!estPosteAccueil(poste, accueil) || !sol) continue
       const c = creneaux.get(`a${a.id}`) as Creneau
       presences.push({
         debut: c.debut,
@@ -1545,6 +1551,10 @@ export function analyser(d: DonneesSemaine): SemaineOut {
         autonome: role(sol, String(a.poste_id)) !== 'soutien',
       })
     }
+    const nuitDemandee = (j: number) =>
+      ctx.consignes.some(
+        (k) => k.jour === j && k.periode === 'nuit' && chiffreAccueil(k) > 0,
+      )
     for (let jour = 0; jour < 7; jour++) {
       const demandes = new Set(
         ctx.consignes
@@ -1555,6 +1565,7 @@ export function analyser(d: DonneesSemaine): SemaineOut {
         candidats.filter((c) => jourDe(c) === jour),
         demandes,
         presences,
+        nuitDeLaVeille(candidats, jourDe, jour, nuitDemandee),
       ))
         trousAccueil.push({
           poste_id: POSTE_ID_ACCUEIL,

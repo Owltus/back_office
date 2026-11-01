@@ -154,15 +154,23 @@ const PERIODES: ReadonlyArray<{
   {
     valeur: 'matin',
     libelle: 'Matin',
-    aide: 'Compte dans la présence du matin',
+    aide: 'Compte le matin dans le tableau Accueil',
   },
   {
     valeur: 'middle',
     libelle: 'Middle',
-    aide: 'À cheval entre le matin et le soir : compte selon son heure de début',
+    aide: 'Compte le matin et le soir dans le tableau Accueil',
   },
-  { valeur: 'soir', libelle: 'Soir', aide: 'Compte dans la présence du soir' },
-  { valeur: 'nuit', libelle: 'Nuit', aide: 'Nuit : hors des consignes' },
+  {
+    valeur: 'soir',
+    libelle: 'Soir',
+    aide: 'Compte le soir dans le tableau Accueil',
+  },
+  {
+    valeur: 'nuit',
+    libelle: 'Nuit',
+    aide: 'Compte la nuit dans le tableau Accueil, sur le poste Veille de nuit',
+  },
   {
     valeur: 'aucune',
     libelle: 'À part',

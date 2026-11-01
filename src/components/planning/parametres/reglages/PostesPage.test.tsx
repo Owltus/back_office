@@ -129,9 +129,7 @@ describe('Postes', () => {
         name: "Ranger à part dans la liste de l'équipe",
       }),
     )
-    fireEvent.click(
-      r.getByRole('switch', { name: 'Compte dans la présence matin et soir' }),
-    )
+    fireEvent.click(r.getByRole('switch', { name: "Poste de l'accueil" }))
     expect(service.enregistrerPoste).not.toHaveBeenCalled()
     fireEvent.click(r.getByRole('button', { name: 'Enregistrer' }))
     await waitFor(() =>
