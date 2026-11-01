@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 
 import {
   brouillonVierge,
+  changerCategorie,
   changerContrat,
   erreurBrouillon,
+  forfaitPossible,
   heuresSansObjet,
   fusionnerAbsences,
   horsSemainesVerrouillees,
@@ -173,5 +175,40 @@ describe('fin de contrat et bouton Actif (U2 du 2026-11-01)', () => {
     expect(changerContrat({ ...extra, actif: false }, 'extra').actif).toBe(
       false,
     )
+  })
+})
+
+describe('cadre au forfait jours : la direction seule (2026-11-01)', () => {
+  const groupes = [
+    { id: 1, nom: 'Direction', ordre: 0, postes_autorises: [] },
+    { id: 2, nom: 'Hôteliers', ordre: 1, postes_autorises: [] },
+  ]
+  const fiche = (kw: Partial<ReturnType<typeof brouillonVierge>>) => ({
+    ...brouillonVierge(),
+    prenom: 'Léa',
+    ...kw,
+  })
+  it('un CDI ou un CDD du groupe Direction', () => {
+    expect(forfaitPossible(fiche({ groupe_id: 1 }), groupes)).toBe(true)
+    expect(
+      forfaitPossible(fiche({ groupe_id: 1, type_contrat: 'cdd' }), groupes),
+    ).toBe(true)
+    // Refusé : un autre groupe, un apprenti, un stagiaire, un extra.
+    expect(forfaitPossible(fiche({ groupe_id: 2 }), groupes)).toBe(false)
+    for (const type_contrat of ['apprenti', 'stagiaire', 'extra'] as const)
+      expect(
+        forfaitPossible(fiche({ groupe_id: 1, type_contrat }), groupes),
+      ).toBe(false)
+  })
+  it('quitter la direction ou passer apprenti retire le forfait', () => {
+    const cadre = fiche({ groupe_id: 1, forfait_jours: true })
+    expect(changerContrat(cadre, 'apprenti').forfait_jours).toBe(false)
+    expect(changerContrat(cadre, 'cdd').forfait_jours).toBe(true)
+    expect(
+      changerCategorie(cadre, 2, [], groupes as never).brouillon.forfait_jours,
+    ).toBe(false)
+    expect(
+      changerCategorie(cadre, 1, [], groupes as never).brouillon.forfait_jours,
+    ).toBe(true)
   })
 })

@@ -12,6 +12,7 @@ import {
   changerContrat,
   evolutionParDefaut,
   FIN_OBLIGATOIRE,
+  forfaitPossible,
   heuresSansObjet,
 } from '#/components/planning/parametres/equipe/brouillon.ts'
 import type {
@@ -210,13 +211,18 @@ export function SectionIdentite({
         )}
       </div>
       <div className="flex flex-col gap-2">
-        <Interrupteur
-          coche={b.forfait_jours}
-          disabled={disabled}
-          onChange={(v) => maj((x) => ({ ...x, forfait_jours: v }))}
-        >
-          Cadre au forfait jours
-        </Interrupteur>
+        {/* Cadre au forfait jours : la direction seule, en CDI ou CDD
+            (2026-11-01) ; une fiche déjà cochée garde l'interrupteur pour
+            pouvoir le retirer. */}
+        {(forfaitPossible(b, groupes) || b.forfait_jours) && (
+          <Interrupteur
+            coche={b.forfait_jours}
+            disabled={disabled}
+            onChange={(v) => maj((x) => ({ ...x, forfait_jours: v }))}
+          >
+            Cadre au forfait jours
+          </Interrupteur>
+        )}
         <Interrupteur
           coche={b.mineur}
           disabled={disabled}

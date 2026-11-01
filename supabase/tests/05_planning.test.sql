@@ -133,7 +133,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':R', (select r from t_ids)::text);
 $$;
 
-select plan(63);
+select plan(65);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -287,6 +287,13 @@ select is(pg_temp.essai('gestion', array[
   pg_temp.q('insert into public.planning_besoins (poste_id, jour, debut, fin, effectif) values (:PA, 6, ''09:00'', ''10:00'', 1)'),
   pg_temp.q('select soutien::text from public.planning_besoins where poste_id = :PA and jour = 6 and debut = ''09:00''')]),
   '0', 'besoin : aucune place d''apprenti par défaut');
+select is(pg_temp.essai('gestion', array[
+  pg_temp.q('insert into public.planning_salaries (prenom, nom, type_contrat, heures_hebdo, forfait_jours) values (''Cadre'', ''Test'', ''cdi'', 0, true)'),
+  pg_temp.q('select forfait_jours::text from public.planning_salaries where prenom = ''Cadre'' and nom = ''Test''')]),
+  'true', 'forfait jours : possible pour un CDI');
+select is(pg_temp.essai('gestion', array[
+  pg_temp.q('insert into public.planning_salaries (prenom, nom, type_contrat, heures_hebdo, forfait_jours) values (''Appr'', ''Test'', ''apprenti'', 35, true)')]),
+  'err=23514', 'forfait jours : jamais pour un apprenti');
 
 -- ------------------------------------ consignes de présence (2026-10-28) ---
 select is(pg_temp.essai('aucun', array['select count(*) from public.planning_consignes']),

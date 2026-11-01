@@ -315,7 +315,8 @@ export function changerContrat(
     ...b,
     type_contrat,
     heures_hebdo: type_contrat === 'extra' ? 0 : b.heures_hebdo || 35,
-    forfait_jours: type_contrat === 'extra' ? false : b.forfait_jours,
+    // Seuls un CDI ou un CDD peuvent être cadres au forfait (2026-11-01).
+    forfait_jours: CONTRATS_CADRE.has(type_contrat) ? b.forfait_jours : false,
     // Un extra vient ponctuellement : jamais de fin de contrat (U2) ; un
     // autre contrat est toujours actif (sa fin le sort du planning).
     date_sortie: type_contrat === 'extra' ? null : b.date_sortie,
@@ -337,10 +338,45 @@ export function changerCategorie(
   const gardees = b.competences.filter((c) =>
     possibles.some((p) => p.id === c.poste_id),
   )
+  const groupe = groupes.find((g) => g.id === groupeId)
   return {
-    brouillon: { ...b, groupe_id: groupeId, competences: gardees },
+    brouillon: {
+      ...b,
+      groupe_id: groupeId,
+      competences: gardees,
+      // Hors de la direction, plus de forfait jours (2026-11-01).
+      forfait_jours: b.forfait_jours && estDirection(groupe),
+    },
     perdues: b.competences.length - gardees.length,
   }
+}
+
+/** Contrats qui peuvent être cadres au forfait jours (décision utilisateur
+ * du 2026-11-01 : jamais un apprenti, un stagiaire ni un extra). */
+export const CONTRATS_CADRE: ReadonlySet<TypeContrat> = new Set(['cdi', 'cdd'])
+
+/** Le groupe Direction (par son nom) : le seul où l'on est cadre. */
+export function estDirection(groupe: Pick<Groupe, 'nom'> | undefined): boolean {
+  return (
+    !!groupe &&
+    groupe.nom
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toLowerCase() === 'direction'
+  )
+}
+
+/** « Cadre au forfait jours » possible : un CDI ou un CDD du groupe
+ * Direction seulement (décision utilisateur du 2026-11-01). */
+export function forfaitPossible(
+  b: Pick<Brouillon, 'type_contrat' | 'groupe_id'>,
+  groupes: ReadonlyArray<Groupe>,
+): boolean {
+  return (
+    CONTRATS_CADRE.has(b.type_contrat) &&
+    estDirection(groupes.find((g) => g.id === b.groupe_id))
+  )
 }
 
 export function reglerNiveau(
