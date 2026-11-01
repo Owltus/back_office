@@ -619,12 +619,12 @@ describe('10. cycles : le vérificateur recompte le moteur', () => {
 
   it('un titulaire qui n’a que le code voisin tient la place par le remplaçant', () => {
     // Besoin M3 07:00 → 15:00 ; la personne n'a que M6 (07:00 → 14:00).
-    const b = creneau('b1', 0, 7, 15, { typeShift: '3', presence: 'matin' })
+    const b = creneau('b1', 0, 7, 15, { typeShift: '3', presence: ['matin'] })
     const r = creneau('r1-6', 0, 7, 14, {
       typeShift: '6',
       place: 'b1',
       effectif: 0,
-      presence: 'matin',
+      presence: ['matin'],
     })
     const s = receptionniste('r', { shiftsAutorises: new Set(['6']) })
     const p = probleme({
@@ -642,12 +642,12 @@ describe('10. cycles : le vérificateur recompte le moteur', () => {
   })
 
   it('personne pour la place : le moteur et le vérificateur voient le même manque', () => {
-    const b = creneau('b1', 0, 7, 15, { typeShift: '3', presence: 'matin' })
+    const b = creneau('b1', 0, 7, 15, { typeShift: '3', presence: ['matin'] })
     const r = creneau('r1-6', 0, 7, 14, {
       typeShift: '6',
       place: 'b1',
       effectif: 0,
-      presence: 'matin',
+      presence: ['matin'],
     })
     const absent = receptionniste('r', { indisponibilites: new Set([0]) })
     const p = probleme({
@@ -665,8 +665,8 @@ describe('10. cycles : le vérificateur recompte le moteur', () => {
   })
 
   it('matin et soir qui se touchent, tous deux tenus : aucun trou', () => {
-    const matin = creneau('bm', 0, 7, 15, { presence: 'matin' })
-    const soir = creneau('bs', 0, 15, 23, { presence: 'soir' })
+    const matin = creneau('bm', 0, 7, 15, { presence: ['matin'] })
+    const soir = creneau('bs', 0, 15, 23, { presence: ['soir'] })
     const p = probleme({
       salaries: [receptionniste('a'), receptionniste('b')],
       creneaux: [matin, soir],

@@ -19,7 +19,7 @@ import {
   periodeShift,
   sommeBesoinsPresence,
 } from '#/lib/planning/presence.ts'
-import type { Periode } from '#/lib/planning/types.ts'
+import type { Horaire, Periode } from '#/lib/planning/types.ts'
 import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
 import { codeTest } from '#/lib/planning/test/codesTest.ts'
 import { PlanningMemoire } from '#/lib/planning/test/planningMemoire.ts'
@@ -68,7 +68,7 @@ const place = (
     fin: (debutH + 8) * H,
     effectif: 0,
     facultatif: 4,
-    presence,
+    presence: presence ? [presence] : [],
     ...kw,
   })
 
@@ -291,15 +291,17 @@ describe('générateur', () => {
     expect(compte(avec, ['m'])).toBe(2)
   })
 
-  it('le maximum envoie le surplus sur l’autre période', () => {
-    // Trois personnes à 8 h dues, le même lundi : matin plafonné à 1.
+  it('le chiffre exact envoie le surplus sur l’autre période', () => {
+    // Trois personnes à 8 h dues, le même lundi : il en faut 1 le matin. Le
+    // chiffre est EXACT depuis le 2026-11-01 (D3) : « minimum 0, maximum 1 »
+    // ne se dit plus, c'est « 1 » (le minimum fait foi).
     const staff = ['a', 'b', 'c'].map((id) => personne(id, 8))
     const creneaux = [place('m', 7, 'matin'), place('s', 14, 'soir')]
     const r = generer(
       probleme({
         salaries: staff,
         creneaux,
-        consignes: [lundi('matin', 0, 1)],
+        consignes: [lundi('matin', 1, 1)],
         nbJours: 1,
       }),
       highs,
@@ -308,14 +310,15 @@ describe('générateur', () => {
     expect(compte(r, ['s'])).toBe(2)
   })
 
-  it('les heures dues passent avant le plafond', () => {
-    // Deux personnes à 8 h, un seul créneau, plafond à 1 : les deux viennent.
+  it('les heures dues passent avant le chiffre (D8, dernier recours)', () => {
+    // Deux personnes à 8 h, un seul créneau, il en faut 1 : les deux
+    // viennent, rien d'autre ne leur donne leurs heures (D8 du 2026-11-01).
     const staff = ['a', 'b'].map((id) => personne(id, 8))
     const r = generer(
       probleme({
         salaries: staff,
         creneaux: [place('m', 7, 'matin')],
-        consignes: [lundi('matin', 0, 1)],
+        consignes: [lundi('matin', 1, 1)],
         nbJours: 1,
       }),
       highs,
@@ -323,22 +326,37 @@ describe('générateur', () => {
     expect(compte(r, ['m'])).toBe(2)
   })
 
-  it('un profil soutien ne compte pas dans la consigne', () => {
+  it('un soutien compte dans le chiffre, jamais seul (D5)', () => {
+    // Révisé le 2026-11-01 (D5 : « les apprentis et stagiaires COMPTENT
+    // dans le chiffre, jamais seuls ») : avant, il ne comptait pas.
     const apprenti = personne('apprenti', 0, {
       postes: new Set(),
       postesSoutien: new Set(['reception']),
     })
     const titulaire = personne('titulaire', 0)
-    const r = generer(
+    const deux = generer(
       probleme({
         salaries: [apprenti, titulaire],
         creneaux: [place('m', 7, 'matin', { soutien: 1 })],
-        consignes: [lundi('matin', 1, null)],
+        consignes: [lundi('matin', 2, 2)],
         nbJours: 1,
       }),
       highs,
     )
-    expect(compte(r, ['m'], ['apprenti'])).toBe(1)
+    // Accepté : l'apprenti et le titulaire font les 2.
+    expect(compte(deux, ['m'])).toBe(2)
+    expect(compte(deux, ['m'], ['titulaire'])).toBe(1)
+    // Refusé : seul, l'apprenti ne vient pas (il manque 1).
+    const seul = generer(
+      probleme({
+        salaries: [apprenti],
+        creneaux: [place('m', 7, 'matin', { soutien: 1 })],
+        consignes: [lundi('matin', 1, 1)],
+        nbJours: 1,
+      }),
+      highs,
+    )
+    expect(compte(seul, ['m'])).toBe(0)
   })
 
   it('un créneau hors présence ne compte pas', () => {
@@ -378,52 +396,57 @@ describe('générateur', () => {
 })
 
 describe('une semaine de l’hôtel d’essai', () => {
-  it('la génération suit la consigne et l’analyse la recompte', () => {
+  it('la génération suit le tableau de l’accueil et l’analyse le recompte', () => {
+    // Révisé le 2026-11-01 (plan planning-accueil) : l'accueil (Réception,
+    // Club, Veille de nuit) n'a plus de besoins, seul le tableau compte. Les
+    // chiffres reprennent les anciens besoins de l'hôtel d'essai (matin 2,
+    // soir 2, nuit 1 ; le middle était un renfort facultatif), avec 3 le
+    // samedi matin.
     const { referentiel, absences } = hotelDemo('2026-11-02')
     for (const p of referentiel.postes)
       p.presence = p.nom === 'Réception' || p.nom === 'Club'
+    const moment: Record<string, Horaire['periode']> = {
+      M: 'matin',
+      MI: 'middle',
+      AM: 'soir',
+      N: 'nuit',
+    }
     for (const h of referentiel.horaires)
-      h.periode =
-        codeTest(h) === 'AM' ? 'soir' : codeTest(h) === 'N' ? 'nuit' : 'matin'
-    referentiel.consignes = [
-      { id: 1, jour: 5, periode: 'matin', minimum: 3, maximum: 3 },
-      { id: 2, jour: 0, periode: 'soir', minimum: 2, maximum: 2 },
-    ]
+      h.periode = moment[codeTest(h) ?? ''] ?? null
+    let n = 0
+    referentiel.consignes = [0, 1, 2, 3, 4, 5, 6].flatMap((jour) =>
+      (['matin', 'soir', 'nuit'] as const).map((periode) => {
+        const chiffre =
+          periode === 'nuit' ? 1 : jour === 5 && periode === 'matin' ? 3 : 2
+        return { id: ++n, jour, periode, minimum: chiffre, maximum: chiffre }
+      }),
+    )
     const p = new PlanningMemoire(referentiel, absences, '2026-09-01', highs)
     const sem = p.generer('2026-11-02')
     expect(sem.stats.infractions).toBe(0)
-    // Oracle : recompte à la main depuis les shifts rendus.
+    // Oracle : recompte à la main depuis les shifts rendus (D5 : soutiens
+    // compris ; D11 : un middle compte au matin et au soir ; D10 : la nuit
+    // sur la Veille seule).
     const postes = new Set(
       referentiel.postes.filter((x) => x.presence).map((x) => x.id),
     )
+    const veille = referentiel.postes.find((x) => x.categorie === 'veille_nuit')
     const code = new Map(referentiel.horaires.map((h) => [h.id, codeTest(h)]))
-    const recompte = (jour: number, soir: boolean) =>
-      sem.affectations.filter(
-        (a) =>
-          a.jour === jour &&
-          postes.has(a.poste_id) &&
-          a.role !== 'soutien' &&
-          (code.get(a.type_shift_id ?? -1) === 'AM') === soir &&
-          code.get(a.type_shift_id ?? -1) !== 'N',
-      ).length
-    expect(sem.presence).toEqual([
-      {
-        jour: 0,
-        periode: 'soir',
-        compte: recompte(0, true),
-        minimum: 2,
-        maximum: 2,
-        ecart: 0,
-      },
-      {
-        jour: 5,
-        periode: 'matin',
-        compte: recompte(5, false),
-        minimum: 3,
-        maximum: 3,
-        ecart: 0,
-      },
-    ])
-    expect(recompte(5, false)).toBe(3)
+    const recompte = (jour: number, periode: 'matin' | 'soir' | 'nuit') =>
+      sem.affectations.filter((a) => {
+        if (a.jour !== jour) return false
+        const c = code.get(a.type_shift_id ?? -1)
+        if (periode === 'nuit') return a.poste_id === veille?.id && c === 'N'
+        if (!postes.has(a.poste_id)) return false
+        return periode === 'matin'
+          ? c === 'M' || c === 'MI'
+          : c === 'AM' || c === 'MI'
+      }).length
+    for (const x of sem.presence) {
+      expect(x.compte).toBe(recompte(x.jour, x.periode))
+      // Le chiffre exact : jamais de manque ici (assez de monde).
+      expect(x.ecart).toBeGreaterThanOrEqual(0)
+    }
+    expect(recompte(5, 'matin')).toBe(3)
   }, 60_000)
 })

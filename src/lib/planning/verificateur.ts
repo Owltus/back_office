@@ -399,6 +399,9 @@ export function violations(
   const parPlace = autonomesParPlace(p, affectations)
   for (const [place, n] of parPlace) {
     const c = creneaux.get(place)
+    // Un candidat de l'accueil n'a pas de place : son nombre se lit contre
+    // le chiffre du moment (`presenceParCycle`), pas ici (2026-11-01).
+    if (c?.accueil) continue
     // Un remplaçant dont la place est inconnue n'a droit à personne.
     const limite = c ? c.effectif + c.facultatif : 0
     if (n > limite) {
@@ -605,10 +608,13 @@ export interface EcartPresence {
 }
 
 /** Recompte des consignes de présence (matin, soir, nuit), sans le
- * générateur : AFFECTATIONS autonomes posées ce jour (`jourDe`) sur
- * un créneau qui compte dans cette période (`Creneau.presence`, posé par
- * l'assemblage : le middle n'y compte jamais, D11 ; la nuit sur un poste qui
- * a des horaires de nuit, D15). Remplaçants, shifts posés et épinglés compris.
+ * générateur : AFFECTATIONS posées ce jour (`jourDe`) sur un créneau qui
+ * compte dans cette période (`Creneau.presence`, une LISTE posée par
+ * l'assemblage). Révisé le 2026-11-01 (plan planning-accueil-2026-11-01,
+ * adaptation minimale de l'étape 3, à relire à l'étape 4) : un middle de
+ * l'accueil compte dans ses deux moments (D11), les soutiens comptent (D5),
+ * et l'écart se lit contre le chiffre EXACT `minimum` (D3).
+ * Remplaçants, shifts posés et épinglés compris.
  * Une affectation = une présence, comme le moteur (une variable par
  * affectation) et `analyser` (`bilanPresence`, un shift = un) : une même
  * personne sur deux shifts du même cycle compte deux fois partout (cas
@@ -624,17 +630,15 @@ export function presenceParCycle(
   for (const a of affectationsCompletes(p, affectations)) {
     const c = creneaux.get(a.creneauId)
     const s = salaries.get(a.salarieId)
-    if (!c || !s || c.presence === null) continue
-    if (role(s, c.poste) === 'soutien') continue
-    const k = `${jourDe(c)}|${c.presence}`
-    presents.set(k, (presents.get(k) ?? 0) + 1)
+    if (!c || !s) continue
+    for (const moment of c.presence) {
+      const k = `${jourDe(c)}|${moment}`
+      presents.set(k, (presents.get(k) ?? 0) + 1)
+    }
   }
   return p.consignes.map((k) => {
     const compte = presents.get(`${k.jour}|${k.periode}`) ?? 0
-    let ecart = 0
-    if (compte < k.minimum) ecart = compte - k.minimum
-    else if (k.maximum !== null && compte > k.maximum)
-      ecart = compte - k.maximum
+    const ecart = compte - Math.max(0, k.minimum)
     return {
       jour: k.jour,
       periode: k.periode,

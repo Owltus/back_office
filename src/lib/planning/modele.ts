@@ -37,8 +37,15 @@ export interface Creneau {
   presenceMax: number | null
   /** Empiète sur 22 h → 6 h en heure locale ; null : calculé ici. */
   nuit: boolean | null
-  /** Consigne de présence où ce créneau compte (poste et période), ou null. */
-  presence: PeriodePresence | null
+  /** Moments du tableau de l'accueil où ce créneau compte (vide : aucun).
+   * Un middle de l'accueil compte au matin ET au soir (D11 du 2026-11-01,
+   * plan planning-accueil-2026-11-01) : d'où une liste. */
+  presence: readonly PeriodePresence[]
+  /** Créneau CANDIDAT de l'accueil (`p<jour>-<poste>-<horaire>`, D1, D2) :
+   * aucune place propre (effectif 0), chacun peut le prendre ; c'est le
+   * chiffre du moment (`Probleme.consignes`) qui fixe combien. Les extras y
+   * sont placés en dernier recours (D7), les soutiens y comptent (D5). */
+  accueil: boolean
   /** Créneau remplaçant (`r…`) : id `b…` du besoin qu'il sert, avec un autre
    * horaire permis du même cycle (plan planning-cycles-2026-10-30, D13). Null
    * pour un besoin ou un shift posé hors besoins. */
@@ -65,7 +72,8 @@ export function creneau(
     ferme: false,
     presenceMax: null,
     nuit: null,
-    presence: null,
+    presence: [],
+    accueil: false,
     place: null,
     soir: false,
     matinTot: false,
@@ -241,7 +249,10 @@ export function role(s: SalarieSolveur, poste: string): Role | null {
   return s.postesSoutien.has(poste) ? 'soutien' : null
 }
 
-/** Consigne de présence d'un jour de la période (`presence.ts`). */
+/** Un moment du tableau de l'accueil (`presence.ts`). Depuis le 2026-11-01
+ * (D3) le chiffre est EXACT : le générateur lit `minimum` comme le nombre
+ * voulu ; `maximum` n'est gardé que pour la forme des données (après la
+ * migration, minimum = maximum ; s'il diffère, seul `minimum` compte). */
 export interface ConsigneSolveur {
   jour: number
   periode: PeriodePresence
@@ -262,7 +273,7 @@ export interface Probleme {
   courtes: ReadonlySet<string>
   /** Propositions de la génération précédente « salarié|jour|poste|code ». */
   aEviter: ReadonlySet<string>
-  /** Consignes de présence du matin et du soir, jour par jour. */
+  /** Tableau de l'accueil : le chiffre de chaque moment, jour par jour. */
   consignes: ConsigneSolveur[]
 }
 

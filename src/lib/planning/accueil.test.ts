@@ -1,0 +1,755 @@
+import fc from 'fast-check'
+import highsLoader from 'highs'
+import { beforeAll, describe, expect, it } from 'vitest'
+
+import {
+  plageAccueil,
+  POSTE_ACCUEIL,
+  trousAccueilDuJour,
+} from '#/lib/planning/cycles.ts'
+import type { PresencePoste } from '#/lib/planning/cycles.ts'
+import {
+  construire,
+  coutDepannage,
+  coutExtra,
+  coutManqueMinimum,
+  coutSurplus,
+  generer,
+  PART_FIXE_DEPANNAGE,
+  POIDS_SIXIEME_JOUR,
+  POIDS_SOUS_CONTRAT,
+  POIDS_SUR_CONTRAT,
+} from '#/lib/planning/generateur.ts'
+import type { Highs } from '#/lib/planning/generateur.ts'
+import {
+  creneau,
+  duree,
+  jourDe,
+  probleme,
+  role,
+  salarieSolveur,
+  travail,
+} from '#/lib/planning/modele.ts'
+import type {
+  ConsigneSolveur,
+  Creneau,
+  Probleme,
+  SalarieSolveur,
+} from '#/lib/planning/modele.ts'
+import { momentsAccueil } from '#/lib/planning/presence.ts'
+import {
+  analyser,
+  POSTE_ID_ACCUEIL,
+  preparerGeneration,
+} from '#/lib/planning/semaine.ts'
+import type { DonneesSemaine } from '#/lib/planning/semaine.ts'
+import {
+  chiffreHotelAccueil,
+  hotelAccueil,
+} from '#/lib/planning/test/hotelAccueil.ts'
+import { PlanningMemoire } from '#/lib/planning/test/planningMemoire.ts'
+import {
+  enVersionCourte,
+  presenceParCycle,
+  soutiensSeuls,
+  violations,
+} from '#/lib/planning/verificateur.ts'
+
+/*
+ * Tableau de l'accueil (plan planning-accueil-2026-11-01, étape 3) : le
+ * moteur place EXACTEMENT le chiffre de chaque moment sur les postes de
+ * l'accueil (D1-D3), un middle au matin et au soir (D11), les soutiens
+ * comptés et accompagnés (D5), titulaire < dépannage < extra < vide (D7), le
+ * surplus en dernier recours pour des heures dues (D8), la nuit sur la
+ * Veille seule (D10), les trous sur l'accueil entier (D15). Chaque règle a
+ * son cas accepté et son cas refusé. Données fictives seulement.
+ */
+
+const H = 60
+const J = 24 * H
+
+let highs: Highs
+beforeAll(async () => {
+  highs = (await highsLoader()) as unknown as Highs
+})
+const gen = (p: Probleme) => generer(p, highs)
+
+const sal = (id: string, kw: Partial<SalarieSolveur> = {}): SalarieSolveur =>
+  salarieSolveur({
+    id,
+    postes: new Set(['rec', 'club']),
+    minutesHebdoContrat: 0,
+    minutesHebdoMax: 48 * H,
+    minutesJourMax: 12 * H,
+    joursTravaillesMaxSemaine: 6,
+    reposQuotidienMin: 11 * H,
+    ...kw,
+  })
+const extra = (id: string, kw: Partial<SalarieSolveur> = {}) =>
+  sal(id, {
+    postesOccasionnels: new Set(['rec', 'club']),
+    placementManuel: true,
+    contratIndicatif: true,
+    ...kw,
+  })
+const apprenti = (id: string, postes = ['rec', 'club']) =>
+  sal(id, { postes: new Set(), postesSoutien: new Set(postes) })
+
+/** Un candidat de l'accueil : `jour`, heures (décimales), moments. */
+const cand = (
+  id: string,
+  poste: string,
+  jour: number,
+  debutH: number,
+  finH: number,
+  presence: Creneau['presence'],
+  kw: Partial<Creneau> = {},
+): Creneau =>
+  creneau({
+    id,
+    poste,
+    debut: jour * J + debutH * H,
+    fin: jour * J + finH * H,
+    effectif: 0,
+    jourPlanning: jour,
+    presence,
+    accueil: true,
+    ...kw,
+  })
+const matin = (id: string, poste = 'rec', jour = 0) =>
+  cand(id, poste, jour, 7, 15, ['matin'])
+const soir = (id: string, poste = 'rec', jour = 0) =>
+  cand(id, poste, jour, 15, 23, ['soir'])
+const middle = (id: string, poste = 'rec', jour = 0) =>
+  cand(id, poste, jour, 11, 19, ['matin', 'soir'])
+const chiffre = (
+  jour: number,
+  periode: ConsigneSolveur['periode'],
+  n: number,
+  maximum: number | null = n,
+): ConsigneSolveur => ({ jour, periode, minimum: n, maximum })
+
+const qui = (r: ReturnType<typeof gen>) =>
+  r.affectations.map((a) => `${a.salarieId}@${a.creneauId}`).sort()
+const ecarts = (p: Probleme, r: ReturnType<typeof gen>) =>
+  presenceParCycle(p, r.affectations).map((x) => x.ecart)
+
+// ------------------------------------------------------------- moments
+
+describe('moments du tableau (presence.ts)', () => {
+  const rec = { presence: true, categorie: 'reception' as const }
+  const veille = { presence: false, categorie: 'veille_nuit' as const }
+  const aPart = { presence: false, categorie: 'autre' as const }
+  it('un middle compte au matin ET au soir (D11)', () => {
+    expect(momentsAccueil(rec, { periode: 'middle' }, '11:00')).toEqual([
+      'matin',
+      'soir',
+    ])
+    expect(momentsAccueil(rec, { periode: 'matin' }, '07:00')).toEqual([
+      'matin',
+    ])
+    // Refusé : un horaire sans moment ne compte nulle part.
+    expect(momentsAccueil(rec, { periode: null }, '09:00')).toEqual([])
+  })
+  it('la nuit : la Veille seule (D10)', () => {
+    expect(momentsAccueil(veille, { periode: 'nuit' }, '23:00')).toEqual([
+      'nuit',
+    ])
+    // Refusé : une nuit sur la Réception, un matin sur la Veille, un poste à
+    // part, ou un tableau qui n'est pas en service.
+    expect(momentsAccueil(rec, { periode: 'nuit' }, '23:00')).toEqual([])
+    expect(momentsAccueil(veille, { periode: 'matin' }, '07:00')).toEqual([])
+    expect(momentsAccueil(aPart, { periode: 'matin' }, '07:00')).toEqual([])
+    expect(momentsAccueil(veille, { periode: 'nuit' }, '23:00', false)).toEqual(
+      [],
+    )
+  })
+})
+
+// --------------------------------------------------------- chiffre exact
+
+describe('le chiffre est exact (D1-D3)', () => {
+  const quatre = ['a', 'b', 'c', 'd'].map((id) => sal(id))
+  const creneaux = [matin('rm'), matin('cm', 'club'), soir('rs')]
+
+  it('accepté : 2 le matin, ni plus ni moins, sur l’un ou l’autre poste', () => {
+    const p = probleme({
+      salaries: quatre,
+      creneaux,
+      consignes: [chiffre(0, 'matin', 2)],
+      nbJours: 1,
+    })
+    const r = gen(p)
+    expect(r.affectations.length).toBe(2)
+    expect(r.affectations.every((a) => a.creneauId !== 'rs')).toBe(true)
+    expect(ecarts(p, r)).toEqual([0])
+  })
+
+  it('refusé : chiffre 0, ou aucun chiffre, personne ne vient', () => {
+    for (const consignes of [[chiffre(0, 'matin', 0)], []]) {
+      const r = gen(
+        probleme({ salaries: quatre, creneaux, consignes, nbJours: 1 }),
+      )
+      expect(r.affectations).toEqual([])
+    }
+  })
+
+  it('le minimum fait foi si le maximum diffère (D9)', () => {
+    const p = probleme({
+      salaries: quatre,
+      creneaux,
+      consignes: [chiffre(0, 'matin', 2, 3)],
+      nbJours: 1,
+    })
+    expect(gen(p).affectations.length).toBe(2)
+  })
+
+  it('l’app répartit selon les compétences (D2)', () => {
+    const p = probleme({
+      salaries: [
+        sal('r', { postes: new Set(['rec']) }),
+        sal('c', { postes: new Set(['club']) }),
+      ],
+      creneaux,
+      consignes: [chiffre(0, 'matin', 2)],
+      nbJours: 1,
+    })
+    expect(qui(gen(p))).toEqual(['c@cm', 'r@rm'])
+  })
+})
+
+// --------------------------------------------------------------- middle
+
+describe('un middle compte deux fois (D11)', () => {
+  it('accepté : une seule personne en middle tient le matin et le soir', () => {
+    const p = probleme({
+      salaries: [sal('a')],
+      creneaux: [middle('mi')],
+      consignes: [chiffre(0, 'matin', 1), chiffre(0, 'soir', 1)],
+      nbJours: 1,
+    })
+    const r = gen(p)
+    expect(qui(r)).toEqual(['a@mi'])
+    expect(ecarts(p, r)).toEqual([0, 0])
+  })
+
+  it('refusé : un middle en plus d’un matin, c’est un matin de trop', () => {
+    // Deux personnes, 1 le matin et 1 le soir : jamais middle + matin (2 le
+    // matin), ni deux middles.
+    const p = probleme({
+      salaries: [sal('a'), sal('b')],
+      creneaux: [matin('m'), soir('s'), middle('mi')],
+      consignes: [chiffre(0, 'matin', 1), chiffre(0, 'soir', 1)],
+      nbJours: 1,
+    })
+    const r = gen(p)
+    expect(ecarts(p, r)).toEqual([0, 0])
+  })
+})
+
+// -------------------------------------------------------------- soutien
+
+describe('un soutien compte, jamais seul (D5)', () => {
+  it('accepté : un titulaire et un apprenti font les 2', () => {
+    const p = probleme({
+      salaries: [sal('t'), apprenti('app')],
+      creneaux: [matin('rm')],
+      consignes: [chiffre(0, 'matin', 2)],
+      nbJours: 1,
+    })
+    const r = gen(p)
+    expect(qui(r)).toEqual(['app@rm', 't@rm'])
+    expect(ecarts(p, r)).toEqual([0])
+  })
+
+  it('refusé : seul, l’apprenti ne vient pas', () => {
+    const p = probleme({
+      salaries: [apprenti('app')],
+      creneaux: [matin('rm')],
+      consignes: [chiffre(0, 'matin', 1)],
+      nbJours: 1,
+    })
+    const r = gen(p)
+    expect(r.affectations).toEqual([])
+    expect(ecarts(p, r)).toEqual([-1])
+  })
+
+  it('refusé : accompagné sur le MÊME poste, pas sur l’autre', () => {
+    // Le titulaire ne tient que la Réception, l'apprenti que le Club.
+    const p = probleme({
+      salaries: [
+        sal('t', { postes: new Set(['rec']) }),
+        apprenti('app', ['club']),
+      ],
+      creneaux: [matin('rm'), matin('cm', 'club')],
+      consignes: [chiffre(0, 'matin', 2)],
+      nbJours: 1,
+    })
+    const r = gen(p)
+    expect(qui(r)).toEqual(['t@rm'])
+    expect(soutiensSeuls(p, r.affectations)).toEqual([])
+  })
+
+  it('refusé : accompagné par un shift qui CHEVAUCHE le sien', () => {
+    // Le titulaire ne peut faire que le matin (fiche), l'apprenti que le
+    // soir : ils ne se croisent pas.
+    const p = probleme({
+      salaries: [
+        sal('t', { shiftsAutorises: new Set(['M']) }),
+        sal('app', {
+          postes: new Set(),
+          postesSoutien: new Set(['rec']),
+          shiftsAutorises: new Set(['S']),
+        }),
+      ],
+      creneaux: [
+        { ...matin('rm'), typeShift: 'M' },
+        { ...soir('rs'), typeShift: 'S' },
+      ],
+      consignes: [chiffre(0, 'matin', 1), chiffre(0, 'soir', 1)],
+      nbJours: 1,
+    })
+    const r = gen(p)
+    expect(qui(r)).toEqual(['t@rm'])
+  })
+})
+
+// -------------------------------------------------------- ordre D7
+
+describe('titulaire < dépannage < extra < vide (D7)', () => {
+  const tit = sal('tit')
+  const dep = sal('dep', { postesOccasionnels: new Set(['rec', 'club']) })
+  const ext = extra('ext')
+  const p = (salaries: SalarieSolveur[], graine = 0) =>
+    probleme({
+      salaries,
+      creneaux: [matin('rm')],
+      consignes: [chiffre(0, 'matin', 1)],
+      nbJours: 1,
+      graine,
+    })
+  it('chaque palier passe devant le suivant', () => {
+    // Quel que soit le hasard (une égalité se départagerait au bruit).
+    for (let graine = 0; graine < 12; graine++) {
+      expect(qui(gen(p([dep, tit], graine)))).toEqual(['tit@rm'])
+      expect(qui(gen(p([ext, dep], graine)))).toEqual(['dep@rm'])
+    }
+    expect(qui(gen(p([ext, dep, tit])))).toEqual(['tit@rm'])
+    // Accepté : un extra est placé par l'app sur l'accueil (changement de
+    // règle du 2026-11-01).
+    expect(qui(gen(p([ext])))).toEqual(['ext@rm'])
+    // Vide : personne.
+    const vide = p([])
+    expect(ecarts(vide, gen(vide))).toEqual([-1])
+  })
+
+  it('refusé : un extra n’est jamais placé hors de l’accueil', () => {
+    const besoin = creneau({
+      id: 'b1',
+      poste: 'rec',
+      debut: 7 * H,
+      fin: 15 * H,
+      effectif: 1,
+    })
+    const r = gen(probleme({ salaries: [ext], creneaux: [besoin], nbJours: 1 }))
+    expect(r.affectations).toEqual([])
+    expect(r.manques).toEqual([{ creneauId: 'b1', manquant: 1 }])
+  })
+
+  it('les paliers en chiffres', () => {
+    const c = cand('c', 'rec', 0, 7, 15.75, ['matin'], { pause: 45 })
+    // Un extra coûte plus qu'un dépannage qui ferait le shift en heures en
+    // plus ET en 6e jour.
+    expect(coutExtra(c)).toBeGreaterThan(
+      coutDepannage(c) + POIDS_SUR_CONTRAT * duree(c) + POIDS_SIXIEME_JOUR,
+    )
+    // La place vide coûte plus que tout, extra compris.
+    expect(coutManqueMinimum([c], coutSurplus([c]))).toBeGreaterThan(
+      coutExtra(c) + coutSurplus([c]),
+    )
+  })
+})
+
+// --------------------------------------------------------------- D8
+
+describe('le surplus : en dernier recours pour des heures dues (D8)', () => {
+  // Un shift de 7 h de travail, sans pause.
+  const sept = (id: string, jour = 0) => cand(id, 'rec', jour, 7, 14, ['matin'])
+
+  it('refusé : personne ne vient en plus pour son jour habituel', () => {
+    const p = probleme({
+      salaries: [sal('a'), sal('b', { travailFixe: new Set([0]) })],
+      creneaux: [sept('m')],
+      consignes: [chiffre(0, 'matin', 1)],
+      nbJours: 1,
+    })
+    const r = gen(p)
+    expect(r.affectations.length).toBe(1)
+    expect(ecarts(p, r)).toEqual([0])
+  })
+
+  it('accepté : il manque ses heures et aucun autre jour ne les donne', () => {
+    const p = probleme({
+      salaries: [
+        sal('a', { minutesHebdoContrat: 7 * H }),
+        sal('b', { minutesHebdoContrat: 7 * H }),
+      ],
+      creneaux: [sept('m')],
+      consignes: [chiffre(0, 'matin', 1)],
+      nbJours: 1,
+    })
+    const r = gen(p)
+    expect(r.affectations.length).toBe(2)
+    expect(ecarts(p, r)).toEqual([1])
+  })
+
+  it('accepté : même un shift court, dans un moment où d’autres sont longs (plafond)', () => {
+    // Le surplus du matin suit le plus long candidat (10 h) mais reste
+    // PLAFONNÉ sous les heures dues du plus court (2 h) : la personne à qui
+    // il manque ces 2 h vient quand même, sur le court.
+    const p = probleme({
+      salaries: [
+        sal('a', { minutesHebdoContrat: 2 * H, postes: new Set(['rec']) }),
+        sal('b', { minutesHebdoContrat: 2 * H, postes: new Set(['rec']) }),
+      ],
+      creneaux: [
+        cand('long', 'rec', 0, 7, 17, ['matin']),
+        cand('court', 'rec', 0, 7, 9, ['matin']),
+      ],
+      consignes: [chiffre(0, 'matin', 1)],
+      nbJours: 1,
+    })
+    const r = gen(p)
+    expect(qui(r)).toEqual(['a@court', 'b@court'])
+  })
+
+  it('refusé : un autre jour peut les lui donner, il y va', () => {
+    const p = probleme({
+      salaries: [
+        sal('a', { minutesHebdoContrat: 7 * H }),
+        sal('b', { minutesHebdoContrat: 7 * H }),
+      ],
+      creneaux: [sept('m0', 0), sept('m1', 1)],
+      consignes: [chiffre(0, 'matin', 1), chiffre(1, 'matin', 1)],
+      nbJours: 2,
+    })
+    const r = gen(p)
+    expect(r.affectations.length).toBe(2)
+    expect(ecarts(p, r)).toEqual([0, 0])
+  })
+
+  it('refusé : un extra ne vient jamais en plus', () => {
+    const p = probleme({
+      salaries: [sal('t'), extra('e')],
+      creneaux: [sept('m')],
+      consignes: [chiffre(0, 'matin', 1)],
+      nbJours: 1,
+    })
+    expect(qui(gen(p))).toEqual(['t@m'])
+  })
+
+  it('les paliers en chiffres', () => {
+    const c = cand('c', 'rec', 0, 7, 15.75, ['matin'], { pause: 45 })
+    const mi = cand('mi', 'rec', 0, 11, 19.75, ['matin', 'soir'], { pause: 45 })
+    // Plus que tout le confort, un 6e jour et les heures en plus du shift.
+    expect(coutSurplus([c])).toBeGreaterThan(
+      PART_FIXE_DEPANNAGE + POIDS_SIXIEME_JOUR + POIDS_SUR_CONTRAT * duree(c),
+    )
+    // Moins que les heures dues d'un shift, dépannage et confort payés ; un
+    // middle en plus l'est deux fois.
+    for (const x of [c, mi])
+      expect(x.presence.length * coutSurplus([x])).toBeLessThan(
+        POIDS_SOUS_CONTRAT * travail(x) -
+          coutDepannage(x) -
+          PART_FIXE_DEPANNAGE,
+      )
+    // Un shift posé (fait) ne pèse pas dans le calcul.
+    expect(coutSurplus([{ ...c, ferme: true }])).toBe(0)
+  })
+})
+
+// --------------------------------------------------------------- trous
+
+describe('trous sur l’accueil entier (D15)', () => {
+  it('plage : du début le plus tard des matins à la fin la plus tôt des soirs', () => {
+    const cs = [
+      cand('a', 'rec', 0, 6.5, 15, ['matin']),
+      cand('b', 'club', 0, 8, 16, ['matin']),
+      cand('c', 'rec', 0, 11, 19, ['matin', 'soir']),
+      cand('d', 'rec', 0, 15, 23, ['soir']),
+      cand('e', 'club', 0, 14, 22.75, ['soir']),
+    ]
+    const tous = new Set(['matin', 'soir'] as const)
+    expect(plageAccueil(cs, tous)).toEqual({ debut: 8 * H, fin: 22.75 * H })
+    // Le matin seul : la plage du matin.
+    expect(plageAccueil(cs, new Set(['matin'] as const))).toEqual({
+      debut: 8 * H,
+      fin: 15 * H,
+    })
+    // Refusé : rien de demandé (la nuit ne compte pas), pas de plage.
+    expect(plageAccueil(cs, new Set())).toBeNull()
+    expect(plageAccueil(cs, new Set(['nuit'] as const))).toBeNull()
+  })
+
+  it('Réception et Club ensemble ; le moteur choisit l’horaire qui ferme le trou', () => {
+    const consignes = [chiffre(0, 'matin', 1), chiffre(0, 'soir', 1)]
+    const salaries = [sal('a'), sal('b')]
+    // Seuls un matin à la Réception et un soir de 16 h au Club : un trou.
+    const avecTrou = gen(
+      probleme({
+        salaries,
+        creneaux: [matin('rm'), cand('cs', 'club', 0, 16, 23, ['soir'])],
+        consignes,
+        nbJours: 1,
+      }),
+    )
+    expect(avecTrou.trous).toEqual([
+      { poste: POSTE_ACCUEIL, jour: 0, debut: 15 * H, fin: 16 * H },
+    ])
+    // Avec un soir de 15 h au Club : pris, plus de trou (la plage va de 7 h,
+    // seul matin, à 23 h, le soir le plus tôt fini).
+    const sansTrou = gen(
+      probleme({
+        salaries,
+        creneaux: [
+          matin('rm'),
+          cand('cs', 'club', 0, 16, 23, ['soir']),
+          cand('cs2', 'club', 0, 15, 23, ['soir']),
+        ],
+        consignes,
+        nbJours: 1,
+      }),
+    )
+    expect(sansTrou.trous).toEqual([])
+    expect(qui(sansTrou)).toContain('b@cs2')
+  })
+
+  /*
+   * Propriété : des semaines tirées au hasard (candidats, chiffres,
+   * personnes, soutiens, extras, versions courtes) ; (a) la réduction des
+   * paires garde le même optimum ; (b) les trous du générateur sont ceux que
+   * l'oracle (`trousAccueilDuJour`, cycles.ts) recompte sur la solution ;
+   * (c) aucune règle de la loi enfreinte, aucun soutien seul ; (d) le compte
+   * de chaque moment = chiffre + surplus - manque, et sans personne à qui il
+   * manque des heures, jamais au-delà du chiffre.
+   */
+  it('propriété : générateur = oracle, réduction sans effet, loi tenue', () => {
+    const arbCand = fc.record({
+      poste: fc.constantFrom('rec', 'club'),
+      jour: fc.integer({ min: 0, max: 2 }),
+      debutQ: fc.integer({ min: 24, max: 72 }), // 6 h à 18 h
+      dureeQ: fc.integer({ min: 16, max: 36 }), // 4 h à 9 h
+      raccourci: fc.constantFrom(0, 60),
+      raccourciDebut: fc.constantFrom(0, 30),
+    })
+    const arbSal = fc.record({
+      genre: fc.constantFrom('tit', 'tit', 'dep', 'ext', 'app'),
+      contratH: fc.constantFrom(0, 0, 7, 14),
+      absent: fc.option(fc.integer({ min: 0, max: 2 }), { nil: null }),
+    })
+    const arbChiffre = fc.record({
+      jour: fc.integer({ min: 0, max: 2 }),
+      periode: fc.constantFrom('matin' as const, 'soir' as const),
+      n: fc.integer({ min: 0, max: 2 }),
+    })
+    let avecTrous = 0
+    fc.assert(
+      fc.property(
+        fc.array(arbCand, { minLength: 2, maxLength: 8 }),
+        fc.array(arbSal, { minLength: 1, maxLength: 4 }),
+        fc.uniqueArray(arbChiffre, {
+          maxLength: 4,
+          selector: (k) => `${k.jour}|${k.periode}`,
+        }),
+        fc.integer({ min: 0, max: 1000 }),
+        (cs, gens, chiffres, graine) => {
+          const creneaux = cs.map((c, i) => {
+            const debut = c.debutQ * 15
+            const presence: Creneau['presence'] =
+              debut < 11 * H
+                ? ['matin']
+                : debut < 13 * H
+                  ? ['matin', 'soir']
+                  : ['soir']
+            return creneau({
+              id: `p${i}`,
+              poste: c.poste,
+              debut: c.jour * J + debut,
+              fin: c.jour * J + debut + c.dureeQ * 15,
+              effectif: 0,
+              jourPlanning: c.jour,
+              raccourci: c.raccourci,
+              raccourciDebut: c.raccourci ? c.raccourciDebut : 0,
+              presence,
+              accueil: true,
+            })
+          })
+          const salaries = gens.map((g, i) => {
+            const kw: Partial<SalarieSolveur> = {
+              minutesHebdoContrat: g.contratH * H,
+              indisponibilites: new Set(g.absent === null ? [] : [g.absent]),
+            }
+            if (g.genre === 'dep')
+              return sal(`s${i}`, {
+                ...kw,
+                postesOccasionnels: new Set(['rec', 'club']),
+              })
+            if (g.genre === 'ext') return extra(`s${i}`, kw)
+            if (g.genre === 'app')
+              return sal(`s${i}`, {
+                ...kw,
+                postes: new Set(),
+                postesSoutien: new Set(['rec', 'club']),
+              })
+            return sal(`s${i}`, kw)
+          })
+          const p = probleme({
+            salaries,
+            creneaux,
+            consignes: chiffres.map((k) => chiffre(k.jour, k.periode, k.n)),
+            graine,
+            nbJours: 3,
+          })
+          const avec = construire(p)
+          const sans = construire(p, { reduire: false })
+          if (avec.modele.impossible || avec.x.size === 0) return
+          const ra = highs.solve(avec.modele.lp(), {
+            mip_rel_gap: 0,
+            output_flag: false,
+          })
+          const rs = highs.solve(sans.modele.lp(), {
+            mip_rel_gap: 0,
+            output_flag: false,
+          })
+          expect(ra.Status).toBe('Optimal')
+          expect(rs.Status).toBe('Optimal')
+          expect(ra.ObjectiveValue).toBeCloseTo(rs.ObjectiveValue as number, 3)
+          const r = gen(p)
+          expect(r.statut).toBe('optimal')
+          // (b) l'oracle sur la solution.
+          const parId = new Map(creneaux.map((c) => [c.id, c]))
+          const parSal = new Map(salaries.map((s) => [s.id, s]))
+          const presences: PresencePoste[] = r.affectations.map((a) => {
+            const c = parId.get(a.creneauId) as Creneau
+            const fait = a.court ? enVersionCourte(c) : c
+            return {
+              debut: fait.debut,
+              fin: fait.fin,
+              autonome:
+                role(parSal.get(a.salarieId) as SalarieSolveur, c.poste) !==
+                'soutien',
+            }
+          })
+          const attendus = [0, 1, 2].flatMap((jour) => {
+            const demandes = new Set(
+              p.consignes
+                .filter((k) => k.jour === jour && k.minimum > 0)
+                .map((k) => k.periode),
+            )
+            return trousAccueilDuJour(
+              creneaux.filter((c) => jourDe(c) === jour),
+              demandes,
+              presences,
+            ).map((t) => ({ poste: POSTE_ACCUEIL, jour, ...t }))
+          })
+          if (attendus.length) avecTrous++
+          expect(r.trous).toEqual(attendus)
+          // (c) la loi, le soutien.
+          expect(
+            violations(p, r.affectations).filter((v) => v.nature === 'loi'),
+          ).toEqual([])
+          expect(soutiensSeuls(p, r.affectations)).toEqual([])
+          // (d) personne à qui il manque des heures : jamais de surplus.
+          if (salaries.every((s) => s.minutesHebdoContrat === 0))
+            for (const x of presenceParCycle(p, r.affectations))
+              expect(x.ecart).toBeLessThanOrEqual(0)
+        },
+      ),
+      { numRuns: 60, seed: 20261101 },
+    )
+    // La propriété voit des trous, pas seulement des semaines sans.
+    expect(avecTrous).toBeGreaterThan(5)
+  }, 180_000)
+})
+
+// ------------------------------------------------- assemblage (semaine.ts)
+
+describe('assemblage d’une semaine (semaine.ts)', () => {
+  const LUNDI = '2026-11-02'
+  const donnees = (accueil: boolean): DonneesSemaine => ({
+    lundi: LUNDI,
+    referentiel: hotelAccueil(accueil),
+    absences: [],
+    affectations: [],
+    avant: [],
+    apres: [],
+  })
+  const ref = hotelAccueil(true)
+  const accueilIds = new Set(
+    ref.postes
+      .filter((p) => p.presence || p.categorie === 'veille_nuit')
+      .map((p) => String(p.id)),
+  )
+
+  it('les besoins de l’accueil sont ignorés (D13), ceux des postes à part inchangés', () => {
+    const avec = preparerGeneration(donnees(true), { aujourdhui: '2026-09-01' })
+    const sans = preparerGeneration(donnees(false), {
+      aujourdhui: '2026-09-01',
+    })
+    // Aucun besoin `b…` ni remplaçant `r…` sur l'accueil.
+    expect(
+      avec.probleme.creneaux.filter(
+        (c) => !c.accueil && accueilIds.has(c.poste),
+      ),
+    ).toEqual([])
+    // Des candidats `p…`, seulement sur l'accueil, aucun sur un poste à part.
+    const candidats = avec.probleme.creneaux.filter((c) => c.accueil)
+    expect(candidats.length).toBeGreaterThan(100)
+    expect(candidats.every((c) => accueilIds.has(c.poste))).toBe(true)
+    expect(candidats.every((c) => /^p\d-\d+-\d+$/.test(c.id))).toBe(true)
+    // Les postes à part : mêmes créneaux qu'avec l'ancien moteur (le matin
+    // tôt de l'équité ne regarde que leurs besoins).
+    const aPart = (q: Probleme) =>
+      q.creneaux.filter((c) => !accueilIds.has(c.poste))
+    expect(aPart(avec.probleme)).toEqual(aPart(sans.probleme))
+    // Refusé : sans poste coché « présence », pas de tableau, les besoins
+    // de l'accueil restent.
+    expect(sans.probleme.creneaux.some((c) => c.accueil)).toBe(false)
+    expect(sans.probleme.consignes).toEqual([])
+  })
+
+  it('la Veille ne propose que ses nuits, la Réception aucune nuit (D10)', () => {
+    const g = preparerGeneration(donnees(true), { aujourdhui: '2026-09-01' })
+    const veille = String(
+      ref.postes.find((p) => p.categorie === 'veille_nuit')?.id,
+    )
+    for (const c of g.probleme.creneaux.filter((x) => x.accueil)) {
+      if (c.poste === veille) expect(c.presence).toEqual(['nuit'])
+      else expect(c.presence).not.toContain('nuit')
+    }
+  })
+
+  it('une semaine générée : chiffre tenu, aucune infraction, analyse cohérente', () => {
+    const p = new PlanningMemoire(ref, [], '2026-09-01', highs)
+    const sem = p.generer(LUNDI)
+    expect(sem.stats.infractions).toBe(0)
+    // Le chiffre de chaque moment : jamais de manque ici (assez de monde) ;
+    // un surplus éventuel ne vient que d'heures dues (D8).
+    for (const x of sem.presence) {
+      expect(x.minimum).toBe(chiffreHotelAccueil(x.jour, x.periode))
+      expect(x.maximum).toBe(x.minimum)
+      expect(x.ecart).toBeGreaterThanOrEqual(0)
+    }
+    // Places de l'accueil comptées dans les places du jour.
+    const aPart = ref.besoins
+      .filter((b) => !accueilIds.has(String(b.poste_id)))
+      .reduce((t, b) => t + b.effectif, 0)
+    const accueil = sem.presence.reduce((t, x) => t + x.minimum, 0)
+    expect(sem.stats.places).toBe(aPart + accueil)
+    // Pas de trou de l'accueil d'un poste inventé.
+    expect(sem.trous.every((t) => t.poste_id === POSTE_ID_ACCUEIL)).toBe(true)
+    // Les shifts de l'accueil ont l'horaire et le poste d'un candidat.
+    const analyse = analyser(p.donnees(LUNDI))
+    expect(analyse.presence).toEqual(sem.presence)
+  }, 60_000)
+})

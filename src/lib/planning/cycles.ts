@@ -133,11 +133,87 @@ export function trousDuJour(
  * middles ou des nuits n'est donc pas vu : l'appelant qui connaît les
  * postes passe alors la liste lui-même. */
 export function postesAPresence(
-  creneaux: ReadonlyArray<Pick<Creneau, 'poste' | 'presence'>>,
+  creneaux: ReadonlyArray<Pick<Creneau, 'poste' | 'presence' | 'accueil'>>,
 ): Set<string> {
   const r = new Set<string>()
   for (const c of creneaux) {
-    if (c.presence === 'matin' || c.presence === 'soir') r.add(c.poste)
+    // Un candidat de l'accueil n'est pas un besoin : ses trous se comptent
+    // sur l'accueil entier (`trousAccueilDuJour`), pas par poste.
+    if (c.accueil) continue
+    if (c.presence.includes('matin') || c.presence.includes('soir'))
+      r.add(c.poste)
   }
   return r
 }
+
+// ----------------------------------------- trous de l'accueil (D15)
+
+/*
+ * Trous de l'ACCUEIL (plan planning-accueil-2026-11-01, D15) : l'accueil n'a
+ * plus de besoins (D13), donc plus de « premier et dernier besoin » par poste.
+ * Les trous se cherchent sur l'accueil ENTIER d'un jour (Réception et Club
+ * ensemble : une personne autonome sur l'un OU l'autre tient le quart
+ * d'heure), du premier au dernier moment DEMANDÉ du jour (chiffre > 0, matin
+ * et soir seulement : la nuit est la Veille, un autre poste).
+ *
+ * Bornes d'un moment : celles qui tiennent QUEL QUE SOIT l'horaire choisi.
+ * Début de la plage = le début le PLUS TARD des horaires du premier moment
+ * (si le matin commence à 06:30, 07:00 ou 08:00 selon l'horaire, l'accueil
+ * n'est sûrement ouvert qu'à 08:00 : le moteur n'est pas poussé vers
+ * l'horaire le plus tôt pour un « trou » de 06:30 à 08:00) ; fin = la fin la
+ * PLUS TÔT des horaires du dernier moment. Les middles ne fixent pas les
+ * bornes (ils sont au milieu), sauf s'il n'y a qu'eux. Un jour où seul le
+ * matin est demandé : la plage est celle du matin seul.
+ *
+ * Même grille et même règle de couverture que `trousDuJour` (un quart
+ * d'heure tenu quand UNE présence autonome le couvre en entier).
+ */
+
+/** Plage de l'accueil d'un jour : `candidats` = créneaux candidats de
+ * l'accueil écrits ce jour (leurs moments dans `presence`) ; `demandes` =
+ * moments au chiffre > 0 ce jour. Null : rien à tenir. */
+export function plageAccueil(
+  candidats: ReadonlyArray<Pick<Creneau, 'debut' | 'fin' | 'presence'>>,
+  demandes: ReadonlySet<'matin' | 'soir' | 'nuit'>,
+): PlageMinutes | null {
+  const premier = demandes.has('matin')
+    ? 'matin'
+    : demandes.has('soir')
+      ? 'soir'
+      : null
+  const dernier = demandes.has('soir')
+    ? 'soir'
+    : demandes.has('matin')
+      ? 'matin'
+      : null
+  if (!premier || !dernier) return null
+  const du = (moment: 'matin' | 'soir') => {
+    const purs = candidats.filter(
+      (c) => c.presence.length === 1 && c.presence[0] === moment,
+    )
+    return purs.length
+      ? purs
+      : candidats.filter((c) => c.presence.includes(moment))
+  }
+  const ouvrent = du(premier)
+  const ferment = du(dernier)
+  if (!ouvrent.length || !ferment.length) return null
+  const debut = Math.max(...ouvrent.map((c) => c.debut))
+  const fin = Math.min(...ferment.map((c) => c.fin))
+  return fin > debut ? { debut, fin } : null
+}
+
+/** Trous de l'accueil un jour : `trousDuJour` sur la plage de l'accueil,
+ * avec les présences de TOUS les postes de l'accueil du matin et du soir. */
+export function trousAccueilDuJour(
+  candidats: ReadonlyArray<Pick<Creneau, 'debut' | 'fin' | 'presence'>>,
+  demandes: ReadonlySet<'matin' | 'soir' | 'nuit'>,
+  presences: ReadonlyArray<PresencePoste>,
+): PlageMinutes[] {
+  const plage = plageAccueil(candidats, demandes)
+  return plage ? trousDuJour([plage], presences) : []
+}
+
+/** « Poste » d'un trou de l'accueil entier (D15) : il n'appartient à aucun
+ * poste en particulier. */
+export const POSTE_ACCUEIL = 'accueil'

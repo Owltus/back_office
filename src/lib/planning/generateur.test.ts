@@ -838,8 +838,8 @@ describe('réduction des remplaçants : même optimum', () => {
               ...c,
               presence:
                 (c.debut % MINUTES_PAR_JOUR) / H < 12
-                  ? ('matin' as const)
-                  : ('soir' as const),
+                  ? ['matin' as const]
+                  : ['soir' as const],
             }))
           const p = probleme({
             salaries,

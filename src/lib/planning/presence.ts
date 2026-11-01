@@ -19,6 +19,15 @@
  *
  * `periodeShift` (équité du générateur) garde son ancienne règle : middle et
  * court selon l'heure de début.
+ *
+ * ⚠ TABLEAU DE L'ACCUEIL (plan planning-accueil-2026-11-01, décisions
+ * utilisateur du 2026-11-01) : le MOTEUR et l'analyse comptent désormais par
+ * `momentsAccueil` (plus bas), qui RÉVISE trois points de cet en-tête :
+ * un middle compte au matin ET au soir (D11), la nuit ne compte que sur le
+ * poste de catégorie Veille de nuit (D10), et les soutiens comptent (D5,
+ * l'appelant ne les retire plus). `periodePresence` et
+ * `sommeBesoinsPresence` gardent l'ancienne règle tant que le contrôle des
+ * réglages (`coherence.ts`, étape 4) ne les a pas remplacées.
  */
 
 import { minutes } from '#/lib/planning/temps.ts'
@@ -183,4 +192,67 @@ export function sommeBesoinsPresence(
     somme.set(cle, (somme.get(cle) ?? 0) + b.effectif)
   }
   return somme
+}
+
+// ------------------------------------------------- tableau de l'accueil
+
+/*
+ * Tableau de l'accueil (plan planning-accueil-2026-11-01, D1, D10, D11, D12) :
+ * un chiffre par jour et par moment (matin, soir, nuit), pour l'accueil
+ * entier. Postes de l'accueil : ceux cochés « présence » (Réception, Club)
+ * pour le matin et le soir, et le poste de catégorie Veille de nuit pour la
+ * nuit (D10 : personne d'autre la nuit). Le tableau n'existe que si au moins
+ * un poste est coché « présence » (`accueilActif`) : un hôtel qui ne l'a pas
+ * réglé garde ses besoins, Veille de nuit comprise.
+ */
+
+/** Un poste au moins est coché « présence » : le tableau de l'accueil est en
+ * service. */
+export function accueilActif(
+  postes: Iterable<Pick<Poste, 'presence'>>,
+): boolean {
+  for (const p of postes) if (p.presence) return true
+  return false
+}
+
+/** Le poste est-il de l'accueil (D12) ? `actif` : `accueilActif` de l'hôtel. */
+export function estPosteAccueil(
+  poste: Pick<Poste, 'presence' | 'categorie'> | undefined,
+  actif: boolean,
+): boolean {
+  if (!poste || !actif) return false
+  return poste.presence || poste.categorie === 'veille_nuit'
+}
+
+/** Moments du tableau où compte un shift (ou un créneau candidat) de ce
+ * poste, dans l'ordre matin, soir, nuit. Vide : il ne compte nulle part.
+ *   - poste coché « présence » : matin → matin, soir → soir, middle → matin
+ *     ET soir (D11 du 2026-11-01 : « Marc fait 11:00 – 19:45 » compte au
+ *     matin et au soir) ; une nuit n'y compte pas (D10) ;
+ *   - poste Veille de nuit (accueil actif) : nuit → nuit ;
+ *   - horaire sans moment (`periode` null) : rien ;
+ *   - horaire libre : son heure de début (`periodeLibre`).
+ * `actif` : `accueilActif` de l'hôtel (faux : rien ne compte). */
+export function momentsAccueil(
+  poste: Pick<Poste, 'presence' | 'categorie'> | undefined,
+  horaire: Pick<Horaire, 'periode'> | undefined,
+  debut: string,
+  actif = true,
+): PeriodePresence[] {
+  if (!estPosteAccueil(poste, actif) || !poste) return []
+  const p = horaire ? horaire.periode : periodeLibre(debut)
+  if (p === null) return []
+  const r: PeriodePresence[] = []
+  if (poste.presence) {
+    if (p === 'matin' || p === 'middle') r.push('matin')
+    if (p === 'soir' || p === 'middle') r.push('soir')
+  }
+  if (poste.categorie === 'veille_nuit' && p === 'nuit') r.push('nuit')
+  return r
+}
+
+/** Le chiffre EXACT d'un moment (D3) : `minimum` (après la migration,
+ * minimum = maximum ; si le maximum diffère, le minimum fait foi, D9). */
+export function chiffreAccueil(c: Pick<Consigne, 'minimum'>): number {
+  return Math.max(0, c.minimum)
 }

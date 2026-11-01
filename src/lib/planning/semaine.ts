@@ -2,13 +2,17 @@
  * Le planning d'une semaine : analyse en direct et préparation d'une
  * génération autour des shifts épinglés (prototype `semaine.py`). Pur : les
  * données arrivent déjà lues (service), les écritures repartent par les RPC.
- * Les créneaux des besoins s'appellent « b<id> », ceux du planning « a<id> ».
+ * Les créneaux des besoins s'appellent « b<id> », ceux du planning « a<id> »,
+ * les candidats de l'accueil « p<jour>-<poste>-<horaire> » (plan
+ * planning-accueil-2026-11-01 : l'accueil n'a plus de besoins, D13, c'est
+ * le chiffre de chaque moment qui compte, D1-D3).
  *
  * Sorties : mêmes noms de champs que l'API du prototype (`SemaineOut`…), pour
  * que l'écran se porte tel quel.
  */
 
-import { cycleDe, estCourt } from '#/lib/planning/cycles.ts'
+import { cycleDe, estCourt, trousAccueilDuJour } from '#/lib/planning/cycles.ts'
+import type { PresencePoste } from '#/lib/planning/cycles.ts'
 import {
   codePrevuAuPoste,
   codesDeLaFiche,
@@ -42,10 +46,12 @@ import {
 } from '#/lib/planning/regles.ts'
 import type { Fiche } from '#/lib/planning/regles.ts'
 import {
+  accueilActif,
   bilanPresence,
-  periodePresence,
+  chiffreAccueil,
+  estPosteAccueil,
+  momentsAccueil,
   periodeShift,
-  posteADesCodesDeNuit,
 } from '#/lib/planning/presence.ts'
 import type { PresenceOut } from '#/lib/planning/presence.ts'
 // Cycle d'import voulu (semaine → raisonsPlaces → coherence → semaine) :
@@ -149,8 +155,13 @@ export interface APourvoirOut {
   raison_commune: string | null
 }
 
+/** `TrouOut.poste_id` d'un trou de l'accueil ENTIER (D15, 2026-11-01) :
+ * Réception et Club ensemble, aucun poste en particulier. */
+export const POSTE_ID_ACCUEIL = 0
+
 /** Un trou entre deux équipes, pour l'écran. */
 export interface TrouOut {
+  /** `POSTE_ID_ACCUEIL` (0) pour l'accueil entier. */
   poste_id: number
   /** Jour du planning (0 = lundi) des besoins qui fixent la plage. */
   jour: number
@@ -459,38 +470,36 @@ export function fiche(
 
 // --------------------------------------------------------------- créneaux
 
-/** Postes qui listent au moins un horaire de la famille nuit
- * (`posteADesCodesDeNuit`, « Tous » exclu) : la nuit n'y compte dans les
- * consignes que là (D15). Calculé une fois par
- * contexte. */
-const nuitParHoraires = new WeakMap<
-  Map<number, Horaire>,
-  Map<number, boolean>
->()
-function nuitComptee(ctx: Contexte, posteId: number): boolean {
-  let r = nuitParHoraires.get(ctx.horaires)
-  if (!r) {
-    r = new Map()
-    nuitParHoraires.set(ctx.horaires, r)
-  }
-  let v = r.get(posteId)
+/** Le tableau de l'accueil est-il en service (`accueilActif`) ? Calculé une
+ * fois par contexte. */
+const actifParPostes = new WeakMap<Map<number, Poste>, boolean>()
+function accueilEnService(ctx: Pick<Contexte, 'postes'>): boolean {
+  let v = actifParPostes.get(ctx.postes)
   if (v === undefined) {
-    v = posteADesCodesDeNuit(ctx.postes.get(posteId), ctx.horaires.values())
-    r.set(posteId, v)
+    v = accueilActif(ctx.postes.values())
+    actifParPostes.set(ctx.postes, v)
   }
   return v
 }
 
-/** Consigne de présence où compte un shift ou un besoin (`presence.ts`). */
+/** Le poste est-il de l'accueil (D12) : ses besoins sont ignorés (D13). */
+export function posteDeLAccueil(
+  ctx: Pick<Contexte, 'postes'>,
+  posteId: number,
+): boolean {
+  return estPosteAccueil(ctx.postes.get(posteId), accueilEnService(ctx))
+}
+
+/** Moments du tableau où compte un shift ou un candidat (`momentsAccueil`). */
 function presenceDe(
   ctx: Contexte,
   x: { poste_id: number; horaire_id: number | null; debut: string },
-): PeriodePresence | null {
-  return periodePresence(
+): PeriodePresence[] {
+  return momentsAccueil(
     ctx.postes.get(x.poste_id),
     x.horaire_id !== null ? ctx.horaires.get(x.horaire_id) : undefined,
     x.debut,
-    nuitComptee(ctx, x.poste_id),
+    accueilEnService(ctx),
   )
 }
 
@@ -502,11 +511,22 @@ function debutsMatinTot(ctx: Contexte): Map<number, number> {
   if (!r) {
     r = new Map()
     for (const b of ctx.besoins) {
+      // L'accueil n'a plus de besoins (D13) : ses matins tôt viennent des
+      // horaires permis au poste, plus bas.
+      if (posteDeLAccueil(ctx, b.poste_id)) continue
       const h =
         b.horaire_id !== null ? ctx.horaires.get(b.horaire_id) : undefined
       if (periodeShift(h, b.debut) !== 'matin') continue
       const m = minutes(b.debut)
       r.set(b.poste_id, Math.min(r.get(b.poste_id) ?? m, m))
+    }
+    for (const poste of ctx.postes.values()) {
+      if (!posteDeLAccueil(ctx, poste.id)) continue
+      for (const h of codesDuPoste(poste, [...ctx.horaires.values()])) {
+        if (h.periode !== 'matin') continue
+        const m = minutes(h.debut)
+        r.set(poste.id, Math.min(r.get(poste.id) ?? m, m))
+      }
     }
     matinsTotParBesoins.set(ctx.besoins, r)
   }
@@ -652,6 +672,108 @@ export function creneauRemplacant(
     place: `b${b.id}`,
     ...equiteDe(ctx, x),
   })
+}
+
+// ------------------------------------------------- candidats de l'accueil
+
+/** Id du créneau candidat de l'accueil (D1) : un jour, un poste, un horaire. */
+export const idCandidat = (jour: number, posteId: number, horaireId: number) =>
+  `p${jour}-${posteId}-${horaireId}`
+
+/** Un candidat de l'accueil : le poste et l'horaire sur ce jour du
+ * planning, aucune place propre (effectif 0) ; ses moments dans `presence`
+ * (un middle : matin et soir, D11). */
+export function creneauCandidat(
+  ctx: Contexte,
+  jour: number,
+  poste: Poste,
+  h: Horaire,
+): Creneau {
+  const [d, f] = bornes(ctx.lundi, jour, h.debut, h.fin)
+  const x = { poste_id: poste.id, horaire_id: h.id, debut: h.debut }
+  return creneau({
+    id: idCandidat(jour, poste.id, h.id),
+    poste: String(poste.id),
+    debut: d,
+    fin: f,
+    effectif: 0,
+    typeShift: String(h.id),
+    pause: h.pause,
+    raccourci: h.raccourci,
+    raccourciDebut: h.raccourci_debut,
+    jourPlanning: jour,
+    presenceMax: presenceMaxPoste(poste.categorie),
+    nuit: toucheLaNuit(jour, h.debut, h.fin),
+    presence: presenceDe(ctx, x),
+    accueil: true,
+    ...equiteDe(ctx, x),
+  })
+}
+
+/** Candidats de l'accueil d'une semaine (D1, D2, D4, D10, D12) : pour
+ * chaque jour à partir de `depuis`, chaque poste de l'accueil et chaque
+ * horaire permis au poste (`codesDuPoste` ; la fiche filtre ensuite, comme
+ * partout, `codesPermis`), un candidat s'il compte dans au moins un moment
+ * demandé ce jour-là (chiffre > 0). Un horaire trop long pour la catégorie
+ * du poste est écarté, comme un besoin (`alerteBesoin`). Rien si le tableau
+ * n'est pas en service. */
+export function candidatsAccueil(ctx: Contexte, depuis = 0): Creneau[] {
+  if (!accueilEnService(ctx)) return []
+  const demandes = new Set(
+    ctx.consignes
+      .filter((k) => chiffreAccueil(k) > 0)
+      .map((k) => `${k.jour}|${k.periode}`),
+  )
+  const horaires = [...ctx.horaires.values()].sort((a, b) => a.id - b.id)
+  const postes = [...ctx.postes.values()]
+    .filter((p) => posteDeLAccueil(ctx, p.id))
+    .sort((a, b) => a.id - b.id)
+  const r: Creneau[] = []
+  for (let jour = depuis; jour < 7; jour++) {
+    for (const poste of postes) {
+      for (const h of codesDuPoste(poste, horaires)) {
+        const c = creneauCandidat(ctx, jour, poste, h)
+        if (!c.presence.some((m) => demandes.has(`${jour}|${m}`))) continue
+        if (alerteBesoin(poste.categorie, duree(c))) continue
+        r.push(c)
+      }
+    }
+  }
+  return r
+}
+
+/** Le tableau de l'accueil tel que le moteur le lit : le chiffre EXACT de
+ * chaque moment (D3 : `minimum`, D9 ; le maximum suit), rien si le tableau
+ * n'est pas en service. */
+function chiffresAccueil(ctx: Contexte): Probleme['consignes'] {
+  if (!accueilEnService(ctx)) return []
+  // Tous les jours, passés compris : les shifts posés y comptent encore (le
+  // moteur n'y place personne, rien n'y bouge).
+  return ctx.consignes.map((c) => ({
+    jour: c.jour,
+    periode: c.periode,
+    minimum: chiffreAccueil(c),
+    maximum: chiffreAccueil(c),
+  }))
+}
+
+/** Les besoins que le moteur lit : valides, hors accueil (D13 : ceux de
+ * l'accueil sont gardés en base mais ignorés tant que le tableau est en
+ * service). */
+export function besoinsDuMoteur(ctx: Contexte): {
+  valides: Besoin[]
+  alertes: Array<{ besoin_id: number; message: string }>
+} {
+  const { valides, alertes } = besoinsValides(ctx)
+  const ici = (b: { poste_id: number }) => !posteDeLAccueil(ctx, b.poste_id)
+  const parId = new Map(ctx.besoins.map((b) => [b.id, b]))
+  return {
+    valides: valides.filter(ici),
+    alertes: alertes.filter((a) => {
+      const b = parId.get(a.besoin_id)
+      return !b || ici(b)
+    }),
+  }
 }
 
 /** Écarte les besoins trop longs pour leur catégorie et ceux dont le code
@@ -1125,7 +1247,7 @@ export function analyser(d: DonneesSemaine): SemaineOut {
   const ctx = contexte(d)
   const lundi = ctx.lundi
   const remplie = semaineRemplie(ctx.affectations, d.referentiel.salaries)
-  const { valides: besoins, alertes: alertesBesoins } = besoinsValides(ctx)
+  const { valides: besoins, alertes: alertesBesoins } = besoinsDuMoteur(ctx)
   let salaries = new Map(
     ctx.staff.map((x) => [x.id, versSolveur(fiche(x, lundi, ctx))]),
   )
@@ -1316,14 +1438,70 @@ export function analyser(d: DonneesSemaine): SemaineOut {
     })
   }
 
-  // Présence : personnes autonomes sur les postes qui comptent.
+  // Tableau de l'accueil : chaque shift dans chacun de ses moments (un
+  // middle au matin et au soir, D11), soutiens compris (D5), contre le
+  // chiffre EXACT (D3).
   const presents: Array<{ jour: number; periode: PeriodePresence }> = []
   for (const a of ctx.affectations) {
-    const periode = presenceDe(ctx, a)
-    const sol = salaries.get(a.salarie_id)
-    if (!periode || (sol && role(sol, String(a.poste_id)) === 'soutien'))
-      continue
-    presents.push({ jour: a.jour, periode })
+    for (const periode of presenceDe(ctx, a))
+      presents.push({ jour: a.jour, periode })
+  }
+  const chiffres = ctx.consignes.map((c) => ({
+    ...c,
+    minimum: chiffreAccueil(c),
+    maximum: chiffreAccueil(c),
+  }))
+  const presence = bilanPresence(chiffres, presents)
+  // Places de l'accueil (D1) : le chiffre de chaque moment, pourvu jusqu'à
+  // lui ; s'ajoutent aux places des besoins des postes à part.
+  const accueil = accueilEnService(ctx)
+  const placesAccueil = (j: number) =>
+    accueil
+      ? presence.filter((x) => x.jour === j).reduce((t, x) => t + x.minimum, 0)
+      : 0
+  const pourvuesAccueil = (j: number) =>
+    accueil
+      ? presence
+          .filter((x) => x.jour === j)
+          .reduce((t, x) => t + Math.min(x.compte, x.minimum), 0)
+      : 0
+
+  // Trous de l'accueil entier (D15) : Réception et Club ensemble, du premier
+  // au dernier moment demandé (`trousAccueilDuJour`, l'oracle de
+  // `cycles.ts`) ; présences autonomes, aux heures écrites du shift.
+  const trousAccueil: TrouOut[] = []
+  if (accueil) {
+    const candidats = candidatsAccueil(ctx)
+    const presences: PresencePoste[] = []
+    for (const a of ctx.affectations) {
+      const poste = ctx.postes.get(a.poste_id)
+      const sol = salaries.get(a.salarie_id)
+      if (!poste?.presence || !sol) continue
+      const c = creneaux.get(`a${a.id}`) as Creneau
+      presences.push({
+        debut: c.debut,
+        fin: c.fin,
+        autonome: role(sol, String(a.poste_id)) !== 'soutien',
+      })
+    }
+    for (let jour = 0; jour < 7; jour++) {
+      const demandes = new Set(
+        ctx.consignes
+          .filter((k) => k.jour === jour && chiffreAccueil(k) > 0)
+          .map((k) => k.periode),
+      )
+      for (const t of trousAccueilDuJour(
+        candidats.filter((c) => jourDe(c) === jour),
+        demandes,
+        presences,
+      ))
+        trousAccueil.push({
+          poste_id: POSTE_ID_ACCUEIL,
+          jour,
+          debut: heureMurale(lundi, t.debut),
+          fin: heureMurale(lundi, t.fin),
+        })
+    }
   }
 
   const infractions = toutes.filter((v) => v.nature === 'loi').length
@@ -1333,29 +1511,39 @@ export function analyser(d: DonneesSemaine): SemaineOut {
     a_pourvoir: aPourvoir,
     bilan,
     alertes_besoins: alertesBesoins,
-    presence: bilanPresence(ctx.consignes, presents),
-    trous: trous(p, affs).map((t) => ({
-      poste_id: Number(t.poste),
-      jour: t.jour,
-      debut: heureMurale(lundi, t.debut),
-      fin: heureMurale(lundi, t.fin),
-    })),
+    presence,
+    trous: [
+      ...trous(p, affs).map((t) => ({
+        poste_id: Number(t.poste),
+        jour: t.jour,
+        debut: heureMurale(lundi, t.debut),
+        fin: heureMurale(lundi, t.fin),
+      })),
+      ...trousAccueil,
+    ],
     stats: {
-      places: besoins.reduce((t, b) => t + b.effectif, 0),
-      pourvues: besoins.reduce(
-        (t, b) => t + Math.min(pourvus.get(b.id) ?? 0, b.effectif),
-        0,
+      places:
+        besoins.reduce((t, b) => t + b.effectif, 0) +
+        [0, 1, 2, 3, 4, 5, 6].reduce((t, j) => t + placesAccueil(j), 0),
+      pourvues:
+        besoins.reduce(
+          (t, b) => t + Math.min(pourvus.get(b.id) ?? 0, b.effectif),
+          0,
+        ) + [0, 1, 2, 3, 4, 5, 6].reduce((t, j) => t + pourvuesAccueil(j), 0),
+      places_jour: [0, 1, 2, 3, 4, 5, 6].map(
+        (j) =>
+          besoins
+            .filter((b) => b.jour === j)
+            .reduce((t, b) => t + b.effectif, 0) + placesAccueil(j),
       ),
-      places_jour: [0, 1, 2, 3, 4, 5, 6].map((j) =>
-        besoins.filter((b) => b.jour === j).reduce((t, b) => t + b.effectif, 0),
-      ),
-      pourvues_jour: [0, 1, 2, 3, 4, 5, 6].map((j) =>
-        besoins
-          .filter((b) => b.jour === j)
-          .reduce(
-            (t, b) => t + Math.min(pourvus.get(b.id) ?? 0, b.effectif),
-            0,
-          ),
+      pourvues_jour: [0, 1, 2, 3, 4, 5, 6].map(
+        (j) =>
+          besoins
+            .filter((b) => b.jour === j)
+            .reduce(
+              (t, b) => t + Math.min(pourvus.get(b.id) ?? 0, b.effectif),
+              0,
+            ) + pourvuesAccueil(j),
       ),
       infractions,
       alertes_organisation:
@@ -1472,7 +1660,7 @@ export function preparerGeneration(
         )
   const d2: DonneesSemaine = { ...d, affectations: restants, absences }
   const ctx = contexte(d2)
-  const { valides: besoins } = besoinsValides(ctx)
+  const { valides: besoins } = besoinsDuMoteur(ctx)
   let salaries = new Map(
     ctx.staff.map((x) => [
       x.id,
@@ -1583,6 +1771,20 @@ export function preparerGeneration(
     if ((deja.get(b.id) ?? 0) >= b.effectif + b.renfort) continue
     for (const h of remplacantsDe(ctx, b)) ajouteRemplacant(b, h)
   }
+  // Candidats de l'accueil (D1) : à partir d'aujourd'hui seulement (avant,
+  // personne n'est libre ; les shifts posés y restent des faits).
+  const candidats = new Map<
+    string,
+    { jour: number; poste: Poste; h: Horaire }
+  >()
+  for (const c of candidatsAccueil(ctx, depuis)) {
+    creneaux.push(c)
+    candidats.set(c.id, {
+      jour: c.jourPlanning as number,
+      poste: ctx.postes.get(Number(c.poste)) as Poste,
+      h: ctx.horaires.get(Number(c.typeShift)) as Horaire,
+    })
+  }
   const rattache = new Map([...lien, ...enSoutien])
   for (const a of ctx.affectations) {
     if (!rattache.has(a.id)) creneaux.push(creneauAffectation(ctx, a))
@@ -1610,12 +1812,7 @@ export function preparerGeneration(
     imposees,
     courtes,
     aEviter,
-    consignes: ctx.consignes.map((c) => ({
-      jour: c.jour,
-      periode: c.periode,
-      minimum: c.minimum,
-      maximum: c.maximum,
-    })),
+    consignes: chiffresAccueil(ctx),
     tempsMaxSecondes: o.tempsMaxSecondes ?? 10,
   })
   const parId = new Map(besoins.map((b) => [`b${b.id}`, b]))
@@ -1623,6 +1820,20 @@ export function preparerGeneration(
     const nouveaux: NouveauShift[] = []
     for (const a of r.affectations) {
       if (imposees.has(cle(a.salarieId, a.creneauId))) continue
+      const cand = candidats.get(a.creneauId)
+      if (cand) {
+        // Un candidat de l'accueil : l'horaire choisi sur le poste choisi.
+        nouveaux.push({
+          salarie_id: Number(a.salarieId),
+          poste_id: cand.poste.id,
+          jour: cand.jour,
+          horaire_id: cand.h.id,
+          ...horaireDe(cand.h, a.court),
+          court: a.court,
+          pause: cand.h.pause,
+        })
+        continue
+      }
       const rempl = remplacants.get(a.creneauId)
       if (rempl) {
         // Un remplaçant : le code réel sur le poste et le jour du besoin.

@@ -28,6 +28,7 @@ import {
   estEcole,
   fiche,
   heureMurale,
+  POSTE_ID_ACCUEIL,
   idRemplacant,
   preparerGeneration,
   raisonCommune,
@@ -1376,7 +1377,12 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
       couleur: '#111111',
       horaires_autorises: [1, 2, 3, 4, 5, 6, 7],
       a_part: false,
-      presence: true,
+      // Poste « à part » depuis le 2026-11-01 (plan planning-accueil,
+      // D13) : un poste coché « présence » n'a plus de besoins (le tableau
+      // de l'accueil les remplace), or ce bloc éprouve le rattachement par
+      // cycle et les remplaçants, qui ne servent plus qu'aux postes à part.
+      // Les tests du tableau de l'accueil sont plus bas (`accueilAvec`).
+      presence: false,
     },
     {
       id: VEILLE,
@@ -1431,6 +1437,18 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
     soutien: 0,
     renfort: 0,
     ...kw,
+  })
+  /** Le même jeu, l'Accueil coché « présence » : le tableau de l'accueil
+   * est en service (plan planning-accueil-2026-11-01), la Veille de nuit
+   * compte la nuit (D10). */
+  const accueilAvec = (d: DonneesSemaine): DonneesSemaine => ({
+    ...d,
+    referentiel: {
+      ...d.referentiel,
+      postes: d.referentiel.postes.map((p) =>
+        p.id === ACCUEIL ? { ...p, presence: true } : p,
+      ),
+    },
   })
   let prochainId = 1000
   const shift = (
@@ -1591,7 +1609,8 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
       ferme: false,
       pause: M6.pause,
       raccourci: M6.raccourci,
-      presence: 'matin',
+      // Poste à part (D13 du 2026-11-01) : aucun moment du tableau.
+      presence: [],
       jourPlanning: 1,
       debut,
       fin,
@@ -1744,13 +1763,16 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
     expect(r2.lien.size + r2.soutien.size).toBe(0)
   })
 
-  it('nuit : comptée sur un poste qui a des codes de nuit, sans regarder la présence', () => {
+  it('nuit : comptée sur la Veille de nuit seule, quand le tableau est en service (D10)', () => {
+    // Décision D10 du 2026-11-01 : la nuit = les veilleurs (puis le
+    // dépannage sur la Veille), personne d'autre ; le tableau n'existe que si
+    // un poste est coché « présence » (sans lui, la Veille garde ses besoins).
     const veille = personne(14, 'Echo', 'titulaire', VEILLE)
     const nuit = shift(veille, N, 2, { poste_id: VEILLE })
     const consignes: Consigne[] = [
-      { id: 1, jour: 2, periode: 'nuit', minimum: 1, maximum: null },
+      { id: 1, jour: 2, periode: 'nuit', minimum: 1, maximum: 1 },
     ]
-    const sem = analyser(donnees([], [nuit], [veille], consignes))
+    const sem = analyser(accueilAvec(donnees([], [nuit], [veille], consignes)))
     expect(sem.presence).toEqual([
       expect.objectContaining({
         jour: 2,
@@ -1759,42 +1781,65 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
         ecart: 0,
       }),
     ])
+    // Refusé : sans poste coché « présence », pas de tableau, rien ne compte.
+    const sans = analyser(donnees([], [nuit], [veille], consignes))
+    expect(sans.presence[0]).toMatchObject({ compte: 0, ecart: -1 })
   })
 
-  it('trous entre équipes : en heures d’horloge, au jour de la plage', () => {
-    // M3 07:00-15:00 puis S4 15:00-23:00 : rien. Le soir tenu en S4 décalé à
-    // 16:00 : personne de 15 h à 16 h, le mardi.
-    const besoins = [besoin(100, M3), besoin(101, S4)]
+  it('trous de l’accueil entier : en heures d’horloge, au jour de la plage (D15)', () => {
+    // Révisé le 2026-11-01 (D13, D15) : l'accueil n'a plus de besoins ; la
+    // plage va du début le plus TARD des matins permis (M6, 08:00) à la fin
+    // la plus TÔT des soirs permis (S4, 23:00), les jours où le matin et le
+    // soir sont demandés. M3 07:00-15:00 puis S4 15:00-23:00 : rien. Le soir
+    // décalé à 16:00 : personne de 15 h à 16 h, le mardi.
+    const consignes: Consigne[] = [
+      { id: 1, jour: 1, periode: 'matin', minimum: 1, maximum: 1 },
+      { id: 2, jour: 1, periode: 'soir', minimum: 1, maximum: 1 },
+    ]
     const plein = analyser(
-      donnees(besoins, [shift(ALPHA, M3), shift(BRAVO, S4)]),
+      accueilAvec(
+        donnees([], [shift(ALPHA, M3), shift(BRAVO, S4)], undefined, consignes),
+      ),
     )
     expect(plein.trous).toEqual([])
     const sem = analyser(
-      donnees(besoins, [
-        shift(ALPHA, M3),
-        shift(BRAVO, null, 1, { debut: '16:00', fin: '23:00' }),
-      ]),
+      accueilAvec(
+        donnees(
+          [],
+          [
+            shift(ALPHA, M3),
+            shift(BRAVO, null, 1, { debut: '16:00', fin: '23:00' }),
+          ],
+          undefined,
+          consignes,
+        ),
+      ),
     )
     expect(sem.trous).toEqual([
-      { poste_id: ACCUEIL, jour: 1, debut: '15:00', fin: '16:00' },
+      { poste_id: POSTE_ID_ACCUEIL, jour: 1, debut: '15:00', fin: '16:00' },
     ])
-    // Un soutien seul ne bouche pas le trou ; une fin à minuit s'écrit 00:00.
+    // Un soutien seul ne bouche pas le trou (jusqu'à la fin de la plage).
     const soutien = analyser(
-      donnees(
-        [
-          besoin(100, M3),
-          besoin(101, null, 1, 1, { debut: '15:00', fin: '24:00' }),
-        ],
-        [
-          shift(ALPHA, M3),
-          shift(DELTA, null, 1, { debut: '15:00', fin: '24:00' }),
-        ],
-        [ALPHA, DELTA],
+      accueilAvec(
+        donnees(
+          [],
+          [
+            shift(ALPHA, M3),
+            shift(DELTA, null, 1, { debut: '15:00', fin: '24:00' }),
+          ],
+          [ALPHA, DELTA],
+          consignes,
+        ),
       ),
     )
     expect(soutien.trous).toEqual([
-      { poste_id: ACCUEIL, jour: 1, debut: '15:00', fin: '00:00' },
+      { poste_id: POSTE_ID_ACCUEIL, jour: 1, debut: '15:00', fin: '23:00' },
     ])
+    // Refusé : un jour où rien n'est demandé n'a pas de plage.
+    const rien = analyser(
+      accueilAvec(donnees([], [shift(ALPHA, M3)], undefined, [])),
+    )
+    expect(rien.trous).toEqual([])
   })
 
   it('heure murale : inverse des minutes réelles, changement d’heure compris', () => {
@@ -1900,10 +1945,11 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
     )
   })
 
-  it('Martin V3-I : recompte par cycle = oracle à la main (middle et soutien jamais)', () => {
-    // Oracle : matin / soir = famille du code sur l'Accueil (coché présence) ;
-    // horaire libre : matin avant 12 h 30 ; middle, code sans famille et
-    // soutien : jamais. Une personne par jour au plus.
+  it('Martin V3-I : recompte par cycle = oracle à la main (middle deux fois, soutien compté)', () => {
+    // Oracle (révisé le 2026-11-01, D5 et D11 du plan planning-accueil) :
+    // matin / soir = famille du code sur l'Accueil (coché présence) ; middle
+    // : matin ET soir ; horaire libre : matin avant 12 h 30 ; code sans
+    // famille : jamais ; soutien : compté. Une personne par jour au plus.
     type Choix = { h: Horaire | null; debut: string; fin: string } | null
     const choix: Choix[] = [
       null,
@@ -1917,13 +1963,15 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
       { h: null, debut: '12:30', fin: '20:00' },
       { h: null, debut: '12:15', fin: '19:00' },
     ]
-    const oracle = (c: NonNullable<Choix>): 'matin' | 'soir' | null => {
-      if (c.h)
+    const oracle = (c: NonNullable<Choix>): Array<'matin' | 'soir'> => {
+      if (c.h) {
+        if (c.h.periode === 'middle') return ['matin', 'soir']
         return c.h.periode === 'matin' || c.h.periode === 'soir'
-          ? c.h.periode
-          : null
+          ? [c.h.periode]
+          : []
+      }
       const [hh, mm] = c.debut.split(':').map(Number)
-      return hh * 60 + mm < 12 * 60 + 30 ? 'matin' : 'soir'
+      return [hh * 60 + mm < 12 * 60 + 30 ? 'matin' : 'soir']
     }
     const gens = [ALPHA, BRAVO, CHARLIE, DELTA]
     const consignes: Consigne[] = []
@@ -1946,13 +1994,12 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
             const x = gens[i % gens.length]
             const jour = Math.floor(i / gens.length)
             affs.push(shift(x, c.h, jour, { debut: c.debut, fin: c.fin }))
-            const p = oracle(c)
-            if (p && x.id !== DELTA.id) {
+            for (const p of oracle(c)) {
               const cleP = `${jour}|${p}`
               attendu.set(cleP, (attendu.get(cleP) ?? 0) + 1)
             }
           })
-          const d = donnees([], affs, gens, consignes)
+          const d = accueilAvec(donnees([], affs, gens, consignes))
           const g = preparerGeneration(d, { aujourdhui: AUJOURDHUI })
           const recompte = presenceParCycle(g.probleme, [])
           const sem = analyser(d)
@@ -1994,7 +2041,9 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
       debut: '15:30',
       fin: '22:30',
     })
-    const vus = trous(g.probleme, affs).map((t) => [
+    // Poste à part depuis le 2026-11-01 (bloc ci-dessus) : il n'est plus
+    // « compté », on demande ses trous explicitement.
+    const vus = trous(g.probleme, affs, new Set([String(ACCUEIL)])).map((t) => [
       heureMurale(LUNDI, t.debut),
       heureMurale(LUNDI, t.fin),
     ])

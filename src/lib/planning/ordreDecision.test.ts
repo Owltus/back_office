@@ -232,7 +232,7 @@ describe('P2 : le matin et le soir, sous les places nécessaires (D1 = A)', () =
       creneau('lun', 0, 7, 15, {
         effectif: 0,
         facultatif: 1,
-        presence: 'matin',
+        presence: ['matin'],
       }),
     ]
     const sans = gen(
@@ -257,9 +257,9 @@ describe('P2 : le matin et le soir, sous les places nécessaires (D1 = A)', () =
       const p = probleme({
         salaries: [personne('a', longue), personne('b', 2)],
         creneaux: [
-          creneau('long', 0, 7, 7 + longue, { presence: 'matin' }),
+          creneau('long', 0, 7, 7 + longue, { presence: ['matin'] }),
           creneau('court', 0, 7, 9, {
-            presence: 'matin',
+            presence: ['matin'],
             effectif: 0,
             facultatif: 1,
           }),
@@ -275,8 +275,8 @@ describe('P2 : le matin et le soir, sous les places nécessaires (D1 = A)', () =
   // Vague 1 des cycles (D7) : ce plafond ne vaut plus que pour le MAXIMUM ;
   // le minimum est une place nécessaire (P1), voir plus bas.
   it('le coût du maximum d’une consigne est plafonné sous les heures dues de chaque créneau qui y compte', () => {
-    const long = creneau('long', 0, 7, 17, { presence: 'matin' })
-    const court = creneau('court', 0, 7, 9, { presence: 'matin' })
+    const long = creneau('long', 0, 7, 17, { presence: ['matin'] })
+    const court = creneau('court', 0, 7, 9, { presence: ['matin'] })
     // Un seul créneau long : proportionnel, comme avant.
     expect(coutConsigne([long])).toBe(POIDS_PRESENCE_MINUTE * 10 * H)
     // Avec un créneau de 2 h : sous ce que rapportent ses heures dues, une
@@ -304,7 +304,7 @@ describe('P2 : le matin et le soir, sous les places nécessaires (D1 = A)', () =
     const renfort = creneau('renfort', 0, 7, 14, {
       effectif: 0,
       facultatif: 1,
-      presence: 'matin',
+      presence: ['matin'],
     })
     expect(coutManqueMinimum([renfort], 0)).toBe(coutPlaceVide(besoin, 0))
     // Une seule personne : elle tient l'un des deux, l'autre manque.
@@ -321,7 +321,7 @@ describe('P2 : le matin et le soir, sous les places nécessaires (D1 = A)', () =
     const r2 = gen(
       probleme({
         salaries: [personne('a', 7)],
-        creneaux: [besoin, creneau('matin', 0, 7, 14, { presence: 'matin' })],
+        creneaux: [besoin, creneau('matin', 0, 7, 14, { presence: ['matin'] })],
         consignes: [lundi(1)],
       }),
     )
@@ -910,9 +910,9 @@ describe('cycles : le minimum d’une consigne est une place nécessaire (D7)', 
 
   it('le coût du manque est dérivé comme une place vide', () => {
     for (const heures of [2, 7, 10]) {
-      const c = creneau('c', 0, 7, 7 + heures, { presence: 'matin' })
+      const c = creneau('c', 0, 7, 7 + heures, { presence: ['matin'] })
       const r = creneau('r', 0, 8, 8 + heures, {
-        presence: 'matin',
+        presence: ['matin'],
         place: 'c',
         effectif: 0,
       })
@@ -926,7 +926,10 @@ describe('cycles : le minimum d’une consigne est une place nécessaire (D7)', 
         }
       }
       // Un shift posé à la main ne reçoit personne : hors du calcul.
-      const pose = creneau('pose', 0, 0, 23, { presence: 'matin', ferme: true })
+      const pose = creneau('pose', 0, 0, 23, {
+        presence: ['matin'],
+        ferme: true,
+      })
       expect(coutManqueMinimum([c, pose], 0)).toBe(coutPlaceVide(c, 0))
       expect(coutManqueMinimum([pose], 0)).toBe(0)
     }
@@ -938,7 +941,7 @@ describe('cycles : le minimum d’une consigne est une place nécessaire (D7)', 
       creneau('lun', 0, 7, 9, {
         effectif: 0,
         facultatif: 1,
-        presence: 'matin',
+        presence: ['matin'],
       }),
     ]
     // Avant la vague (P2, plafonné) : 12 000 < 6e jour + 2 h en plus.
@@ -973,7 +976,7 @@ describe('cycles : le minimum d’une consigne est une place nécessaire (D7)', 
     const lun = creneau('lun', 0, 7, 14, {
       effectif: 0,
       facultatif: 1,
-      presence: 'matin',
+      presence: ['matin'],
     })
     const mar = creneauModele({
       id: 'mar',
@@ -1007,7 +1010,7 @@ describe('cycles : le minimum d’une consigne est une place nécessaire (D7)', 
     const veille = creneau('veille', 0, 23, 31, {
       effectif: 0,
       facultatif: 1,
-      presence: 'nuit',
+      presence: ['nuit'],
     })
     const p = (consignes: Probleme['consignes']) =>
       gen(
@@ -1027,9 +1030,9 @@ describe('cycles : le minimum d’une consigne est une place nécessaire (D7)', 
     const p = probleme({
       salaries: [personne('a', 10), personne('b', 2)],
       creneaux: [
-        creneau('long', 0, 7, 17, { presence: 'matin' }),
+        creneau('long', 0, 7, 17, { presence: ['matin'] }),
         creneau('court', 0, 7, 9, {
-          presence: 'matin',
+          presence: ['matin'],
           effectif: 0,
           facultatif: 1,
         }),
@@ -1045,11 +1048,17 @@ describe('cycles : le minimum d’une consigne est une place nécessaire (D7)', 
 describe('cycles : pas de trou entre deux équipes (D10)', () => {
   // Réception comptée dans la présence : matin 7 h - 15 h, soir 16 h - 23 h,
   // et un autre code du soir, 15 h - 23 h, qui touche le matin.
-  const matin = creneau('mat', 0, 7, 15, { typeShift: 'M', presence: 'matin' })
-  const soir = creneau('soi', 0, 16, 23, { typeShift: 'S1', presence: 'soir' })
+  const matin = creneau('mat', 0, 7, 15, {
+    typeShift: 'M',
+    presence: ['matin'],
+  })
+  const soir = creneau('soi', 0, 16, 23, {
+    typeShift: 'S1',
+    presence: ['soir'],
+  })
   const soirLong = creneau('soi-S2', 0, 15, 23, {
     typeShift: 'S2',
-    presence: 'soir',
+    presence: ['soir'],
     place: 'soi',
     effectif: 0,
   })
@@ -1097,7 +1106,7 @@ describe('cycles : pas de trou entre deux équipes (D10)', () => {
   it('un poste hors présence n’a pas de trou : le code imposé reste', () => {
     const horsPresence = [matin, soir, soirLong].map((c) => ({
       ...c,
-      presence: null,
+      presence: [],
     }))
     const r = gen(probleme({ salaries: equipe, creneaux: horsPresence }))
     expect(qui(r, 'soi')).toEqual(['b'])
@@ -1152,7 +1161,7 @@ describe('cycles : pas de trou entre deux équipes (D10)', () => {
   })
 
   it('la nuit du dimanche, écrite le dimanche, ferme la plage du dimanche', () => {
-    const soir6 = creneau('soir6', 6, 15, 23, { presence: 'soir' })
+    const soir6 = creneau('soir6', 6, 15, 23, { presence: ['soir'] })
     // « 24:00 → 07:00 » : commence lundi 0 h, écrite dimanche.
     const nuit = creneau('nuit6', 7, 0, 7, { jourPlanning: 6 })
     const r = gen(
@@ -1210,7 +1219,7 @@ describe('cycles : ce que le lot C pose et ce que l’oracle compte', () => {
       poste: 'r',
       debut: 7 * H,
       fin,
-      presence: 'matin',
+      presence: ['matin'],
       typeShift: 'M',
       ...kw,
     })
@@ -1220,7 +1229,7 @@ describe('cycles : ce que le lot C pose et ce que l’oracle compte', () => {
       poste: 'r',
       debut,
       fin: 23 * H,
-      presence: 'soir',
+      presence: ['soir'],
       typeShift: 'S',
     })
   const deux = [personne('a', 0), personne('b', 0)]
@@ -1406,7 +1415,7 @@ describe('cycles : le code exact d’abord, en deux temps', () => {
     // Place facultative (aucune place vide au premier temps), mais le
     // minimum du matin n'est tenu que par le code voisin.
     const facultatif = { ...besoin, effectif: 0, facultatif: 1 }
-    const voisin = { ...r6, presence: 'matin' as const }
+    const voisin = { ...r6, presence: ['matin' as const] }
     const a = personne('a', 7, { finServicePrecedent: -2 * H })
     const consignes = [
       { jour: 0, periode: 'matin' as const, minimum: 1, maximum: null },
@@ -1414,7 +1423,7 @@ describe('cycles : le code exact d’abord, en deux temps', () => {
     for (const graine of graines) {
       const p = probleme({
         salaries: [a],
-        creneaux: [{ ...facultatif, presence: 'matin' }, voisin],
+        creneaux: [{ ...facultatif, presence: ['matin' as const] }, voisin],
         consignes,
         graine,
       })
@@ -1430,15 +1439,15 @@ describe('cycles : le code exact d’abord, en deux temps', () => {
   it('un trou au premier temps, fermé par un remplaçant : second temps', () => {
     const matin = creneau('mat', 0, 7, 15, {
       typeShift: 'M',
-      presence: 'matin',
+      presence: ['matin'],
     })
     const soir = creneau('soi', 0, 16, 23, {
       typeShift: 'S1',
-      presence: 'soir',
+      presence: ['soir'],
     })
     const soirLong = creneau('soi-S2', 0, 15, 23, {
       typeShift: 'S2',
-      presence: 'soir',
+      presence: ['soir'],
       place: 'soi',
       effectif: 0,
     })

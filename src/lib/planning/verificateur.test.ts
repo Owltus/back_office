@@ -635,8 +635,8 @@ const apprenti = (id = 's') =>
   sal(id, { postes: new Set(), postesSoutien: new Set(['rec']) })
 
 describe('places : un remplaçant tient la place de son besoin', () => {
-  const b = cr('b1', 0, 7 * H, 15 * H, 'rec', { presence: 'matin' })
-  const r = remplacant('r1-6', 'b1', 0, 7 * H, 14 * H, { presence: 'matin' })
+  const b = cr('b1', 0, 7 * H, 15 * H, 'rec', { presence: ['matin'] })
+  const r = remplacant('r1-6', 'b1', 0, 7 * H, 14 * H, { presence: ['matin'] })
 
   it('un titulaire sur le remplaçant remplit la place (accepté)', () => {
     const p = probleme({ salaries: [sal('a')], creneaux: [b, r] })
@@ -736,8 +736,8 @@ describe('places : un remplaçant tient la place de son besoin', () => {
 
 describe('trous entre deux équipes (vérificateur)', () => {
   // Réception : matin 07:00 → 15:00, soir 16:00 → 23:00 ; veille de nuit à part.
-  const matin = cr('bm', 0, 7 * H, 15 * H, 'rec', { presence: 'matin' })
-  const soir = cr('bs', 0, 16 * H, 23 * H, 'rec', { presence: 'soir' })
+  const matin = cr('bm', 0, 7 * H, 15 * H, 'rec', { presence: ['matin'] })
+  const soir = cr('bs', 0, 16 * H, 23 * H, 'rec', { presence: ['soir'] })
   const gens = [sal('a'), sal('c'), sal('m')]
 
   it('une heure entre le matin et le soir : un trou (refusé)', () => {
@@ -760,7 +760,7 @@ describe('trous entre deux équipes (vérificateur)', () => {
       trous(
         probleme({
           salaries: gens,
-          creneaux: [middle, { ...matin, presence: 'matin', effectif: 0 }],
+          creneaux: [middle, { ...matin, presence: ['matin'], effectif: 0 }],
           imposees: new Set([cle('m', 'a7')]),
         }),
         [],
@@ -782,10 +782,10 @@ describe('trous entre deux équipes (vérificateur)', () => {
 
   it('un remplaçant compte comme présence mais ne fixe pas la plage', () => {
     const tot = remplacant('rm-1', 'bm', 0, 6 * H, 15 * H, {
-      presence: 'matin',
+      presence: ['matin'],
     })
     const tard = remplacant('rs-2', 'bs', 0, 15 * H, 23 * H, {
-      presence: 'soir',
+      presence: ['soir'],
     })
     const p = probleme({ salaries: gens, creneaux: [matin, soir, tot, tard] })
     expect(trous(p, [aff('a', 'rm-1'), aff('c', 'rs-2')])).toEqual([])
@@ -808,7 +808,7 @@ describe('trous entre deux équipes (vérificateur)', () => {
   })
 
   it('seuls les postes qui comptent dans la présence sont regardés', () => {
-    const nuit = cr('bn', 0, 23 * H, 31 * H, 'veille', { presence: 'nuit' })
+    const nuit = cr('bn', 0, 23 * H, 31 * H, 'veille', { presence: ['nuit'] })
     const p = probleme({ salaries: gens, creneaux: [matin, nuit] })
     expect(trous(p, [aff('a', 'bm')])).toEqual([])
     expect(trous(p, [aff('a', 'bm')], new Set(['veille']))).toEqual([
@@ -817,10 +817,10 @@ describe('trous entre deux équipes (vérificateur)', () => {
   })
 
   it('nuit du dimanche : le besoin écrit dimanche « 24:00 → 07:00 » reste au dimanche', () => {
-    const soirDim = cr('bs6', 6, 15 * H, 23 * H, 'rec', { presence: 'soir' })
+    const soirDim = cr('bs6', 6, 15 * H, 23 * H, 'rec', { presence: ['soir'] })
     const nuitDim = cr('bn6', 7, 0, 7 * H, 'rec', {
       jourPlanning: 6,
-      presence: null,
+      presence: [],
     })
     const p = probleme({ salaries: gens, creneaux: [soirDim, nuitDim] })
     expect(trous(p, [aff('a', 'bs6')])).toEqual([
@@ -836,8 +836,8 @@ describe('trous entre deux équipes (vérificateur)', () => {
       matin,
       soir,
       cr('a7', 0, 12 * H, 20 * H, 'rec', { ferme: true }),
-      remplacant('rm-1', 'bm', 0, 6 * H, 14 * H, { presence: 'matin' }),
-      cr('bm1', 1, 7 * H, 15 * H, 'rec', { presence: 'matin' }),
+      remplacant('rm-1', 'bm', 0, 6 * H, 14 * H, { presence: ['matin'] }),
+      cr('bm1', 1, 7 * H, 15 * H, 'rec', { presence: ['matin'] }),
     ]
     const ids = creneaux.map((c) => c.id)
     const tous = ['a', 'c', 'm', 'e'].map((i) => sal(i))
@@ -876,13 +876,15 @@ describe('trous entre deux équipes (vérificateur)', () => {
 
 describe('consignes par cycle (recompte sans le générateur)', () => {
   const m1 = cr('bm1', 0, 7 * H, 15 * H, 'rec', {
-    presence: 'matin',
+    presence: ['matin'],
     effectif: 3,
   })
-  const rm = remplacant('rm1-6', 'bm1', 0, 6 * H, 14 * H, { presence: 'matin' })
-  const mid = cr('bx', 0, 11 * H, 19 * H, 'rec', { presence: null })
-  const s1 = cr('bs1', 0, 15 * H, 23 * H, 'rec', { presence: 'soir' })
-  const n1 = cr('bn1', 0, 23 * H, 31 * H, 'veille', { presence: 'nuit' })
+  const rm = remplacant('rm1-6', 'bm1', 0, 6 * H, 14 * H, {
+    presence: ['matin'],
+  })
+  const mid = cr('bx', 0, 11 * H, 19 * H, 'rec', { presence: [] })
+  const s1 = cr('bs1', 0, 15 * H, 23 * H, 'rec', { presence: ['soir'] })
+  const n1 = cr('bn1', 0, 23 * H, 31 * H, 'veille', { presence: ['nuit'] })
   const gens = ['a', 'c', 'd', 'e', 'v'].map((i) =>
     sal(i, { postes: new Set(['rec', 'veille']) }),
   )
@@ -917,12 +919,20 @@ describe('consignes par cycle (recompte sans le générateur)', () => {
     ])
   })
 
-  it('il manque du monde : écart négatif ; le soutien ne compte pas (refusé)', () => {
-    expect(ecarts([aff('a', 'bm1'), aff('s', 'bm1')])).toEqual([
+  it('il manque du monde : écart négatif (refusé) ; le soutien compte (D5)', () => {
+    expect(ecarts([aff('a', 'bm1')])).toEqual([
       ['soir', 0, 0, -1],
       ['matin', 0, 1, -1],
       ['nuit', 0, 0, -1],
       ['matin', 1, 0, -1],
+    ])
+    // Révisé le 2026-11-01 (D5 : apprentis et stagiaires comptent dans le
+    // chiffre) : l'apprenti fait le second du matin.
+    expect(ecarts([aff('a', 'bm1'), aff('s', 'bm1')])[1]).toEqual([
+      'matin',
+      0,
+      2,
+      0,
     ])
   })
 

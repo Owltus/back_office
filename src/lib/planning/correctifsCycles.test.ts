@@ -26,11 +26,7 @@ import type {
   Poste,
   Salarie,
 } from '#/lib/planning/types.ts'
-import {
-  presenceParCycle,
-  trous,
-  violations,
-} from '#/lib/planning/verificateur.ts'
+import { presenceParCycle, violations } from '#/lib/planning/verificateur.ts'
 import type { Violation } from '#/lib/planning/verificateur.ts'
 
 /*
@@ -189,6 +185,18 @@ const donnees = (
   apres: [],
 })
 
+/** Le même jeu sans aucun poste coché « présence » : pas de tableau de
+ * l'accueil, tous les postes gardent leurs besoins (plan
+ * planning-accueil-2026-11-01 : le rattachement par cycle et les places de
+ * soutien ne servent plus qu'aux postes à part, D13). */
+const sansAccueil = (d: DonneesSemaine): DonneesSemaine => ({
+  ...d,
+  referentiel: {
+    ...d.referentiel,
+    postes: d.referentiel.postes.map((x) => ({ ...x, presence: false })),
+  },
+})
+
 // ------------------------------------------------------------------ 1
 
 describe('1. la nuit ne compte que sur un poste qui LISTE un code de nuit (D15)', () => {
@@ -205,14 +213,15 @@ describe('1. la nuit ne compte que sur un poste qui LISTE un code de nuit (D15)'
     const ctx = contexte(d)
     const surTous = creneauBesoin(ctx, { ...besoin(1, N), poste_id: TOUS })
     const surVeille = creneauBesoin(ctx, { ...besoin(2, N), poste_id: VEILLE })
-    // Refusé : une nuit sur un poste « Tous » ne compte pas.
-    expect(surTous.presence).toBeNull()
-    // Accepté : la veille de nuit fait le minimum de nuit.
-    expect(surVeille.presence).toBe('nuit')
+    // Refusé : une nuit sur un poste « Tous » ne compte pas (D10 du
+    // 2026-11-01 : la nuit n'est plus que la Veille de nuit).
+    expect(surTous.presence).toEqual([])
+    // Accepté : la veille de nuit fait la nuit.
+    expect(surVeille.presence).toEqual(['nuit'])
     // Le matin d'un poste « Tous » coché présence compte toujours.
     expect(
       creneauBesoin(ctx, { ...besoin(3, M3), poste_id: TOUS }).presence,
-    ).toBe('matin')
+    ).toEqual(['matin'])
   })
 })
 
@@ -221,10 +230,12 @@ describe('1. la nuit ne compte que sur un poste qui LISTE un code de nuit (D15)'
 describe('2. un soutien rattaché par cycle tient sa place de soutien', () => {
   it('apprenti en M6 sur une place de soutien M3 : plus de place ouverte, pas de second apprenti', async () => {
     const a = shift(DELTA, M6)
-    const d = donnees(
-      [besoin(100, M3, 1, { soutien: 1 })],
-      [a, shift(ALPHA, M3)],
-      [ALPHA, DELTA, ECHO],
+    const d = sansAccueil(
+      donnees(
+        [besoin(100, M3, 1, { soutien: 1 })],
+        [a, shift(ALPHA, M3)],
+        [ALPHA, DELTA, ECHO],
+      ),
     )
     // L'analyse le rattache à la place de soutien du M3.
     const sem = analyser(d)
@@ -246,10 +257,12 @@ describe('2. un soutien rattaché par cycle tient sa place de soutien', () => {
   })
 
   it('sans apprenti posé, la place de soutien reste offerte', () => {
-    const d = donnees(
-      [besoin(100, M3, 1, { soutien: 1 })],
-      [shift(ALPHA, M3)],
-      [ALPHA, DELTA, ECHO],
+    const d = sansAccueil(
+      donnees(
+        [besoin(100, M3, 1, { soutien: 1 })],
+        [shift(ALPHA, M3)],
+        [ALPHA, DELTA, ECHO],
+      ),
     )
     const g = preparerGeneration(d, { aujourdhui: AUJOURDHUI })
     expect(g.probleme.creneaux.find((c) => c.id === 'b100')?.soutien).toBe(1)
@@ -294,14 +307,14 @@ describe('4. personnes par cycle : une affectation = une présence, partout', ()
       poste: '1',
       debut: 7 * H,
       fin: 15 * H,
-      presence: 'matin',
+      presence: ['matin'],
     })
     const c2 = creneau({
       id: 'c2',
       poste: '1',
       debut: 8 * H,
       fin: 12 * H,
-      presence: 'matin',
+      presence: ['matin'],
     })
     const s = salarieSolveur({
       id: 'a',
@@ -406,37 +419,46 @@ describe('B. version courte qui commence plus tard (raccourci_debut)', () => {
     })
     if (!h.raccourci_debut)
       Object.assign(court, { debut: '15:00', fin: '22:00' })
+    // Révisé le 2026-11-01 (D13, D15) : l'Accueil n'a plus de besoins ; le
+    // matin et le soir du mardi sont demandés au tableau, la plage va de
+    // 08:00 (M6, le matin le plus tard) à 23:00 (le soir).
     return donnees(
-      [besoin(100, M3), besoin(101, h)],
+      [],
       [shift(ALPHA, M3), court],
       [ALPHA, BRAVO],
-      [],
+      [
+        { id: 1, jour: 1, periode: 'matin', minimum: 1, maximum: 1 },
+        { id: 2, jour: 1, periode: 'soir', minimum: 1, maximum: 1 },
+      ],
       HORAIRES.map((x) => (x.id === S4.id ? h : x)),
     )
   }
+  /** Les trous de l'analyse (oracle `trousAccueilDuJour`), en heures. */
+  const deLAnalyse = (d: DonneesSemaine) =>
+    analyser(d).trous.map((t) => [t.debut, t.fin])
   const murale = (t: { debut: number; fin: number }) => [
     heureMurale(LUNDI, t.debut),
     heureMurale(LUNDI, t.fin),
   ]
 
-  it('générateur et vérificateur voient les mêmes trous (début décalé)', () => {
-    const g = preparerGeneration(semaineCourte(S4c), { aujourdhui: AUJOURDHUI })
+  it('générateur et analyse voient les mêmes trous de l’accueil (début décalé)', () => {
+    const d = semaineCourte(S4c)
+    const g = preparerGeneration(d, { aujourdhui: AUJOURDHUI })
     const r = generer(g.probleme, highs)
     const attendus = [
       ['15:00', '15:30'],
       ['22:30', '23:00'],
     ]
     expect(r.trous.map(murale)).toEqual(attendus)
-    expect(trous(g.probleme, r.affectations).map(murale)).toEqual(attendus)
+    expect(deLAnalyse(d)).toEqual(attendus)
   })
 
   it('sans raccourci au début : seule la fin manque, comme avant', () => {
     const S4f = { ...S4c, raccourci_debut: 0 }
-    const g = preparerGeneration(semaineCourte(S4f), { aujourdhui: AUJOURDHUI })
+    const d = semaineCourte(S4f)
+    const g = preparerGeneration(d, { aujourdhui: AUJOURDHUI })
     const r = generer(g.probleme, highs)
     expect(r.trous.map(murale)).toEqual([['22:00', '23:00']])
-    expect(trous(g.probleme, r.affectations).map(murale)).toEqual([
-      ['22:00', '23:00'],
-    ])
+    expect(deLAnalyse(d)).toEqual([['22:00', '23:00']])
   })
 })
