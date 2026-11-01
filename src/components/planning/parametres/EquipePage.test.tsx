@@ -192,7 +192,9 @@ describe('EquipePage', () => {
       within(postes).getByRole('button', { name: /Veille de nuit/ }),
     )
     expect(
-      await screen.findByText(/2 personnes de ce groupe perdent 2 compétences/),
+      await screen.findByText(
+        /Ces postes seront retirés de leur fiche\..* : Veille de nuit ; .* : Veille de nuit\./,
+      ),
     ).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Restreindre' }))
     await waitFor(() =>

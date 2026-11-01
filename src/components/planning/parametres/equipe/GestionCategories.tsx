@@ -60,6 +60,29 @@ export function competencesPerdues(
   return { personnes, competences }
 }
 
+/** Qui perd quel poste (décision U5 du 2026-11-01) : « Léa Martin : Club,
+ * Réception », une ligne par personne du groupe touchée. */
+export function detailPertes(
+  groupeId: number,
+  permis: number[],
+  salaries: Salarie[],
+  postes: Poste[],
+): string[] {
+  if (permis.length === 0) return []
+  const nom = (id: number) => postes.find((p) => p.id === id)?.nom ?? 'Poste'
+  return salaries.flatMap((s) => {
+    if (s.groupe_id !== groupeId) return []
+    const perdus = s.competences
+      .filter((c) => !permis.includes(c.poste_id))
+      .map((c) => nom(c.poste_id))
+    return perdus.length
+      ? [
+          `${[s.prenom, s.nom].filter(Boolean).join(' ')} : ${perdus.join(', ')}`,
+        ]
+      : []
+  })
+}
+
 export function GestionCategories({
   ouvert,
   onFermer,
@@ -125,7 +148,7 @@ export function GestionCategories({
     if (perte.competences > 0) {
       const ok = await confirm({
         title: `Restreindre les postes de ${g.nom} ?`,
-        description: `${perte.personnes} personne${perte.personnes > 1 ? 's' : ''} de ce groupe perd${perte.personnes > 1 ? 'ent' : ''} ${perte.competences} compétence${perte.competences > 1 ? 's' : ''} sur des postes qu'il ne permettra plus.`,
+        description: `Ces postes seront retirés de leur fiche. ${detailPertes(g.id, permis, salaries, postes).join(' ; ')}.`,
         confirmLabel: 'Restreindre',
         destructive: true,
       })

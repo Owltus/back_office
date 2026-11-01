@@ -7,7 +7,10 @@ import {
   modeDe,
   modificationPermise,
 } from '#/components/planning/parametres/reglages/tousOuCertains.ts'
-import { competencesPerdues } from '#/components/planning/parametres/equipe/GestionCategories.tsx'
+import {
+  competencesPerdues,
+  detailPertes,
+} from '#/components/planning/parametres/equipe/GestionCategories.tsx'
 import type { Salarie } from '#/lib/planning/types.ts'
 
 /*
@@ -155,6 +158,22 @@ describe('competencesPerdues', () => {
     membre(3, 7, [3]),
     membre(4, 8, [1, 3]),
   ]
+
+  it('dit qui perd quel poste (U5)', () => {
+    const nomme = equipe.map((s, i) => ({
+      ...s,
+      prenom: `P${i + 1}`,
+      nom: 'X',
+    }))
+    const postes = [1, 2, 3].map((id) => ({ id, nom: `Poste ${id}` }))
+    expect(detailPertes(7, [2], nomme, postes as never)).toEqual([
+      'P1 X : Poste 1',
+      'P3 X : Poste 3',
+    ])
+    // Refusé : passer à Tous, ou un autre groupe, ne nomme personne.
+    expect(detailPertes(7, [], nomme, postes as never)).toEqual([])
+    expect(detailPertes(9, [2], nomme, postes as never)).toEqual([])
+  })
 
   it('passer à Tous ne retire rien', () => {
     expect(competencesPerdues(7, [], equipe)).toEqual({
