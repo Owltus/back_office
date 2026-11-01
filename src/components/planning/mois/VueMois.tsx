@@ -158,6 +158,8 @@ export function VueMois({
     n: number
   } | null>(null)
   const [menu, setMenu] = useState<OuvertureMenu | null>(null)
+  // Cadenas d'une semaine : confirmé avant d'agir (décision U7 du 2026-11-01).
+  const [verrouSemaine, setVerrouSemaine] = useState<string | null>(null)
   // Éditeur complet d'un jour : la semaine (lundi de la date cliquée) que
   // visent ses écritures.
   const [edition, setEdition] = useState<{
@@ -296,7 +298,7 @@ export function VueMois({
 
   const nonTouchees = lundis.length - ouvertes.length
   const noteNonTouchees = nonTouchees
-    ? ` ${pluriel(nonTouchees, 'semaine')} passée${nonTouchees > 1 ? 's' : ''}, verrouillée${nonTouchees > 1 ? 's' : ''} ou déjà réalisée${nonTouchees > 1 ? 's' : ''} : non touchée${nonTouchees > 1 ? 's' : ''}.`
+    ? ` ${pluriel(nonTouchees, 'semaine')} passée${nonTouchees > 1 ? 's' : ''} ou verrouillée${nonTouchees > 1 ? 's' : ''} : non touchée${nonTouchees > 1 ? 's' : ''}.`
     : ''
 
   const completerLeMois = () => {
@@ -630,11 +632,11 @@ export function VueMois({
           ? 'Calcul en cours…'
           : undefined
   const portee = ouvertes.length
-    ? `Les actions du mois portent sur ${ouvertes.length > 1 ? 'les semaines' : 'la semaine'} ${listeSemaines(ouvertes, numeroSemaine)}, en entier (jours du mois voisin compris).${nonTouchees ? ' Les semaines passées, verrouillées ou déjà réalisées ne sont pas touchées.' : ''}`
+    ? `Les actions du mois portent sur ${ouvertes.length > 1 ? 'les semaines' : 'la semaine'} ${listeSemaines(ouvertes, numeroSemaine)}, en entier (jours du mois voisin compris).${nonTouchees ? ' Les semaines passées ou verrouillées ne sont pas touchées.' : ''}`
     : 'Aucune semaine ouverte : ce mois est passé, verrouillé ou déjà réalisé.'
   const aucuneOuverte = ouvertes.length
     ? undefined
-    : 'Aucune semaine ouverte : passée, verrouillée ou déjà réalisée'
+    : 'Aucune semaine ouverte : passée ou verrouillée'
 
   const groupes: Array<{ titre: string; actions: ActionMois[] }> = [
     {
@@ -880,18 +882,7 @@ export function VueMois({
             onFiche={setFiche}
             onJour={ouvrirJour}
             onDouble={droits.ecrire ? basculerValidation : undefined}
-            onVerrou={
-              droits.gerer
-                ? (l) => {
-                    const verrouillee = !!etats.get(l)?.verrouillee
-                    void executer(
-                      l,
-                      () => verrouiller(l, !verrouillee),
-                      "Le verrou n'a pas pu changer",
-                    )
-                  }
-                : undefined
-            }
+            onVerrou={droits.gerer ? setVerrouSemaine : undefined}
             onDeposer={deposer}
           />
         </GardeDemarrage>
@@ -1163,6 +1154,37 @@ export function VueMois({
           )
         }
       />
+      {verrouSemaine && (
+        <ConfirmDialog
+          open
+          onOpenChange={(o) => !o && setVerrouSemaine(null)}
+          title={
+            etats.get(verrouSemaine)?.verrouillee
+              ? `Déverrouiller la semaine ${numeroSemaine(verrouSemaine)} ?`
+              : `Verrouiller la semaine ${numeroSemaine(verrouSemaine)} ?`
+          }
+          description={
+            etats.get(verrouSemaine)?.verrouillee
+              ? 'Elle redevient modifiable, et la génération peut de nouveau la changer.'
+              : "Elle devient un planning réalisé : plus aucune modification ni génération, jusqu'à ce que la gestion la rouvre."
+          }
+          confirmLabel={
+            etats.get(verrouSemaine)?.verrouillee
+              ? 'Déverrouiller'
+              : 'Verrouiller'
+          }
+          onConfirm={() => {
+            const l = verrouSemaine
+            const verrouillee = !!etats.get(l)?.verrouillee
+            setVerrouSemaine(null)
+            void executer(
+              l,
+              () => verrouiller(l, !verrouillee),
+              "Le verrou n'a pas pu changer",
+            )
+          }}
+        />
+      )}
       <ConfirmDialog
         open={confirmation === 'verrou'}
         onOpenChange={(o) => !o && setConfirmation(null)}

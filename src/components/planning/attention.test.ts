@@ -106,7 +106,7 @@ const SEM = semaine('2026-10-26', {
     },
   ],
   presence: [
-    { jour: 0, periode: 'matin', compte: 0, minimum: 2, maximum: 2, ecart: -2 },
+    { jour: 0, periode: 'matin', compte: 3, minimum: 2, maximum: 2, ecart: 1 },
     { jour: 1, periode: 'soir', compte: 2, minimum: 2, maximum: 2, ecart: 0 },
   ],
   bilan: [
@@ -175,7 +175,7 @@ describe('points d’attention', () => {
       resumePoints(pointsAttention([semaine('2026-11-02')], SALARIES, POSTES)),
     ).toBe('Tout est en ordre.')
     expect(resumePoints(pointsAttention([SEM], SALARIES, POSTES))).toBe(
-      "5 points : 1 infraction, 2 places à pourvoir, 1 moment de l'accueil à compléter, 1 à regarder.",
+      "5 points : 1 infraction, 2 places à pourvoir, 1 moment de l'accueil avec du monde en plus, 1 à regarder.",
     )
   })
 })
@@ -377,10 +377,12 @@ describe('personnes par cycle (matin, soir, nuit)', () => {
   })
   const S = semaine('2026-11-02', {
     presence: [
-      ecart(1, 'nuit', -1),
+      ecart(1, 'nuit', 1),
       ecart(1, 'soir', 1),
-      ecart(1, 'matin', -2),
+      ecart(1, 'matin', 2),
       ecart(0, 'nuit', 0),
+      // Un manque n'est pas listé ici : c'est une place à pourvoir (U6).
+      ecart(2, 'matin', -1),
     ],
   } as unknown as Partial<SemaineOut>)
 
@@ -394,9 +396,9 @@ describe('personnes par cycle (matin, soir, nuit)', () => {
     const p = pointsAttention([S], SALARIES, POSTES)
     const jour = nommerJours(p.presence.map((e) => e.date))
     expect(p.presence.map((e) => phraseCycle(e, jour(e.date)))).toEqual([
-      'Il manque 2 personnes le matin mardi',
+      '2 personnes de trop le matin mardi',
       '1 personne de trop le soir mardi',
-      'Il manque 1 personne la nuit mardi',
+      '1 personne de trop la nuit mardi',
     ])
   })
 

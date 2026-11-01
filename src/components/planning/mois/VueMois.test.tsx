@@ -221,14 +221,15 @@ describe('VueMois', { timeout: 20_000 }, () => {
     expect(await screen.findByText(/Mois (complet )?généré/)).toBeTruthy()
   })
 
-  it('saute la semaine verrouillée et celles d’avant le dernier planning réalisé', async () => {
+  it('saute la semaine verrouillée, pas celles d’avant (U8)', async () => {
     droits = { pret: true, lire: true, ecrire: true, gerer: false }
     referentiel = { ...demo.referentiel, verrous: ['2026-11-09'] }
     monter()
     await charge()
     await completerLeMois()
-    await waitFor(() => expect(generer).toHaveBeenCalledTimes(3))
+    await waitFor(() => expect(generer).toHaveBeenCalledTimes(4))
     expect(generer.mock.calls.map((c) => c[0])).toEqual([
+      '2026-11-02',
       '2026-11-16',
       '2026-11-23',
       '2026-11-30',
@@ -276,6 +277,23 @@ describe('VueMois', { timeout: 20_000 }, () => {
       '2026-11-23',
       '2026-11-30',
     ])
+  })
+
+  it('le cadenas d’une semaine demande confirmation (U7)', async () => {
+    droits = { pret: true, lire: true, ecrire: true, gerer: true }
+    referentiel = { ...demo.referentiel, verrous: [] }
+    monter()
+    await charge()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Verrouiller la semaine 46' }),
+    )
+    // Rien n'est écrit avant la confirmation.
+    expect(await screen.findByText('Verrouiller la semaine 46 ?')).toBeTruthy()
+    expect(service.verrouiller).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Verrouiller' }))
+    await waitFor(() =>
+      expect(service.verrouiller).toHaveBeenCalledWith('2026-11-09', true),
+    )
   })
 
   it('en gestion, le cadenas verrouille chaque semaine du mois', async () => {

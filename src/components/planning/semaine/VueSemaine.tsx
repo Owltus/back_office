@@ -91,6 +91,7 @@ import {
   poserHoraire,
   reposAValider,
   reposDe,
+  reposProposesParJour,
   shiftDe,
   statutDuJour,
   trous,
@@ -342,15 +343,17 @@ export function VueSemaine({
   const bilanDe = (id: number) =>
     semaine?.bilan.find((b) => b.salarie_id === id)
 
-  const joursAValider = useMemo(
-    () =>
-      JOURS.map(
-        (_, j) =>
-          gestes &&
-          !!affichee?.affectations.some((a) => a.jour === j && !a.epinglee),
-      ),
-    [affichee, gestes],
-  )
+  // Un jour est à valider s'il a un shift OU un repos en proposition
+  // (décision U9 du 2026-11-01 : la coche valide les deux).
+  const joursAValider = useMemo(() => {
+    const repos = affichee ? reposProposesParJour(affichee) : []
+    return JOURS.map(
+      (_, j) =>
+        gestes &&
+        (!!affichee?.affectations.some((a) => a.jour === j && !a.epinglee) ||
+          (repos[j] ?? 0) > 0),
+    )
+  }, [affichee, gestes])
 
   // -------------------------------------------------------------- écritures
 

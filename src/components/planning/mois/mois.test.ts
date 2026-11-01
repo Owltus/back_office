@@ -39,16 +39,14 @@ describe('calendrier du mois', () => {
     ).toBe('S2, S9 et S16')
   })
 
-  it('état d’une semaine : passée, verrouillée, avant le réalisé, ouverte', () => {
+  it('état d’une semaine : passée, verrouillée, ouverte (U8)', () => {
     const verrous = ['2026-11-16']
     expect(etatSemaine('2026-10-26', verrous, '2026-11-04')).toMatchObject({
       passee: true,
       ouverte: false,
     })
-    expect(etatSemaine('2026-11-02', verrous, '2026-11-04')).toMatchObject({
-      avantLeRealise: true,
-      ouverte: false,
-    })
+    // Avant le dernier verrou mais ni passée ni verrouillée : ouverte.
+    expect(etatSemaine('2026-11-02', verrous, '2026-11-04').ouverte).toBe(true)
     expect(etatSemaine('2026-11-16', verrous, '2026-11-04')).toMatchObject({
       verrouillee: true,
       ouverte: false,

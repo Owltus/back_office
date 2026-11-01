@@ -41,18 +41,11 @@ export function reperer(date: string): { lundi: string; jour: number } {
   return { lundi, jour: ecartJours(lundi, date) }
 }
 
-/** Dernier planning réalisé (semaine verrouillée la plus récente). */
-export function dernierRealise(verrous: string[]): string | null {
-  return verrous.length ? [...verrous].sort().at(-1)! : null
-}
-
 export interface EtatSemaine {
   verrouillee: boolean
   passee: boolean
-  /** Avant (ou égale à) la dernière semaine verrouillée : déjà réalisée. */
-  avantLeRealise: boolean
-  /** Ni verrouillée, ni passée, ni avant le réalisé : les actions du mois
-   * la touchent. */
+  /** Ni verrouillée, ni passée : les actions du mois la touchent (décision
+   * U8 du 2026-11-01 : une semaine d'avant le dernier verrou reste ouverte). */
   ouverte: boolean
 }
 
@@ -63,21 +56,13 @@ export function etatSemaine(
 ): EtatSemaine {
   const verrouillee = verrous.includes(lundi)
   const passee = lundi < lundiDe(aujourdhui)
-  const realise = dernierRealise(verrous)
-  const avantLeRealise = realise !== null && lundi <= realise
-  return {
-    verrouillee,
-    passee,
-    avantLeRealise,
-    ouverte: !verrouillee && !passee && !avantLeRealise,
-  }
+  return { verrouillee, passee, ouverte: !verrouillee && !passee }
 }
 
 /** Pourquoi une semaine n'est pas touchée par les actions du mois. */
 export function raisonFermee(e: EtatSemaine): string | null {
   if (e.verrouillee) return 'verrouillée : planning réalisé'
   if (e.passee) return 'passée : on ne génère pas le passé'
-  if (e.avantLeRealise) return 'avant le dernier planning réalisé'
   return null
 }
 

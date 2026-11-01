@@ -273,10 +273,10 @@ describe('panneau : personnes par cycle et trous entre équipes', () => {
         {
           jour: 1,
           periode: 'nuit',
-          compte: 0,
+          compte: 2,
           minimum: 1,
           maximum: null,
-          ecart: -1,
+          ecart: 1,
         },
         {
           jour: 1,
@@ -302,14 +302,14 @@ describe('panneau : personnes par cycle et trous entre équipes', () => {
     )
     expect(
       screen.getByText(
-        "3 points : 2 écarts à l'accueil, 1 trou entre équipes.",
+        "3 points : 2 moments de l'accueil avec du monde en plus, 1 trou entre équipes.",
       ),
     ).toBeTruthy()
     expect(screen.getByText('Accueil : matin, soir, nuit')).toBeTruthy()
     expect(screen.getByText('Trous entre équipes')).toBeTruthy()
     const phrases = [
       '1 personne de trop le matin mardi',
-      'Il manque 1 personne la nuit mardi',
+      '1 personne de trop la nuit mardi',
       'Club mardi : personne de 15 h à 16 h',
     ]
     for (const t of phrases) expect(screen.getByText(t)).toBeTruthy()
