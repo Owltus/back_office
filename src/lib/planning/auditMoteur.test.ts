@@ -2,7 +2,7 @@ import fc from 'fast-check'
 import highsLoader from 'highs'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import { compatible, construire, generer } from '#/lib/planning/generateur.ts'
+import { compatible, generer } from '#/lib/planning/generateur.ts'
 import type { Highs } from '#/lib/planning/generateur.ts'
 import {
   cle,
@@ -806,12 +806,9 @@ describe('11. tableau de l’accueil : le vérificateur recompte le moteur', () 
           // Les trous : moteur = vérificateur.
           const tri = (t: { debut: number }[]) =>
             [...t].sort((a, b) => a.debut - b.debut)
-          // Écart connu du générateur (2026-11-01, étape 4) : sans AUCUNE
-          // variable (personne ne peut venir), il rend tôt, sans trou ; le
-          // vérificateur voit l'accueil vide comme un trou. L'écran lit
-          // l'analyse (vérificateur), pas ce retour.
-          if (construire(p).x.size === 0) expect(r.trous).toEqual([])
-          else expect(tri(trous(p, affs))).toEqual(tri(r.trous))
+          // Même sans AUCUNE variable (personne ne peut venir), l'accueil vide
+          // est un trou des deux côtés (écart corrigé le 2026-11-01).
+          expect(tri(trous(p, affs))).toEqual(tri(r.trous))
           if (r.trous.length) avecTrous++
           // Un moment incomplet : personne de libre pour lui.
           for (const x of presenceParCycle(p, affs)) {

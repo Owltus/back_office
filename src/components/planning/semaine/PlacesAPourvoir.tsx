@@ -106,7 +106,9 @@ function Placer({
       salarieId: id,
       date: place.date,
       jour: place.jour,
-      posteId: place.posteId,
+      // Accueil : le poste de l'accueil que la personne tient le mieux.
+      posteId:
+        place.personnes.find((p) => p.id === id)?.posteId ?? place.posteId,
       horaireId: place.horaireId,
       x: r.left,
       y: r.bottom,
@@ -173,7 +175,10 @@ function Groupe({
   // Heures de la place (une journée courte peut différer de l'horaire).
   const heures = libelleHoraire(g)
   const nom = g.poste?.nom ?? 'Poste'
-  const titre = `${nom}, ${g.code ?? heures}`
+  // Une place de l'accueil n'a ni poste ni horaire : son moment (2026-11-01).
+  const titre = g.moment
+    ? `Accueil, ${g.moment === 'nuit' ? 'la nuit' : g.moment}`
+    : `${nom}, ${g.code ?? heures}`
   const jours = joursDesPlaces(g.places.map((p) => p.date))
   return (
     <li>
@@ -193,7 +198,7 @@ function Groupe({
           <ChevronRight className="ml-auto size-3.5 shrink-0 self-center text-muted-foreground transition-transform group-open/raison:rotate-90" />
         </summary>
         <div className="flex flex-col gap-2 px-3 pb-2 pl-7 text-sm">
-          {g.code && g.code !== heures && (
+          {!g.moment && g.code && g.code !== heures && (
             <span className="text-xs text-muted-foreground tabular-nums">
               {heures}
             </span>
@@ -249,7 +254,7 @@ function Groupe({
                 onClick={() =>
                   onAller({
                     page: '/planning/besoins',
-                    cible: `poste-${g.posteId}`,
+                    cible: g.moment ? 'presence' : `poste-${g.posteId}`,
                   })
                 }
               >

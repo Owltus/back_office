@@ -576,3 +576,84 @@ describe('place que rien ne remplit', () => {
     expect(g.autresCodes).toEqual([{ code: '09:00–17:00', noms: ['Léa'] }])
   })
 })
+
+describe('places de l’accueil (2026-11-01)', () => {
+  // Oracle : D2 et D10 ; une place de l'accueil (`poste_id` 0) vaut pour
+  // Réception et Club le matin, la veille la nuit ; « Placer quelqu'un » met
+  // la personne sur le poste de l'accueil qu'elle tient le mieux.
+  const postes = [
+    {
+      id: 9,
+      nom: 'Réception',
+      couleur: '#000',
+      presence: true,
+      categorie: 'reception',
+    },
+    { id: 8, nom: 'Club', couleur: '#111', presence: true, categorie: 'autre' },
+    {
+      id: 7,
+      nom: 'Veille de nuit',
+      couleur: '#222',
+      presence: false,
+      categorie: 'veille_nuit',
+    },
+  ] as Poste[]
+  const gens = [
+    {
+      ...salarie(1, 'Léa'),
+      competences: [
+        { poste_id: 9, niveau: 'occasionnel' },
+        { poste_id: 8, niveau: 'titulaire' },
+      ],
+    },
+    {
+      ...salarie(2, 'Paul'),
+      competences: [{ poste_id: 7, niveau: 'titulaire' }],
+    },
+  ] as Salarie[]
+  const place = (moment: 'matin' | 'nuit') => ({
+    besoin_id: -1,
+    poste_id: 0,
+    moment,
+    jour: 1,
+    type_shift_id: null,
+    debut: '07:00',
+    fin: '15:45',
+    duree: 480,
+    manquant: 1,
+    remplacants: [],
+    raison_commune: null,
+    raisons: [
+      { salarie_id: 1, messages: [], regles: [] },
+      { salarie_id: 2, messages: [], regles: [] },
+    ],
+  })
+
+  it('le matin : Club, où elle est titulaire, plutôt que la Réception', () => {
+    const p = pointsAttention(
+      [semaine('2026-10-26', { a_pourvoir: [place('matin')] } as never)],
+      gens,
+      postes,
+    )
+    const [s] = p.aPourvoir.flatMap((j) => j.shifts)
+    expect(s.moment).toBe('matin')
+    const lea = s.personnes.find((x) => x.id === 1)
+    expect(lea?.posteId).toBe(8)
+    expect(lea?.role).toBe('titulaire')
+    // Paul ne tient aucun poste du matin de l'accueil : il reste sur la place.
+    expect(s.personnes.find((x) => x.id === 2)?.posteId).toBe(0)
+    const [g] = regrouperPlaces([s])
+    expect(g.moment).toBe('matin')
+  })
+
+  it('la nuit : la veille seule', () => {
+    const p = pointsAttention(
+      [semaine('2026-10-26', { a_pourvoir: [place('nuit')] } as never)],
+      gens,
+      postes,
+    )
+    const [s] = p.aPourvoir.flatMap((j) => j.shifts)
+    expect(s.personnes.find((x) => x.id === 2)?.posteId).toBe(7)
+    expect(s.personnes.find((x) => x.id === 1)?.posteId).toBe(0)
+  })
+})

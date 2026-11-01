@@ -1880,7 +1880,14 @@ function resoudreUneFois(
     ),
   )
   // Sans variable ni place : aucun besoin, donc aucune plage, aucun trou.
-  if (x.size === 0 && manque.size === 0) {
+  // Un moment de l'accueil demandé, ou une plage de l'accueil, se résout
+  // même sans personne (2026-11-01) : l'accueil vide est un manque et un trou.
+  if (
+    x.size === 0 &&
+    manque.size === 0 &&
+    minimums.length === 0 &&
+    trous.length === 0
+  ) {
     return {
       statut: 'optimal',
       affectations: [],

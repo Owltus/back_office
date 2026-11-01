@@ -17,6 +17,7 @@ import {
   raisonsClaires,
 } from '#/lib/planning/raisonsPlaces.ts'
 import type { RaisonClaire } from '#/lib/planning/raisonsPlaces.ts'
+import { POSTE_ID_ACCUEIL } from '#/lib/planning/semaine.ts'
 import type { SemaineOut } from '#/lib/planning/semaine.ts'
 import { ORDRE_PERIODES } from '#/lib/planning/presence.ts'
 import { ajouterJours } from '#/lib/planning/temps.ts'
@@ -29,6 +30,11 @@ import type {
 } from '#/lib/planning/types.ts'
 
 const RAISON_EXTRA = 'extra disponible'
+const RANG_NIVEAU: Record<string, number> = {
+  titulaire: 0,
+  occasionnel: 1,
+  soutien: 2,
+}
 const SANS_RAISON = 'disponible ce jour-là'
 
 export interface Raison {
@@ -50,6 +56,9 @@ export interface PersonnePlace {
   id: number
   nom: string
   role: RolePlace
+  /** Poste où la placer : celui de la place, ou pour l'accueil le poste de
+   * l'accueil qu'elle tient le mieux (titulaire avant dépannage). */
+  posteId: number
   raisons: RaisonClaire[]
   /** Rien ne l'empêche de prendre la place, sinon ses heures ou un appel. */
   possible: boolean
@@ -63,6 +72,9 @@ export interface ShiftAPourvoir {
   posteId: number
   horaireId: number | null
   poste: Poste | undefined
+  /** Moment d'une place de l'accueil (`posteId` = `POSTE_ID_ACCUEIL`), sinon
+   * null (2026-11-01). */
+  moment: PeriodePresence | null
   debut: string
   fin: string
   manquant: number
@@ -175,15 +187,29 @@ export function pointsAttention(
       const extras: string[] = []
       const parRaison = new Map<string, string[]>()
       const personnes: PersonnePlace[] = []
+      // Une place de l'accueil (2026-11-01) vaut pour tous ses postes : la
+      // nuit, la veille ; le matin et le soir, les postes cochés « présence ».
+      const moment = t.poste_id === POSTE_ID_ACCUEIL ? (t.moment ?? null) : null
+      const postesPlace =
+        t.poste_id === POSTE_ID_ACCUEIL
+          ? postes
+              .filter((p) =>
+                moment === 'nuit' ? p.categorie === 'veille_nuit' : p.presence,
+              )
+              .map((p) => p.id)
+          : [t.poste_id]
       for (const r of t.raisons) {
         const x = parId.get(r.salarie_id)
-        const niveau = x?.competences.find(
-          (c) => c.poste_id === t.poste_id,
-        )?.niveau
+        const competence = x?.competences
+          .filter((c) => postesPlace.includes(c.poste_id))
+          .sort((a, b) => RANG_NIVEAU[a.niveau] - RANG_NIVEAU[b.niveau])
+          .at(0)
+        const niveau = competence?.niveau
         const claires = raisonsClaires(r.salarie_id, r.regles, r.messages)
         personnes.push({
           id: r.salarie_id,
           nom: nom(r.salarie_id),
+          posteId: competence?.poste_id ?? t.poste_id,
           role:
             x?.type_contrat === 'extra'
               ? 'extra'
@@ -228,6 +254,7 @@ export function pointsAttention(
         posteId: t.poste_id,
         horaireId: t.type_shift_id,
         poste: postes.find((p) => p.id === t.poste_id),
+        moment,
         debut: t.debut,
         fin: t.fin,
         manquant: t.manquant,
@@ -376,6 +403,8 @@ export interface GroupePlaces {
   cle: string
   poste: Poste | undefined
   posteId: number
+  /** Moment d'un groupe de l'accueil, sinon null. */
+  moment: PeriodePresence | null
   /** Heures de l'horaire demandé (« 07:00–15:45 », `libelleHoraire`), ou
    * null (place sans horaire, ou horaires non donnés : on montre les heures
    * de la place). Plus de code depuis le 2026-10-31. */
@@ -476,13 +505,14 @@ export function regrouperPlaces(
     (a, b) => a.date.localeCompare(b.date) || a.debut.localeCompare(b.debut),
   )
   for (const t of tries) {
-    const cle = `${t.posteId}|${t.horaireId ?? ''}|${t.debut}|${t.fin}|${t.raisonCommune?.regle ?? ''}`
+    const cle = `${t.posteId}|${t.moment ?? ''}|${t.horaireId ?? ''}|${t.debut}|${t.fin}|${t.raisonCommune?.regle ?? ''}`
     let g = groupes.get(cle)
     if (!g) {
       g = {
         cle,
         poste: t.poste,
         posteId: t.posteId,
+        moment: t.moment,
         code: t.horaireId === null ? null : (codes.get(t.horaireId) ?? null),
         debut: t.debut,
         fin: t.fin,
