@@ -269,7 +269,7 @@ export function BarreMois({
         <DropdownMenu>
           <AvecRaison
             desactive={!!menuInactif}
-            label={menuInactif ?? 'Générer, valider, effacer'}
+            label={menuInactif ?? 'Compléter, valider, effacer'}
           >
             <DropdownMenuTrigger asChild disabled={!!menuInactif}>
               <Button

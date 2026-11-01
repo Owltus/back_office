@@ -314,7 +314,7 @@ export function VueMois({
       const faites = new Map<string, SemaineOut>()
       let proposes = 0
       // Dans l'ordre : chaque semaine voit la précédente (repos de 11 h).
-      const ok = await parSemaine('Génération du mois', visees, async (l) => {
+      const ok = await parSemaine('Compléter le mois', visees, async (l) => {
         const r = await generer(l, { aujourdhui })
         faites.set(l, r.semaine)
         proposes += r.poses
@@ -638,7 +638,7 @@ export function VueMois({
 
   const groupes: Array<{ titre: string; actions: ActionMois[] }> = [
     {
-      titre: 'Générer',
+      titre: 'Compléter',
       actions: [
         {
           libelle: 'Compléter le mois',

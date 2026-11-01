@@ -513,7 +513,7 @@ describe('VueMois', { timeout: 20_000 }, () => {
     await completerLeMois()
     expect(
       await screen.findByText(
-        'Génération du mois : arrêt à la semaine S45 (du 02/11). Le planning a changé entre-temps.',
+        'Compléter le mois : arrêt à la semaine S45 (du 02/11). Le planning a changé entre-temps.',
       ),
     ).toBeTruthy()
   })
