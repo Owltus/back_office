@@ -587,8 +587,8 @@ describe('FicheSalarie', () => {
     expect(regles.textContent).not.toContain('R-SEMAINE-MAX')
     expect(codes()).toContain('R-SEMAINE-MAX')
     expect(codes()).not.toContain('R-NUIT-MINEUR')
-    fireEvent.click(screen.getByLabelText('Mineur (16-18 ans)'))
-    expect(codes()).toContain('R-NUIT-MINEUR')
+    // Un CDI est majeur : pas d'interrupteur Mineur (2026-11-01).
+    expect(screen.queryByLabelText('Mineur (16-18 ans)')).toBeNull()
   })
 
   it("s'ouvre sur les absences RELUES, pas sur celles du cache", async () => {

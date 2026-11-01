@@ -317,6 +317,8 @@ export function changerContrat(
     heures_hebdo: type_contrat === 'extra' ? 0 : b.heures_hebdo || 35,
     // Seuls un CDI ou un CDD peuvent être cadres au forfait (2026-11-01).
     forfait_jours: CONTRATS_CADRE.has(type_contrat) ? b.forfait_jours : false,
+    // Seuls un apprenti ou un stagiaire peuvent être mineurs (2026-11-01).
+    mineur: CONTRATS_MINEUR.has(type_contrat) ? b.mineur : false,
     // Un extra vient ponctuellement : jamais de fin de contrat (U2) ; un
     // autre contrat est toujours actif (sa fin le sort du planning).
     date_sortie: type_contrat === 'extra' ? null : b.date_sortie,
@@ -350,6 +352,13 @@ export function changerCategorie(
     perdues: b.competences.length - gardees.length,
   }
 }
+
+/** Contrats qui peuvent être mineurs (décision utilisateur du 2026-11-01 :
+ * un CDI, un CDD ou un extra est majeur). */
+export const CONTRATS_MINEUR: ReadonlySet<TypeContrat> = new Set([
+  'apprenti',
+  'stagiaire',
+])
 
 /** Contrats qui peuvent être cadres au forfait jours (décision utilisateur
  * du 2026-11-01 : jamais un apprenti, un stagiaire ni un extra). */

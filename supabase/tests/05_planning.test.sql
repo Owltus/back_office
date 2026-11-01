@@ -133,7 +133,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':R', (select r from t_ids)::text);
 $$;
 
-select plan(65);
+select plan(67);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -294,6 +294,13 @@ select is(pg_temp.essai('gestion', array[
 select is(pg_temp.essai('gestion', array[
   pg_temp.q('insert into public.planning_salaries (prenom, nom, type_contrat, heures_hebdo, forfait_jours) values (''Appr'', ''Test'', ''apprenti'', 35, true)')]),
   'err=23514', 'forfait jours : jamais pour un apprenti');
+select is(pg_temp.essai('gestion', array[
+  pg_temp.q('insert into public.planning_salaries (prenom, nom, type_contrat, heures_hebdo, mineur) values (''Jeune'', ''Test'', ''apprenti'', 35, true)'),
+  pg_temp.q('select mineur::text from public.planning_salaries where prenom = ''Jeune'' and nom = ''Test''')]),
+  'true', 'mineur : possible pour un apprenti');
+select is(pg_temp.essai('gestion', array[
+  pg_temp.q('insert into public.planning_salaries (prenom, nom, type_contrat, heures_hebdo, mineur) values (''Jeune'', ''Cdi'', ''cdi'', 35, true)')]),
+  'err=23514', 'mineur : jamais en CDI');
 
 -- ------------------------------------ consignes de présence (2026-10-28) ---
 select is(pg_temp.essai('aucun', array['select count(*) from public.planning_consignes']),

@@ -10,6 +10,7 @@ import { Repeat } from 'lucide-react'
 import {
   changerCategorie,
   changerContrat,
+  CONTRATS_MINEUR,
   evolutionParDefaut,
   FIN_OBLIGATOIRE,
   forfaitPossible,
@@ -223,13 +224,17 @@ export function SectionIdentite({
             Cadre au forfait jours
           </Interrupteur>
         )}
-        <Interrupteur
-          coche={b.mineur}
-          disabled={disabled}
-          onChange={(v) => maj((x) => ({ ...x, mineur: v }))}
-        >
-          Mineur (16-18 ans)
-        </Interrupteur>
+        {/* Mineur : apprenti ou stagiaire seulement (2026-11-01) ; une fiche
+            déjà cochée garde l'interrupteur pour pouvoir le retirer. */}
+        {(CONTRATS_MINEUR.has(b.type_contrat) || b.mineur) && (
+          <Interrupteur
+            coche={b.mineur}
+            disabled={disabled}
+            onChange={(v) => maj((x) => ({ ...x, mineur: v }))}
+          >
+            Mineur (16-18 ans)
+          </Interrupteur>
+        )}
         {/* Actif / Inactif : pour un extra seulement (U2) ; une fiche
             déjà désactivée le garde pour pouvoir la rouvrir. */}
         {(b.type_contrat === 'extra' || !b.actif) && (

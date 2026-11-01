@@ -4,6 +4,7 @@ import {
   brouillonVierge,
   changerCategorie,
   changerContrat,
+  CONTRATS_MINEUR,
   erreurBrouillon,
   forfaitPossible,
   heuresSansObjet,
@@ -210,5 +211,20 @@ describe('cadre au forfait jours : la direction seule (2026-11-01)', () => {
     expect(
       changerCategorie(cadre, 1, [], groupes as never).brouillon.forfait_jours,
     ).toBe(true)
+  })
+})
+
+describe('mineur : apprenti ou stagiaire seulement (2026-11-01)', () => {
+  const fiche = (kw: Partial<ReturnType<typeof brouillonVierge>>) => ({
+    ...brouillonVierge(),
+    prenom: 'Léa',
+    ...kw,
+  })
+  it('passer en CDI, CDD ou extra retire « mineur »', () => {
+    const jeune = fiche({ type_contrat: 'apprenti', mineur: true })
+    expect(changerContrat(jeune, 'stagiaire').mineur).toBe(true)
+    for (const t of ['cdi', 'cdd', 'extra'] as const)
+      expect(changerContrat(jeune, t).mineur).toBe(false)
+    expect([...CONTRATS_MINEUR].sort()).toEqual(['apprenti', 'stagiaire'])
   })
 })
