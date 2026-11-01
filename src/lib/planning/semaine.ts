@@ -91,8 +91,10 @@ import type {
   Salarie,
 } from '#/lib/planning/types.ts'
 import {
+  ouverturesManquees,
   raisonsBlocage,
   raisonsBlocageAccueil,
+  relevesManquantes,
   reposHebdoTrouve,
   trous,
   violations,
@@ -243,6 +245,9 @@ export interface SemaineOut {
    * (`verificateur.trous`), en heures d'horloge. Ajouté le 2026-10-30 ;
    * absent de l'API du prototype. */
   trous: TrouOut[]
+  /** Jours (0 à 6) sans relève entre l'équipe du matin et celle de
+   * l'après-midi (2026-11-01). Absent : données d'avant. */
+  releves_manquantes?: number[]
   stats: {
     places: number
     pourvues: number
@@ -763,6 +768,33 @@ export function candidatsAccueil(ctx: Contexte, depuis = 0): Creneau[] {
         if (alerteBesoin(poste.categorie, duree(c))) continue
         r.push(c)
       }
+    }
+  }
+  return r
+}
+
+/** Durée tenue à l'ouverture d'un poste de l'accueil : la première heure. */
+export const DUREE_OUVERTURE = 60
+
+/** L'ouverture de chaque poste de l'accueil qui a une heure d'ouverture
+ * (2026-11-01, « à 7 h, quelqu'un en réception et quelqu'un au club ») :
+ * chaque jour où le matin est demandé, de l'heure d'ouverture à une heure
+ * plus tard, en minutes réelles. Rien si le tableau n'est pas en service. */
+export function ouverturesAccueil(ctx: Contexte): Probleme['ouvertures'] {
+  if (!accueilEnService(ctx)) return []
+  const r: NonNullable<Probleme['ouvertures']> = []
+  for (const poste of [...ctx.postes.values()].sort((a, b) => a.id - b.id)) {
+    if (!poste.ouverture || poste.ferme || !poste.presence) continue
+    const m = minutes(poste.ouverture) + DUREE_OUVERTURE
+    const fin = `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
+    for (let jour = 0; jour < 7; jour++) {
+      const matin = ctx.consignes.some(
+        (k) =>
+          k.jour === jour && k.periode === 'matin' && chiffreAccueil(k) > 0,
+      )
+      if (!matin) continue
+      const [debut, f] = bornes(ctx.lundi, jour, poste.ouverture, fin)
+      r.push({ poste: String(poste.id), jour, debut, fin: f })
     }
   }
   return r
@@ -1576,6 +1608,25 @@ export function analyser(d: DonneesSemaine): SemaineOut {
     }
   }
 
+  // Ouverture et relève (2026-11-01) : recomptées par l'oracle, sur les
+  // shifts posés ; le jour de la relève se lit sur les horaires possibles.
+  const pReglages: Probleme = {
+    ...p,
+    creneaux: [...p.creneaux, ...candidatsDuMoment],
+    consignes: chiffresAccueil(ctx),
+    ouvertures: ouverturesAccueil(ctx),
+    releveMinutes: accueil ? (d.referentiel.reglages?.releve_minutes ?? 0) : 0,
+  }
+  const ouverturesVides: TrouOut[] = ouverturesManquees(pReglages, affs).map(
+    (t) => ({
+      poste_id: Number(t.poste),
+      jour: t.jour,
+      debut: heureMurale(lundi, t.debut),
+      fin: heureMurale(lundi, t.fin),
+    }),
+  )
+  const sansReleve = relevesManquantes(pReglages, affs)
+
   const infractions = toutes.filter((v) => v.nature === 'loi').length
   return {
     lundi,
@@ -1592,7 +1643,9 @@ export function analyser(d: DonneesSemaine): SemaineOut {
         fin: heureMurale(lundi, t.fin),
       })),
       ...trousAccueil,
+      ...ouverturesVides,
     ],
+    releves_manquantes: sansReleve,
     stats: {
       places:
         besoins.reduce((t, b) => t + b.effectif, 0) +
@@ -1885,6 +1938,10 @@ export function preparerGeneration(
     courtes,
     aEviter,
     consignes: chiffresAccueil(ctx),
+    ouvertures: ouverturesAccueil(ctx),
+    releveMinutes: accueilEnService(ctx)
+      ? (d.referentiel.reglages?.releve_minutes ?? 0)
+      : 0,
     // 40 s au plus par semaine (2026-11-01) : à 10 s, HiGHS s'arrêtait
     // avant l'optimum sur une semaine réelle (décembre : des contrats à
     // 32 h et des places vides alors que des extras étaient libres) ; il

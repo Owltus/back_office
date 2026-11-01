@@ -76,6 +76,7 @@ const saisieDe = (p: Poste): SaisiePoste => ({
   presence: p.presence,
   accueil_nuit: tientLaNuit({ ...p, ferme: false }),
   ferme: p.ferme ?? false,
+  ouverture: p.ouverture ?? null,
 })
 
 /** Le choix unique « Accueil » d'un poste (U1 du 2026-11-01). */
@@ -134,6 +135,7 @@ export function PostesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
       presence: false,
       accueil_nuit: false,
       ferme: false,
+      ouverture: null,
     })
   }
 
@@ -400,13 +402,42 @@ function CartePoste({
           options={OPTIONS_ACCUEIL}
           disabled={!modifiable}
           onChange={(v) =>
-            changer({ presence: v === 'jour', accueil_nuit: v === 'nuit' })
+            changer({
+              presence: v === 'jour',
+              accueil_nuit: v === 'nuit',
+              // L'ouverture ne vaut que pour un poste du matin et du soir.
+              ouverture: v === 'jour' ? (p.ouverture ?? null) : null,
+            })
           }
         />
         <span className="text-xs text-muted-foreground">
           {TEXTE_ACCUEIL[choixAccueil(p)]}
         </span>
       </div>
+
+      {p.presence && (
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor={`${idNom}-ouverture`} className="text-sm font-medium">
+            Ouverture
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              id={`${idNom}-ouverture`}
+              type="time"
+              step={900}
+              className="w-32"
+              value={p.ouverture ?? ''}
+              disabled={!modifiable}
+              onChange={(e) => changer({ ouverture: e.target.value || null })}
+            />
+            <span className="text-xs text-muted-foreground">
+              {p.ouverture
+                ? `Quelqu'un sur ce poste dès ${p.ouverture} chaque matin, pendant au moins une heure.`
+                : "Aucune heure d'ouverture : vide."}
+            </span>
+          </div>
+        </div>
+      )}
 
       <label className="flex items-start gap-2 text-sm">
         <Switch

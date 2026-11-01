@@ -839,3 +839,108 @@ export function raisonsBlocage(
   }
   return raisons
 }
+
+// ------------------------------------------- ouverture et relève (2026-11-01)
+
+/** Ouvertures sans personne : pour chaque `p.ouvertures` (la première heure
+ * d'un poste de l'accueil), les morceaux où personne d'autonome n'est sur CE
+ * poste. Recompté ici, sans rien du générateur. */
+export function ouverturesManquees(
+  p: Probleme,
+  affectations: AffectationSolveur[],
+): Trou[] {
+  if (!p.ouvertures?.length) return []
+  const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
+  const salaries = new Map(p.salaries.map((s) => [s.id, s]))
+  const parPoste = new Map<string, PresencePoste[]>()
+  for (const a of affectationsCompletes(p, affectations)) {
+    const c = creneaux.get(a.creneauId)
+    const s = salaries.get(a.salarieId)
+    if (!c || !s) continue
+    const fait = a.court ? enVersionCourte(c) : c
+    parPoste.set(c.poste, [
+      ...(parPoste.get(c.poste) ?? []),
+      {
+        debut: fait.debut,
+        fin: fait.fin,
+        autonome: role(s, c.poste) !== 'soutien',
+      },
+    ])
+  }
+  const r: Trou[] = []
+  for (const o of p.ouvertures)
+    for (const t of trousDuJour(
+      [{ debut: o.debut, fin: o.fin }],
+      parPoste.get(o.poste) ?? [],
+    ))
+      r.push({ poste: o.poste, jour: o.jour, debut: t.debut, fin: t.fin })
+  return r
+}
+
+/** Jours sans relève : le matin et le soir demandés, des horaires du matin et
+ * du soir de l'accueil du jour qui PEUVENT se chevaucher `p.releveMinutes`,
+ * et pourtant jamais une personne autonome d'un horaire du matin et une d'un
+ * horaire du soir ensemble aussi longtemps, d'affilée, au quart d'heure. */
+export function relevesManquantes(
+  p: Probleme,
+  affectations: AffectationSolveur[],
+): number[] {
+  const duree = p.releveMinutes ?? 0
+  if (duree <= 0) return []
+  const Q = 15
+  const k = Math.ceil(duree / Q)
+  const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
+  const salaries = new Map(p.salaries.map((s) => [s.id, s]))
+  const postesJour = new Set(
+    p.creneaux
+      .filter((c) => c.accueil && !c.presence.includes('nuit'))
+      .map((c) => c.poste),
+  )
+  const pur = (c: Creneau, moment: 'matin' | 'soir') =>
+    c.presence.length === 1 && c.presence[0] === moment
+  const demande = (j: number, periode: 'matin' | 'soir') =>
+    p.consignes.some(
+      (c) => c.jour === j && c.periode === periode && c.minimum > 0,
+    )
+  const faits = affectationsCompletes(p, affectations).flatMap((a) => {
+    const c = creneaux.get(a.creneauId)
+    const s = salaries.get(a.salarieId)
+    if (!c || !s || !postesJour.has(c.poste)) return []
+    if (role(s, c.poste) === 'soutien') return []
+    return [{ c, fait: a.court ? enVersionCourte(c) : c }]
+  })
+  const r: number[] = []
+  for (let jour = 0; jour < p.nbJours; jour++) {
+    if (!demande(jour, 'matin') || !demande(jour, 'soir')) continue
+    const duJour = p.creneaux.filter(
+      (c) => postesJour.has(c.poste) && jourDe(c) === jour,
+    )
+    const matins = duJour.filter((c) => pur(c, 'matin'))
+    const soirs = duJour.filter((c) => pur(c, 'soir'))
+    if (!matins.length || !soirs.length) continue
+    const debut = Math.ceil(Math.min(...soirs.map((c) => c.debut)) / Q) * Q
+    const fin = Math.max(...matins.map((c) => c.fin))
+    const quarts: number[] = []
+    for (let a = debut; a + Q <= fin; a += Q) quarts.push(a)
+    if (quarts.length * Q < duree) continue
+    const ensemble = quarts.map((a) => {
+      const la = (moment: 'matin' | 'soir') =>
+        faits.some(
+          ({ c, fait }) =>
+            jourDe(c) === jour &&
+            pur(c, moment) &&
+            fait.debut <= a &&
+            fait.fin >= a + Q,
+        )
+      return la('matin') && la('soir')
+    })
+    let suite = 0
+    let ok = false
+    for (const e of ensemble) {
+      suite = e ? suite + 1 : 0
+      if (suite >= k) ok = true
+    }
+    if (!ok) r.push(jour)
+  }
+  return r
+}

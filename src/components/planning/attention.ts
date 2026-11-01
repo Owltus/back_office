@@ -114,6 +114,8 @@ export interface TrouAttention {
   /** Heures d'horloge, fin exclue. */
   debut: string
   fin: string
+  /** Relève manquée ce jour-là (2026-11-01) : pas d'heures. */
+  releve?: boolean
 }
 
 export interface PointPersonne {
@@ -292,6 +294,21 @@ export function pointsAttention(
         poste: postes.find((p) => p.id === t.poste_id),
         debut: t.debut,
         fin: t.fin,
+      })
+    }
+    // Relève (2026-11-01) : un jour où l'équipe du matin et celle de
+    // l'après-midi ne se croisent pas le temps réglé.
+    for (const j of s.releves_manquantes ?? []) {
+      const date = ajouterJours(s.lundi, j)
+      if (!garder(date)) continue
+      trous.push({
+        cle: `${date}-releve`,
+        date,
+        posteId: 0,
+        poste: undefined,
+        debut: '',
+        fin: '',
+        releve: true,
       })
     }
   }
@@ -488,6 +505,8 @@ export function heureParlee(h: string): string {
 
 /** « Réception mardi : personne de 15 h à 16 h ». */
 export function phraseTrou(t: TrouAttention, jour: string): string {
+  if (t.releve)
+    return `Relève ${jour} : l'équipe du matin et celle de l'après-midi ne se croisent pas`
   // `poste_id` 0 : trou de l'accueil entier, Réception et Club ensemble
   // (`POSTE_ID_ACCUEIL`, décision D15 du 2026-11-01).
   const ou = t.poste?.nom ?? (t.posteId === 0 ? 'Accueil' : 'Poste')

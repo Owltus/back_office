@@ -275,6 +275,16 @@ export interface Probleme {
   aEviter: ReadonlySet<string>
   /** Tableau de l'accueil : le chiffre de chaque moment, jour par jour. */
   consignes: ConsigneSolveur[]
+  /** Ouverture (2026-11-01) : la première heure d'un poste de l'accueil qui
+   * a une heure d'ouverture, jour par jour (minutes réelles). */
+  ouvertures?: Array<{
+    poste: string
+    jour: number
+    debut: number
+    fin: number
+  }>
+  /** Relève entre le matin et le soir, en minutes (0 ou absent : aucune). */
+  releveMinutes?: number
 }
 
 export const cle = (salarie: string, creneauId: string) =>

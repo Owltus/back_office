@@ -24,6 +24,7 @@ import type {
   Motif,
   Poste,
   Referentiel,
+  Reglages,
   Salarie,
 } from '#/lib/planning/types.ts'
 import { supabase } from '#/lib/supabase.ts'
@@ -32,7 +33,7 @@ const COL_HORAIRE =
   'id, nom, debut, fin, couleur, pause, raccourci, raccourci_debut, periode'
 const COL_MOTIF = 'id, code, nom, couleur, decompte, nature'
 const COL_POSTE =
-  'id, nom, categorie, couleur, horaires_autorises, presence, accueil_nuit, ferme'
+  'id, nom, categorie, couleur, horaires_autorises, presence, accueil_nuit, ferme, ouverture'
 const COL_CONSIGNE = 'id, jour, periode, minimum, maximum'
 const COL_GROUPE = 'id, nom, ordre, postes_autorises'
 const COL_SALARIE =
@@ -79,6 +80,7 @@ export async function fetchReferentiel(): Promise<Referentiel> {
     besoins,
     consignes,
     verrous,
+    reglages,
   ] = await Promise.all([
     supabase
       .from('planning_horaires')
@@ -107,6 +109,11 @@ export async function fetchReferentiel(): Promise<Referentiel> {
       .from('planning_semaines_verrouillees')
       .select('lundi')
       .order('lundi'),
+    supabase
+      .from('planning_reglages')
+      .select('releve_minutes')
+      .eq('id', 1)
+      .maybeSingle(),
   ])
   return {
     horaires: verifier(horaires),
@@ -131,7 +138,24 @@ export async function fetchReferentiel(): Promise<Referentiel> {
     verrous: (verifier(verrous) as Array<{ lundi: string }>).map(
       (v) => v.lundi,
     ),
+    // La ligne manque (base pas encore migrée) : la relève par défaut.
+    reglages: {
+      releve_minutes:
+        (verifier(reglages) as { releve_minutes: number } | null)
+          ?.releve_minutes ?? 30,
+    },
   }
+}
+
+/** Réglages généraux du planning (gestion). */
+export async function enregistrerReglages(r: Reglages): Promise<void> {
+  auMoinsUne(
+    await supabase
+      .from('planning_reglages')
+      .update({ releve_minutes: r.releve_minutes })
+      .eq('id', 1)
+      .select('id'),
+  )
 }
 
 export interface DonneesShifts {

@@ -218,6 +218,23 @@ export const POIDS_EQUITE = 100
  * équité), sous les contrats et les places : les poids P1 et le surplus en
  * dérivent. */
 export const POIDS_REPOS_SEPARES = 8_000
+/** Un jour de travail en moins que le rythme du contrat (5 jours pour un
+ * contrat de 35 h ou plus, école et absences décomptées ; demande
+ * utilisateur du 2026-11-01 : « 39 h en 4 jours de 10 h », c'est non).
+ * Au-dessus d'une personne en plus à l'accueil (le surplus d'un shift,
+ * plafonné, reste en dessous), sous les heures dues et les places. */
+export const POIDS_JOUR_MANQUANT = 80_000
+/** Contrats à rythme de 5 jours : 35 h et plus. */
+export const RYTHME_CONTRAT_MIN = 35 * 60
+/** Ouverture d'un poste de l'accueil (07:00 Réception et Club, réglage du
+ * poste) : un quart d'heure sans personne sur ce poste dans la première
+ * heure. « Obligatoire » (2026-11-01) : au-dessus des contrats d'un jour de
+ * travail. */
+export const POIDS_OUVERTURE_QUART = 40_000
+/** Pas de relève (l'équipe du matin et celle de l'après-midi jamais
+ * ensemble le temps réglé) : au-dessus du 6e jour et des repos accolés,
+ * sous les contrats. */
+export const POIDS_RELEVE = 16_000
 /** Travailler un jour habituel (semaine type « travail »). */
 export const POIDS_JOUR_FIXE = 2_000
 // P4 — titulaire avant dépannage, horaire imposé avant remplaçant.
@@ -484,6 +501,10 @@ export interface Trou {
 /** Le résultat du générateur, avec les trous entre équipes restés. */
 export type ResultatGeneration = Resultat & {
   trous: Trou[]
+  /** Ouvertures restées sans personne (poste de l'accueil, première heure). */
+  ouvertures: Trou[]
+  /** Jours sans relève entre l'équipe du matin et celle de l'après-midi. */
+  relevesManquantes: number[]
   /** Calcul qui a servi (mesure seulement, voir `generer`) : 1 = sans les
    * remplaçants non imposés, 2 = problème complet. */
   etapes: 1 | 2
@@ -686,6 +707,10 @@ interface Construit {
   ecarts: Array<[string, string]>
   /** Variables de trou (une par morceau de plage), voir `trousEntreEquipes`. */
   trous: Array<Trou & { v: string }>
+  /** Ouvertures (première heure d'un poste de l'accueil), même forme. */
+  ouvertures: Array<Trou & { v: string }>
+  /** Relève manquée, une variable par jour. */
+  releves: Array<{ jour: number; v: string }>
   /** Variables de manque au chiffre d'un moment (une par moment demandé),
    * avec l'indice du moment dans `Probleme.consignes`. */
   minimums: Array<{ v: string; consigne: number }>
@@ -973,6 +998,24 @@ export function construire(
   })
 
   const trous = trousEntreEquipes(m, p, x, court, termesDe)
+  // Ouverture (2026-11-01) : la première heure de chaque poste de l'accueil
+  // qui a une heure d'ouverture, tenue sur CE poste.
+  const ouvertures = (p.ouvertures ?? []).flatMap((o) =>
+    variablesTrous(
+      m,
+      p,
+      x,
+      court,
+      termesDe,
+      o.poste,
+      o.jour,
+      o.debut,
+      o.fin,
+      p.creneaux.filter((c) => c.poste === o.poste),
+      POIDS_OUVERTURE_QUART,
+    ),
+  )
+  const releves = relevesAccueil(m, p, court, termesDe)
 
   // Une « expression » : termes + constante.
   type Expr = { termes: Terme[]; constante: number }
@@ -1118,6 +1161,24 @@ export function construire(
           nbJours.constante - s.joursPreferesSemaine,
         )
         m.cout(POIDS_SIXIEME_JOUR, six)
+      }
+      // Rythme de 5 jours (2026-11-01) : un contrat de 35 h ou plus se fait
+      // en `joursPreferesSemaine` jours, absences et jours hors contrat
+      // décomptés (l'école compte déjà comme un jour, `nbJours`).
+      if (!s.contratIndicatif && s.minutesHebdoContrat >= RYTHME_CONTRAT_MIN) {
+        const absents = jours.filter(
+          (j) => s.indisponibilites.has(j) || s.horsContrat.has(j),
+        ).length
+        const attendu = Math.min(s.joursPreferesSemaine, jours.length) - absents
+        if (attendu > nbJours.constante) {
+          const ecart = m.entier(0, 7)
+          m.ajoute(
+            [[1, ecart], ...nbJours.termes],
+            '>=',
+            attendu - nbJours.constante,
+          )
+          m.cout(POIDS_JOUR_MANQUANT, ecart)
+        }
       }
       if (s.reposDeuxSemaines) {
         const plafondDeux = 14 - s.reposDeuxSemaines
@@ -1384,7 +1445,18 @@ export function construire(
     for (const v of x.values()) m.cout(Math.floor(hasard() * 4), v)
   }
 
-  return { modele: m, x, court, manque, ecarts, trous, minimums, sousContrat }
+  return {
+    modele: m,
+    x,
+    court,
+    manque,
+    ecarts,
+    trous,
+    ouvertures,
+    releves,
+    minimums,
+    sousContrat,
+  }
 }
 
 /**
@@ -1762,6 +1834,119 @@ function trousEntreEquipes(
   return r
 }
 
+/**
+ * Relève (demande utilisateur du 2026-11-01 : « du monde entre le shift du
+ * matin et celui de l'après-midi pour transmettre les informations, une
+ * demi-heure ») : chaque jour où le matin et le soir sont demandés, au moins
+ * `p.releveMinutes` de suite où une personne autonome d'un horaire du MATIN
+ * et une d'un horaire du SOIR (postes de l'accueil du jour) sont là
+ * ensemble. Souple (`POIDS_RELEVE`). Même définition que l'oracle
+ * (`relevesManquantes`, verificateur.ts).
+ */
+function relevesAccueil(
+  m: Modele,
+  p: Probleme,
+  court: Map<string, string>,
+  termesDe: (c: Creneau, quoi: 'autonomes' | 'courts') => Terme[],
+): Array<{ jour: number; v: string }> {
+  const duree = p.releveMinutes ?? 0
+  if (duree <= 0) return []
+  void court
+  const k = Math.ceil(duree / QUART)
+  const r: Array<{ jour: number; v: string }> = []
+  for (const { jour, quarts, matins, soirs } of zonesReleve(p)) {
+    const presents = (liste: Creneau[], a: number): Terme[] => {
+      const t: Terme[] = []
+      for (const c of liste) {
+        if (c.debut > a || c.fin < a + QUART) continue
+        t.push(...termesDe(c, 'autonomes'))
+        if (!courteCouvre(c, a, a + QUART))
+          t.push(...termesDe(c, 'courts').map(([n, v]) => [-n, v] as Terme))
+      }
+      return t
+    }
+    const y = quarts.map((a) => {
+      const v = m.bool()
+      for (const liste of [matins, soirs])
+        m.ajoute(
+          [[1, v], ...presents(liste, a).map(([n, w]) => [-n, w] as Terme)],
+          '<=',
+          0,
+        )
+      return v
+    })
+    const z: string[] = []
+    for (let i = 0; i + k <= y.length; i++) {
+      const v = m.bool()
+      for (let t = 0; t < k; t++)
+        m.ajoute(
+          [
+            [1, v],
+            [-1, y[i + t]],
+          ],
+          '<=',
+          0,
+        )
+      z.push(v)
+    }
+    const manque = m.continu(0, 1)
+    m.ajoute([...z.map((v) => [1, v] as Terme), [1, manque]], '>=', 1)
+    m.cout(POIDS_RELEVE, manque)
+    r.push({ jour, v: manque })
+  }
+  return r
+}
+
+/** Les jours où une relève se cherche : matin et soir demandés, des
+ * horaires du matin et du soir aux postes de l'accueil du jour qui se
+ * chevauchent ; les quarts d'heure (grille absolue) du chevauchement
+ * possible. Partagé avec l'oracle. */
+export function zonesReleve(
+  p: Pick<Probleme, 'creneaux' | 'consignes' | 'nbJours' | 'releveMinutes'>,
+): Array<{
+  jour: number
+  quarts: number[]
+  matins: Creneau[]
+  soirs: Creneau[]
+}> {
+  const duree = p.releveMinutes ?? 0
+  if (duree <= 0) return []
+  const demande = (j: number, periode: 'matin' | 'soir') =>
+    p.consignes.some(
+      (c) => c.jour === j && c.periode === periode && c.minimum > 0,
+    )
+  const postesJour = new Set(
+    p.creneaux
+      .filter((c) => c.accueil && !c.presence.includes('nuit'))
+      .map((c) => c.poste),
+  )
+  const pur = (c: Creneau, moment: 'matin' | 'soir') =>
+    c.presence.length === 1 && c.presence[0] === moment
+  const r: Array<{
+    jour: number
+    quarts: number[]
+    matins: Creneau[]
+    soirs: Creneau[]
+  }> = []
+  for (let jour = 0; jour < p.nbJours; jour++) {
+    if (!demande(jour, 'matin') || !demande(jour, 'soir')) continue
+    const duJour = p.creneaux.filter(
+      (c) => postesJour.has(c.poste) && jourDe(c) === jour,
+    )
+    const matins = duJour.filter((c) => pur(c, 'matin'))
+    const soirs = duJour.filter((c) => pur(c, 'soir'))
+    if (!matins.length || !soirs.length) continue
+    const debut =
+      Math.ceil(Math.min(...soirs.map((c) => c.debut)) / QUART) * QUART
+    const fin = Math.max(...matins.map((c) => c.fin))
+    const quarts: number[] = []
+    for (let a = debut; a + QUART <= fin; a += QUART) quarts.push(a)
+    if (quarts.length * QUART < duree) continue
+    r.push({ jour, quarts, matins, soirs })
+  }
+  return r
+}
+
 /** Les variables de trou d'une plage [debut, fin[ tenue par `tenus` (tous
  * les créneaux des postes concernés, quel que soit leur jour). */
 function variablesTrous(
@@ -1775,6 +1960,7 @@ function variablesTrous(
   debut: number,
   fin: number,
   tenus: Creneau[],
+  poidsQuart = POIDS_TROU_QUART,
 ): Array<Trou & { v: string }> {
   const r: Array<Trou & { v: string }> = []
   const presents = tenus.filter((c) => c.debut < fin && c.fin > debut)
@@ -1820,10 +2006,7 @@ function variablesTrous(
     }
     const v = m.continu(0, 1)
     m.ajoute([...termes, [1, v]], '>=', 1)
-    m.cout(
-      Math.round((POIDS_TROU_QUART * (suite.fin - suite.debut)) / QUART),
-      v,
-    )
+    m.cout(Math.round((poidsQuart * (suite.fin - suite.debut)) / QUART), v)
     r.push({ poste, jour, debut: suite.debut, fin: suite.fin, v })
   }
   return r
@@ -1853,6 +2036,8 @@ const echec = (): Resolution => ({
   manques: [],
   ecartTotalMinutes: null,
   trous: [],
+  ouvertures: [],
+  relevesManquantes: [],
   manqueMinimum: 0,
   sousContrat: new Set(),
   auDessusContrat: new Set(),
@@ -1871,8 +2056,18 @@ function resoudreUneFois(
   plafond = Number.POSITIVE_INFINITY,
   complet?: Probleme,
 ): Resolution {
-  const { modele, x, court, manque, ecarts, trous, minimums, sousContrat } =
-    construire(p)
+  const {
+    modele,
+    x,
+    court,
+    manque,
+    ecarts,
+    trous,
+    ouvertures,
+    releves,
+    minimums,
+    sousContrat,
+  } = construire(p)
   if (modele.impossible) return echec()
   // Moments où un remplaçant compte (`aTenir`) : ceux du problème COMPLET,
   // pour que le temps 1 (sans remplaçants) les reconnaisse aussi.
@@ -1895,7 +2090,8 @@ function resoudreUneFois(
     x.size === 0 &&
     manque.size === 0 &&
     minimums.length === 0 &&
-    trous.length === 0
+    trous.length === 0 &&
+    ouvertures.length === 0
   ) {
     return {
       statut: 'optimal',
@@ -1903,6 +2099,9 @@ function resoudreUneFois(
       manques: [],
       ecartTotalMinutes: 0,
       trous: [],
+      ouvertures: [],
+      // Personne ne peut venir : chaque relève cherchée manque.
+      relevesManquantes: releves.map(({ jour }) => jour),
       manqueMinimum: 0,
       sousContrat: new Set(),
       auDessusContrat: new Set(),
@@ -1954,19 +2153,23 @@ function resoudreUneFois(
     if (n) manques.push({ creneauId, manquant: n })
   }
   // Trous restés, morceaux qui se touchent réunis.
-  const restes: Trou[] = []
-  for (const { v, ...t } of trous) {
-    if (valeur(v) !== 1) continue
-    const dernier = restes.at(-1)
-    if (
-      dernier &&
-      dernier.poste === t.poste &&
-      dernier.jour === t.jour &&
-      dernier.fin === t.debut
-    )
-      dernier.fin = t.fin
-    else restes.push(t)
+  const reunir = (liste: Array<Trou & { v: string }>): Trou[] => {
+    const r: Trou[] = []
+    for (const { v, ...t } of liste) {
+      if (valeur(v) !== 1) continue
+      const dernier = r.at(-1)
+      if (
+        dernier &&
+        dernier.poste === t.poste &&
+        dernier.jour === t.jour &&
+        dernier.fin === t.debut
+      )
+        dernier.fin = t.fin
+      else r.push(t)
+    }
+    return r
   }
+  const restes = reunir(trous)
   return {
     statut,
     affectations,
@@ -1976,6 +2179,10 @@ function resoudreUneFois(
       0,
     ),
     trous: restes,
+    ouvertures: reunir(ouvertures),
+    relevesManquantes: releves
+      .filter(({ v }) => valeur(v) > 0.5)
+      .map(({ jour }) => jour),
     manqueMinimum: minimums
       .filter(({ consigne }) => remplacables.has(consigne))
       .reduce((t, { v }) => t + valeur(v), 0),

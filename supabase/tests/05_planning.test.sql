@@ -133,7 +133,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':R', (select r from t_ids)::text);
 $$;
 
-select plan(67);
+select plan(71);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -301,6 +301,17 @@ select is(pg_temp.essai('gestion', array[
 select is(pg_temp.essai('gestion', array[
   pg_temp.q('insert into public.planning_salaries (prenom, nom, type_contrat, heures_hebdo, mineur) values (''Jeune'', ''Cdi'', ''cdi'', 35, true)')]),
   'err=23514', 'mineur : jamais en CDI');
+select is(pg_temp.essai('lecture', array['select releve_minutes::text from public.planning_reglages where id = 1']),
+  (select releve_minutes::text from public.planning_reglages where id = 1), 'réglages : la lecture lit la relève');
+select is(pg_temp.essai('ecriture', array['update public.planning_reglages set releve_minutes = 45 where id = 1']),
+  '0', 'réglages : l''écriture ne change pas la relève (gestion seule)');
+select is(pg_temp.essai('gestion', array[
+  pg_temp.q('update public.planning_reglages set releve_minutes = 45 where id = 1'),
+  pg_temp.q('select releve_minutes::text from public.planning_reglages where id = 1')]),
+  '45', 'réglages : la gestion règle la relève');
+select is(pg_temp.essai('gestion', array[
+  pg_temp.q('update public.planning_postes set ouverture = ''7h'' where id = :PA')]),
+  'err=23514', 'ouverture : une heure au format HH:MM seulement');
 
 -- ------------------------------------ consignes de présence (2026-10-28) ---
 select is(pg_temp.essai('aucun', array['select count(*) from public.planning_consignes']),

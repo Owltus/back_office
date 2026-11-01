@@ -2220,6 +2220,28 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   n'est dit qu'une fois (Places à pourvoir). Semaine fermée = passée ou
   verrouillée. Vocabulaire : Accueil (jamais « cycle »), Places à pourvoir,
   Vider la case, Tout recalculer, Veilleur, journée étoile, Compléter.
+- **Tenir l'hôtel (2026-11-01, demandes utilisateur après essai de
+  décembre)** — vérifiées par un oracle indépendant sur décembre réel (copie
+  locale) : 0 quart d'heure sans personne, 0 ouverture manquée, 0 jour sans
+  relève, 0 place vide, personne sous contrat, 5 jours pour tous.
+  - La journée de l'accueil est tenue d'un veilleur à l'autre : jusqu'à son
+    arrivée la PLUS TARDIVE (nuit étoile à 00:00), dès son départ le plus tôt
+    (`arriveeAuPlusTard`, `departAuPlusTot`, `cycles.ts`).
+  - Rythme : un contrat de 35 h ou plus se fait en 5 jours
+    (`POIDS_JOUR_MANQUANT`, au-dessus d'une personne en trop à l'accueil),
+    plus jamais 39 h en 4 jours de 10 h.
+  - Ouverture (réglage du POSTE, `planning_postes.ouverture`, 07:00 pour
+    Réception et Club) : quelqu'un sur ce poste la première heure
+    (`DUREE_OUVERTURE`), `POIDS_OUVERTURE_QUART` ; signalée comme un trou du
+    poste.
+  - Relève (réglage `planning_reglages.releve_minutes`, 30 par défaut, page
+    Besoins) : une personne d'un horaire du matin et une du soir ensemble ce
+    temps-là chaque jour (`zonesReleve`, oracle `relevesManquantes`),
+    `POIDS_RELEVE`.
+  - Repos accolés : `POIDS_REPOS_SEPARES` 8 000 (au-dessus du confort, sous
+    le 6e jour), hors de la part fixe du dépannage.
+  - Budget du solveur : 40 s par semaine (10 s ne suffisaient pas pour
+    l'optimum).
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), jours fériés (décision utilisateur relayée par le binôme), scénario
   « exclus » à l'écran (retiré du prototype aussi).

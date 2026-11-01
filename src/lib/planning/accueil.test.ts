@@ -53,6 +53,8 @@ import { PlanningMemoire } from '#/lib/planning/test/planningMemoire.ts'
 import {
   enVersionCourte,
   presenceParCycle,
+  ouverturesManquees,
+  relevesManquantes,
   soutiensSeuls,
   violations,
 } from '#/lib/planning/verificateur.ts'
@@ -934,5 +936,135 @@ describe('d’un veilleur à l’autre (audit du 2026-11-01)', () => {
     expect(r.trous).toEqual([
       { poste: POSTE_ACCUEIL, jour: 0, debut: 22.75 * H, fin: 23 * H },
     ])
+  })
+})
+
+// ------------------------- rythme, ouverture, relève (2026-11-01, demandes)
+
+describe('rythme de 5 jours (contrat de 35 h ou plus)', () => {
+  // Oracle : 39 h se font en 5 jours, pas en 4 jours de 10 h, même si
+  // l'accueil a alors une personne en plus.
+  const jours = [0, 1, 2, 3, 4, 5, 6]
+  const consignes = jours.map((j) => chiffre(j, 'matin', 1))
+  const creneaux = jours.flatMap((j) => [
+    cand(`c8-${j}`, 'rec', j, 7, 15, ['matin']),
+    cand(`c10-${j}`, 'rec', j, 7, 17.75, ['matin']),
+  ])
+  const nbJoursDe = (r: ReturnType<typeof gen>, id: string) =>
+    new Set(
+      r.affectations
+        .filter((a) => a.salarieId === id)
+        .map((a) => creneaux.find((c) => c.id === a.creneauId)!)
+        .map(jourDe),
+    ).size
+  it('accepté : 39 h en 5 jours', () => {
+    const r = gen(
+      probleme({
+        salaries: [
+          sal('a', { minutesHebdoContrat: 39 * H }),
+          sal('b', { minutesHebdoContrat: 39 * H }),
+        ],
+        creneaux,
+        consignes,
+      }),
+    )
+    expect(nbJoursDe(r, 'a')).toBe(5)
+    expect(nbJoursDe(r, 'b')).toBe(5)
+  })
+  it('refusé : un contrat de moins de 35 h n’a pas ce rythme', () => {
+    // Trois matins demandés : rien ne le pousse à 5 jours.
+    const r = gen(
+      probleme({
+        salaries: [sal('a', { minutesHebdoContrat: 30 * H })],
+        creneaux,
+        consignes: consignes.slice(0, 3),
+      }),
+    )
+    expect(nbJoursDe(r, 'a')).toBeLessThan(5)
+  })
+})
+
+describe('ouverture d’un poste de l’accueil (réglage du poste)', () => {
+  // Oracle : à 07:00, quelqu'un sur la Réception, pendant la première heure.
+  const consignes = [chiffre(0, 'matin', 2)]
+  const ouvertures = [{ poste: 'rec', jour: 0, debut: 7 * H, fin: 8 * H }]
+  const salaries = [sal('a'), sal('b')]
+  it('accepté : le moteur met quelqu’un à 07:00 sur la Réception', () => {
+    const p = probleme({
+      salaries,
+      creneaux: [
+        cand('r7', 'rec', 0, 7, 15, ['matin']),
+        cand('r8', 'rec', 0, 8, 16, ['matin']),
+        cand('c8', 'club', 0, 8, 16, ['matin']),
+      ],
+      consignes,
+      ouvertures,
+      nbJours: 1,
+    })
+    const r = gen(p)
+    expect(r.ouvertures).toEqual([])
+    expect(qui(r).some((x) => x.endsWith('@r7'))).toBe(true)
+    expect(ouverturesManquees(p, r.affectations)).toEqual([])
+  })
+  it('refusé : sans horaire de 07:00 à la Réception, l’ouverture manque', () => {
+    const p = probleme({
+      salaries,
+      creneaux: [
+        cand('r8', 'rec', 0, 8, 16, ['matin']),
+        cand('c7', 'club', 0, 7, 15, ['matin']),
+      ],
+      consignes,
+      ouvertures,
+      nbJours: 1,
+    })
+    const r = gen(p)
+    const attendu = [{ poste: 'rec', jour: 0, debut: 7 * H, fin: 8 * H }]
+    expect(r.ouvertures).toEqual(attendu)
+    expect(ouverturesManquees(p, r.affectations)).toEqual(attendu)
+  })
+})
+
+describe('relève entre le matin et le soir (réglage, 30 min)', () => {
+  // Oracle : une personne du matin et une du soir ensemble 30 min de suite.
+  const consignes = [chiffre(0, 'matin', 1), chiffre(0, 'soir', 1)]
+  const salaries = [sal('a'), sal('b')]
+  it('accepté : le moteur choisit le soir qui arrive avant le départ du matin', () => {
+    const p = probleme({
+      salaries,
+      creneaux: [
+        matin('rm'),
+        cand('s15', 'rec', 0, 15, 23, ['soir']),
+        cand('s1430', 'club', 0, 14.5, 22.5, ['soir']),
+      ],
+      consignes,
+      releveMinutes: 30,
+      nbJours: 1,
+    })
+    const r = gen(p)
+    expect(r.relevesManquantes).toEqual([])
+    expect(qui(r).some((x) => x.endsWith('@s1430'))).toBe(true)
+    expect(relevesManquantes(p, r.affectations)).toEqual([])
+  })
+  it('refusé : sans relève réglée, rien n’est demandé ; posés sans chevauchement, elle manque', () => {
+    const creneaux = [
+      matin('rm'),
+      cand('s15', 'rec', 0, 15, 23, ['soir']),
+      cand('s1430', 'club', 0, 14.5, 22.5, ['soir']),
+    ]
+    const sans = probleme({ salaries, creneaux, consignes, nbJours: 1 })
+    expect(gen(sans).relevesManquantes).toEqual([])
+    const avec = probleme({
+      salaries,
+      creneaux,
+      consignes,
+      releveMinutes: 30,
+      nbJours: 1,
+    })
+    expect(
+      relevesManquantes(avec, [
+        { salarieId: 'a', creneauId: 'rm', court: false },
+        { salarieId: 'b', creneauId: 's15', court: false },
+      ]),
+    ).toEqual([0])
   })
 })

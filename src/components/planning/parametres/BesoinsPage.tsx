@@ -58,6 +58,7 @@ import type {
   Historique,
 } from '#/components/planning/parametres/besoins/historique.ts'
 import { TableauAccueil } from '#/components/planning/parametres/besoins/TableauAccueil.tsx'
+import { ReglageReleve } from '#/components/planning/parametres/besoins/ReglageReleve.tsx'
 import {
   idCible,
   useOuvrirCible,
@@ -471,6 +472,12 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
             affiche={afficheAccueil}
             regler={reglerAccueil}
           />
+          {actif && (
+            <ReglageReleve
+              minutes={data.reglages?.releve_minutes ?? 30}
+              modifiable={modifiable}
+            />
+          )}
 
           {actif && <h2 className="text-base font-semibold">Autres postes</h2>}
           {!poste ? (

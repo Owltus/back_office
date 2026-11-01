@@ -54,6 +54,15 @@ export interface Poste {
   accueil_nuit?: boolean
   /** Poste fermé (U3) : plus proposé nulle part, historique gardé. */
   ferme?: boolean
+  /** Heure d'ouverture (HH:MM) : ce poste de l'accueil est tenu dès cette
+   * heure chaque matin (2026-11-01). Null : aucune. */
+  ouverture?: string | null
+}
+
+/** Réglages généraux du planning (table `planning_reglages`, une ligne). */
+export interface Reglages {
+  /** Temps passé ensemble par l'équipe du matin et celle de l'après-midi. */
+  releve_minutes: number
 }
 
 export interface Groupe {
@@ -156,6 +165,8 @@ export interface Referentiel {
   consignes: Consigne[]
   /** Lundis des semaines verrouillées (AAAA-MM-JJ). */
   verrous: string[]
+  /** Réglages généraux ; absents (données de test) : aucune relève. */
+  reglages?: Reglages
 }
 
 export const CATEGORIES: ReadonlyArray<{

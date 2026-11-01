@@ -140,6 +140,7 @@ describe('Postes', () => {
           presence: true,
           accueil_nuit: false,
           ferme: true,
+          ouverture: null,
         },
         2,
       ),

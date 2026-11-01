@@ -597,9 +597,10 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
       soutien: fc.integer({ min: 0, max: 1 }),
       raccourci: fc.constantFrom(0, 60),
     })
-    // Empreinte relevée de nouveau le 2026-11-01 : seul le poids des repos
-    // accolés a changé (POIDS_REPOS_SEPARES 1 000 → 8 000, et ce qui en
-    // dérive) ; la structure du modèle est la même.
+    // Empreinte relevée de nouveau le 2026-11-01 : le poids des repos
+    // accolés (POIDS_REPOS_SEPARES 1 000 → 8 000) et le rythme de 5 jours
+    // d'un contrat de 35 h ou plus (POIDS_JOUR_MANQUANT) ; le reste du modèle
+    // est le même.
     const textes: string[] = []
     fc.assert(
       fc.property(
@@ -637,7 +638,7 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
       ),
       { numRuns: 80, seed: 20261030 },
     )
-    expect(empreinte(textes.join('\n=====\n'))).toBe('6158ea95')
+    expect(empreinte(textes.join('\n=====\n'))).toBe('f243e188')
   })
 })
 
