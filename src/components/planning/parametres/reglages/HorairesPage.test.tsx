@@ -215,7 +215,7 @@ describe('Horaires et absences', () => {
       target: { value: '11:00' },
     })
     expect(
-      carte.getByText('La journée courte doit garder du temps de travail.'),
+      carte.getByText('La journée étoile doit garder du temps de travail.'),
     ).toBeTruthy()
   })
 

@@ -81,6 +81,8 @@ export type Edition =
       /** Place à pourvoir : son poste et son horaire, choisis d'office. */
       poste_id?: number
       horaire_id?: number | null
+      /** Place de l'accueil sans horaire : le moment à proposer. */
+      moment?: 'matin' | 'soir' | 'nuit' | null
     }
   | { mode: 'modification'; shift: ShiftOut }
 
@@ -254,10 +256,23 @@ export function EditeurShift({
     rubriquesInitiales && posteDemande !== undefined
       ? ligneDe(rubriquesInitiales, posteDemande, creation?.horaire_id)
       : null
+  // Place de l'accueil : un horaire de son moment d'abord (matin, soir ou
+  // nuit), sinon le premier libre.
+  const duMoment = (r: RubriquesCase) => {
+    const m = creation?.moment
+    if (!m) return undefined
+    for (const rub of r.rubriques) {
+      if (posteDemande !== undefined && rub.poste.id !== posteDemande) continue
+      const l = rub.lignes.find((x) => !x.alerte && x.horaire.periode === m)
+      if (l) return { poste: rub.poste.id, horaire: l.horaire }
+    }
+    return undefined
+  }
   const initial = rubriquesInitiales
     ? ligneDemandee && !ligneDemandee.ligne.alerte
       ? { poste: posteDemande ?? 0, horaire: ligneDemandee.ligne.horaire }
-      : premierLibre(rubriquesInitiales, posteDemande)
+      : (duMoment(rubriquesInitiales) ??
+        premierLibre(rubriquesInitiales, posteDemande))
     : undefined
   const horaireInitial = initial?.horaire
 

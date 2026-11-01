@@ -31,7 +31,14 @@ export function messageErreur(
     if (message) return message
   }
   if (code === '23505') {
-    return `${action} : cette personne a déjà un shift ce jour-là, un seul par jour.`
+    // Le nom de la règle refusée dit laquelle (audit RH du 2026-11-01 : un
+    // horaire en double ne parle pas d'une personne).
+    const brut = `${(err as ErreurPostgres).message ?? ''} ${(err as { details?: string }).details ?? ''}`
+    if (brut.includes('horaires_heures'))
+      return `${action} : un horaire aux mêmes heures existe déjà.`
+    if (brut.includes('un_par_jour') || !brut.trim())
+      return `${action} : cette personne a déjà un shift ce jour-là, un seul par jour.`
+    return `${action} : cet élément existe déjà.`
   }
   if (typeof code === 'string' && code !== '') {
     if (code.startsWith('23') || code.startsWith('22')) {

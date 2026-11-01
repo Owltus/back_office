@@ -388,6 +388,49 @@ describe('EditeurShift : règle des codes', () => {
     )
   })
 
+  it('place de l’accueil : un horaire de son moment (audit RH du 2026-11-01)', () => {
+    // Oracle : la place du soir n'a pas d'horaire ; le volet propose un
+    // horaire du soir permis, pas le premier matin de la liste.
+    const avecMoments: Referentiel = {
+      ...referentiel,
+      horaires: referentiel.horaires.map((h) => ({
+        ...h,
+        periode:
+          h.debut >= '21:00' || h.debut < '05:00'
+            ? 'nuit'
+            : h.debut >= '14:00'
+              ? 'soir'
+              : 'matin',
+      })),
+    }
+    const periodeDe = (id: number) =>
+      avecMoments.horaires.find((h) => h.id === id)?.periode
+    const { onCreer } = rendreAvec(avecMoments, {
+      mode: 'creation',
+      salarie_id: 3,
+      jour: 2,
+      poste_id: 3,
+      horaire_id: null,
+      moment: 'soir',
+    })
+    fireEvent.click(principal('Ajouter le shift'))
+    const id = (onCreer.mock.calls[0][0] as { horaire_id: number }).horaire_id
+    expect(periodeDe(id)).toBe('soir')
+    cleanup()
+    // Refusé : sans moment, le premier horaire libre (un matin).
+    const sans = rendreAvec(avecMoments, {
+      mode: 'creation',
+      salarie_id: 3,
+      jour: 2,
+      poste_id: 3,
+      horaire_id: null,
+    })
+    fireEvent.click(principal('Ajouter le shift'))
+    const id2 = (sans.onCreer.mock.calls[0][0] as { horaire_id: number })
+      .horaire_id
+    expect(periodeDe(id2)).toBe('matin')
+  })
+
   it('changer de jour revalide le code ; revenir rend le code d’origine', () => {
     rendreAvec(referentielAvec({ semaine_type: reposLe(4) }), {
       mode: 'modification',

@@ -1024,6 +1024,7 @@ export function VueSemaine({
                       jour: d.jour,
                       poste_id: d.posteId,
                       horaire_id: d.horaireId,
+                      moment: d.moment ?? null,
                     }),
                   )
               : undefined

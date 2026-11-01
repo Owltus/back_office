@@ -5,6 +5,7 @@
  * actions), navigation dans le temps, puis l'engrenage des paramètres.
  */
 
+import { AideGestes } from '#/components/planning/AideGestes.tsx'
 import type { ReactNode } from 'react'
 import {
   CalendarDays,
@@ -17,7 +18,6 @@ import {
 } from 'lucide-react'
 
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
-import { HelpGlyph } from '#/components/shared/HelpGlyph.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
 import { CompteursValidation } from '#/components/planning/CompteursValidation.tsx'
@@ -49,8 +49,9 @@ export const AIDE_VALIDATION = [
 
 export const AIDE_GESTES = [
   'Glisser un shift : le déplacer (Alt maintenu : le dupliquer)',
-  "Clic droit sur une case : changer l'horaire, valider, journée étoile",
+  "Clic droit sur une case : changer l'horaire, poser un repos ou une absence, valider, journée étoile",
   'Clic sur un shift : tout modifier',
+  'Double-clic sur un shift ou un repos : le valider, ou le remettre en proposition',
   'Posez et validez quelques shifts : Compléter fait le reste',
 ]
 
@@ -71,16 +72,6 @@ export interface ActionsEnTete {
   onValiderSemaine: (epinglee: boolean) => void
   onEffacerPropositions: () => void
   onVider: () => void
-}
-
-function Lignes({ lignes }: { lignes: string[] }) {
-  return (
-    <div className="max-w-80 space-y-0.5">
-      {lignes.map((l) => (
-        <div key={l}>{l}</div>
-      ))}
-    </div>
-  )
 }
 
 /** Un bouton d'icône avec son infobulle, même désactivé (span porteur). */
@@ -278,9 +269,7 @@ export function EnTeteSemaine({
           )}
 
           <ButtonGroup>
-            <BoutonBarre label="Aide" tip={<Lignes lignes={AIDE_GESTES} />}>
-              <HelpGlyph className="size-4" />
-            </BoutonBarre>
+            <AideGestes lignes={AIDE_GESTES} />
             <BoutonBarre
               label={
                 verrou ? 'Déverrouiller la semaine' : 'Verrouiller la semaine'

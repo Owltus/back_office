@@ -2,7 +2,10 @@
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { PointsPresence } from '#/components/planning/semaine/Presence.tsx'
+import {
+  PastillesPresence,
+  PointsPresence,
+} from '#/components/planning/semaine/Presence.tsx'
 import { TooltipProvider } from '#/components/ui/tooltip.tsx'
 
 const rendre = (n: React.ReactNode) =>
@@ -54,7 +57,7 @@ describe('PointsPresence', () => {
     expect(p[2].classe).not.toMatch(/bg-/)
     expect(
       container.querySelector('[aria-label]')?.getAttribute('aria-label'),
-    ).toContain('Nuit : rien de demandé')
+    ).toContain("Nuit : personne de demandé, l'hôtel peut rester vide")
   })
 
   it('bleu au-delà du maximum ; rien tant que la semaine n’est pas lue', () => {
@@ -76,5 +79,52 @@ describe('PointsPresence', () => {
     cleanup()
     const vide = rendre(<PointsPresence presence={undefined} />)
     expect(points(vide.container)).toEqual([])
+  })
+})
+
+describe('PastillesPresence (audit RH du 2026-11-01)', () => {
+  it('un moment sans personne demandée a sa pastille orange', () => {
+    const { container } = rendre(
+      <PastillesPresence
+        presence={[
+          {
+            jour: 0,
+            periode: 'matin',
+            compte: 2,
+            minimum: 2,
+            maximum: 2,
+            ecart: 0,
+          },
+          {
+            jour: 0,
+            periode: 'soir',
+            compte: 2,
+            minimum: 2,
+            maximum: 2,
+            ecart: 0,
+          },
+        ]}
+      />,
+    )
+    const noms = [...container.querySelectorAll('[aria-label]')].map((x) =>
+      x.getAttribute('aria-label'),
+    )
+    expect(noms).toContain(
+      "Nuit : personne de demandé, l'hôtel peut rester vide",
+    )
+    // Refusé : les trois moments demandés, aucune pastille vide.
+    const plein = rendre(
+      <PastillesPresence
+        presence={(['matin', 'soir', 'nuit'] as const).map((periode) => ({
+          jour: 0,
+          periode,
+          compte: 1,
+          minimum: 1,
+          maximum: 1,
+          ecart: 0,
+        }))}
+      />,
+    )
+    expect(plein.container.textContent).not.toContain('–')
   })
 })

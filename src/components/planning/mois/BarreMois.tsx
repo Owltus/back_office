@@ -5,10 +5,10 @@
  * navigation de mois en mois, puis l'engrenage des paramètres.
  */
 
+import { AideGestes } from '#/components/planning/AideGestes.tsx'
 import type { ReactNode } from 'react'
 import {
   ChevronDown,
-  CircleHelp,
   Loader2,
   Lock,
   LockOpen,
@@ -187,23 +187,16 @@ export function BarreMois({
       {progression}
       {compteurs && <Indicateurs c={compteurs} />}
       <ButtonGroup>
-        <Tip
-          label={
-            <span className="whitespace-pre-line">
-              {[
-                'Clic : modifier le jour (horaire, poste, absence, école…)',
-                'Clic droit : changer l’horaire, valider, journée étoile',
-                'Glisser un shift : le déplacer, même vers une autre semaine (Alt : le dupliquer)',
-                'Glisser un repos, une absence ou l’école : dans sa semaine',
-                'S45 : ouvrir la semaine en vue semaine',
-              ].join('\n')}
-            </span>
-          }
-        >
-          <Button variant="outline" size="icon-sm" aria-label="Aide">
-            <CircleHelp />
-          </Button>
-        </Tip>
+        <AideGestes
+          lignes={[
+            'Clic : modifier le jour (horaire, poste, absence, école…)',
+            'Clic droit : changer l’horaire, valider, journée étoile',
+            'Double-clic sur un shift ou un repos : le valider, ou le remettre en proposition',
+            'Glisser un shift : le déplacer, même vers une autre semaine (Alt : le dupliquer)',
+            'Glisser un repos, une absence ou l’école : dans sa semaine',
+            'S45 : ouvrir la semaine en vue semaine',
+          ]}
+        />
         <AvecRaison
           desactive={!!verrou.inactif}
           label={

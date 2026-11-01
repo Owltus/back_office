@@ -19,6 +19,7 @@ import type { PresenceOut } from '#/lib/planning/presence.ts'
 import { cn } from '#/lib/utils.ts'
 
 const NOM = { matin: 'Matin', soir: 'Soir', nuit: 'Nuit' } as const
+const PERIODES = ['matin', 'soir', 'nuit'] as const
 const ICONE = { matin: Sun, soir: Sunset, nuit: Moon } as const
 
 /** « 1 de moins », « 2 de plus ». */
@@ -26,10 +27,30 @@ export function ecartTexte(ecart: number): string {
   return ecart < 0 ? `${-ecart} de moins` : `${ecart} de plus`
 }
 
+/** Un moment où personne n'est demandé (audit RH du 2026-11-01) : l'hôtel
+ * peut rester vide, comme le dit le rond orange du mois. */
+const RIEN = "personne de demandé, l'hôtel peut rester vide"
+
 export function PastillesPresence({ presence }: { presence: PresenceOut[] }) {
   if (!presence.length) return null
+  const absents = PERIODES.filter((m) => !presence.some((p) => p.periode === m))
   return (
     <div className="mt-1 flex flex-wrap gap-1">
+      {absents.map((m) => {
+        const Icone = ICONE[m]
+        const texte = `${NOM[m]} : ${RIEN}`
+        return (
+          <Tip key={m} label={texte}>
+            <span
+              tabIndex={0}
+              aria-label={texte}
+              className="inline-flex items-center gap-0.5 rounded border border-amber-500/60 px-1 text-[10px] font-semibold text-amber-500"
+            >
+              <Icone className="size-3" />–
+            </span>
+          </Tip>
+        )
+      })}
       {presence.map((p) => {
         const Icone = ICONE[p.periode]
         const attendu = libelleConsigne(p.minimum, p.maximum)
@@ -56,8 +77,6 @@ export function PastillesPresence({ presence }: { presence: PresenceOut[] }) {
   )
 }
 
-const PERIODES = ['matin', 'soir', 'nuit'] as const
-
 /** Vue mois : trois points sous le numéro du jour, matin, soir, nuit. Un
  * moment où rien n'est demandé (page Besoins) est un rond vide. Rien tant
  * que la semaine n'est pas lue. */
@@ -74,7 +93,7 @@ export function PointsPresence({
   const lignes = points.map(({ periode, p }) =>
     p
       ? `${NOM[periode]} : ${p.compte} pour ${libelleConsigne(p.minimum, p.maximum)}${p.ecart ? ` (${ecartTexte(p.ecart)})` : ''}`
-      : `${NOM[periode]} : rien de demandé (page Besoins)`,
+      : `${NOM[periode]} : ${RIEN}`,
   )
   return (
     <Tip
@@ -91,7 +110,7 @@ export function PointsPresence({
             data-periode={periode}
             className={cn(
               'size-1.5 rounded-full',
-              !p && 'border border-muted-foreground/50',
+              !p && 'border border-amber-500',
               p && p.ecart < 0 && 'bg-red-500',
               p && p.ecart > 0 && 'bg-sky-500',
               p && p.ecart === 0 && 'bg-emerald-500',

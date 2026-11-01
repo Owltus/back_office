@@ -99,7 +99,7 @@ export function erreursHoraire(
     erreurs.push("L'horaire ne peut pas commencer à 24:00.")
   if (!entier(h.pause, 0, 180)) erreurs.push('La pause va de 0 à 180 minutes.')
   if (!entier(h.raccourci, 0, 240))
-    erreurs.push('La journée courte retire de 0 à 240 minutes.')
+    erreurs.push('La journée étoile retire de 0 à 240 minutes.')
   if (!entier(h.raccourci_debut, 0, 240)) {
     erreurs.push('Les minutes retirées au début vont de 0 à 240.')
   } else if (h.raccourci_debut > h.raccourci) {
@@ -112,7 +112,7 @@ export function erreursHoraire(
     if (h.pause >= p)
       erreurs.push("La pause doit être plus courte que l'horaire.")
     else if (h.raccourci >= p - h.pause) {
-      erreurs.push('La journée courte doit garder du temps de travail.')
+      erreurs.push('La journée étoile doit garder du temps de travail.')
     }
   }
   if (horaireAuxMemesHeures(h, horaires, id))

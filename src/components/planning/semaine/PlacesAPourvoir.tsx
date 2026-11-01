@@ -42,6 +42,9 @@ export interface DemandePlacement {
   jour: number
   posteId: number
   horaireId: number | null
+  /** Place de l'accueil : son moment, pour proposer un horaire de ce
+   * moment (audit RH du 2026-11-01). */
+  moment?: 'matin' | 'soir' | 'nuit' | null
   x: number
   y: number
 }
@@ -110,6 +113,7 @@ function Placer({
       posteId:
         place.personnes.find((p) => p.id === id)?.posteId ?? place.posteId,
       horaireId: place.horaireId,
+      moment: place.moment,
       x: r.left,
       y: r.bottom,
     })
@@ -190,7 +194,10 @@ function Groupe({
         >
           <span
             className="size-2 shrink-0 self-center rounded-full"
-            style={{ background: g.poste?.couleur }}
+            // L'accueil n'a pas de poste : une puce neutre.
+            style={{
+              background: g.poste?.couleur ?? 'var(--muted-foreground)',
+            }}
           />
           <span className="min-w-0">
             <strong>{titre}</strong> : {jours}
@@ -206,7 +213,9 @@ function Groupe({
           {g.raisonCommune ? (
             <p className="flex flex-col text-xs text-muted-foreground">
               <strong className="text-sm text-foreground">
-                {jeNePeuxPas(g.code)}
+                {g.moment
+                  ? `Impossible de compléter l'accueil ${g.moment === 'nuit' ? 'la nuit' : `le ${g.moment}`}.`
+                  : jeNePeuxPas(g.code)}
               </strong>
               <span>{g.raisonCommune}</span>
               <span>{SOLUTION_HUMAINE}</span>

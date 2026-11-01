@@ -75,6 +75,8 @@ export function MenuParametres({ actif }: { actif?: CheminParametre }) {
   const navigate = useNavigate()
   const { gerer } = useDroitsPlanning()
   const ref = useReferentiel()
+  const planningVide =
+    !!ref.data && !ref.data.salaries.length && !ref.data.postes.length
   const { etapes } = usePretAGenerer(ref.data)
   const fait = new Set(etapes.filter((e) => e.fait).map((e) => e.ecran))
   const [importer, setImporter] = useState(false)
@@ -119,7 +121,9 @@ export function MenuParametres({ actif }: { actif?: CheminParametre }) {
               )}
             </DropdownMenuItem>
           ))}
-          {gerer && (
+          {/* L'import ne marche que sur un planning vide (audit RH du
+              2026-11-01) : ailleurs, l'entrée ne servirait qu'à un refus. */}
+          {gerer && planningVide && (
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => setImporter(true)}>

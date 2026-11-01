@@ -58,11 +58,11 @@ describe('contrôles de saisie (miroir des contraintes de la base)', () => {
       "La pause doit être plus courte que l'horaire.",
     )
     expect(erreursHoraire({ ...matin, raccourci: 480 - 1 })).toContain(
-      'La journée courte retire de 0 à 240 minutes.',
+      'La journée étoile retire de 0 à 240 minutes.',
     )
     expect(
       erreursHoraire({ ...matin, fin: '10:00', raccourci: 135 }),
-    ).toContain('La journée courte doit garder du temps de travail.')
+    ).toContain('La journée étoile doit garder du temps de travail.')
     expect(erreursHoraire({ ...matin, fin: '10:00', raccourci: 134 })).toEqual(
       [],
     )
