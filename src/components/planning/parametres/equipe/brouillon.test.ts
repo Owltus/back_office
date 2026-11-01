@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   brouillonVierge,
   erreurBrouillon,
+  heuresSansObjet,
   fusionnerAbsences,
   horsSemainesVerrouillees,
   joursDesPeriodes,
@@ -105,5 +106,35 @@ describe('périodes d’absence', () => {
       /finit avant de commencer/,
     )
     expect(erreurBrouillon(avec([p('2026-11-02', '2026-11-05')]))).toBeNull()
+  })
+})
+
+describe('heures du contrat (audit RH du 2026-11-01)', () => {
+  const fiche = (kw: Partial<ReturnType<typeof brouillonVierge>>) => ({
+    ...brouillonVierge(),
+    prenom: 'Léa',
+    ...kw,
+  })
+  it('un contrat mesuré a des heures ; un extra et un forfait jours non', () => {
+    expect(erreurBrouillon(fiche({ heures_hebdo: 35 }))).toBeNull()
+    expect(erreurBrouillon(fiche({ heures_hebdo: 0 }))).toBe(
+      'Indiquez les heures par semaine (plus de 0 h).',
+    )
+    expect(
+      erreurBrouillon(fiche({ type_contrat: 'extra', heures_hebdo: 0 })),
+    ).toBeNull()
+    expect(
+      erreurBrouillon(fiche({ forfait_jours: true, heures_hebdo: 0 })),
+    ).toBeNull()
+    expect(heuresSansObjet(fiche({ type_contrat: 'extra' }))).toBe(true)
+    expect(heuresSansObjet(fiche({}))).toBe(false)
+  })
+  it('un mineur : 35 h au plus', () => {
+    expect(
+      erreurBrouillon(fiche({ mineur: true, heures_hebdo: 35 })),
+    ).toBeNull()
+    expect(erreurBrouillon(fiche({ mineur: true, heures_hebdo: 39 }))).toBe(
+      'Un mineur ne peut pas dépasser 35 h par semaine.',
+    )
   })
 })

@@ -32,7 +32,6 @@ import { ChoixCodes } from '#/components/planning/parametres/reglages/ChoixCodes
 import { modificationPermise } from '#/components/planning/parametres/reglages/tousOuCertains.ts'
 import { TousOuCertains } from '#/components/planning/parametres/reglages/TousOuCertains.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
-import { titreRegle } from '#/components/planning/semaine/PanneauAlertes.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import {
@@ -111,7 +110,7 @@ export function SectionCompetences({
   return (
     <Section
       titre="Compétences"
-      aide="Les postes qu'elle tient, et comment. Titulaire : seule sur le poste. Dépannage : seule aussi, mais le moteur préfère un titulaire, sauf si celui-ci ferait des heures en plus ou un 6e jour. Soutien (apprenti, stagiaire) : ne compte pas seule, toujours avec une personne autonome."
+      aide="Les postes qu'elle tient, et comment. Titulaire : seule sur le poste. Dépannage : seule aussi, mais le planning automatique préfère un titulaire, sauf si celui-ci ferait des heures en plus ou un 6e jour. Soutien (apprenti, stagiaire) : ne compte pas seule, toujours avec une personne autonome."
     >
       {tenus.length === 0 && (
         <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
@@ -331,9 +330,9 @@ export function SectionSemaineType({
   return (
     <Section
       titre="Semaine type"
-      aide={`Libre : le moteur décide si elle travaille ; avec un horaire choisi, ce sera celui-là les jours où elle travaille (de nuit le week-end, par exemple). Travaille : elle travaille toujours ce jour-là. Repos et Absence : jamais planifiée ce jour-là. École : jour hors de l'hôtel, compté comme une journée de travail complète.${
+      aide={`Libre : le planning automatique décide si elle travaille ; avec un horaire choisi, ce sera celui-là les jours où elle travaille (de nuit le week-end, par exemple). Travaille : son jour habituel, le planning la fait travailler ce jour-là dès qu'il le peut. Repos et Absence : jamais planifiée ce jour-là. École : jour hors de l'hôtel, compté comme une journée de travail complète.${
         etoile
-          ? ' ★ : journée étoile (la journée courte) fixée ce jour-là ; sans étoile, le moteur la place selon les besoins.'
+          ? ' ★ : journée étoile (la journée courte) fixée ce jour-là ; sans étoile, le planning automatique la place selon les besoins.'
           : ''
       }`}
     >
@@ -627,7 +626,7 @@ export function SectionRegles({ b }: Pick<PropsSection, 'b'>) {
     <Section titre="Règles HCR appliquées">
       <ul className="flex flex-col gap-1" aria-label="Règles HCR appliquées">
         {regles.map((r) => (
-          <li key={r.regle} title={titreRegle(r.regle)} className="text-sm">
+          <li key={r.regle} data-regle={r.regle} className="text-sm">
             {r.texte}
           </li>
         ))}

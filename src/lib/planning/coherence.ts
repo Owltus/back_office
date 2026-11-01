@@ -489,7 +489,7 @@ export function verifierReglages(
         `presence-sans-titulaire:${p.id}`,
         'a-voir',
         'equipe',
-        `Le poste ${p.nom} compte dans le matin et le soir, mais personne n'y est titulaire.`,
+        `Le poste ${p.nom} fait partie de l'accueil, mais personne n'y est titulaire.`,
         `poste-${p.id}`,
         PAGE_ECRAN.postes,
       )

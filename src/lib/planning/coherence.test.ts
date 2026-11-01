@@ -756,7 +756,7 @@ describe('verifierReglages, points complets (test de mutation)', () => {
       point(
         'presence-sans-titulaire:2',
         'equipe',
-        "Le poste Club compte dans le matin et le soir, mais personne n'y est titulaire.",
+        "Le poste Club fait partie de l'accueil, mais personne n'y est titulaire.",
         { page: '/planning/postes', cible: 'poste-2' },
       ),
     )

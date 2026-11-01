@@ -418,6 +418,24 @@ export function erreurBrouillon(b: Brouillon): string | null {
   if (!(b.heures_hebdo >= 0 && b.heures_hebdo <= 48)) {
     return 'Les heures par semaine vont de 0 à 48.'
   }
+  // Audit RH du 2026-11-01 : un contrat mesuré a des heures, et un mineur
+  // ne dépasse pas 35 h (le moteur le plafonne, les heures dues suivaient).
+  if (heuresSansObjet(b)) return erreurSuite(b)
+  if (b.heures_hebdo <= 0)
+    return 'Indiquez les heures par semaine (plus de 0 h).'
+  if (b.mineur && b.heures_hebdo > 35)
+    return 'Un mineur ne peut pas dépasser 35 h par semaine.'
+  return erreurSuite(b)
+}
+
+/** Extra et cadre au forfait jours : les heures par semaine ne comptent pas. */
+export function heuresSansObjet(
+  b: Pick<Brouillon, 'type_contrat' | 'forfait_jours'>,
+): boolean {
+  return b.type_contrat === 'extra' || b.forfait_jours
+}
+
+function erreurSuite(b: Brouillon): string | null {
   if (b.date_entree && !dateValide(b.date_entree))
     return "La date d'arrivée est incomplète."
   if (b.date_sortie && !dateValide(b.date_sortie))

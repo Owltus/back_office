@@ -576,13 +576,14 @@ describe('FicheSalarie', () => {
     const regles = await screen.findByRole('list', {
       name: 'Règles HCR appliquées',
     })
-    // Le code n'est plus écrit à l'écran, seulement au survol (title).
+    // Le code de la règle n'est plus montré, même au survol (audit RH du
+    // 2026-11-01) : il reste dans `data-regle` pour les tests.
     const codes = () =>
       [
         ...screen
           .getByRole('list', { name: 'Règles HCR appliquées' })
           .querySelectorAll('li'),
-      ].map((li) => li.title)
+      ].map((li) => li.dataset.regle ?? '')
     expect(regles.textContent).not.toContain('R-SEMAINE-MAX')
     expect(codes()).toContain('R-SEMAINE-MAX')
     expect(codes()).not.toContain('R-NUIT-MINEUR')

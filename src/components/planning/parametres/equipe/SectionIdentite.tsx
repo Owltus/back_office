@@ -11,6 +11,7 @@ import {
   changerCategorie,
   changerContrat,
   evolutionParDefaut,
+  heuresSansObjet,
 } from '#/components/planning/parametres/equipe/brouillon.ts'
 import type {
   Brouillon,
@@ -136,7 +137,20 @@ export function SectionIdentite({
           onChange={(v) => maj((x) => changerContrat(x, v as TypeContrat))}
           disabled={disabled}
         />
-        <Champ label="Heures par semaine">
+        <Champ
+          label={
+            heuresSansObjet(b)
+              ? 'Heures par semaine (sans objet)'
+              : 'Heures par semaine'
+          }
+          aide={
+            b.type_contrat === 'extra'
+              ? "Un extra est appelé en dernier, à l'accueil seulement, quand l'équipe ne suffit pas. Ses heures ne sont pas fixées."
+              : b.forfait_jours
+                ? 'Cadre au forfait jours : pas de décompte des heures.'
+                : undefined
+          }
+        >
           {(id) => (
             <Input
               id={id}
@@ -144,7 +158,7 @@ export function SectionIdentite({
               min={0}
               max={48}
               step={0.5}
-              disabled={disabled}
+              disabled={disabled || heuresSansObjet(b)}
               value={Number.isFinite(b.heures_hebdo) ? b.heures_hebdo : ''}
               onChange={(e) => {
                 const h =
