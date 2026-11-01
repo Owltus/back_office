@@ -258,7 +258,7 @@ describe('VueSemaine', () => {
     const panneau = await screen.findByRole('dialog', {
       name: "Points d'attention",
     })
-    fireEvent.click(within(panneau).getByText('Shifts à pourvoir'))
+    fireEvent.click(within(panneau).getByText('Places à pourvoir'))
     // Le premier groupe qui a quelqu'un de libre.
     const placer = within(panneau).getAllByRole('button', {
       name: /^Placer quelqu'un le /,

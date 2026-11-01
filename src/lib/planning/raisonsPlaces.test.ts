@@ -72,7 +72,7 @@ const MESSAGES: Record<(typeof REGLES_BLOCAGE)[number], string[]> = {
   ],
   'R-SEMAINE-MAX': ['50 h dans la semaine, maximum 48 h'],
   'R-JOURNEE-ETOILE': [
-    'sa journée étoile (courte) est fixée ce jour-là',
+    'sa journée étoile (une heure de moins) est fixée ce jour-là',
     '2 journées courtes dans la semaine, une seule prévue au contrat',
   ],
   'R-REPOS-HEBDO-35H': [
@@ -467,9 +467,9 @@ describe('table complète des raisons (test de mutation)', () => {
     ],
     [
       'R-JOURNEE-ETOILE',
-      'sa journée étoile (courte) est fixée ce jour-là',
+      'sa journée étoile (une heure de moins) est fixée ce jour-là',
       'R-JOURNEE-ETOILE:fixee',
-      'Sa journée courte est fixée ce jour-là',
+      'Sa journée étoile est fixée ce jour-là',
       lien('semaine', 'Semaine type'),
     ],
     [

@@ -122,7 +122,7 @@ export function MenuCase({
       {vider && (
         <ContextMenuItem onSelect={vider}>
           <Eraser />
-          <span className="font-medium">Non attribué</span>
+          <span className="font-medium">Vider la case</span>
         </ContextMenuItem>
       )}
       {validation && (

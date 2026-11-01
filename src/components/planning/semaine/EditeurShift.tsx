@@ -738,7 +738,7 @@ export function EditeurShift({
                 coche={b.court}
                 onChange={(court) => maj({ court })}
               >
-                Journée courte : {heureAffichee(horaireDe(code, true).debut)} →{' '}
+                Journée étoile : {heureAffichee(horaireDe(code, true).debut)} →{' '}
                 {heureAffichee(horaireDe(code, true).fin)} (
                 {heures(travailCode(code) - code.raccourci)} de travail)
               </Interrupteur>

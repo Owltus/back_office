@@ -295,7 +295,7 @@ export function MenuJour({
             onClick={choisir(onVider)}
           >
             <Eraser className="size-4" />
-            <span className="flex-1 font-medium">Non attribué</span>
+            <span className="flex-1 font-medium">Vider la case</span>
           </button>
         )}
         {ecrire && validation && (

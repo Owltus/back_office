@@ -67,8 +67,8 @@ export const SOLUTION_HUMAINE = 'Prenez un extra ou changez un shift.'
  * place ». */
 export const jeNePeuxPas = (horaire: string | null) =>
   horaire
-    ? `Je ne peux pas remplir le ${horaire}.`
-    : 'Je ne peux pas remplir cette place.'
+    ? `Impossible de remplir le ${horaire}.`
+    : 'Impossible de remplir cette place.'
 
 const LIEN =
   'rounded text-xs font-medium text-primary underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none'

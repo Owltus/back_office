@@ -244,14 +244,14 @@ describe('place que rien ne remplit', () => {
 
   it('je ne peux pas, la raison, la solution ; Placer reste', () => {
     monterCommune(vi.fn())
-    const mardi = screen.getByText('Je ne peux pas remplir le 07:00–15:00.')
+    const mardi = screen.getByText('Impossible de remplir le 07:00–15:00.')
     const bloc = mardi.parentElement!
     expect(bloc.textContent).toBe(
-      "Je ne peux pas remplir le 07:00–15:00.Personne n'a assez de repos avec ses autres shifts.Prenez un extra ou changez un shift.",
+      "Impossible de remplir le 07:00–15:00.Personne n'a assez de repos avec ses autres shifts.Prenez un extra ou changez un shift.",
     )
     // Une seule place dit « je ne peux pas » : celle de mercredi garde les
     // raisons par personne, et l'horaire voisin possible.
-    expect(screen.getAllByText(/Je ne peux pas/)).toHaveLength(1)
+    expect(screen.getAllByText(/Impossible de remplir/)).toHaveLength(1)
     expect(
       screen.getAllByRole('list', { name: 'Pourquoi personne' }),
     ).toHaveLength(1)
@@ -302,10 +302,10 @@ describe('panneau : personnes par cycle et trous entre équipes', () => {
     )
     expect(
       screen.getByText(
-        '3 points : 2 écarts de personnes par cycle, 1 trou entre équipes.',
+        "3 points : 2 écarts à l'accueil, 1 trou entre équipes.",
       ),
     ).toBeTruthy()
-    expect(screen.getByText('Personnes par cycle')).toBeTruthy()
+    expect(screen.getByText('Accueil : matin, soir, nuit')).toBeTruthy()
     expect(screen.getByText('Trous entre équipes')).toBeTruthy()
     const phrases = [
       '1 personne de trop le matin mardi',

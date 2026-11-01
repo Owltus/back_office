@@ -441,7 +441,7 @@ export function SectionSemaineType({
                     label={
                       e.etoile
                         ? `Journée étoile fixée le ${jour} : cliquez pour la laisser variable`
-                        : `Fixer la journée étoile (courte) le ${jour}`
+                        : `Fixer la journée étoile (une heure de moins) le ${jour}`
                     }
                   >
                     <Button

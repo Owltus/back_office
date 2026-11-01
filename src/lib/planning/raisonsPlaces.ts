@@ -174,7 +174,7 @@ export function raisonClaire(
     case 'R-JOURNEE-ETOILE':
       return message.includes('fixée')
         ? r(
-            'Sa journée courte est fixée ce jour-là',
+            'Sa journée étoile est fixée ce jour-là',
             fiche(salarieId, 'Semaine type', 'semaine'),
             'R-JOURNEE-ETOILE:fixee',
           )

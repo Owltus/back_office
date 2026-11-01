@@ -1063,8 +1063,8 @@ export function VueSemaine({
         open={confirmation === 'fullauto'}
         onOpenChange={(o) => !o && setConfirmation(null)}
         title="Tout recalculer ?"
-        description="Full auto repart de zéro : les shifts validés sont eux aussi recalculés."
-        confirmLabel="Full auto"
+        description="Le planning repart de zéro : les shifts validés sont eux aussi recalculés."
+        confirmLabel="Tout recalculer"
         onConfirm={() =>
           confirmGen.demander(() => void lancerGeneration({ tout: true }))
         }

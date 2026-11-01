@@ -30,9 +30,13 @@ afterEach(cleanup)
 describe('5. résumé des points : le vocabulaire de « Personnes par cycle »', () => {
   const e = (ecart: number) => ({ ecart })
   it('manques seuls, surplus seuls, mélange', () => {
-    expect(resumeCycles([e(-1), e(-2)])).toBe('2 cycles à compléter')
-    expect(resumeCycles([e(1)])).toBe('1 cycle avec du monde en trop')
-    expect(resumeCycles([e(-1), e(1)])).toBe('2 écarts de personnes par cycle')
+    expect(resumeCycles([e(-1), e(-2)])).toBe(
+      "2 moments de l'accueil à compléter",
+    )
+    expect(resumeCycles([e(1)])).toBe(
+      "1 moment de l'accueil avec du monde en plus",
+    )
+    expect(resumeCycles([e(-1), e(1)])).toBe("2 écarts à l'accueil")
   })
   it('plus aucun « hors consigne » dans la phrase', () => {
     const texte = resumePoints({
@@ -54,18 +58,18 @@ describe('5. résumé des points : le vocabulaire de « Personnes par cycle »',
       trous: [],
       aRegarder: [],
     } as unknown as Parameters<typeof resumePoints>[0])
-    expect(texte).toBe('1 point : 1 cycle à compléter.')
+    expect(texte).toBe("1 point : 1 moment de l'accueil à compléter.")
   })
 })
 
 describe('6. À vérifier : la pastille dit sa part de données à ranger', () => {
   it('29 = 13 points des réglages + 16 données à ranger', () => {
     expect(etiquetteAVerifier(13, 16)).toBe(
-      'À vérifier : 29 points, dont 16 données à ranger',
+      'À vérifier : 29 points, dont 16 shifts à corriger',
     )
     expect(etiquetteAVerifier(13, 0)).toBe('À vérifier : 13 points')
     expect(etiquetteAVerifier(0, 1)).toBe(
-      'À vérifier : 1 point, dont 1 donnée à ranger',
+      'À vérifier : 1 point, dont 1 shift à corriger',
     )
     expect(etiquetteAVerifier(0, 0)).toBe(
       'Réglages cohérents : rien à vérifier',
@@ -91,11 +95,7 @@ describe('6. À vérifier : la pastille dit sa part de données à ranger', () =
     expect(
       screen.getByText(/13 points à vérifier dans les réglages/),
     ).toBeTruthy()
-    expect(
-      screen.getByText(
-        /Les données à ranger, des shifts déjà posés, ne sont pas comptées ici/,
-      ),
-    ).toBeTruthy()
+    expect(screen.getByText(/Vous pouvez générer quand même/)).toBeTruthy()
   })
 })
 

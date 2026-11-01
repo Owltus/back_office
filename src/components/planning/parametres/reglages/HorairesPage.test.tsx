@@ -206,7 +206,7 @@ describe('Horaires et absences', () => {
       carte.getByLabelText<HTMLInputElement>('Minutes retirées au début').value,
     ).toBe('60')
     fireEvent.change(
-      carte.getByLabelText('Journée courte : minutes en moins'),
+      carte.getByLabelText('Journée étoile : minutes en moins'),
       {
         target: { value: '240' },
       },

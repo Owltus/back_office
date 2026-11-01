@@ -350,7 +350,9 @@ describe('couverture, soutien, raisons', () => {
     const gens = ['a', 'b', 'c'].map((i) => sal(i))
     const affs = ['a', 'b', 'c'].map((i) => aff(i, 'c'))
     const v = violations(probleme({ salaries: gens, creneaux: [c] }), affs)
-    expect(v.map((x) => [x.regle, x.message])).toEqual([['SUREFFECTIF', '3/2']])
+    expect(v.map((x) => [x.regle, x.message])).toEqual([
+      ['SUREFFECTIF', '3 personnes pour 2 places : 1 de trop'],
+    ])
   })
 
   it('les manquants ne comptent pas le soutien', () => {
@@ -665,7 +667,7 @@ describe('places : un remplaçant tient la place de son besoin', () => {
       v
         .filter((x) => x.regle === 'SUREFFECTIF')
         .map((x) => [x.message, x.creneaux]),
-    ).toEqual([['2/1', ['b1']]])
+    ).toEqual([['2 personnes pour 1 place : 1 de trop', ['b1']]])
     const deux = { ...b, effectif: 2 }
     const p2 = probleme({ salaries: [sal('a'), sal('c')], creneaux: [deux, r] })
     expect(
@@ -688,7 +690,7 @@ describe('places : un remplaçant tient la place de son besoin', () => {
     expect(surplus([aff('a', 'b1'), aff('c', 'r1-6')])).toEqual([])
     expect(
       surplus([aff('a', 'b1'), aff('c', 'r1-6'), aff('d', 'r1-6')]),
-    ).toEqual(['3/2'])
+    ).toEqual(['3 personnes pour 2 places : 1 de trop'])
   })
 
   it('un remplaçant d’une place inconnue n’a droit à personne', () => {
@@ -698,7 +700,7 @@ describe('places : un remplaçant tient la place de son besoin', () => {
       violations(p, [aff('a', 'r9-6')])
         .filter((x) => x.regle === 'SUREFFECTIF')
         .map((x) => [x.message, x.creneaux]),
-    ).toEqual([['1/0', ['b9']]])
+    ).toEqual([['1 personne pour aucune place : 1 de trop', ['b9']]])
     expect(manquants(p, [aff('a', 'r9-6')])).toEqual(new Map())
   })
 

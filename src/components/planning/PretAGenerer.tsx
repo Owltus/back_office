@@ -426,11 +426,9 @@ export function ConfirmationGeneration({
         <DialogHeader>
           <DialogTitle>Générer le planning ?</DialogTitle>
           <DialogDescription>
-            {resume} dans les réglages. Ils n’empêchent pas de générer, mais le
-            résultat peut s’en ressentir. Les données à ranger, des shifts déjà
-            posés, ne sont pas comptées ici : elles restent dans À vérifier. Les
-            shifts générés restent des propositions : vous les relisez et les
-            validez ensuite.
+            {resume} dans les réglages. Vous pouvez générer quand même : les
+            shifts générés restent des propositions, que vous relisez et validez
+            ensuite.
           </DialogDescription>
         </DialogHeader>
         <Button

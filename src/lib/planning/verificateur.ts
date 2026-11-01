@@ -265,7 +265,7 @@ export function violationsSalarie(
       if (s.etoileFixe.has(jourDe(c)) && travail(c) >= s.journeePleine) {
         ajoute(
           'R-JOURNEE-ETOILE',
-          'sa journée étoile (courte) est fixée ce jour-là',
+          'sa journée étoile (une heure de moins) est fixée ce jour-là',
           [c],
           'organisation',
         )
@@ -414,7 +414,7 @@ export function violations(
       erreurs.push({
         salarieId: null,
         regle: 'SUREFFECTIF',
-        message: `${n}/${limite}`,
+        message: `${n} personne${n > 1 ? 's' : ''} pour ${limite ? `${limite} place${limite > 1 ? 's' : ''}` : 'aucune place'} : ${n - limite} de trop`,
         creneaux: [place],
         nature: 'loi',
       })

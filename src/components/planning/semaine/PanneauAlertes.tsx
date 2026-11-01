@@ -212,7 +212,7 @@ export function PanneauAlertes({
           </Famille>
 
           <Famille
-            titre="Shifts à pourvoir"
+            titre="Places à pourvoir"
             nombre={autres ? shifts.length : 0}
           >
             <PlacesNavigables
@@ -229,7 +229,7 @@ export function PanneauAlertes({
           </Famille>
 
           <Famille
-            titre="Personnes par cycle"
+            titre="Accueil : matin, soir, nuit"
             nombre={autres ? p.presence.length : 0}
           >
             {p.presence.map((e) => (

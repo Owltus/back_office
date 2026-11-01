@@ -276,7 +276,7 @@ export function metier(
     .filter((p): p is Poste => !!p)
     .map((p) =>
       p.categorie === 'veille_nuit'
-        ? 'Night'
+        ? 'Veilleur'
         : p.categorie === 'reception' || p.nom === 'Club'
           ? 'Hôtelier'
           : p.nom,

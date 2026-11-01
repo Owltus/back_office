@@ -146,7 +146,7 @@ export const PAGE_ECRAN: Record<EcranReglage, PageReglage> = {
 }
 
 export const LIBELLE_ECRAN: Record<EcranReglage, string> = {
-  horaires: 'Horaires',
+  horaires: 'Horaires et absences',
   postes: 'Postes',
   equipe: 'Équipe',
   besoins: 'Besoins',

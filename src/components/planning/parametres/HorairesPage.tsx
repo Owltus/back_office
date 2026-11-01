@@ -470,7 +470,7 @@ function LigneHoraire({ h, onOuvrir }: { h: Horaire; onOuvrir: () => void }) {
         />
       }
       libelle={<span className="font-medium tabular-nums">{libelle}</span>}
-      detail={`${heures(dureeHoraire(h.debut, h.fin) - h.pause)}${h.pause > 0 ? ` · pause ${h.pause} min` : ''}${h.raccourci > 0 ? ' · journée courte' : ''}`}
+      detail={`${heures(dureeHoraire(h.debut, h.fin) - h.pause)}${h.pause > 0 ? ` · pause ${h.pause} min` : ''}${h.raccourci > 0 ? ' · journée étoile possible' : ''}`}
       onOuvrir={onOuvrir}
     />
   )
@@ -792,9 +792,9 @@ function CarteHoraire({
           />
           min
         </Champ>
-        <Champ libelle="Journée courte">
+        <Champ libelle="Journée étoile">
           <ChampMinutes
-            etiquette="Journée courte : minutes en moins"
+            etiquette="Journée étoile : minutes en moins"
             valeur={h.raccourci}
             max={240}
             pas={15}
@@ -815,7 +815,7 @@ function CarteHoraire({
         {raccourci > 0 && (
           <Champ
             libelle="dont"
-            aide="Minutes retirées au début : la journée courte commence plus tard"
+            aide="Minutes retirées au début : la journée étoile commence plus tard"
           >
             <ChampMinutes
               etiquette="Minutes retirées au début"
@@ -848,7 +848,7 @@ function CarteHoraire({
           </div>
           {court && (
             <div className="flex justify-between gap-2">
-              <span className="text-muted-foreground">Journée courte</span>
+              <span className="text-muted-foreground">Journée étoile</span>
               <span className="tabular-nums">
                 {heureAffichee(court.debut)} → {heureAffichee(court.fin)} ·{' '}
                 {heures(travail - raccourci)} de travail

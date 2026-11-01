@@ -360,10 +360,10 @@ export function resumeCycles(
 ): string {
   const n = presence.length
   if (presence.every((e) => e.ecart < 0))
-    return `${pluriel(n, 'cycle')} à compléter`
+    return `${pluriel(n, 'moment')} de l'accueil à compléter`
   if (presence.every((e) => e.ecart > 0))
-    return `${pluriel(n, 'cycle')} avec du monde en trop`
-  return `${pluriel(n, 'écart')} de personnes par cycle`
+    return `${pluriel(n, 'moment')} de l'accueil avec du monde en plus`
+  return `${pluriel(n, 'écart')} à l'accueil`
 }
 
 /** « Tout est en ordre », ou « 7 points : 5 shifts à pourvoir, 2 … ». */
@@ -373,7 +373,7 @@ export function resumePoints(p: PointsAttention): string {
   const infractions = p.infractions.reduce((n, x) => n + x.messages.length, 0)
   if (infractions) morceaux.push(pluriel(infractions, 'infraction'))
   const shifts = p.aPourvoir.reduce((n, j) => n + j.shifts.length, 0)
-  if (shifts) morceaux.push(`${pluriel(shifts, 'shift')} à pourvoir`)
+  if (shifts) morceaux.push(`${pluriel(shifts, 'place')} à pourvoir`)
   if (p.presence.length) morceaux.push(resumeCycles(p.presence))
   if (p.trous.length)
     morceaux.push(pluriel(p.trous.length, 'trou') + ' entre équipes')

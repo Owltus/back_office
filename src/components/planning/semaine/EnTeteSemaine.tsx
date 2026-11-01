@@ -356,7 +356,7 @@ export function EnTeteSemaine({
                     Générer
                   </DropdownMenuLabel>
                   <ItemAction
-                    libelle="Full auto"
+                    libelle="Tout recalculer"
                     aide="Repart de zéro, y compris ce qui est validé"
                     inactif={
                       passee

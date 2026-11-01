@@ -49,7 +49,7 @@ describe('PanneauControle', () => {
     const sections = screen.getAllByRole('region')
     expect(sections.map((s) => s.getAttribute('aria-label'))).toEqual([
       'Besoins',
-      'Horaires',
+      'Horaires et absences',
       'Équipe',
     ])
     expect(within(sections[0]).getByText('Bloquant.')).toBeTruthy()

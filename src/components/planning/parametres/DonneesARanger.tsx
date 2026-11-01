@@ -172,9 +172,9 @@ export function SectionDonneesARanger({
     )
   }
   return (
-    <section aria-label="Données à ranger" className="flex flex-col gap-2">
+    <section aria-label="Shifts à corriger" className="flex flex-col gap-2">
       <h3 className="flex items-baseline gap-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-        Données à ranger
+        Shifts à corriger
         {groupes && groupes.length > 0 && (
           <span className="font-normal tabular-nums">{groupes.length}</span>
         )}

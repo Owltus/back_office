@@ -66,7 +66,7 @@ export function etiquetteAVerifier(reglages: number, aRanger: number): string {
   if (!total) return 'Réglages cohérents : rien à vérifier'
   const tete = `À vérifier : ${total} point${total > 1 ? 's' : ''}`
   if (!aRanger) return tete
-  return `${tete}, dont ${aRanger} donnée${aRanger > 1 ? 's' : ''} à ranger`
+  return `${tete}, dont ${aRanger} shift${aRanger > 1 ? 's' : ''} à corriger`
 }
 
 /** La pastille de l'en-tête et son volet. */

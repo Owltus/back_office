@@ -263,7 +263,7 @@ export function resume(f: Fiche): LigneRegle[] {
     ],
     [
       'R-REPOS-HEBDO-HCR',
-      `2 jours de repos par semaine (${s.joursPreferesSemaine} jours travaillés ; 6 en cas de besoin, avec au moins ${s.reposDeuxSemaines} jours de repos sur deux semaines ; en dessous, permis à la main avec une alerte, jusqu'à 12 jours d'affilée)`,
+      `2 jours de repos par semaine, ${s.joursPreferesSemaine} jours travaillés. 6 jours en cas de besoin, avec ${s.reposDeuxSemaines} jours de repos sur deux semaines. Au-delà, possible à la main avec une alerte, jusqu'à 12 jours d'affilée.`,
     ],
   ]
   if (s.reposHebdoMin) {
@@ -284,13 +284,13 @@ export function resume(f: Fiche): LigneRegle[] {
   if (f.forfaitJours) {
     lignes.push([
       'R-CADRE-FJ',
-      'Forfait jours : pas de décompte horaire, 218 jours par an',
+      'Forfait jours : pas de décompte des heures. Le repos de 11 h et le repos de la semaine s’appliquent.',
     ])
   }
   if (f.typeContrat === 'stagiaire') {
     lignes.push([
       'R-STAGE-TEMPS',
-      'Stagiaire : mêmes durées et repos que les salariés',
+      'Stagiaire : au plus 10 h par jour, mêmes repos que les salariés',
     ])
   }
   if (f.typeContrat === 'apprenti' || f.joursEcole?.size) {
