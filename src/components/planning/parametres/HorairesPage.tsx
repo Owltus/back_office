@@ -171,11 +171,6 @@ const PERIODES: ReadonlyArray<{
     libelle: 'Nuit',
     aide: 'Compte la nuit dans le tableau Accueil, sur le poste Veille de nuit',
   },
-  {
-    valeur: 'aucune',
-    libelle: 'À part',
-    aide: 'À part (direction, supervision…) : hors des consignes',
-  },
 ]
 
 const saisieMotif = (m: Motif): SaisieMotif => ({
@@ -863,7 +858,7 @@ function CarteHoraire({
           <span className="text-sm text-muted-foreground">Moment</span>
           <Segmente
             etiquette="Moment de l'horaire"
-            valeur={h.periode ?? 'aucune'}
+            valeur={h.periode ?? 'middle'}
             options={PERIODES}
             disabled={desactive}
             onChange={(v) => {
@@ -1052,22 +1047,26 @@ function CarteMotif({
         />
       </div>
 
-      <label className="flex items-start gap-2 text-sm">
-        <Switch
-          checked={m.decompte}
-          disabled={desactive}
-          onCheckedChange={(decompte) => changer({ decompte })}
-          aria-label="Compté dans les heures"
-          className="mt-0.5"
-        />
-        <span>
-          Compté dans les heures
-          <span className="block text-xs text-muted-foreground">
-            Un jour de ce motif vaut une journée de travail : il est retiré des
-            heures dues de la semaine.
+      {/* École et repos ont leur propre règle d'heures (audit RH du
+          2026-11-01) : la case ne servirait à rien. */}
+      {m.nature === 'absence' && (
+        <label className="flex items-start gap-2 text-sm">
+          <Switch
+            checked={m.decompte}
+            disabled={desactive}
+            onCheckedChange={(decompte) => changer({ decompte })}
+            aria-label="Compté dans les heures"
+            className="mt-0.5"
+          />
+          <span>
+            Compté dans les heures
+            <span className="block text-xs text-muted-foreground">
+              Un jour de ce motif vaut une journée de travail : il est retiré
+              des heures dues de la semaine.
+            </span>
           </span>
-        </span>
-      </label>
+        </label>
+      )}
 
       <ErreursSaisie erreurs={modifiable ? erreurs : []} />
 

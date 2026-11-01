@@ -306,8 +306,10 @@ function CartePoste({
   // Chiffres du poste (prototype) : qui le tient, et sa présence demandée
   // par semaine (effectif × durée, pause non déduite).
   const compte = (niveau: string) =>
-    referentiel.salaries.filter((s) =>
-      s.competences.some((c) => c.poste_id === id && c.niveau === niveau),
+    referentiel.salaries.filter(
+      (s) =>
+        s.actif &&
+        s.competences.some((c) => c.poste_id === id && c.niveau === niveau),
     ).length
   const besoinsSemaine = referentiel.besoins
     .filter((b) => b.poste_id === id)
@@ -373,17 +375,16 @@ function CartePoste({
           checked={p.a_part}
           disabled={!modifiable}
           onCheckedChange={(a_part) => changer({ a_part })}
-          aria-label="Ranger à part dans la liste de l'équipe"
+          aria-label="Proposer en second dans la fiche d'une personne"
           className="mt-0.5"
         />
         <span className="flex flex-col gap-0.5">
           <span className="font-medium">
-            Ranger à part dans la liste de l'équipe
+            Proposer en second dans la fiche d'une personne
           </span>
           <span className="text-xs text-muted-foreground">
-            Dans la fiche d'une personne, ce poste est proposé sous les postes
-            courants, avec la direction, la supervision ou la technique. Le
-            planning automatique le traite comme les autres.
+            Pour la direction, la supervision ou la technique : à l'ajout d'un
+            poste, il vient après les postes courants. Rien d'autre ne change.
           </span>
         </span>
       </label>
@@ -414,7 +415,11 @@ function CartePoste({
           proposes={referentiel.horaires.map((h) => h.id)}
           onChange={(horaires_autorises) => changer({ horaires_autorises })}
           disabled={!modifiable}
-          texteTous={`Les ${referentiel.horaires.length} horaires, y compris ceux créés plus tard.`}
+          texteTous={
+            referentiel.horaires.length
+              ? `Tous les horaires (${referentiel.horaires.length}), y compris ceux créés plus tard.`
+              : 'Aucun horaire pour l’instant : créez-les dans Horaires et absences.'
+          }
         >
           {(liste) => (
             <>
@@ -496,7 +501,7 @@ function CartePoste({
         open={suppression}
         onOpenChange={setSuppression}
         title={`Supprimer le poste ${nomAffiche} ?`}
-        description="Ses besoins et ses shifts sont supprimés avec lui, et il est retiré des fiches et des groupes. Les plannings réalisés (semaines verrouillées) empêchent la suppression."
+        description="Tous ses shifts sont effacés, y compris ceux des semaines passées non verrouillées, ainsi que ses besoins. Il est retiré des fiches et des groupes. Une semaine verrouillée empêche la suppression."
         confirmLabel="Supprimer"
         destructive
         onConfirm={() => void supprimer()}

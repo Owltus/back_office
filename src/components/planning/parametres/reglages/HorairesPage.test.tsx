@@ -361,9 +361,11 @@ describe('Horaires et absences', () => {
     monter(<HorairesPage />)
     const carte = within(carteMaladie())
     fireEvent.click(carte.getByRole('radio', { name: 'École' }))
-    fireEvent.click(
-      carte.getByRole('switch', { name: 'Compté dans les heures' }),
-    )
+    // L'école a sa propre règle d'heures : pas de case (audit RH du
+    // 2026-11-01).
+    expect(
+      carte.queryByRole('switch', { name: 'Compté dans les heures' }),
+    ).toBeNull()
     fireEvent.click(carte.getByRole('button', { name: 'Enregistrer' }))
     await waitFor(() =>
       expect(service.enregistrerMotif).toHaveBeenCalledWith(
@@ -371,7 +373,7 @@ describe('Horaires et absences', () => {
           code: 'MA',
           nom: 'Maladie',
           couleur: '#000000',
-          decompte: false,
+          decompte: true,
           nature: 'ecole',
         },
         3,

@@ -126,7 +126,7 @@ describe('Postes', () => {
     fireEvent.click(r.getByRole('button', { name: '23:00–07:45' }))
     fireEvent.click(
       r.getByRole('switch', {
-        name: "Ranger à part dans la liste de l'équipe",
+        name: "Proposer en second dans la fiche d'une personne",
       }),
     )
     fireEvent.click(r.getByRole('switch', { name: "Poste de l'accueil" }))
@@ -160,7 +160,7 @@ describe('Postes', () => {
     expect(tous.getAttribute('aria-checked')).toBe('true')
     expect(r.queryByRole('button', { name: '07:00–15:45' })).toBeNull()
     expect(
-      r.getByText('Les 7 horaires, y compris ceux créés plus tard.'),
+      r.getByText('Tous les horaires (7), y compris ceux créés plus tard.'),
     ).toBeTruthy()
     // Retour à Seulement : la sélection d'avant revient.
     fireEvent.click(r.getByRole('radio', { name: 'Seulement ceux-ci' }))
@@ -215,7 +215,7 @@ describe('Postes', () => {
     }
     monter(<PostesPage />)
     const r = carte('Club')
-    expect(r.getByText(/^Les 7 horaires/)).toBeTruthy()
+    expect(r.getByText(/^Tous les horaires \(7\)/)).toBeTruthy()
     fireEvent.click(r.getByRole('radio', { name: 'Seulement ceux-ci' }))
     const boutons = within(r.getByRole('group', { name: 'Horaires possibles' }))
       .getAllByRole('button')
