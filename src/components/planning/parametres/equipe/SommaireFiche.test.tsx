@@ -3,7 +3,7 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { useRef } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { SommaireFiche } from '#/components/planning/parametres/equipe/SommaireFiche.tsx'
+import { useDepartFiche } from '#/components/planning/parametres/equipe/SommaireFiche.tsx'
 
 /*
  * Fiche ouverte par un lien (`salarie-3.semaine`) : elle va d'emblée à la
@@ -20,9 +20,9 @@ const PARTIES = [
 
 function Fiche({ depart }: { depart?: string }) {
   const zone = useRef<HTMLDivElement>(null)
+  useDepartFiche(zone, depart)
   return (
     <div ref={zone}>
-      <SommaireFiche parties={PARTIES} zone={zone} depart={depart} />
       {PARTIES.map((p) => (
         <section key={p.partie} data-partie={p.partie}>
           {p.libelle}
@@ -41,9 +41,10 @@ function rendre(depart?: string) {
   return vues
 }
 
-describe('SommaireFiche : partie de départ', () => {
-  it('va à la partie visée par le lien', () => {
+describe('useDepartFiche : partie de départ', () => {
+  it('va à la partie visée par le lien, sans sommaire affiché', () => {
     expect(rendre('Semaine type')).toEqual(['Semaine type'])
+    expect(screen.queryByRole('navigation')).toBeNull()
     expect(
       screen.getByText('Semaine type', { selector: 'section' }),
     ).toBeTruthy()

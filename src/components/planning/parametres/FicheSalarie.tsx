@@ -59,7 +59,7 @@ import {
   messageShiftsRetires,
 } from '#/components/planning/parametres/equipe/ecole.ts'
 import { SectionIdentite } from '#/components/planning/parametres/equipe/SectionIdentite.tsx'
-import { SommaireFiche } from '#/components/planning/parametres/equipe/SommaireFiche.tsx'
+import { useDepartFiche } from '#/components/planning/parametres/equipe/SommaireFiche.tsx'
 import type { PartieFiche } from '#/lib/planning/coherence.ts'
 
 /** Partie d'un lien (`cibleFiche`) → attribut data-partie de sa section. */
@@ -514,6 +514,10 @@ function CorpsFiche({
     })) ?? false
 
   const zone = useRef<HTMLDivElement>(null)
+  useDepartFiche(
+    zone,
+    partie ? PARTIES_FICHE[partie as PartieFiche] : undefined,
+  )
   const titre =
     b.id !== null
       ? nomBrouillon(initial) || 'Fiche de la personne'
@@ -541,21 +545,6 @@ function CorpsFiche({
         ref={zone}
         className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-4 [scrollbar-gutter:stable]"
       >
-        <SommaireFiche
-          zone={zone}
-          depart={partie ? PARTIES_FICHE[partie as PartieFiche] : undefined}
-          parties={[
-            { libelle: 'Identité', partie: PARTIES_FICHE.identite },
-            ...(alternance && ecole
-              ? [{ libelle: 'École', partie: PARTIES_FICHE.ecole }]
-              : []),
-            { libelle: 'Postes', partie: PARTIES_FICHE.postes },
-            { libelle: 'Horaires', partie: PARTIES_FICHE.horaires },
-            { libelle: 'Semaine type', partie: PARTIES_FICHE.semaine },
-            { libelle: 'Absences', partie: PARTIES_FICHE.absences },
-            { libelle: 'Règles', partie: PARTIES_FICHE.regles },
-          ]}
-        />
         <SectionIdentite
           {...proprietes}
           aujourdhui={aujourdhui}
