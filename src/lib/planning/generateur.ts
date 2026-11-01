@@ -212,7 +212,12 @@ import type {
 // P5 — confort.
 /** Par jour d'écart à sa part (week-ends, soirs, matins tôt). */
 export const POIDS_EQUITE = 100
-export const POIDS_REPOS_SEPARES = 1_000
+/** Deux jours de repos qui se suivent (demande utilisateur du 2026-11-01 :
+ * « il faut que ça soit une priorité ; à défaut, des plannings un peu
+ * biscornus »). Au-dessus de tout le reste du confort (jour habituel,
+ * équité), sous les contrats et les places : les poids P1 et le surplus en
+ * dérivent. */
+export const POIDS_REPOS_SEPARES = 8_000
 /** Travailler un jour habituel (semaine type « travail »). */
 export const POIDS_JOUR_FIXE = 2_000
 // P4 — titulaire avant dépannage, horaire imposé avant remplaçant.
@@ -309,14 +314,12 @@ export const EQUITE_MAX_PAR_SHIFT =
 
 /** P4 : part fixe d'un shift en dépannage, au-dessus de la somme de TOUT le
  * confort (P5) qu'un shift peut faire gagner ou perdre, départage compris :
- * un titulaire libre passe devant, quelle que soit la durée du shift (D13). */
+ * un titulaire libre passe devant, quelle que soit la durée du shift (D13).
+ * Les repos accolés n'y sont plus (2026-11-01) : ils sont devenus une
+ * priorité au niveau du dépannage, sous le 6e jour ; les y laisser rendait
+ * le dépannage plus cher qu'un 6e jour de titulaire. */
 export const PART_FIXE_DEPANNAGE =
-  POIDS_JOUR_FIXE +
-  POIDS_REPOS_SEPARES +
-  EQUITE_MAX_PAR_SHIFT +
-  POIDS_DEJA_PROPOSE +
-  BRUIT_MAX +
-  1
+  POIDS_JOUR_FIXE + EQUITE_MAX_PAR_SHIFT + POIDS_DEJA_PROPOSE + BRUIT_MAX + 1
 
 /** P4 : ce que coûte un shift `c` tenu en dépannage. */
 export function coutDepannage(c: Creneau) {

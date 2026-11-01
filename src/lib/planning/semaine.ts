@@ -1885,7 +1885,11 @@ export function preparerGeneration(
     courtes,
     aEviter,
     consignes: chiffresAccueil(ctx),
-    tempsMaxSecondes: o.tempsMaxSecondes ?? 10,
+    // 40 s au plus par semaine (2026-11-01) : à 10 s, HiGHS s'arrêtait
+    // avant l'optimum sur une semaine réelle (décembre : des contrats à
+    // 32 h et des places vides alors que des extras étaient libres) ; il
+    // atteint l'optimum en 10 à 20 s et rend la main dès qu'il l'a.
+    tempsMaxSecondes: o.tempsMaxSecondes ?? 40,
   })
   const parId = new Map(besoins.map((b) => [`b${b.id}`, b]))
   const traduire = (r: Resultat): NouveauShift[] => {

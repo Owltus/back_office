@@ -597,6 +597,9 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
       soutien: fc.integer({ min: 0, max: 1 }),
       raccourci: fc.constantFrom(0, 60),
     })
+    // Empreinte relevée de nouveau le 2026-11-01 : seul le poids des repos
+    // accolés a changé (POIDS_REPOS_SEPARES 1 000 → 8 000, et ce qui en
+    // dérive) ; la structure du modèle est la même.
     const textes: string[] = []
     fc.assert(
       fc.property(
@@ -634,7 +637,7 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
       ),
       { numRuns: 80, seed: 20261030 },
     )
-    expect(empreinte(textes.join('\n=====\n'))).toBe('c66ff0f1')
+    expect(empreinte(textes.join('\n=====\n'))).toBe('6158ea95')
   })
 })
 

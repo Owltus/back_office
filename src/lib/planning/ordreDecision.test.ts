@@ -147,8 +147,14 @@ describe('les poids sont des paliers dérivés', () => {
     // P4 > P5 : un dépannage, même d'une heure, coûte plus que TOUT le
     // confort d'un shift additionné.
     expect(coutDepannage(creneau('c', 0, 7, 8))).toBeGreaterThan(
-      POIDS_JOUR_FIXE + POIDS_REPOS_SEPARES + EQUITE_MAX_PAR_SHIFT,
+      POIDS_JOUR_FIXE + EQUITE_MAX_PAR_SHIFT,
     )
+    // Repos accolés (2026-11-01) : au-dessus de tout le confort, sous le 6e
+    // jour ; un dépannage de 8 h pèse autant.
+    expect(POIDS_REPOS_SEPARES).toBeGreaterThan(
+      POIDS_JOUR_FIXE + EQUITE_MAX_PAR_SHIFT,
+    )
+    expect(POIDS_SIXIEME_JOUR).toBeGreaterThan(POIDS_REPOS_SEPARES)
     // P3 > P4 : dès 2 h, un titulaire en heures en plus laisse la place ;
     // le 6e jour, jusqu'à 17 h de shift.
     expect(POIDS_SUR_CONTRAT * 2 * H).toBeGreaterThan(
@@ -375,12 +381,10 @@ describe('P4 : titulaire avant dépannage (D13, D14)', () => {
   // du dépannage sur un shift de 3 h ou 4 h.
   it('les coûts de confort ADDITIONNÉS ne font jamais passer un dépannage devant un titulaire libre', () => {
     // Le confort, au pire, pour un shift : moins que la part fixe seule.
+    // (Les repos accolés n'en sont plus depuis le 2026-11-01 : une priorité
+    // au niveau du dépannage, testée plus haut.)
     expect(PART_FIXE_DEPANNAGE).toBeGreaterThan(
-      POIDS_JOUR_FIXE +
-        POIDS_REPOS_SEPARES +
-        EQUITE_MAX_PAR_SHIFT +
-        POIDS_DEJA_PROPOSE +
-        BRUIT_MAX,
+      POIDS_JOUR_FIXE + EQUITE_MAX_PAR_SHIFT + POIDS_DEJA_PROPOSE + BRUIT_MAX,
     )
     for (const heures of [1, 2, 3, 4, 5, 6]) {
       for (const graine of graines) {
