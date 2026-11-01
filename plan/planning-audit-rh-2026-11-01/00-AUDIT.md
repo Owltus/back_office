@@ -113,3 +113,36 @@ Constats bruts : journal du workflow `wf_6b04ce74-19e`.
 
 Non couverts : le parcours d'un nouvel utilisateur (lecteur coupé par la
 limite), jours fériés automatiques, export ou impression du planning.
+
+---
+
+## État au 2026-11-01 (soir)
+
+Fait, en dev, non poussé :
+
+| Commit  | Contenu                                                                                                                                       |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| c1ea435 | Partie A : trous d'un veilleur à l'autre, moment vide signalé, heures de l'accueil, interrupteur « Poste de l'accueil », Pour commencer juste |
+| 10df352 | Fiche : 0 h refusé, mineur 35 h, heures sans objet (extra, forfait), aide « Travaille »                                                       |
+| 2ee0f7e | Partie C : vocabulaire                                                                                                                        |
+| f719caa | Partie D : Placer quelqu'un au bon moment, doublon, pastilles vides, aide au clic, import masqué                                              |
+| 54626d4 | Postes et Horaires : « À part » retiré, case d'heures pour les absences seules, « Proposer en second »                                        |
+| 8684cc3 | Un seul verbe « Compléter » dans le mois                                                                                                      |
+
+Écarté après essai : alerte « apprenti réglé en titulaire » (un apprenti de
+2e année peut tenir un poste seul ; le jeu de démonstration le fait).
+
+Reste, chacun demande une décision ou une migration :
+
+- Un seul réglage « Accueil : non / matin et soir / nuit » par poste (la
+  nuit passe encore par la catégorie Veille de nuit). Migration.
+- Retirer l'interrupteur « Actif » (doublon de la fin de contrat) et le mode
+  « Absence » de la semaine type. Données existantes à reprendre.
+- « Poste fermé » au lieu de supprimer (garder l'historique). Migration.
+- Groupes : « Postes autorisés » retire des compétences sans prévenir.
+- Un manque de l'accueil apparaît encore dans deux familles.
+- Semaines « avant le dernier planning réalisé » fermées à tort.
+- Cadenas d'une semaine sans confirmation.
+- Bouton « valider le jour » quand seuls des repos sont en proposition.
+- Nettoyage en base : besoins ignorés de Réception et Club, défaut soutien
+  = 1, code obligatoire des motifs.
