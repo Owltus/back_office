@@ -457,7 +457,10 @@ export function heureParlee(h: string): string {
 
 /** « Réception mardi : personne de 15 h à 16 h ». */
 export function phraseTrou(t: TrouAttention, jour: string): string {
-  return `${t.poste?.nom ?? 'Poste'} ${jour} : personne de ${heureParlee(t.debut)} à ${heureParlee(t.fin)}`
+  // `poste_id` 0 : trou de l'accueil entier, Réception et Club ensemble
+  // (`POSTE_ID_ACCUEIL`, décision D15 du 2026-11-01).
+  const ou = t.poste?.nom ?? (t.posteId === 0 ? 'Accueil' : 'Poste')
+  return `${ou} ${jour} : personne de ${heureParlee(t.debut)} à ${heureParlee(t.fin)}`
 }
 
 /** Regroupe les places identiques ; groupes dans l'ordre de leur première

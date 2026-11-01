@@ -54,7 +54,7 @@ describe('PointsPresence', () => {
     expect(p[2].classe).not.toMatch(/bg-/)
     expect(
       container.querySelector('[aria-label]')?.getAttribute('aria-label'),
-    ).toContain('Nuit : aucun minimum réglé')
+    ).toContain('Nuit : rien de demandé')
   })
 
   it('bleu au-delà du maximum ; rien tant que la semaine n’est pas lue', () => {

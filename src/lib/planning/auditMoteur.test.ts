@@ -1,11 +1,13 @@
+import fc from 'fast-check'
 import highsLoader from 'highs'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import { compatible, generer } from '#/lib/planning/generateur.ts'
+import { compatible, construire, generer } from '#/lib/planning/generateur.ts'
 import type { Highs } from '#/lib/planning/generateur.ts'
 import {
   cle,
   creneau as creneauModele,
+  jourDe,
   probleme,
   salarieSolveur,
 } from '#/lib/planning/modele.ts'
@@ -24,8 +26,10 @@ import { ajouterJours, bornes, MINUTES_PAR_JOUR } from '#/lib/planning/temps.ts'
 import {
   manquants,
   presenceParCycle,
+  raisonsBlocageAccueil,
   trous,
   violations,
+  violationsAccueil,
 } from '#/lib/planning/verificateur.ts'
 
 /*
@@ -683,4 +687,166 @@ describe('10. cycles : le vérificateur recompte le moteur', () => {
       ),
     ).toEqual([{ poste: 'r', jour: 0, debut: 7 * H, fin: 15 * H }])
   })
+})
+
+/*
+ * Tableau de l'accueil (plan planning-accueil-2026-11-01, étape 4) : oracle
+ * DIFFÉRENTIEL entre le générateur et le vérificateur, qui ne partagent que
+ * les données (le vérificateur n'importe rien de `generateur.ts`). Sur des
+ * semaines tirées au hasard (candidats Réception et Club, titulaires,
+ * dépannages, extras, apprentis, absences, contrats, chiffres matin et
+ * soir) :
+ *   - la loi tenue, un apprenti jamais seul ;
+ *   - les trous que le moteur laisse = ceux que recompte le vérificateur
+ *     (accueil entier, D15) ;
+ *   - un moment incomplet : personne d'autonome ne pouvait prendre un de ses
+ *     candidats sans enfreindre une règle (`raisonsBlocageAccueil`), sinon
+ *     le moteur aurait laissé une place qu'il pouvait remplir (D7 : extras
+ *     compris) ;
+ *   - personne à qui il manque des heures : jamais de surplus (D8).
+ */
+describe('11. tableau de l’accueil : le vérificateur recompte le moteur', () => {
+  it('propriété sur des semaines tirées (≥ 200 cas)', () => {
+    const arbCand = fc.record({
+      poste: fc.constantFrom('rec', 'club'),
+      jour: fc.integer({ min: 0, max: 1 }),
+      debutQ: fc.integer({ min: 24, max: 64 }), // 6 h à 16 h
+      dureeQ: fc.integer({ min: 20, max: 34 }), // 5 h à 8 h 30
+    })
+    const arbSal = fc.record({
+      genre: fc.constantFrom('tit', 'tit', 'dep', 'ext', 'app'),
+      contratH: fc.constantFrom(0, 0, 0, 8),
+      absent: fc.option(fc.integer({ min: 0, max: 1 }), { nil: null }),
+      seulRec: fc.boolean(),
+    })
+    const arbChiffre = fc.record({
+      jour: fc.integer({ min: 0, max: 1 }),
+      periode: fc.constantFrom('matin' as const, 'soir' as const),
+      n: fc.integer({ min: 0, max: 3 }),
+    })
+    let incomplets = 0
+    let avecTrous = 0
+    fc.assert(
+      fc.property(
+        fc.array(arbCand, { minLength: 1, maxLength: 5 }),
+        fc.array(arbSal, { minLength: 1, maxLength: 4 }),
+        fc.uniqueArray(arbChiffre, {
+          minLength: 1,
+          maxLength: 4,
+          selector: (k) => `${k.jour}|${k.periode}`,
+        }),
+        (cs, gens, chiffres) => {
+          const creneaux = cs.map((c, i) => {
+            const debut = c.debutQ * 15
+            return creneauModele({
+              id: `p${i}`,
+              poste: c.poste,
+              debut: c.jour * J + debut,
+              fin: c.jour * J + debut + c.dureeQ * 15,
+              effectif: 0,
+              jourPlanning: c.jour,
+              presence:
+                debut < 10 * H
+                  ? ['matin']
+                  : debut < 13 * H
+                    ? ['matin', 'soir']
+                    : ['soir'],
+              accueil: true,
+            })
+          })
+          const salaries = gens.map((g, i) => {
+            const postes = new Set(g.seulRec ? ['rec'] : ['rec', 'club'])
+            const kw: Partial<SalarieSolveur> = {
+              minutesHebdoContrat: g.contratH * H,
+              joursTravaillesMaxSemaine: 6,
+              indisponibilites: new Set(g.absent === null ? [] : [g.absent]),
+            }
+            if (g.genre === 'dep')
+              return receptionniste(`s${i}`, {
+                ...kw,
+                postes,
+                postesOccasionnels: postes,
+              })
+            if (g.genre === 'ext')
+              return receptionniste(`s${i}`, {
+                ...kw,
+                postes,
+                postesOccasionnels: postes,
+                placementManuel: true,
+                contratIndicatif: true,
+              })
+            if (g.genre === 'app')
+              return receptionniste(`s${i}`, {
+                ...kw,
+                postes: new Set(),
+                postesSoutien: postes,
+              })
+            return receptionniste(`s${i}`, { ...kw, postes })
+          })
+          const p = probleme({
+            salaries,
+            creneaux,
+            consignes: chiffres.map((k) => ({
+              jour: k.jour,
+              periode: k.periode,
+              minimum: k.n,
+              maximum: k.n,
+            })),
+            nbJours: 2,
+          })
+          const r = generer(p, highs)
+          expect(r.statut).toBe('optimal')
+          const affs = r.affectations
+          // La loi, le soutien.
+          expect(
+            violations(p, affs).filter(
+              (v) => v.nature === 'loi' || v.regle === 'SOUTIEN-SEUL',
+            ),
+          ).toEqual([])
+          // Les trous : moteur = vérificateur.
+          const tri = (t: { debut: number }[]) =>
+            [...t].sort((a, b) => a.debut - b.debut)
+          // Écart connu du générateur (2026-11-01, étape 4) : sans AUCUNE
+          // variable (personne ne peut venir), il rend tôt, sans trou ; le
+          // vérificateur voit l'accueil vide comme un trou. L'écran lit
+          // l'analyse (vérificateur), pas ce retour.
+          if (construire(p).x.size === 0) expect(r.trous).toEqual([])
+          else expect(tri(trous(p, affs))).toEqual(tri(r.trous))
+          if (r.trous.length) avecTrous++
+          // Un moment incomplet : personne de libre pour lui.
+          for (const x of presenceParCycle(p, affs)) {
+            if (x.ecart >= 0) continue
+            incomplets++
+            const ids = creneaux
+              .filter(
+                (c) => jourDe(c) === x.jour && c.presence.includes(x.periode),
+              )
+              .map((c) => c.id)
+            for (const [qui, raisons] of raisonsBlocageAccueil(p, affs, ids))
+              expect({ qui, moment: x, raisons: raisons.length }).not.toEqual({
+                qui,
+                moment: x,
+                raisons: 0,
+              })
+          }
+          // Personne à qui il manque des heures : aucun surplus (D8). Sauf
+          // par un middle : il compte aux deux moments (D11), donc tenir le
+          // soir peut mettre un matin en trop (un manque coûte plus).
+          if (
+            salaries.every((s) => s.minutesHebdoContrat === 0) &&
+            creneaux.every((c) => c.presence.length === 1)
+          )
+            expect(
+              violationsAccueil(p, affs).filter(
+                (v) => v.regle === 'ACCUEIL-SURPLUS',
+              ),
+            ).toEqual([])
+        },
+      ),
+      { numRuns: 220, seed: 20261101 },
+    )
+    // La propriété voit des moments incomplets et des trous.
+    expect(incomplets).toBeGreaterThan(20)
+    expect(avecTrous).toBeGreaterThan(5)
+  }, 240_000)
 })

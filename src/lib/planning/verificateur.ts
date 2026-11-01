@@ -5,7 +5,12 @@
  * violation porte l'identifiant de sa règle et les créneaux en cause.
  */
 
-import { postesAPresence, trousDuJour } from '#/lib/planning/cycles.ts'
+import {
+  POSTE_ACCUEIL,
+  postesAPresence,
+  trousAccueilDuJour,
+  trousDuJour,
+} from '#/lib/planning/cycles.ts'
 import type { PresencePoste } from '#/lib/planning/cycles.ts'
 import {
   codeDeLaFiche,
@@ -547,11 +552,16 @@ export interface Trou {
  * remplaçants) d'au moins une personne nécessaire, rangés au jour où ils
  * sont écrits. Présences : toutes les affectations du poste, quel que soit
  * leur jour (remplaçants, shifts posés et épinglés compris), version courte
- * appliquée. `postes` : par défaut `postesAPresence`. */
+ * appliquée. `postes` : par défaut `postesAPresence` et l'accueil entier
+ * (`POSTE_ACCUEIL`, `trousAccueil`) ; une liste donnée ne voit l'accueil que
+ * si elle contient `POSTE_ACCUEIL`. */
 export function trous(
   p: Probleme,
   affectations: AffectationSolveur[],
-  postes: ReadonlySet<string> = postesAPresence(p.creneaux),
+  postes: ReadonlySet<string> = new Set([
+    ...postesAPresence(p.creneaux),
+    POSTE_ACCUEIL,
+  ]),
 ): Trou[] {
   const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
   const salaries = new Map(p.salaries.map((s) => [s.id, s]))
@@ -559,7 +569,7 @@ export function trous(
   for (const a of affectationsCompletes(p, affectations)) {
     const c = creneaux.get(a.creneauId)
     const s = salaries.get(a.salarieId)
-    if (!c || !s || !postes.has(c.poste)) continue
+    if (!c || !s || !postes.has(c.poste) || c.accueil) continue
     const fait = a.court ? enVersionCourte(c) : c
     presences.set(c.poste, [
       ...(presences.get(c.poste) ?? []),
@@ -588,12 +598,64 @@ export function trous(
       r.push({ poste, jour, debut: t.debut, fin: t.fin })
     }
   }
+  if (postes.has(POSTE_ACCUEIL)) r.push(...trousAccueil(p, affectations))
   return r.sort(
     (a, b) =>
       a.debut - b.debut ||
       a.jour - b.jour ||
       (a.poste < b.poste ? -1 : a.poste > b.poste ? 1 : 0),
   )
+}
+
+/** Trous de l'ACCUEIL ENTIER (D15 du 2026-11-01, plan
+ * planning-accueil-2026-11-01) : Réception et Club ensemble, un jour, du
+ * premier au dernier moment demandé (chiffre > 0, matin et soir), plage lue
+ * sur les candidats de l'accueil écrits ce jour (`trousAccueilDuJour`, la
+ * définition de `cycles.ts`). Présences : TOUTES les affectations des postes
+ * de ces candidats (shifts posés, épinglés et candidats, quel que soit leur
+ * jour), version courte appliquée, un soutien jamais autonome. Recompté ici
+ * sans rien du générateur ; le poste du trou est `POSTE_ACCUEIL`. */
+export function trousAccueil(
+  p: Probleme,
+  affectations: AffectationSolveur[],
+): Trou[] {
+  const candidats = p.creneaux.filter(
+    (c) =>
+      c.accueil &&
+      (c.presence.includes('matin') || c.presence.includes('soir')),
+  )
+  if (!candidats.length) return []
+  const postes = new Set(candidats.map((c) => c.poste))
+  const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
+  const salaries = new Map(p.salaries.map((s) => [s.id, s]))
+  const presences: PresencePoste[] = []
+  for (const a of affectationsCompletes(p, affectations)) {
+    const c = creneaux.get(a.creneauId)
+    const s = salaries.get(a.salarieId)
+    if (!c || !s || !postes.has(c.poste)) continue
+    const fait = a.court ? enVersionCourte(c) : c
+    presences.push({
+      debut: fait.debut,
+      fin: fait.fin,
+      autonome: role(s, c.poste) !== 'soutien',
+    })
+  }
+  const r: Trou[] = []
+  const jours = [...new Set(candidats.map(jourDe))].sort((a, b) => a - b)
+  for (const jour of jours) {
+    const demandes = new Set(
+      p.consignes
+        .filter((k) => k.jour === jour && k.minimum > 0)
+        .map((k) => k.periode),
+    )
+    for (const t of trousAccueilDuJour(
+      candidats.filter((c) => jourDe(c) === jour),
+      demandes,
+      presences,
+    ))
+      r.push({ poste: POSTE_ACCUEIL, jour, debut: t.debut, fin: t.fin })
+  }
+  return r
 }
 
 /** Une consigne de présence et ce que le planning en fait. */
@@ -610,10 +672,11 @@ export interface EcartPresence {
 /** Recompte des consignes de présence (matin, soir, nuit), sans le
  * générateur : AFFECTATIONS posées ce jour (`jourDe`) sur un créneau qui
  * compte dans cette période (`Creneau.presence`, une LISTE posée par
- * l'assemblage). Révisé le 2026-11-01 (plan planning-accueil-2026-11-01,
- * adaptation minimale de l'étape 3, à relire à l'étape 4) : un middle de
- * l'accueil compte dans ses deux moments (D11), les soutiens comptent (D5),
- * et l'écart se lit contre le chiffre EXACT `minimum` (D3).
+ * l'assemblage, `momentsAccueil`). Révisé le 2026-11-01 (plan
+ * planning-accueil-2026-11-01, étape 4) : un middle de l'accueil compte dans
+ * ses deux moments (D11), les soutiens comptent (D5), les extras aussi (D7),
+ * et l'écart se lit contre le chiffre EXACT `minimum` (D3, D9 : un maximum
+ * différent est ignoré), dans les DEUX sens (manque < 0, surplus > 0).
  * Remplaçants, shifts posés et épinglés compris.
  * Une affectation = une présence, comme le moteur (une variable par
  * affectation) et `analyser` (`bilanPresence`, un shift = un) : une même
@@ -648,6 +711,88 @@ export function presenceParCycle(
       ecart,
     }
   })
+}
+
+/** Un moment de l'accueil qui n'a pas son chiffre exact (D3) : il manque du
+ * monde (`ACCUEIL-MANQUE`) ou il y en a trop (`ACCUEIL-SURPLUS`, D8 : permis
+ * en dernier recours pour des heures dues, toujours signalé). Organisation,
+ * jamais la loi ; hors de `violations` (un manque reste possible quand
+ * personne ne peut venir). `creneaux` : les créneaux tenus qui comptent dans
+ * ce moment. */
+export function violationsAccueil(
+  p: Probleme,
+  affectations: AffectationSolveur[],
+): Violation[] {
+  const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
+  const tenus = affectationsCompletes(p, affectations)
+    .map((a) => creneaux.get(a.creneauId))
+    .filter((c): c is Creneau => c !== undefined)
+  const r: Violation[] = []
+  for (const x of presenceParCycle(p, affectations)) {
+    if (x.ecart === 0) continue
+    const n = Math.max(0, x.minimum)
+    const ids = tenus
+      .filter((c) => jourDe(c) === x.jour && c.presence.includes(x.periode))
+      .map((c) => c.id)
+    r.push({
+      salarieId: null,
+      regle: x.ecart < 0 ? 'ACCUEIL-MANQUE' : 'ACCUEIL-SURPLUS',
+      message:
+        x.ecart < 0
+          ? `${x.compte} pour ${n} : il manque ${-x.ecart}`
+          : `${x.compte} pour ${n} : ${x.ecart} de plus`,
+      creneaux: [...new Set(ids)],
+      nature: 'organisation',
+    })
+  }
+  return r
+}
+
+/** Pour un moment de l'accueil incomplet (plan planning-accueil-2026-11-01,
+ * D7) : pourquoi chaque personne AUTONOME qui tient un poste de ces
+ * candidats (titulaire, dépannage, extra compris : l'app les place sur
+ * l'accueil) ne peut prendre AUCUN d'eux. Pour chacun, la liste la plus
+ * courte de règles nouvelles parmi les candidats de ses postes (vide : elle
+ * pourrait venir) ; à égalité, le premier candidat. Un soutien n'est pas
+ * listé (il ne vient jamais seul, D5), ni celui qui tient déjà l'un de ces
+ * candidats. Aucun « à appeler » : sur l'accueil, un extra libre est
+ * simplement libre. */
+export function raisonsBlocageAccueil(
+  p: Probleme,
+  affectations: AffectationSolveur[],
+  candidatIds: readonly string[],
+): Map<string, Violation[]> {
+  const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
+  const cibles = candidatIds
+    .map((id) => creneaux.get(id))
+    .filter((c): c is Creneau => c !== undefined)
+  const raisons = new Map<string, Violation[]>()
+  for (const s of p.salaries) {
+    const siens = affectations
+      .filter((a) => a.salarieId === s.id)
+      .map((a) => creneaux.get(a.creneauId))
+      .filter((c): c is Creneau => c !== undefined)
+    const avant = new Set(
+      violationsSalarie(s, siens, p.nbJours).map(
+        (v) => `${v.regle}|${v.message}`,
+      ),
+    )
+    // Déjà compté dans ce moment : ce n'est pas lui qui manque.
+    if (cibles.some((c) => siens.includes(c))) continue
+    let meilleure: Violation[] | null = null
+    for (const cible of cibles) {
+      const r = role(s, cible.poste)
+      if (r !== 'titulaire' && r !== 'occasionnel') continue
+      const liste = violationsSalarie(s, [...siens, cible], p.nbJours).filter(
+        (v) => !avant.has(`${v.regle}|${v.message}`),
+      )
+      if (meilleure === null || liste.length < meilleure.length)
+        meilleure = liste
+      if (!liste.length) break
+    }
+    if (meilleure !== null) raisons.set(s.id, meilleure)
+  }
+  return raisons
 }
 
 /** Pour un créneau vide : pourquoi chaque salarié qui tient ce poste ne peut

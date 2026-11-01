@@ -10,6 +10,7 @@ import {
 } from '#/lib/planning/coherence.ts'
 import type { PointReglage } from '#/lib/planning/coherence.ts'
 import { avecCode } from '#/lib/planning/test/codesTest.ts'
+import { hotelAccueil } from '#/lib/planning/test/hotelAccueil.ts'
 import { hotelReel } from '#/lib/planning/test/hotelReel.ts'
 import { SEMAINE_TYPE_VIDE } from '#/lib/planning/types.ts'
 import type {
@@ -119,8 +120,15 @@ const HORAIRES = [
 ]
 const [hM, hS] = HORAIRES
 
-/** Réception (compte dans la présence), trois titulaires à 39 h ; un matin
- * et un soir chaque jour (112 h), consignes du lundi tenues. */
+/** Réception, trois titulaires à 39 h ; un matin et un soir chaque jour
+ * (112 h).
+ *
+ * Révisé le 2026-11-01 (plan planning-accueil-2026-11-01, étape 4, D13) :
+ * les besoins d'un poste de l'ACCUEIL (coché « présence ») sont ignorés par
+ * le moteur, donc par ce contrôle. Pour éprouver les points tirés des
+ * besoins, la Réception de ce référentiel est un poste À PART (non cochée,
+ * aucun tableau de l'accueil) ; le tableau de l'accueil a son propre
+ * référentiel, `accueil()`, plus bas. */
 function propre(): Referentiel {
   const besoins: Besoin[] = []
   for (let j = 0; j < 7; j++) {
@@ -129,19 +137,25 @@ function propre(): Referentiel {
   return {
     horaires: HORAIRES.map((h) => ({ ...h })),
     motifs: [],
-    postes: [poste(1, 'Réception', { presence: true })],
+    postes: [poste(1, 'Réception')],
     groupes: [],
     salaries: [salarie(10), salarie(11), salarie(12)],
     besoins,
-    consignes: [
-      { id: 1, jour: 0, periode: 'matin', minimum: 1, maximum: 1 },
-      { id: 2, jour: 0, periode: 'soir', minimum: 1, maximum: null },
-    ],
+    consignes: [],
     verrous: [],
   }
 }
 
 const ids = (p: PointReglage[]) => p.map((x) => x.id)
+/** Un chiffre au tableau de l'accueil (2026-11-01) : un hôtel dont le seul
+ * poste est de l'accueil a ainsi quelque chose à faire. */
+const LUNDI_MATIN_1 = {
+  id: 1,
+  jour: 0,
+  periode: 'matin' as const,
+  minimum: 1,
+  maximum: 1,
+}
 const seul = (r: Referentiel): PointReglage => {
   const p = verifierReglages(r)
   expect(p).toHaveLength(1)
@@ -156,15 +170,10 @@ describe('verifierReglages', () => {
   it('besoin sur un code que le poste ne permet plus', () => {
     const r = propre()
     r.postes[0].horaires_autorises = [M, J]
-    // Les besoins ignorés ne comptent plus : le lundi soir tombe sous sa
-    // consigne, ce qui est vrai ; et plus aucun code du soir n'est permis sur
-    // le seul poste compté.
+    // Poste à part sans tableau de l'accueil (révisé le 2026-11-01) : seul
+    // le besoin ignoré est signalé.
     const tous = verifierReglages(r)
-    expect(ids(tous)).toEqual([
-      `besoin-code:1:${S}`,
-      'cycle-sans-code:soir',
-      'presence:0:soir',
-    ])
+    expect(ids(tous)).toEqual([`besoin-code:1:${S}`])
     const p = tous[0]
     expect(p).toMatchObject({
       id: `besoin-code:1:${S}`,
@@ -215,23 +224,10 @@ describe('verifierReglages', () => {
     expect(ids(verifierReglages(r))).toEqual([])
   })
 
-  it('matin sous la consigne « au moins »', () => {
-    const r = propre()
-    r.consignes[0] = { ...r.consignes[0], minimum: 2, maximum: null }
-    expect(seul(r)).toMatchObject({
-      id: 'presence:0:matin',
-      ecran: 'besoins',
-      lien: { page: '/planning/besoins', cible: 'presence' },
-    })
-  })
-
-  it('matin au-dessus de la consigne « au plus »', () => {
-    const r = propre()
-    r.besoins.push(besoin(1, 0, HORAIRES[3]))
-    const p = seul(r)
-    expect(p.id).toBe('presence:0:matin')
-    expect(p.texte).toContain('au plus 1')
-  })
+  // « matin sous la consigne au moins / au-dessus de au plus » : RETIRÉS le
+  // 2026-11-01 (plan planning-accueil-2026-11-01, D1, D13). Les besoins de
+  // l'accueil sont ignorés : comparer leur somme au chiffre n'a plus d'objet.
+  // Remplacés par « tableau de l'accueil » plus bas.
 
   it('un poste hors présence ne compte pas dans le matin et le soir', () => {
     const r = propre()
@@ -338,6 +334,8 @@ describe('verifierReglages', () => {
 
   it('code sans période sur un poste qui compte dans la présence', () => {
     const r = propre()
+    r.postes[0].presence = true
+    r.consignes = [LUNDI_MATIN_1]
     r.postes[0].horaires_autorises = [M, S, D]
     expect(seul(r)).toMatchObject({
       id: `periode:${D}`,
@@ -346,9 +344,16 @@ describe('verifierReglages', () => {
     })
   })
 
-  it('code sans période demandé par un besoin du poste', () => {
+  it('code sans période demandé par un besoin du poste : ignoré (D13)', () => {
+    // Révisé le 2026-11-01 : sur un poste de l'accueil, le besoin est
+    // ignoré par le moteur ; il ne fait plus « utiliser » l'horaire.
     const r = propre()
+    r.postes[0].presence = true
+    r.consignes = [LUNDI_MATIN_1]
     r.besoins.push(besoin(1, 4, HORAIRES[4], { effectif: 0, renfort: 1 }))
+    expect(ids(verifierReglages(r))).toEqual([])
+    // Refusé : coché dans la liste du poste, il est signalé.
+    r.postes[0].horaires_autorises = [M, S, D]
     expect(seul(r).id).toBe(`periode:${D}`)
   })
 
@@ -558,6 +563,7 @@ describe('grouperPoints', () => {
     const r = propre()
     r.besoins = []
     r.consignes = []
+    r.postes[0].presence = true
     r.postes[0].horaires_autorises = [M, S, D]
     r.salaries[0].shifts_autorises = [N]
     const g = grouperPoints(verifierReglages(r))
@@ -700,6 +706,8 @@ describe('verifierReglages, points complets (test de mutation)', () => {
 
   it('code sans période : texte et lien', () => {
     const r = propre()
+    r.postes[0].presence = true
+    r.consignes = [LUNDI_MATIN_1]
     r.postes[0].horaires_autorises = [M, S, D]
     expect(seul(r)).toEqual(
       point(
@@ -1013,41 +1021,10 @@ describe('verifierReglages, points complets (test de mutation)', () => {
     expect(ids(verifierReglages(r))).not.toContain('soutien-seul:2')
   })
 
-  it('matin et soir : textes, pluriel, et ordre par jour puis matin avant soir', () => {
-    const r = propre()
-    r.consignes = [
-      { id: 3, jour: 1, periode: 'soir', minimum: 3, maximum: null },
-      { id: 4, jour: 1, periode: 'matin', minimum: 0, maximum: 0 },
-      { id: 5, jour: 0, periode: 'soir', minimum: 2, maximum: null },
-    ]
-    const lien = { page: '/planning/besoins' as const, cible: 'presence' }
-    expect(verifierReglages(r)).toEqual([
-      point(
-        'presence:0:soir',
-        'besoins',
-        'Lundi soir : les besoins demandent 1 personne, la consigne en veut au moins 2.',
-        lien,
-      ),
-      point(
-        'presence:1:matin',
-        'besoins',
-        'Mardi matin : les besoins demandent 1 personne, la consigne en veut au plus 0.',
-        lien,
-      ),
-      point(
-        'presence:1:soir',
-        'besoins',
-        'Mardi soir : les besoins demandent 1 personne, la consigne en veut au moins 3.',
-        lien,
-      ),
-    ])
-    r.besoins.push(besoin(1, 1, hS))
-    expect(
-      verifierReglages(r).find((x) => x.id === 'presence:1:soir')?.texte,
-    ).toBe(
-      'Mardi soir : les besoins demandent 2 personnes, la consigne en veut au moins 3.',
-    )
-  })
+  // « matin et soir : textes » (« les besoins demandent N, la consigne en
+  // veut… ») : RETIRÉ le 2026-11-01 avec ces points (plan
+  // planning-accueil-2026-11-01) ; les textes du tableau de l'accueil sont
+  // éprouvés plus bas.
 
   it('besoinsDemandes : seulement les besoins à personne nécessaire', () => {
     const r = propre()
@@ -1113,11 +1090,8 @@ describe('ordonnerPoints et aDesBloquants', () => {
  * écrit en entier ici, sans relire le code testé.
  */
 describe('verifierReglages, cycles', () => {
-  const VERS_PRESENCE = { page: '/planning/besoins', cible: 'presence' }
   const sansPersonne = (r: Referentiel) =>
     ids(verifierReglages(r)).filter((x) => x.startsWith('besoin-sans-personne'))
-  const deCycle = (r: Referentiel) =>
-    verifierReglages(r).filter((x) => x.id.startsWith('cycle'))
 
   /** Propre + une Veille (code N seul, hors présence), un titulaire et une
    * nuit le lundi. */
@@ -1137,91 +1111,10 @@ describe('verifierReglages, cycles', () => {
     expect(verifierReglages(avecVeille())).toEqual([])
   })
 
-  it('minimum du matin sans aucun code du matin sur les postes comptés', () => {
-    const r = propre()
-    r.postes[0].horaires_autorises = [S]
-    r.besoins = r.besoins.filter((b) => b.horaire_id === S)
-    r.consignes = [
-      { id: 1, jour: 0, periode: 'matin', minimum: 1, maximum: null },
-      { id: 2, jour: 2, periode: 'matin', minimum: 2, maximum: null },
-    ]
-    expect(deCycle(r)).toEqual([
-      {
-        id: 'cycle-sans-code:matin',
-        gravite: 'a-voir',
-        ecran: 'besoins',
-        texte:
-          "Un minimum est demandé le matin (lundi et mercredi), mais Réception n'a aucun horaire du matin. Il ne pourra pas être tenu.",
-        lien: VERS_PRESENCE,
-      },
-    ])
-  })
-
-  it('minimum à 0, ou un code du cycle permis : aucun point de cycle', () => {
-    const r = propre()
-    r.postes[0].horaires_autorises = [S]
-    r.besoins = r.besoins.filter((b) => b.horaire_id === S)
-    r.consignes = [{ id: 1, jour: 0, periode: 'matin', minimum: 0, maximum: 2 }]
-    expect(deCycle(r)).toEqual([])
-    // J est un code du matin : il suffit.
-    r.postes[0].horaires_autorises = [S, J]
-    r.consignes[0].minimum = 1
-    expect(deCycle(r)).toEqual([])
-  })
-
-  it('minimum du matin sans aucun poste compté', () => {
-    const r = propre()
-    r.postes[0].presence = false
-    r.consignes = [
-      { id: 1, jour: 0, periode: 'matin', minimum: 1, maximum: null },
-    ]
-    expect(deCycle(r).map((x) => x.texte)).toEqual([
-      'Un minimum est demandé le matin (lundi), mais aucun poste ne compte dans la présence. Cochez-les dans Postes.',
-    ])
-  })
-
-  it('minimum de nuit sans aucun poste à code de nuit', () => {
-    const r = propre()
-    r.postes[0].horaires_autorises = [M, S]
-    r.consignes = [
-      { id: 1, jour: 0, periode: 'nuit', minimum: 1, maximum: null },
-    ]
-    const points = verifierReglages(r)
-    expect(ids(points)).toEqual(['cycle-sans-code:nuit', 'presence:0:nuit'])
-    expect(points[0]).toEqual({
-      id: 'cycle-sans-code:nuit',
-      gravite: 'a-voir',
-      ecran: 'besoins',
-      texte:
-        "Un minimum est demandé la nuit (lundi), mais aucun poste n'a d'horaire de nuit. Il ne pourra pas être tenu.",
-      lien: VERS_PRESENCE,
-    })
-  })
-
-  it('la nuit compte la Veille, hors présence (D15) ; le minimum se compare', () => {
-    const r = avecVeille()
-    r.postes[0].horaires_autorises = [M, S]
-    r.consignes.push({
-      id: 3,
-      jour: 0,
-      periode: 'nuit',
-      minimum: 1,
-      maximum: null,
-    })
-    // Une nuit demandée en Veille : la consigne est tenue, aucun point.
-    expect(verifierReglages(r)).toEqual([])
-    r.consignes[2].minimum = 2
-    expect(verifierReglages(r)).toEqual([
-      {
-        id: 'presence:0:nuit',
-        gravite: 'a-voir',
-        ecran: 'besoins',
-        texte:
-          'Lundi nuit : les besoins demandent 1 personne, la consigne en veut au moins 2.',
-        lien: VERS_PRESENCE,
-      },
-    ])
-  })
+  // Les tests « minimum du matin / de nuit sans code », « sans aucun poste
+  // compté » et « la nuit compte la Veille, le minimum se compare » sont
+  // réécrits le 2026-11-01 dans « tableau de l'accueil » (plan
+  // planning-accueil-2026-11-01, étape 4).
 
   it('code que personne ne tient, mais un remplaçant du même cycle : aucun point', () => {
     const r = propre()
@@ -1264,26 +1157,322 @@ describe('verifierReglages, cycles', () => {
   })
 })
 
-describe('Martin V3-I : minimum par cycle tenu par un horaire libre', () => {
-  // Oracle écrit à la main : un besoin en horaire LIBRE de 07:00 à 15:00 sur
-  // un poste compté est un matin (`periodeLibre`, avant 12 h 30) ; il compte
-  // dans le minimum du matin (`sommeBesoinsPresence`, aucun point
-  // `presence:0:matin`). Dire « Il ne pourra pas être tenu » est alors faux.
-  it('un matin demandé en horaire libre tient le minimum : pas de cycle-sans-code', () => {
-    const r = propre()
-    r.postes[0].horaires_autorises = [S]
-    r.besoins = r.besoins.map((b) =>
-      b.horaire_id === M
-        ? { ...b, horaire_id: null, debut: '07:00', fin: '15:00' }
-        : b,
+/*
+ * Tableau de l'accueil (plan planning-accueil-2026-11-01, étape 4, décisions
+ * utilisateur du 2026-11-01). Les points « les besoins demandent N, la
+ * consigne en veut au moins / au plus M » sont RETIRÉS (D1, D13 : les besoins
+ * de l'accueil sont ignorés). À leur place, pour chaque moment demandé : qui
+ * peut venir (postes de l'accueil tenus à tout niveau, extras compris, fiche
+ * et semaine type ; personne si aucun autonome, D5), et un moment sans aucun
+ * horaire possible. La nuit : la Veille seule (D10). Oracle écrit à la main.
+ */
+describe("verifierReglages, tableau de l'accueil", () => {
+  const X = 6
+  const VERS_PRESENCE: PointReglage['lien'] = {
+    page: '/planning/besoins',
+    cible: 'presence',
+  }
+
+  /** Réception (10, 11 titulaires ; 14 apprenti), Club (12 titulaire),
+   * Veille (13 titulaire), un extra (15) sur Réception et Club. Lundi :
+   * 2 le matin, 2 le soir, 1 la nuit. Aucun besoin. */
+  function accueil(): Referentiel {
+    return {
+      horaires: [
+        ...HORAIRES.map((h) => ({ ...h })),
+        horaire(X, 'X', '11:00', '19:45', 'middle'),
+      ],
+      motifs: [],
+      postes: [
+        poste(1, 'Réception', { presence: true, horaires_autorises: [M, S] }),
+        poste(2, 'Club', { presence: true, horaires_autorises: [M, S] }),
+        poste(3, 'Veille', {
+          categorie: 'veille_nuit',
+          horaires_autorises: [N],
+        }),
+      ],
+      groupes: [],
+      salaries: [
+        salarie(10),
+        salarie(11),
+        salarie(12, { competences: [{ poste_id: 2, niveau: 'titulaire' }] }),
+        salarie(13, { competences: [{ poste_id: 3, niveau: 'titulaire' }] }),
+        salarie(14, {
+          type_contrat: 'apprenti',
+          heures_hebdo: 35,
+          competences: [{ poste_id: 1, niveau: 'soutien' }],
+        }),
+        salarie(15, {
+          type_contrat: 'extra',
+          heures_hebdo: 0,
+          competences: [
+            { poste_id: 1, niveau: 'occasionnel' },
+            { poste_id: 2, niveau: 'occasionnel' },
+          ],
+        }),
+      ],
+      besoins: [],
+      consignes: [
+        { id: 1, jour: 0, periode: 'matin', minimum: 2, maximum: 2 },
+        { id: 2, jour: 0, periode: 'soir', minimum: 2, maximum: 2 },
+        { id: 3, jour: 0, periode: 'nuit', minimum: 1, maximum: 1 },
+      ],
+      verrous: [],
+    }
+  }
+  const chiffre = (r: Referentiel, i: number, n: number) => {
+    r.consignes[i] = { ...r.consignes[i], minimum: n, maximum: n }
+  }
+  const capacite = (id: string, texte: string): PointReglage => ({
+    id,
+    gravite: 'a-voir',
+    ecran: 'besoins',
+    texte,
+    lien: VERS_PRESENCE,
+  })
+  const deLAccueil = (r: Referentiel) =>
+    verifierReglages(r).filter(
+      (x) => x.id.startsWith('accueil') || x.id.startsWith('cycle-sans-code'),
     )
-    r.consignes = [
-      { id: 1, jour: 0, periode: 'matin', minimum: 1, maximum: null },
+  const repos = { mode: 'repos' as const }
+
+  it('propre : aucun point', () => {
+    expect(verifierReglages(accueil())).toEqual([])
+  })
+
+  it('capacité : 5 peuvent venir le matin, accepté à 5, refusé à 6', () => {
+    const r = accueil()
+    chiffre(r, 0, 5)
+    expect(verifierReglages(r)).toEqual([])
+    chiffre(r, 0, 6)
+    expect(verifierReglages(r)).toEqual([
+      capacite(
+        'accueil-capacite:0:matin',
+        "Lundi matin : il faut 6 personnes, mais seulement 5 peuvent venir à l'accueil.",
+      ),
+    ])
+  })
+
+  it('un apprenti compte, jamais seul (D5)', () => {
+    const r = accueil()
+    r.consignes.push({
+      id: 4,
+      jour: 1,
+      periode: 'matin',
+      minimum: 1,
+      maximum: 1,
+    })
+    for (const s of r.salaries)
+      if (s.id !== 14 && s.id !== 13) s.semaine_type[1] = repos
+    // Seul l'apprenti est libre mardi : personne ne peut venir.
+    expect(deLAccueil(r)).toEqual([
+      capacite(
+        'accueil-capacite:1:matin',
+        "Mardi matin : il faut 1 personne, mais personne ne peut venir à l'accueil.",
+      ),
+    ])
+    // Avec un titulaire, l'apprenti compte : 2 peuvent venir.
+    r.salaries[0].semaine_type[1] = { mode: 'auto' }
+    chiffre(r, 3, 2)
+    expect(deLAccueil(r)).toEqual([])
+    chiffre(r, 3, 3)
+    expect(deLAccueil(r).map((x) => x.texte)).toEqual([
+      "Mardi matin : il faut 3 personnes, mais seulement 2 peuvent venir à l'accueil.",
+    ])
+  })
+
+  it('un extra compte (D7) ; une fiche désactivée non', () => {
+    const r = accueil()
+    chiffre(r, 1, 5)
+    expect(deLAccueil(r)).toEqual([])
+    r.salaries[5].actif = false
+    expect(deLAccueil(r).map((x) => x.texte)).toEqual([
+      "Lundi soir : il faut 5 personnes, mais seulement 4 peuvent venir à l'accueil.",
+    ])
+  })
+
+  it('la fiche et la semaine type décident de l’horaire du moment', () => {
+    const r = accueil()
+    chiffre(r, 0, 5)
+    chiffre(r, 1, 5)
+    r.salaries[2].shifts_autorises = [S]
+    expect(ids(deLAccueil(r))).toEqual(['accueil-capacite:0:matin'])
+    r.salaries[0].semaine_type[0] = { mode: 'travail', type_shift_id: S }
+    expect(deLAccueil(r)[0].texte).toBe(
+      "Lundi matin : il faut 5 personnes, mais seulement 3 peuvent venir à l'accueil.",
+    )
+  })
+
+  it('un middle compte au matin ET au soir (D11)', () => {
+    const r = accueil()
+    r.postes[1].horaires_autorises = [M, S, X]
+    r.salaries.push(
+      salarie(16, {
+        competences: [{ poste_id: 2, niveau: 'titulaire' }],
+        shifts_autorises: [X],
+      }),
+    )
+    chiffre(r, 0, 6)
+    chiffre(r, 1, 6)
+    expect(deLAccueil(r)).toEqual([])
+    chiffre(r, 0, 7)
+    chiffre(r, 1, 7)
+    expect(deLAccueil(r).map((x) => x.texte)).toEqual([
+      "Lundi matin : il faut 7 personnes, mais seulement 6 peuvent venir à l'accueil.",
+      "Lundi soir : il faut 7 personnes, mais seulement 6 peuvent venir à l'accueil.",
+    ])
+  })
+
+  it('la nuit : la Veille seule, puis ses dépannages (D10)', () => {
+    const r = accueil()
+    chiffre(r, 2, 2)
+    const attendu = [
+      capacite(
+        'accueil-capacite:0:nuit',
+        "La nuit de lundi : il faut 2 personnes, mais seulement 1 peut venir à l'accueil.",
+      ),
     ]
-    const points = ids(verifierReglages(r))
-    // Le minimum est tenu par les besoins…
-    expect(points).not.toContain('presence:0:matin')
-    // …donc il ne doit pas être dit intenable.
-    expect(points).not.toContain('cycle-sans-code:matin')
+    expect(deLAccueil(r)).toEqual(attendu)
+    // Un horaire de nuit permis à la Réception ne fait venir personne.
+    r.postes[0].horaires_autorises = [M, S, N]
+    expect(deLAccueil(r)).toEqual(attendu)
+    // Un dépannage de la Veille, si.
+    r.salaries[1].competences.push({ poste_id: 3, niveau: 'occasionnel' })
+    expect(deLAccueil(r)).toEqual([])
+  })
+
+  it('aucun horaire du moment : un point par moment, avec ses jours', () => {
+    const r = accueil()
+    r.postes[0].horaires_autorises = [S]
+    r.postes[1].horaires_autorises = [S]
+    r.consignes.push({
+      id: 4,
+      jour: 2,
+      periode: 'matin',
+      minimum: 1,
+      maximum: 1,
+    })
+    expect(deLAccueil(r)).toEqual([
+      capacite(
+        'cycle-sans-code:matin',
+        "Lundi et mercredi matin : aucun horaire du matin n'est possible à l'accueil.",
+      ),
+    ])
+    r.postes = r.postes.filter((p) => p.id !== 3)
+    expect(ids(deLAccueil(r))).toEqual([
+      'cycle-sans-code:matin',
+      'cycle-sans-code:nuit',
+    ])
+    expect(deLAccueil(r)[1].texte).toBe(
+      "La nuit de lundi : aucun horaire de nuit n'est possible à l'accueil.",
+    )
+  })
+
+  it('un chiffre à 0 ne demande rien ; le minimum fait foi (D9)', () => {
+    const r = accueil()
+    r.postes[0].horaires_autorises = [S]
+    r.postes[1].horaires_autorises = [S]
+    chiffre(r, 0, 0)
+    expect(deLAccueil(r)).toEqual([])
+    r.consignes[1] = { ...r.consignes[1], minimum: 5, maximum: 9 }
+    expect(deLAccueil(r).map((x) => x.id)).toEqual([])
+    r.consignes[1] = { ...r.consignes[1], minimum: 6, maximum: 2 }
+    expect(deLAccueil(r).map((x) => x.id)).toEqual(['accueil-capacite:0:soir'])
+  })
+
+  it('les besoins de l’accueil ne se comparent plus au chiffre (D13)', () => {
+    const r = accueil()
+    for (let j = 0; j < 7; j++)
+      r.besoins.push(besoin(1, j, hM), besoin(1, j, hM), besoin(1, j, hS))
+    const vus = ids(verifierReglages(r))
+    expect(vus.filter((x) => x.startsWith('presence:'))).toEqual([])
+    // Ignorés aussi pour les heures (21 shifts sur 2 titulaires).
+    expect(vus.filter((x) => x.startsWith('heures'))).toEqual([])
+    expect(vus).toEqual([])
+  })
+
+  it('soutien : jamais sur un poste de l’accueil, toujours sur un poste à part', () => {
+    const r = accueil()
+    r.salaries = r.salaries.filter((s) => s.id !== 14)
+    r.besoins.push(
+      besoin(1, 0, hM, { soutien: 1 }),
+      besoin(1, 1, hM, { effectif: 0, soutien: 1 }),
+    )
+    expect(
+      ids(verifierReglages(r)).filter((x) => x.startsWith('soutien')),
+    ).toEqual([])
+    r.postes.push(poste(4, 'Technique', { horaires_autorises: [J] }))
+    r.salaries.push(
+      salarie(17, { competences: [{ poste_id: 4, niveau: 'titulaire' }] }),
+    )
+    r.besoins.push(
+      besoin(4, 0, HORAIRES[3], { soutien: 1 }),
+      besoin(4, 1, HORAIRES[3], { effectif: 0, soutien: 1 }),
+    )
+    expect(
+      ids(verifierReglages(r)).filter((x) => x.startsWith('soutien')),
+    ).toEqual(['soutien:4', 'soutien-seul:4'])
+  })
+
+  it('code fixé : un horaire de l’accueil le demande, sauf moment à 0', () => {
+    const r = accueil()
+    r.salaries[0].semaine_type[0] = { mode: 'travail', type_shift_id: M }
+    expect(verifierReglages(r)).toEqual([])
+    chiffre(r, 0, 0)
+    expect(ids(verifierReglages(r))).toEqual(['code-fixe:10:0'])
+  })
+
+  it('l’hôtel fictif de l’accueil : aucun point sur le tableau', () => {
+    // Le critère de l'étape 4 (« les points de la prod disparaissent ») :
+    // besoins de la Réception et du Club présents mais ignorés (D13).
+    const vus = ids(verifierReglages(hotelAccueil(true)))
+    expect(
+      vus.filter(
+        (x) =>
+          x.startsWith('presence:') ||
+          x.startsWith('accueil') ||
+          x.startsWith('cycle-sans-code'),
+      ),
+    ).toEqual([])
+    // Le même hôtel sans poste coché, mais avec son tableau : il ne sert à
+    // rien, c'est dit.
+    const sans = hotelAccueil(false)
+    sans.consignes = hotelAccueil(true).consignes
+    expect(ids(verifierReglages(sans))).toContain('accueil-sans-poste')
+  })
+
+  it('aucun poste coché : dit dans Postes', () => {
+    const r = accueil()
+    r.postes[0].presence = false
+    r.postes[1].presence = false
+    r.besoins.push(besoin(1, 0, hM))
+    const p = verifierReglages(r).find((x) => x.id === 'accueil-sans-poste')
+    expect(p).toEqual({
+      id: 'accueil-sans-poste',
+      gravite: 'a-voir',
+      ecran: 'besoins',
+      texte:
+        "Le tableau de l'accueil demande du monde, mais aucun poste ne compte dans la présence du matin et du soir. Réglez-le dans Postes.",
+      lien: { page: '/planning/postes' },
+    })
+    r.consignes = r.consignes.map((c) => ({ ...c, minimum: 0, maximum: 0 }))
+    expect(ids(verifierReglages(r))).not.toContain('accueil-sans-poste')
+  })
+
+  it('vocabulaire : ni consigne, ni minimum, ni maximum, ni tiret cadratin, ni guillemets', () => {
+    const textes: string[] = []
+    const r = accueil()
+    chiffre(r, 0, 9)
+    chiffre(r, 2, 4)
+    textes.push(...verifierReglages(r).map((x) => x.texte))
+    r.postes[0].horaires_autorises = [S]
+    r.postes[1].horaires_autorises = [S]
+    r.postes = r.postes.filter((p) => p.id !== 3)
+    textes.push(...verifierReglages(r).map((x) => x.texte))
+    r.postes = r.postes.map((p) => ({ ...p, presence: false }))
+    textes.push(...verifierReglages(r).map((x) => x.texte))
+    expect(textes.length).toBeGreaterThan(3)
+    for (const t of textes)
+      expect(t).not.toMatch(/consigne|minimum|maximum|—|«|»/i)
   })
 })

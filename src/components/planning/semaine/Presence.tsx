@@ -5,9 +5,10 @@
  * sous ceux du mois. Les écarts vont dans « Points d'attention »
  * (`attention.ts`). Couleurs (décision utilisateur du 2026-10-31, « plus
  * clair ») : vert, conforme ; rouge, il manque du monde ; bleu, plus que le
- * maximum. Le mois montre TOUJOURS trois points (matin, soir, nuit) : un
- * moment sans minimum réglé est un rond vide. Un middle n'est jamais compté
- * (D11), la nuit l'est sur les postes à code de nuit (D15).
+ * nombre demandé. Le mois montre TOUJOURS trois points (matin, soir, nuit) :
+ * un moment où rien n'est demandé est un rond vide. Depuis le tableau de
+ * l'accueil (2026-11-01) : un nombre exact, un middle compte le matin et le
+ * soir, la nuit est celle des veilleurs.
  */
 
 import { Moon, Sun, Sunset } from 'lucide-react'
@@ -32,7 +33,7 @@ export function PastillesPresence({ presence }: { presence: PresenceOut[] }) {
       {presence.map((p) => {
         const Icone = ICONE[p.periode]
         const attendu = libelleConsigne(p.minimum, p.maximum)
-        const texte = `${NOM[p.periode]} : ${p.compte} présent${p.compte > 1 ? 's' : ''} pour ${attendu} attendu${p.minimum > 1 ? 's' : ''}${p.ecart ? ` (${ecartTexte(p.ecart)})` : ''}`
+        const texte = `${NOM[p.periode]} : ${p.compte} présent${p.compte > 1 ? 's' : ''} pour ${attendu} demandé${p.minimum > 1 ? 's' : ''}${p.ecart ? ` (${ecartTexte(p.ecart)})` : ''}`
         return (
           <Tip key={p.periode} label={texte}>
             <span
@@ -58,8 +59,8 @@ export function PastillesPresence({ presence }: { presence: PresenceOut[] }) {
 const PERIODES = ['matin', 'soir', 'nuit'] as const
 
 /** Vue mois : trois points sous le numéro du jour, matin, soir, nuit. Un
- * moment sans minimum réglé (page Besoins) est un rond vide. Rien tant que
- * la semaine n'est pas lue. */
+ * moment où rien n'est demandé (page Besoins) est un rond vide. Rien tant
+ * que la semaine n'est pas lue. */
 export function PointsPresence({
   presence,
 }: {
@@ -73,7 +74,7 @@ export function PointsPresence({
   const lignes = points.map(({ periode, p }) =>
     p
       ? `${NOM[periode]} : ${p.compte} pour ${libelleConsigne(p.minimum, p.maximum)}${p.ecart ? ` (${ecartTexte(p.ecart)})` : ''}`
-      : `${NOM[periode]} : aucun minimum réglé (page Besoins)`,
+      : `${NOM[periode]} : rien de demandé (page Besoins)`,
   )
   return (
     <Tip

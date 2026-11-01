@@ -27,6 +27,19 @@
  * cycle sans aucun horaire de ce cycle sur les postes comptés est signalé ; un
  * besoin n'est « sans personne » que si personne ne peut tenir ni son horaire ni
  * un autre horaire du même cycle (`remplacantsDe`, D12).
+ *
+ * Tableau de l'accueil (plan planning-accueil-2026-11-01, étape 4) : les
+ * besoins de l'accueil sont IGNORÉS par le moteur (D13, `besoinsDuMoteur`),
+ * donc par ce contrôle aussi (heures, soutiens, besoins intenables…). Les
+ * points « les besoins demandent N, il en faut au moins / au plus M » n'ont
+ * plus d'objet et sont retirés. À leur place, pour chaque moment demandé :
+ * « Mardi matin : il faut 3 personnes, mais seulement 2 peuvent venir à
+ * l'accueil. » (personnes de l'équipe qui tiennent un poste de l'accueil, à
+ * tout niveau, extras compris, dont la fiche et la semaine type permettent un
+ * horaire de ce moment ; aucune si personne d'autonome ne le peut, un
+ * apprenti ne venant jamais seul, D5) et « … aucun horaire du matin n'est
+ * possible à l'accueil. » (aucun candidat, `candidatsAccueil`). La nuit ne
+ * compte que la Veille de nuit (D10).
  */
 
 import {
@@ -45,14 +58,16 @@ import {
 } from '#/lib/planning/eligibilite.ts'
 import { travail } from '#/lib/planning/modele.ts'
 import {
-  clePresence,
+  accueilActif,
+  chiffreAccueil,
   ORDRE_PERIODES,
-  periodePresence,
   posteADesCodesDeNuit,
   sommeBesoinsPresence,
 } from '#/lib/planning/presence.ts'
 import {
+  besoinsDuMoteur,
   besoinsValides,
+  candidatsAccueil,
   contexte,
   creneauBesoin,
   remplacantsDe,
@@ -145,6 +160,16 @@ export const ORDRE_ECRANS: readonly EcranReglage[] = [
 ]
 
 const jour = (j: number) => JOURS[j].toLowerCase()
+const majuscule = (t: string) => t.charAt(0).toUpperCase() + t.slice(1)
+
+/** « lundi et mardi matin », « lundi soir », « la nuit de mardi ». */
+export function momentDesJours(
+  jours: Iterable<number>,
+  periode: PeriodePresence,
+): string {
+  const quand = listeJours(jours)
+  return periode === 'nuit' ? `la nuit de ${quand}` : `${quand} ${periode}`
+}
 
 /** « lundi », « lundi et mardi », « lundi, mardi et jeudi ». */
 export function listeJours(jours: Iterable<number>): string {
@@ -284,9 +309,15 @@ export function verifierReglages(
     avant: [],
     apres: [],
   })
-  const { valides, alertes } = besoinsValides(ctx)
+  // Les besoins que le moteur lit : ceux de l'accueil sont ignorés (D13).
+  const { valides, alertes } = besoinsDuMoteur(ctx)
   const parId = new Map(ctx.besoins.map((b) => [b.id, b]))
   const demandes = valides.filter((b) => b.effectif > 0)
+  const accueil = accueilActif(r.postes)
+  const chiffres = accueil
+    ? r.consignes.filter((c) => chiffreAccueil(c) > 0)
+    : []
+  const candidats = candidatsAccueil(ctx)
 
   // Qui tient quoi, parmi l'équipe actuelle.
   const tenants = (posteId: number, niveaux: (n: string) => boolean) =>
@@ -319,7 +350,7 @@ export function verifierReglages(
       "Personne n'est placé sur un poste. Indiquez dans chaque fiche les postes tenus.",
     )
   }
-  if (r.postes.length && !demandes.length) {
+  if (r.postes.length && !demandes.length && !chiffres.length) {
     // Des besoins existent peut-être, mais tous écartés par le moteur : le
     // dire, sinon « Aucun besoin » contredit ce que montre l'écran Besoins.
     const ecartes = alertes
@@ -590,13 +621,21 @@ export function verifierReglages(
         )
         return
       }
-      const demande = valides.some(
-        (b) =>
-          b.jour === j &&
-          b.horaire_id === e.type_shift_id &&
-          postesPermis.includes(b.poste_id) &&
-          b.effectif + b.soutien + b.renfort > 0,
-      )
+      const demande =
+        valides.some(
+          (b) =>
+            b.jour === j &&
+            b.horaire_id === e.type_shift_id &&
+            postesPermis.includes(b.poste_id) &&
+            b.effectif + b.soutien + b.renfort > 0,
+        ) ||
+        // L'accueil : un candidat de ce jour avec cet horaire (D1).
+        candidats.some(
+          (c) =>
+            c.jourPlanning === j &&
+            c.typeShift === String(e.type_shift_id) &&
+            postesPermis.includes(Number(c.poste)),
+        )
       if (!demande) {
         ajouter(
           id,
@@ -702,84 +741,96 @@ export function verifierReglages(
     )
   }
 
-  // Minimum par cycle que rien ne peut tenir : ni un horaire permis d'un poste,
-  // ni un besoin (horaire libre ou horaire court compris) que `periodePresence`
-  // range dans ce cycle. MÊME règle que le comptage des consignes : sans
-  // elle, un besoin libre du matin tenait le minimum et le cycle était dit
-  // intenable en même temps. Un point par cycle, avec les jours.
-  const nuitIci = postesAvecNuit(r)
-  const tenables = new Set<PeriodePresence>()
-  for (const p of r.postes) {
-    for (const h of codesDuPoste(p, r.horaires)) {
-      const k = periodePresence(p, h, h.debut, nuitIci.has(p.id))
-      if (k) tenables.add(k)
-    }
-  }
-  for (const b of demandes) {
-    const k = periodePresence(
-      postes.get(b.poste_id),
-      b.horaire_id !== null ? horaires.get(b.horaire_id) : undefined,
-      b.debut,
-      nuitIci.has(b.poste_id),
+  // ------------------------------------------------ tableau de l'accueil
+  // Un chiffre demandé sans aucun poste de l'accueil : rien ne le tiendra.
+  if (!accueil && r.consignes.some((c) => chiffreAccueil(c) > 0)) {
+    ajouter(
+      'accueil-sans-poste',
+      'a-voir',
+      'besoins',
+      "Le tableau de l'accueil demande du monde, mais aucun poste ne compte dans la présence du matin et du soir. Réglez-le dans Postes.",
+      undefined,
+      PAGE_ECRAN.postes,
     )
-    if (k) tenables.add(k)
   }
-  const sansCode = new Map<PeriodePresence, number[]>()
-  for (const c of r.consignes) {
-    if (c.minimum <= 0 || tenables.has(c.periode)) continue
-    sansCode.set(c.periode, [...(sansCode.get(c.periode) ?? []), c.jour])
+  const sansHoraire = new Map<PeriodePresence, number[]>()
+  const capacites: Array<{
+    jour: number
+    periode: PeriodePresence
+    n: number
+    k: number
+  }> = []
+  for (const c of [...chiffres].sort(
+    (a, b) =>
+      a.jour - b.jour || ORDRE_PERIODES[a.periode] - ORDRE_PERIODES[b.periode],
+  )) {
+    const n = chiffreAccueil(c)
+    const duMoment = candidats.filter(
+      (x) => x.jourPlanning === c.jour && x.presence.includes(c.periode),
+    )
+    if (!duMoment.length) {
+      sansHoraire.set(c.periode, [
+        ...(sansHoraire.get(c.periode) ?? []),
+        c.jour,
+      ])
+      continue
+    }
+    // Qui peut venir : un poste de l'accueil tenu (tout niveau) et un
+    // horaire de ce moment que sa fiche et sa semaine type permettent.
+    let capables = 0
+    let autonomes = 0
+    for (const s of equipe) {
+      let peut = false
+      let seul = false
+      for (const x of duMoment) {
+        const poste = postes.get(Number(x.poste))
+        const niveau = s.competences.find(
+          (k) => k.poste_id === Number(x.poste),
+        )?.niveau
+        if (!poste || !niveau) continue
+        const permis = codesPermis({
+          personne: s,
+          poste,
+          jour: c.jour,
+          horaires: r.horaires,
+        }).codes.some((h) => String(h.id) === x.typeShift)
+        if (!permis) continue
+        peut = true
+        if (autonome(niveau)) {
+          seul = true
+          break
+        }
+      }
+      if (peut) capables++
+      if (seul) autonomes++
+    }
+    const k = autonomes ? capables : 0
+    if (k < n) capacites.push({ jour: c.jour, periode: c.periode, n, k })
   }
-  for (const periode of [...sansCode.keys()].sort(
+  for (const periode of [...sansHoraire.keys()].sort(
     (a, b) => ORDRE_PERIODES[a] - ORDRE_PERIODES[b],
   )) {
-    const quand = listeJours(sansCode.get(periode) ?? [])
-    const comptes = postesComptes(r, periode)
-    const texte =
-      periode === 'nuit'
-        ? `Un minimum est demandé la nuit (${quand}), mais aucun poste n'a d'horaire de nuit. Il ne pourra pas être tenu.`
-        : comptes.length
-          ? `Un minimum est demandé le ${periode} (${quand}), mais ${listeEt(comptes.map((p) => p.nom))} n'${comptes.length > 1 ? 'ont' : 'a'} aucun horaire du ${periode}. Il ne pourra pas être tenu.`
-          : `Un minimum est demandé le ${periode} (${quand}), mais aucun poste ne compte dans la présence. Cochez-les dans Postes.`
+    const jours = sansHoraire.get(periode) ?? []
     ajouter(
       `cycle-sans-code:${periode}`,
       'a-voir',
       'besoins',
-      texte,
+      `${majuscule(momentDesJours(jours, periode))} : aucun horaire ${periode === 'nuit' ? 'de nuit' : `du ${periode}`} n'est possible à l'accueil.`,
       'presence',
     )
   }
-
-  // Par cycle : les personnes nécessaires des postes qui comptent, face à
-  // la consigne du jour (la nuit sur les postes à horaire de nuit, D15).
-  const somme = sommeBesoinsPresence(
-    demandes,
-    postes,
-    horaires,
-    postesAvecNuit(r),
-  )
-  for (const c of [...r.consignes].sort(
-    (a, b) =>
-      a.jour - b.jour || ORDRE_PERIODES[a.periode] - ORDRE_PERIODES[b.periode],
-  )) {
-    const n = somme.get(clePresence(c.jour, c.periode)) ?? 0
-    const moment = `${JOURS[c.jour]} ${c.periode}`
-    if (n < c.minimum) {
-      ajouter(
-        `presence:${c.jour}:${c.periode}`,
-        'a-voir',
-        'besoins',
-        `${moment} : les besoins demandent ${pluriel(n, 'personne')}, la consigne en veut au moins ${c.minimum}.`,
-        'presence',
-      )
-    } else if (c.maximum !== null && n > c.maximum) {
-      ajouter(
-        `presence:${c.jour}:${c.periode}`,
-        'a-voir',
-        'besoins',
-        `${moment} : les besoins demandent ${pluriel(n, 'personne')}, la consigne en veut au plus ${c.maximum}.`,
-        'presence',
-      )
-    }
+  for (const { jour: j, periode, n, k } of capacites) {
+    const qui =
+      k === 0
+        ? 'personne ne peut'
+        : `seulement ${k} ${k > 1 ? 'peuvent' : 'peut'}`
+    ajouter(
+      `accueil-capacite:${j}:${periode}`,
+      'a-voir',
+      'besoins',
+      `${majuscule(momentDesJours([j], periode))} : il faut ${pluriel(n, 'personne')}, mais ${qui} venir à l'accueil.`,
+      'presence',
+    )
   }
 
   return ordonnerPoints(points)

@@ -87,6 +87,7 @@ import type {
 } from '#/lib/planning/types.ts'
 import {
   raisonsBlocage,
+  raisonsBlocageAccueil,
   reposHebdoTrouve,
   trous,
   violations,
@@ -132,7 +133,17 @@ export interface RaisonOut {
 }
 
 export interface APourvoirOut {
+  /** Id du besoin ; pour un moment de l'accueil, `idPlaceAccueil` (< 0,
+   * aucun besoin ne le porte). */
   besoin_id: number
+  /** Moment de l'ACCUEIL incomplet (plan planning-accueil-2026-11-01,
+   * étape 4) : la place n'est pas un besoin mais le chiffre du moment ;
+   * `poste_id` vaut `POSTE_ID_ACCUEIL`, `type_shift_id` null, `debut` et
+   * `fin` l'étendue des horaires possibles du moment (vides s'il n'y en a
+   * aucun), `raisons` celles de `raisonsBlocageAccueil`, `remplacants` vide.
+   * Phrase : `phrasePlaceAccueil` (`raisonsPlaces.ts`). Absent pour un
+   * besoin. */
+  moment?: PeriodePresence
   poste_id: number
   jour: number
   type_shift_id: number | null
@@ -158,6 +169,16 @@ export interface APourvoirOut {
 /** `TrouOut.poste_id` d'un trou de l'accueil ENTIER (D15, 2026-11-01) :
  * Réception et Club ensemble, aucun poste en particulier. */
 export const POSTE_ID_ACCUEIL = 0
+
+/** `APourvoirOut.besoin_id` d'un moment de l'accueil incomplet : négatif
+ * (aucun besoin), unique par jour et moment dans la semaine. */
+export const idPlaceAccueil = (jour: number, periode: PeriodePresence) =>
+  -(1 + jour * 3 + ORDRE_MOMENTS[periode])
+const ORDRE_MOMENTS: Readonly<Record<PeriodePresence, number>> = {
+  matin: 0,
+  soir: 1,
+  nuit: 2,
+}
 
 /** Un trou entre deux équipes, pour l'écran. */
 export interface TrouOut {
@@ -1466,12 +1487,52 @@ export function analyser(d: DonneesSemaine): SemaineOut {
           .reduce((t, x) => t + Math.min(x.compte, x.minimum), 0)
       : 0
 
+  // Places de l'accueil à pourvoir (étape 4) : un moment au compte sous son
+  // chiffre. Raisons sur TOUS les candidats du moment (postes et horaires),
+  // pour chaque personne autonome de ces postes (`raisonsBlocageAccueil`).
+  const candidatsDuMoment = accueil ? candidatsAccueil(ctx) : []
+  if (accueil) {
+    const pAccueil: Probleme = {
+      ...p,
+      creneaux: [...p.creneaux, ...candidatsDuMoment],
+    }
+    for (const x of presence) {
+      if (x.compte >= x.minimum) continue
+      const ids = candidatsDuMoment.filter(
+        (c) => jourDe(c) === x.jour && c.presence.includes(x.periode),
+      )
+      const raisons = raisonsBlocageAccueil(
+        pAccueil,
+        affs,
+        ids.map((c) => c.id),
+      )
+      aPourvoir.push({
+        besoin_id: idPlaceAccueil(x.jour, x.periode),
+        moment: x.periode,
+        poste_id: POSTE_ID_ACCUEIL,
+        jour: x.jour,
+        type_shift_id: null,
+        debut: ids.length
+          ? heureMurale(lundi, Math.min(...ids.map((c) => c.debut)))
+          : '',
+        fin: ids.length
+          ? heureMurale(lundi, Math.max(...ids.map((c) => c.fin)))
+          : '',
+        duree: 0,
+        manquant: x.minimum - x.compte,
+        raisons: raisonsOut(raisons),
+        remplacants: [],
+        raison_commune: raisonCommune([raisons]),
+      })
+    }
+  }
+
   // Trous de l'accueil entier (D15) : Réception et Club ensemble, du premier
   // au dernier moment demandé (`trousAccueilDuJour`, l'oracle de
   // `cycles.ts`) ; présences autonomes, aux heures écrites du shift.
   const trousAccueil: TrouOut[] = []
   if (accueil) {
-    const candidats = candidatsAccueil(ctx)
+    const candidats = candidatsDuMoment
     const presences: PresencePoste[] = []
     for (const a of ctx.affectations) {
       const poste = ctx.postes.get(a.poste_id)

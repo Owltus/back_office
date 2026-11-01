@@ -449,6 +449,24 @@ describe('trous entre équipes', () => {
     expect(heureParlee('07:05')).toBe('7 h 05')
   })
 
+  it('un trou de l’accueil entier (poste 0) se dit « Accueil » (2026-11-01)', () => {
+    // Oracle : D15, les trous se cherchent sur Réception et Club ensemble ;
+    // `analyser` les rend avec `poste_id = 0` (`POSTE_ID_ACCUEIL`).
+    const p = pointsAttention(
+      [
+        semaine('2026-10-26', {
+          trous: [{ ...trou(0, '15:00', '15:45'), poste_id: 0 }],
+        }),
+      ],
+      SALARIES,
+      POSTES,
+    )
+    const jour = nommerJours(p.trous.map((t) => t.date))
+    expect(p.trous.map((t) => phraseTrou(t, jour(t.date)))).toEqual([
+      'Accueil lundi : personne de 15 h à 15 h 45',
+    ])
+  })
+
   it('portée : un mois ou une semaine ne montre que ses jours', () => {
     const nov = pointsAttention([S], SALARIES, POSTES, porteeMois('2026-11'))
     expect(nov.trous.map((t) => t.date)).toEqual(['2026-11-01'])

@@ -16,6 +16,9 @@
 
 import { cibleFiche } from '#/lib/planning/coherence.ts'
 import type { LienReglage, PartieFiche } from '#/lib/planning/coherence.ts'
+import type { APourvoirOut } from '#/lib/planning/semaine.ts'
+import { JOURS } from '#/lib/planning/types.ts'
+import type { PeriodePresence } from '#/lib/planning/types.ts'
 
 export type Mention =
   | 'limite légale'
@@ -295,4 +298,67 @@ export function phraseCommune(regle: string | null | undefined): string | null {
   if (!regle || !Object.hasOwn(PHRASES_COMMUNES, regle)) return null
   if (estPossible([raisonClaire(regle, '', 0)])) return null
   return PHRASES_COMMUNES[regle as keyof typeof PHRASES_COMMUNES]
+}
+
+// ------------------------------------------------ moment de l'accueil
+
+/*
+ * Moment de l'accueil incomplet (plan planning-accueil-2026-11-01, étape 4) :
+ * la place n'est pas un besoin mais le chiffre d'un moment (`APourvoirOut`
+ * avec `moment`). Phrase lisible, raison commune s'il y en a une, et le
+ * conseil humain quand personne ne peut venir.
+ */
+
+/** Le conseil quand personne ne peut venir (même phrase que pour une place
+ * qu'aucun horaire ne remplit). */
+export const CONSEIL_PERSONNE = 'Prenez un extra ou changez un shift.'
+
+/** « mardi matin », « mardi soir », « la nuit de mardi ». */
+export function momentDuJour(jour: number, periode: PeriodePresence): string {
+  const j = JOURS[jour].toLowerCase()
+  return periode === 'nuit' ? `la nuit de ${j}` : `${j} ${periode}`
+}
+
+/** « Il manque 1 personne mardi matin à l'accueil. » */
+export function phrasePlaceAccueil(
+  p: Pick<APourvoirOut, 'jour' | 'manquant'> & { moment: PeriodePresence },
+): string {
+  const n = p.manquant
+  return `Il manque ${n} personne${n > 1 ? 's' : ''} ${momentDuJour(p.jour, p.moment)} à l'accueil.`
+}
+
+export interface PlaceAccueilClaire {
+  phrase: string
+  /** Pourquoi personne ne peut venir, ou null (quelqu'un peut, ou rien de
+   * commun à dire). */
+  raison: string | null
+  /** `CONSEIL_PERSONNE` quand personne ne peut venir, sinon null. */
+  conseil: string | null
+}
+
+/** La place d'un moment de l'accueil en clair. Personne ne peut venir :
+ * aucune personne listée, ou aucune dont les raisons laissent la place
+ * possible (`estPossible`). Sans horaire possible (`debut` vide) : « Aucun
+ * horaire de ce moment n'est possible à l'accueil. » */
+export function placeAccueilClaire(
+  p: Pick<
+    APourvoirOut,
+    'jour' | 'manquant' | 'raisons' | 'raison_commune' | 'debut'
+  > & { moment: PeriodePresence },
+): PlaceAccueilClaire {
+  const quelquun = p.raisons.some((r) =>
+    estPossible(raisonsClaires(r.salarie_id, r.regles, r.messages)),
+  )
+  const raison = quelquun
+    ? null
+    : p.debut === ''
+      ? `Aucun horaire ${p.moment === 'nuit' ? 'de nuit' : `du ${p.moment}`} n'est possible à l'accueil.`
+      : !p.raisons.length
+        ? "Personne ne peut venir à l'accueil."
+        : phraseCommune(p.raison_commune)
+  return {
+    phrase: phrasePlaceAccueil(p),
+    raison,
+    conseil: quelquun ? null : CONSEIL_PERSONNE,
+  }
 }

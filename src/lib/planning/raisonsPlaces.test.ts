@@ -6,12 +6,25 @@ import { describe, expect, it } from 'vitest'
 import {
   estPossible,
   phraseCommune,
+  phrasePlaceAccueil,
+  placeAccueilClaire,
   RAISON_LIBRE,
   raisonClaire,
   raisonsClaires,
   REGLES_BLOCAGE,
 } from '#/lib/planning/raisonsPlaces.ts'
 import type { Mention } from '#/lib/planning/raisonsPlaces.ts'
+import {
+  analyser,
+  idPlaceAccueil,
+  POSTE_ID_ACCUEIL,
+} from '#/lib/planning/semaine.ts'
+import type { DonneesSemaine } from '#/lib/planning/semaine.ts'
+import {
+  chiffreHotelAccueil,
+  hotelAccueil,
+} from '#/lib/planning/test/hotelAccueil.ts'
+import type { Referentiel } from '#/lib/planning/types.ts'
 
 /*
  * Étape 8 : chaque raison d'une place vide a une phrase, et un lien vers le
@@ -560,5 +573,141 @@ describe('place que rien ne remplit : la raison commune en clair', () => {
     expect(phraseCommune('')).toBeNull()
     expect(phraseCommune('R-INCONNUE')).toBeNull()
     expect(phraseCommune('toString')).toBeNull()
+  })
+})
+
+/*
+ * Moment de l'accueil incomplet (plan planning-accueil-2026-11-01, étape 4) :
+ * la place n'est plus un besoin mais le chiffre d'un moment. Phrase lisible,
+ * raison, et « Prenez un extra ou changez un shift. » si personne ne peut.
+ * Oracles écrits à la main ; l'analyse est celle d'un hôtel fictif.
+ */
+describe('places de l’accueil à pourvoir', () => {
+  const LUNDI = '2026-09-07'
+  const donnees = (r: Referentiel): DonneesSemaine => ({
+    lundi: LUNDI,
+    referentiel: r,
+    absences: [],
+    affectations: [],
+    avant: [],
+    apres: [],
+  })
+  const deLAccueil = (r: Referentiel) =>
+    analyser(donnees(r)).a_pourvoir.filter((a) => a.moment !== undefined)
+
+  it('phrases : singulier, pluriel, la nuit', () => {
+    expect(phrasePlaceAccueil({ jour: 1, manquant: 1, moment: 'matin' })).toBe(
+      "Il manque 1 personne mardi matin à l'accueil.",
+    )
+    expect(phrasePlaceAccueil({ jour: 6, manquant: 2, moment: 'soir' })).toBe(
+      "Il manque 2 personnes dimanche soir à l'accueil.",
+    )
+    expect(phrasePlaceAccueil({ jour: 0, manquant: 1, moment: 'nuit' })).toBe(
+      "Il manque 1 personne la nuit de lundi à l'accueil.",
+    )
+  })
+
+  it('une semaine vide : une place par moment demandé, tout le monde libre', () => {
+    const r = hotelAccueil(true)
+    const places = deLAccueil(r)
+    const attendu = [0, 1, 2, 3, 4, 5, 6].flatMap((j) =>
+      (['matin', 'soir', 'nuit'] as const).map((m) => ({
+        jour: j,
+        moment: m,
+        manquant: chiffreHotelAccueil(j, m),
+      })),
+    )
+    expect(
+      places.map((a) => ({
+        jour: a.jour,
+        moment: a.moment,
+        manquant: a.manquant,
+      })),
+    ).toEqual(attendu)
+    // Identifiants négatifs et uniques, aucun poste, aucun horaire imposé.
+    expect(new Set(places.map((a) => a.besoin_id)).size).toBe(places.length)
+    expect(places.every((a) => a.besoin_id < 0)).toBe(true)
+    expect(places.every((a) => a.poste_id === POSTE_ID_ACCUEIL)).toBe(true)
+    expect(places.every((a) => a.type_shift_id === null)).toBe(true)
+    const mardiMatin = places.find((a) => a.jour === 1 && a.moment === 'matin')!
+    expect(mardiMatin.besoin_id).toBe(idPlaceAccueil(1, 'matin'))
+    expect(mardiMatin.raison_commune).toBeNull()
+    expect(placeAccueilClaire({ ...mardiMatin, moment: 'matin' })).toEqual({
+      phrase: "Il manque 3 personnes mardi matin à l'accueil.",
+      raison: null,
+      conseil: null,
+    })
+    // Les apprentis ne sont pas listés (jamais seuls), les extras si.
+    const noms = new Map(r.salaries.map((s) => [s.id, s]))
+    const listes = mardiMatin.raisons.map((x) => noms.get(x.salarie_id)!)
+    expect(listes.some((s) => s.type_contrat === 'apprenti')).toBe(false)
+    expect(listes.some((s) => s.type_contrat === 'extra')).toBe(true)
+    // La nuit : la Veille et ses dépannages seulement (D10).
+    const nuit = places.find((a) => a.jour === 1 && a.moment === 'nuit')!
+    const veille = r.postes.find((p) => p.categorie === 'veille_nuit')!.id
+    for (const x of nuit.raisons)
+      expect(
+        noms.get(x.salarie_id)!.competences.some((c) => c.poste_id === veille),
+      ).toBe(true)
+  })
+
+  it('personne ne peut venir : la raison commune et le conseil', () => {
+    const r = hotelAccueil(true)
+    for (const s of r.salaries) s.semaine_type[1] = { mode: 'repos' }
+    const mardi = deLAccueil(r).filter((a) => a.jour === 1)
+    expect(mardi).toHaveLength(3)
+    for (const a of mardi) {
+      expect(a.raison_commune).toBe('REPOS-FIXE')
+      expect(placeAccueilClaire({ ...a, moment: a.moment! })).toEqual({
+        phrase: phrasePlaceAccueil({ ...a, moment: a.moment! }),
+        raison: 'Tout le monde est en repos fixe ce jour-là.',
+        conseil: 'Prenez un extra ou changez un shift.',
+      })
+    }
+    // Refusé : le lundi, quelqu'un peut, ni raison ni conseil.
+    const lundi = deLAccueil(r).find((a) => a.jour === 0)!
+    expect(
+      placeAccueilClaire({ ...lundi, moment: lundi.moment! }).conseil,
+    ).toBe(null)
+  })
+
+  it('aucun horaire possible ; personne de listé', () => {
+    const base = {
+      jour: 2,
+      manquant: 1,
+      moment: 'matin' as const,
+      raison_commune: null,
+    }
+    expect(placeAccueilClaire({ ...base, raisons: [], debut: '' })).toEqual({
+      phrase: "Il manque 1 personne mercredi matin à l'accueil.",
+      raison: "Aucun horaire du matin n'est possible à l'accueil.",
+      conseil: 'Prenez un extra ou changez un shift.',
+    })
+    expect(
+      placeAccueilClaire({ ...base, moment: 'nuit', raisons: [], debut: '' })
+        .raison,
+    ).toBe("Aucun horaire de nuit n'est possible à l'accueil.")
+    expect(
+      placeAccueilClaire({ ...base, raisons: [], debut: '07:00' }).raison,
+    ).toBe("Personne ne peut venir à l'accueil.")
+    // Quelqu'un de libre : rien à conseiller.
+    expect(
+      placeAccueilClaire({
+        ...base,
+        debut: '07:00',
+        raisons: [{ salarie_id: 1, messages: [], regles: [] }],
+      }),
+    ).toEqual({
+      phrase: "Il manque 1 personne mercredi matin à l'accueil.",
+      raison: null,
+      conseil: null,
+    })
+  })
+
+  it('un moment tenu ne donne aucune place ; sans tableau, aucune', () => {
+    const r = hotelAccueil(true)
+    r.consignes = r.consignes.map((c) => ({ ...c, minimum: 0, maximum: 0 }))
+    expect(deLAccueil(r)).toEqual([])
+    expect(deLAccueil(hotelAccueil(false))).toEqual([])
   })
 })

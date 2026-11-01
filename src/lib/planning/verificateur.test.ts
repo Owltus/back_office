@@ -2,6 +2,7 @@ import fc from 'fast-check'
 import highsLoader from 'highs'
 import { beforeAll, describe, expect, it } from 'vitest'
 
+import { POSTE_ACCUEIL, trousAccueilDuJour } from '#/lib/planning/cycles.ts'
 import { generer } from '#/lib/planning/generateur.ts'
 import type { Highs } from '#/lib/planning/generateur.ts'
 import {
@@ -28,8 +29,11 @@ import {
   manquants,
   presenceParCycle,
   raisonsBlocage,
+  raisonsBlocageAccueil,
   trous,
+  trousAccueil,
   violations,
+  violationsAccueil,
   violationsSalarie,
 } from '#/lib/planning/verificateur.ts'
 import type { Violation } from '#/lib/planning/verificateur.ts'
@@ -959,5 +963,202 @@ describe('consignes par cycle (recompte sans le générateur)', () => {
     ])
     expect(r[0]).toMatchObject({ periode: 'soir', compte: 1, ecart: 0 })
     expect(r[1]).toMatchObject({ periode: 'matin', compte: 2, ecart: 0 })
+  })
+})
+
+/*
+ * Tableau de l'accueil (plan planning-accueil-2026-11-01, étape 4) : le
+ * vérificateur recompte, sans le générateur, le chiffre EXACT de chaque
+ * moment (D3 ; D9 : le minimum fait foi), un middle au matin ET au soir
+ * (D11), les soutiens et les extras comptés (D5, D7), un écart dans les deux
+ * sens ; les trous de l'accueil ENTIER (D15) ; les raisons d'un moment
+ * incomplet. Valeurs écrites à la main.
+ */
+describe('tableau de l’accueil (vérificateur)', () => {
+  const cand = (
+    id: string,
+    poste: string,
+    jour: number,
+    debutH: number,
+    finH: number,
+    presence: Creneau['presence'],
+    kw: Partial<Creneau> = {},
+  ) =>
+    cr(id, jour, debutH * H, finH * H, poste, {
+      effectif: 0,
+      jourPlanning: jour,
+      presence,
+      accueil: true,
+      ...kw,
+    })
+  const mR = cand('pm', 'rec', 0, 7, 15, ['matin'])
+  const mC = cand('pmc', 'club', 0, 7, 15, ['matin'])
+  const xR = cand('px', 'rec', 0, 11, 19, ['matin', 'soir'])
+  const sC = cand('psc', 'club', 0, 15, 23, ['soir'])
+  const nV = cand('pn', 'veille', 0, 23, 31, ['nuit'])
+  const accueil = ['rec', 'club']
+  const tit = (id: string, kw: Partial<SalarieSolveur> = {}) =>
+    sal(id, { postes: new Set([...accueil, 'veille']), ...kw })
+  const app = sal('s', { postes: new Set(), postesSoutien: new Set(accueil) })
+  const ext = sal('e', {
+    postes: new Set(accueil),
+    postesOccasionnels: new Set(accueil),
+    placementManuel: true,
+    contratIndicatif: true,
+  })
+  const chiffres = [
+    { jour: 0, periode: 'matin' as const, minimum: 2, maximum: 2 },
+    { jour: 0, periode: 'soir' as const, minimum: 1, maximum: 1 },
+    { jour: 0, periode: 'nuit' as const, minimum: 1, maximum: 1 },
+  ]
+  const p = probleme({
+    salaries: [tit('a'), tit('b'), tit('c'), app, ext],
+    creneaux: [mR, mC, xR, sC, nV],
+    consignes: chiffres,
+  })
+  const compte = (affs: AffectationSolveur[]) =>
+    presenceParCycle(p, affs).map((x) => `${x.periode}:${x.compte}:${x.ecart}`)
+
+  it('un middle compte au matin ET au soir (D11)', () => {
+    // Accepté : un matin et un middle font les 2 du matin et le 1 du soir.
+    expect(compte([aff('a', 'pm'), aff('b', 'px'), aff('c', 'pn')])).toEqual([
+      'matin:2:0',
+      'soir:1:0',
+      'nuit:1:0',
+    ])
+    // Refusé : sans le middle, il manque un matin ET le soir.
+    expect(compte([aff('a', 'pm'), aff('c', 'pn')])).toEqual([
+      'matin:1:-1',
+      'soir:0:-1',
+      'nuit:1:0',
+    ])
+  })
+
+  it('un apprenti et un extra comptent (D5, D7)', () => {
+    expect(
+      compte([aff('a', 'pm'), aff('s', 'pm'), aff('e', 'psc'), aff('c', 'pn')]),
+    ).toEqual(['matin:2:0', 'soir:1:0', 'nuit:1:0'])
+    // Un extra sur l'accueil n'enfreint rien.
+    expect(
+      violations(p, [aff('e', 'pmc'), aff('a', 'pm')]).map((v) => v.regle),
+    ).toEqual([])
+  })
+
+  it('écart dans les deux sens ; le chiffre est le minimum (D3, D9)', () => {
+    // Surplus : 3 le matin pour 2, 2 le soir pour 1 (le middle compte aux deux).
+    expect(compte([aff('a', 'pm'), aff('b', 'pmc'), aff('c', 'px')])).toEqual([
+      'matin:3:1',
+      'soir:1:0',
+      'nuit:0:-1',
+    ])
+    // Un maximum différent (null, plus grand) est ignoré.
+    const large = {
+      ...p,
+      consignes: [
+        { jour: 0, periode: 'soir' as const, minimum: 1, maximum: null },
+      ],
+    }
+    expect(
+      presenceParCycle(large, [aff('a', 'psc'), aff('b', 'px')]).map(
+        (x) => x.ecart,
+      ),
+    ).toEqual([1])
+  })
+
+  it('violationsAccueil : manque et surplus nommés, rien quand c’est exact', () => {
+    expect(
+      violationsAccueil(p, [aff('a', 'pm'), aff('b', 'px'), aff('c', 'pn')]),
+    ).toEqual([])
+    const v = violationsAccueil(p, [
+      aff('a', 'pm'),
+      aff('b', 'pmc'),
+      aff('c', 'px'),
+    ])
+    expect(v).toEqual([
+      {
+        salarieId: null,
+        regle: 'ACCUEIL-SURPLUS',
+        message: '3 pour 2 : 1 de plus',
+        creneaux: ['pm', 'pmc', 'px'],
+        nature: 'organisation',
+      },
+      {
+        salarieId: null,
+        regle: 'ACCUEIL-MANQUE',
+        message: '0 pour 1 : il manque 1',
+        creneaux: [],
+        nature: 'organisation',
+      },
+    ])
+    // Jamais la loi : hors de `violations`.
+    expect(
+      violations(p, [aff('a', 'pm'), aff('b', 'pmc'), aff('c', 'px')]),
+    ).toEqual([])
+  })
+
+  it('trous de l’accueil entier : Réception et Club ensemble (D15)', () => {
+    // Plage : du début des matins (7 h) à la fin des soirs (23 h).
+    expect(trous(p, [aff('a', 'pm'), aff('b', 'psc')])).toEqual([])
+    expect(trous(p, [aff('a', 'pmc'), aff('b', 'psc')])).toEqual([])
+    expect(trous(p, [aff('b', 'psc')])).toEqual([
+      { poste: POSTE_ACCUEIL, jour: 0, debut: 7 * H, fin: 15 * H },
+    ])
+    // Un apprenti ne ferme pas un trou ; un middle si.
+    expect(trous(p, [aff('s', 'pm'), aff('b', 'psc')])).toEqual([
+      { poste: POSTE_ACCUEIL, jour: 0, debut: 7 * H, fin: 15 * H },
+    ])
+    expect(trous(p, [aff('a', 'px'), aff('b', 'psc')])).toEqual([
+      { poste: POSTE_ACCUEIL, jour: 0, debut: 7 * H, fin: 11 * H },
+    ])
+    // La version courte : un soir raccourci d'une heure finit à 22 h.
+    const court = probleme({
+      salaries: p.salaries,
+      creneaux: [mR, { ...sC, raccourci: 60 }],
+      consignes: chiffres,
+    })
+    expect(
+      trous(court, [aff('a', 'pm'), { ...aff('b', 'psc'), court: true }]),
+    ).toEqual([{ poste: POSTE_ACCUEIL, jour: 0, debut: 22 * H, fin: 23 * H }])
+    expect(trous(court, [aff('a', 'pm'), aff('b', 'psc')])).toEqual([])
+    // Une liste de postes sans l'accueil ne le voit pas.
+    expect(trous(p, [aff('b', 'psc')], new Set(['rec']))).toEqual([])
+    // Même définition que l'oracle de `cycles.ts`.
+    expect(trousAccueil(p, [aff('a', 'px'), aff('b', 'psc')])).toEqual(
+      trousAccueilDuJour([mR, mC, xR, sC], new Set(['matin', 'soir', 'nuit']), [
+        { debut: xR.debut, fin: xR.fin, autonome: true },
+        { debut: sC.debut, fin: sC.fin, autonome: true },
+      ]).map((t) => ({ poste: POSTE_ACCUEIL, jour: 0, ...t })),
+    )
+  })
+
+  it('raisons d’un moment incomplet : le meilleur candidat de chacun', () => {
+    const fiche = tit('f', { shiftsAutorises: new Set(['soir']) })
+    const absent = tit('x', { indisponibilites: new Set([0]) })
+    const autre = sal('o', { postes: new Set(['tech']) })
+    const q = probleme({
+      salaries: [tit('a'), fiche, absent, app, ext, autre, tit('d')],
+      creneaux: [
+        { ...mR, typeShift: 'matin' },
+        { ...xR, typeShift: 'middle' },
+        { ...sC, typeShift: 'soir' },
+      ],
+      consignes: chiffres,
+    })
+    const r = raisonsBlocageAccueil(q, [aff('d', 'pm')], ['pm', 'px'])
+    // Libre : aucune raison. Un extra libre est libre (pas « à appeler »).
+    expect(r.get('a')).toEqual([])
+    expect(r.get('e')).toEqual([])
+    expect(r.get('f')!.map((v) => v.regle)).toEqual(['HORAIRE-PERSO'])
+    expect(r.get('x')!.map((v) => v.regle)).toEqual(['ABSENCE'])
+    // Ni l'apprenti (jamais seul), ni qui ne tient pas l'accueil, ni qui
+    // compte déjà dans ce moment.
+    expect([...r.keys()].sort()).toEqual(['a', 'e', 'f', 'x'])
+    // Le MEILLEUR candidat, pas le premier : seul le middle lui est permis.
+    const m = tit('m', { shiftsAutorises: new Set(['middle']) })
+    const r3 = raisonsBlocageAccueil({ ...q, salaries: [m] }, [], ['pm', 'px'])
+    expect(r3.get('m')).toEqual([])
+    // Ailleurs dans la journée : déjà placé.
+    const r2 = raisonsBlocageAccueil(q, [aff('d', 'psc')], ['pm'])
+    expect(r2.get('d')!.map((v) => v.regle)).toContain('UN-SERVICE-PAR-JOUR')
   })
 })
