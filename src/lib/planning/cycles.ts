@@ -181,8 +181,26 @@ export function postesAPresence(
  * `demandes` = moments au chiffre > 0 ce jour ; `nuitVeille` = candidats de
  * la nuit de la veille quand elle est demandée (`nuitDeLaVeille`). Null :
  * rien à tenir (ni matin ni soir demandé). */
+/** Raccourcis d'un créneau (journée étoile) : facultatifs pour les appelants
+ * qui n'en ont pas. */
+type AvecRaccourci = Partial<Pick<Creneau, 'raccourci' | 'raccourciDebut'>>
+
+const auDebutDe = (c: AvecRaccourci) =>
+  Math.min(Math.max(c.raccourciDebut ?? 0, 0), c.raccourci ?? 0)
+
+/** Arrivée la plus TARDIVE d'un veilleur sur cette nuit : sa version courte
+ * peut commencer plus tard (23:00 → 00:00 la nuit étoile). */
+export const arriveeAuPlusTard = (c: Pick<Creneau, 'debut'> & AvecRaccourci) =>
+  c.debut + auDebutDe(c)
+
+/** Départ le plus TÔT d'un veilleur : sa version courte peut finir plus tôt. */
+export const departAuPlusTot = (c: Pick<Creneau, 'fin'> & AvecRaccourci) =>
+  c.fin - ((c.raccourci ?? 0) - auDebutDe(c))
+
 export function plageAccueil(
-  candidats: ReadonlyArray<Pick<Creneau, 'debut' | 'fin' | 'presence'>>,
+  candidats: ReadonlyArray<
+    Pick<Creneau, 'debut' | 'fin' | 'presence'> & AvecRaccourci
+  >,
   demandes: ReadonlySet<'matin' | 'soir' | 'nuit'>,
   nuitVeille: ReadonlyArray<Pick<Creneau, 'debut' | 'fin'>> = [],
 ): PlageMinutes | null {
@@ -215,8 +233,12 @@ export function plageAccueil(
   const debut = nuitVeille.length
     ? Math.max(...nuitVeille.map((c) => c.fin))
     : Math.max(...ouvrent.map((c) => c.debut))
+  // La journée est tenue jusqu'à l'arrivée la plus TARDIVE possible du
+  // veilleur (sa nuit étoile commence à 00:00 : rien entre 22:45 et minuit,
+  // signalé par l'utilisateur le 2026-11-01) ; s'il arrive plus tôt, sa
+  // présence couvre l'écart (la veille compte dans les présences).
   const fin = nuits.length
-    ? Math.min(...nuits.map((c) => c.debut))
+    ? Math.max(...nuits.map(arriveeAuPlusTard))
     : Math.min(...ferment.map((c) => c.fin))
   return fin > debut ? { debut, fin } : null
 }
@@ -226,7 +248,7 @@ export function plageAccueil(
  * les nuits du dimanche de la semaine, reculées de 7 jours (le tableau est le
  * même chaque semaine). */
 export function nuitDeLaVeille<
-  C extends Pick<Creneau, 'debut' | 'fin' | 'presence'>,
+  C extends Pick<Creneau, 'debut' | 'fin' | 'presence'> & AvecRaccourci,
 >(
   candidats: ReadonlyArray<C>,
   jourDuCandidat: (c: C) => number,
@@ -239,7 +261,14 @@ export function nuitDeLaVeille<
     (c) => jourDuCandidat(c) === veille && c.presence.includes('nuit'),
   )
   const recul = jour === 0 ? 7 * 24 * 60 : 0
-  return nuits.map((c) => ({ debut: c.debut - recul, fin: c.fin - recul }))
+  // Le matin est tenu dès le départ le plus TÔT possible du veilleur. Le
+  // lundi, la nuit est celle de la semaine d'avant, dont la version (courte
+  // ou non) n'est pas lue ici : son départ normal (un trou supposé serait
+  // faux, et le moteur ne peut rien y changer).
+  return nuits.map((c) => ({
+    debut: c.debut - recul,
+    fin: (jour === 0 ? c.fin : departAuPlusTot(c)) - recul,
+  }))
 }
 
 /** Trous de l'accueil un jour : `trousDuJour` sur la plage de l'accueil,

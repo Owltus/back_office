@@ -447,6 +447,9 @@ describe('une semaine de l’hôtel d’essai', () => {
       // Le chiffre exact : jamais de manque ici (assez de monde).
       expect(x.ecart).toBeGreaterThanOrEqual(0)
     }
-    expect(recompte(5, 'matin')).toBe(3)
+    // Au moins le chiffre ; une personne en plus est permise pour que la
+    // journée tienne jusqu'à l'arrivée du veilleur (2026-11-01), jamais un trou.
+    expect(recompte(5, 'matin')).toBeGreaterThanOrEqual(3)
+    expect(sem.trous).toEqual([])
   }, 60_000)
 })

@@ -824,6 +824,68 @@ describe('d’un veilleur à l’autre (audit du 2026-11-01)', () => {
     })
   })
 
+  it('nuit étoile : la journée est tenue jusqu’à minuit (2026-11-01)', () => {
+    // Oracle : la nuit de 23:00 peut se faire en version courte, de 00:00 ;
+    // la journée doit donc tenir jusqu'à 00:00 (l'arrivée la plus tardive).
+    const etoile = cand('n', 'veille', 6, 23, 31, ['nuit'], {
+      raccourci: 60,
+      raccourciDebut: 60,
+    })
+    const cs = [
+      cand('m', 'rec', 6, 7, 15, ['matin']),
+      cand('s', 'rec', 6, 14, 22.75, ['soir']),
+      etoile,
+    ]
+    expect(plageAccueil(cs, tout)?.fin).toBe(6 * J + 24 * H)
+    // Refusé : sans version courte, la journée s'arrête à 23:00.
+    expect(plageAccueil([...cs.slice(0, 2), nuit('n2', 6)], tout)?.fin).toBe(
+      6 * J + 23 * H,
+    )
+    // Le matin suivant commence au départ le plus tôt du veilleur.
+    const courteFin = cand('n3', 'veille', 5, 23, 31, ['nuit'], {
+      raccourci: 60,
+      raccourciDebut: 0,
+    })
+    expect(nuitDeLaVeille([courteFin], jourDe, 6, () => true)).toEqual([
+      { debut: 5 * J + 23 * H, fin: 6 * J + 6 * H },
+    ])
+  })
+
+  it('accepté : la nuit étoile commence à minuit, le soir va jusqu’à minuit', () => {
+    const consignes = [
+      chiffre(0, 'matin', 1),
+      chiffre(0, 'soir', 1),
+      chiffre(0, 'nuit', 1),
+    ]
+    const salaries = [
+      sal('a'),
+      sal('b'),
+      sal('v', { postes: new Set(['veille']) }),
+    ]
+    const base = [
+      matin('rm'),
+      cand('cs', 'club', 0, 14, 22.75, ['soir']),
+      cand('n0', 'veille', 0, 24, 31, ['nuit']),
+    ]
+    const r = gen(
+      probleme({
+        salaries,
+        creneaux: [...base, cand('rs', 'rec', 0, 15, 24, ['soir'])],
+        consignes,
+        nbJours: 1,
+      }),
+    )
+    expect(r.trous).toEqual([])
+    expect(qui(r).some((x) => x.endsWith('@rs'))).toBe(true)
+    // Refusé : sans soir jusqu'à minuit, de 22:45 à 00:00 personne.
+    const sans = gen(
+      probleme({ salaries, creneaux: base, consignes, nbJours: 1 }),
+    )
+    expect(sans.trous).toEqual([
+      { poste: POSTE_ACCUEIL, jour: 0, debut: 22.75 * H, fin: 24 * H },
+    ])
+  })
+
   it('le lundi, la veille est le dimanche d’avant', () => {
     const cs = [nuit('n6', 6), nuit('n0', 0)]
     const oui = () => true
