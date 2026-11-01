@@ -61,9 +61,11 @@ export function LigneCompacte({
         aria-label={etiquette}
       >
         {pastille}
-        <span className="min-w-0 flex-1 truncate">{libelle}</span>
+        {/* Le nom passe d'abord : c'est le détail qui se coupe quand la
+            colonne est étroite (largeur contrainte, 2026-11-01). */}
+        <span className="max-w-[70%] shrink-0 truncate">{libelle}</span>
         {detail != null && (
-          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+          <span className="min-w-0 flex-1 truncate text-right text-xs text-muted-foreground tabular-nums">
             {detail}
           </span>
         )}

@@ -32,6 +32,7 @@ import type { PropsOuvrir } from '#/components/planning/parametres/reglages/ouvr
 import { FicheSalarie } from '#/components/planning/parametres/FicheSalarie.tsx'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { PageAvecEnTete } from '#/components/shared/PageAvecEnTete.tsx'
+import { LARGEUR_REGLAGES } from '#/components/planning/parametres/reglages/cadre.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
@@ -109,6 +110,7 @@ export function EquipePage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
 
   return (
     <PageAvecEnTete
+      largeur={LARGEUR_REGLAGES}
       entete={
         <PageHeader
           leading={<RetourPlanning />}

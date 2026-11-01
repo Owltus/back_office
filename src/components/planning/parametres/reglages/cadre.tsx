@@ -22,6 +22,11 @@ import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
 
+/** Largeur des écrans de réglages du planning : centrée et contrainte comme
+ * RepJour, PDJ et Caisse (demande utilisateur du 2026-11-01) ; la grille du
+ * planning, elle, garde toute la largeur. */
+export const LARGEUR_REGLAGES = 'max-w-5xl'
+
 export function CadreReglages({
   titre,
   actif,
@@ -47,6 +52,7 @@ export function CadreReglages({
     // En-tête fixe, contenu qui défile avec sa barre au bord droit de la
     // fenêtre (même cadre que le Classeur, `PageAvecEnTete`).
     <PageAvecEnTete
+      largeur={LARGEUR_REGLAGES}
       entete={
         <PageHeader
           leading={<RetourPlanning />}

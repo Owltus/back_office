@@ -26,11 +26,24 @@ export function PageAvecEnTete({
   entete,
   children,
   className,
+  largeur,
   ...props
 }: {
   entete: ReactNode
   children: ReactNode
+  /** Largeur maximale du contenu, centré (ex. `max-w-5xl`, comme RepJour,
+   * PDJ et Caisse). Sans : toute la largeur. La barre de défilement reste
+   * au bord de la fenêtre. */
+  largeur?: string
 } & Omit<ComponentProps<'div'>, 'children'>) {
+  const borne = (contenu: ReactNode, gap?: string) =>
+    largeur ? (
+      <div className={cn('mx-auto flex w-full min-w-0 flex-col', gap, largeur)}>
+        {contenu}
+      </div>
+    ) : (
+      contenu
+    )
   return (
     <div
       className={cn('flex min-h-0 w-full flex-1 flex-col', className)}
@@ -40,7 +53,7 @@ export function PageAvecEnTete({
         data-page-en-tete=""
         className="-mx-4 -mt-4 flex shrink-0 flex-col gap-3 overflow-hidden px-4 pt-4 pb-3 [scrollbar-gutter:stable] md:-mx-6 md:-mt-6 md:px-6 md:pt-6 print:overflow-visible"
       >
-        {entete}
+        {borne(entete, 'gap-3')}
       </div>
       {/* `relative` : la zone est le repère des éléments en position
           absolue qu'elle contient (textes `sr-only`, badges…). Sans lui, ils
@@ -51,7 +64,7 @@ export function PageAvecEnTete({
         data-page-zone=""
         className="relative -mx-4 -mb-4 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pt-1 pb-4 [scrollbar-gutter:stable] md:-mx-6 md:-mb-6 md:px-6 md:pb-6 print:overflow-visible"
       >
-        {children}
+        {borne(children, 'gap-4')}
       </div>
     </div>
   )

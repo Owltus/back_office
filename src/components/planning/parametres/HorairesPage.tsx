@@ -466,7 +466,7 @@ function LigneHoraire({ h, onOuvrir }: { h: Horaire; onOuvrir: () => void }) {
         />
       }
       libelle={<span className="font-medium tabular-nums">{libelle}</span>}
-      detail={`${heures(dureeHoraire(h.debut, h.fin) - h.pause)}${h.pause > 0 ? ` · pause ${h.pause} min` : ''}${h.raccourci > 0 ? ' · journée étoile possible' : ''}`}
+      detail={`${heures(dureeHoraire(h.debut, h.fin) - h.pause)}${h.pause > 0 ? ` · pause ${h.pause} min` : ''}${h.raccourci > 0 ? ' · étoile' : ''}`}
       onOuvrir={onOuvrir}
     />
   )
