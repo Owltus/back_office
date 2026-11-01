@@ -2438,20 +2438,24 @@ const PL_POSTES: ReadonlyArray<
 ]
 const PL_TOUS = [0, 1, 2, 3, 4, 5, 6]
 const PL_SEMAINE = [0, 1, 2, 3, 4]
-/** (poste, code horaire, jours, effectif, renfort) */
+/** (poste, code horaire, jours, effectif, renfort). Les postes de l'accueil
+ * (Réception, Club, Veille de nuit) n'ont plus de besoins : leur nombre vient
+ * du tableau de l'accueil, `PL_ACCUEIL` (décision utilisateur du 2026-11-01). */
 const PL_BESOINS: ReadonlyArray<
   readonly [string, string, readonly number[], number, number]
 > = [
-  ['Réception', 'M', PL_TOUS, 1, 0],
-  ['Réception', 'MI', PL_TOUS, 0, 1],
-  ['Réception', 'AM', PL_TOUS, 1, 0],
-  ['Club', 'M', PL_TOUS, 1, 0],
-  ['Club', 'AM', PL_TOUS, 1, 0],
-  ['Veille de nuit', 'N', PL_TOUS, 1, 0],
   ['Direction', 'D', PL_SEMAINE, 0, 1],
   ['Responsable technique', 'T', [0, 1, 2, 3], 0, 1],
   ['Responsable technique', 'TV', [4], 0, 1],
 ]
+/** Tableau de l'accueil : (moment, nombre exact par jour, lundi → dimanche). */
+const PL_ACCUEIL: ReadonlyArray<readonly [string, readonly number[]]> = [
+  ['matin', [2, 2, 2, 2, 2, 3, 3]],
+  ['soir', [2, 2, 2, 2, 3, 3, 2]],
+  ['nuit', [1, 1, 1, 1, 1, 1, 1]],
+]
+/** Postes comptés dans le matin et le soir de l'accueil. */
+const PL_PRESENCE = new Set(['Réception', 'Club'])
 const PL_GROUPES: ReadonlyArray<readonly [string, string, readonly string[]]> =
   [
     [
@@ -2668,6 +2672,7 @@ function genererPlanning(f: Fenetre, tables: Table[], apres: string[]): void {
     'categorie',
     'couleur',
     'horaires_autorises',
+    'presence',
   ])
   postes.identiteForcee = true
   const idPoste = new Map<string, number>()
@@ -2679,6 +2684,7 @@ function genererPlanning(f: Fenetre, tables: Table[], apres: string[]): void {
       categorie,
       couleur,
       `{${codes.map((c) => idHoraire.get(c)).join(',')}}`,
+      PL_PRESENCE.has(nom),
     ])
   })
   const groupes = table('public.planning_groupes', [
@@ -2719,10 +2725,19 @@ function genererPlanning(f: Fenetre, tables: Table[], apres: string[]): void {
         h[2],
         h[3],
         effectif,
-        1,
+        0,
         renfort,
       ])
     }
+  }
+  const consignes = table('public.planning_consignes', [
+    'jour',
+    'periode',
+    'minimum',
+    'maximum',
+  ])
+  for (const [periode, parJour] of PL_ACCUEIL) {
+    parJour.forEach((n, j) => consignes.lignes.push([j, periode, n, n]))
   }
   const salaries = table('public.planning_salaries', [
     'id',
@@ -2788,7 +2803,16 @@ function genererPlanning(f: Fenetre, tables: Table[], apres: string[]): void {
         absences.lignes.push([id, versIso(jour), motif])
     },
   )
-  tables.push(horaires, motifs, postes, groupes, besoins, salaries, absences)
+  tables.push(
+    horaires,
+    motifs,
+    postes,
+    groupes,
+    besoins,
+    consignes,
+    salaries,
+    absences,
+  )
   for (const t of [
     'planning_horaires',
     'planning_motifs',

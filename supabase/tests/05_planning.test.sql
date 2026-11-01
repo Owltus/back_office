@@ -133,7 +133,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':R', (select r from t_ids)::text);
 $$;
 
-select plan(60);
+select plan(62);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -289,25 +289,33 @@ select is(pg_temp.essai('aucun', array['select count(*) from public.planning_con
 select is(pg_temp.essai('lecture', array['select count(*) from public.planning_consignes']),
   (select count(*)::text from public.planning_consignes), 'consignes : la lecture les lit toutes');
 select is(pg_temp.essai('ecriture', array[
-  'insert into public.planning_consignes (jour, periode, minimum) values (0, ''matin'', 1)']),
+  'insert into public.planning_consignes (jour, periode, minimum, maximum) values (0, ''matin'', 1, 1)']),
   'err=42501', 'consignes : l''écriture ne les règle pas');
 select is(pg_temp.essai('gestion', array[
   'delete from public.planning_consignes',
-  'insert into public.planning_consignes (jour, periode, minimum, maximum) values (5, ''matin'', 3, 4)',
+  'insert into public.planning_consignes (jour, periode, minimum, maximum) values (5, ''matin'', 3, 3)',
   'select minimum || ''-'' || maximum from public.planning_consignes']),
-  '3-4', 'consignes : la gestion les règle (3 ou 4 le samedi matin)');
+  '3-3', 'consignes : la gestion règle un chiffre exact (3 le samedi matin, 2026-11-01)');
+select is(pg_temp.essai('gestion', array[
+  'delete from public.planning_consignes',
+  'insert into public.planning_consignes (jour, periode, minimum, maximum) values (5, ''matin'', 3, 4)']),
+  'err=23514', 'consignes : deux chiffres différents sont refusés (2026-11-01)');
+select is(pg_temp.essai('gestion', array[
+  'delete from public.planning_consignes',
+  'insert into public.planning_consignes (jour, periode, minimum) values (5, ''matin'', 3)']),
+  'err=23514', 'consignes : un chiffre sans plafond est refusé (2026-11-01)');
 select is(pg_temp.essai('gestion', array[
   'delete from public.planning_consignes',
   'insert into public.planning_consignes (jour, periode, minimum, maximum) values (0, ''soir'', 3, 2)']),
   'err=23514', 'consignes : un plafond sous le minimum est refusé');
 select is(pg_temp.essai('gestion', array[
   'delete from public.planning_consignes',
-  'insert into public.planning_consignes (jour, periode, minimum) values (0, ''nuit'', 1)',
+  'insert into public.planning_consignes (jour, periode, minimum, maximum) values (0, ''nuit'', 1, 1)',
   'select periode || ''-'' || minimum from public.planning_consignes']),
   'nuit-1', 'consignes : la nuit est acceptée (2026-10-30)');
 select is(pg_temp.essai('gestion', array[
   'delete from public.planning_consignes',
-  'insert into public.planning_consignes (jour, periode, minimum) values (0, ''midi'', 1)']),
+  'insert into public.planning_consignes (jour, periode, minimum, maximum) values (0, ''midi'', 1, 1)']),
   'err=23514', 'consignes : une période inconnue est refusée');
 
 -- ----------------------------- moments des horaires (2026-10-28) ---
