@@ -19,6 +19,12 @@ import type { Besoin, Referentiel } from '#/lib/planning/types.ts'
  * apprentis et le « en plus » en options de la case avec un repère, la
  * copie sur d'autres jours explicite, Annuler et Rétablir, la présence
  * minimum sous la grille avec un repère vert ou orange.
+ *
+ * Révisé le 2026-11-01 (plan `planning-accueil-2026-11-01`) : la présence
+ * minimum devient le TABLEAU DE L'ACCUEIL (un chiffre exact par case), et les
+ * postes de l'accueil (case « présence », veille de nuit) n'ont plus
+ * d'onglet. Le référentiel de démo n'a aucune case « présence » cochée : ses
+ * Réception et Club servent ici de postes à grille ordinaires.
  */
 
 const etat = vi.hoisted(() => ({
@@ -115,6 +121,8 @@ const besoinDe = (
 describe('Besoins', () => {
   it('un poste à la fois : les onglets changent la grille', () => {
     // Oracle : « les postes en onglets en haut ; une seule grille à l'écran ».
+    // Aucun poste coché « présence » : pas de tableau de l'accueil, tous les
+    // postes gardent leur grille (même règle que le moteur, 2026-11-01).
     monter(<BesoinsPage />)
     expect(screen.getAllByRole('tab')).toHaveLength(5)
     expect(
@@ -356,13 +364,13 @@ describe('Besoins', () => {
     await waitFor(() => expect(service.reglerBesoin).toHaveBeenCalledTimes(2))
     const [premier, second] = service.reglerBesoin.mock.calls
     expect(premier[1]).toBeUndefined()
-    // Un nouveau besoin ouvre une place pour un apprenti (règle gardée).
+    // Un nouveau besoin n’ouvre plus de place d’apprenti (2026-11-01).
     expect(premier[0]).toMatchObject({
       poste_id: 3,
       jour: 3,
       horaire_id: 2,
       effectif: 1,
-      soutien: 1,
+      soutien: 0,
     })
     expect(second[0].effectif).toBe(2)
     expect(second[1]).toMatchObject({ poste_id: 3, jour: 3, horaire_id: 2 })
@@ -423,59 +431,60 @@ describe('Besoins', () => {
     ])
   })
 
-  describe('présence minimum', () => {
-    // Réception et Club comptent ; M du matin, AM du soir, MI middle.
-    const avecConsignes = (): Referentiel => {
+  describe("tableau de l'accueil", () => {
+    // Décisions du 2026-11-01 : Réception et Club (case « présence ») et la
+    // veille de nuit forment l'accueil ; un chiffre exact par case.
+    const avecAccueil = (): Referentiel => {
       const ref = referentielDemo()
       for (const p of ref.postes)
         p.presence = p.nom === 'Réception' || p.nom === 'Club'
-      const periodes: Partial<Record<string, 'matin' | 'middle' | 'soir'>> = {
-        M: 'matin',
-        MI: 'middle',
-        AM: 'soir',
-      }
-      for (const h of ref.horaires)
-        h.periode = periodes[codeTest(h) ?? ''] ?? null
       ref.consignes = [
-        { id: 1, jour: 5, periode: 'matin', minimum: 3, maximum: null },
-        { id: 2, jour: 0, periode: 'matin', minimum: 2, maximum: 2 },
+        { id: 1, jour: 5, periode: 'matin', minimum: 3, maximum: 3 },
+        { id: 2, jour: 0, periode: 'nuit', minimum: 1, maximum: 1 },
       ]
       return ref
     }
-    const casePresence = (cle: string) =>
+    const caseAccueil = (cle: string) =>
       document.querySelector<HTMLElement>(`[data-presence="${cle}"]`)
 
-    it('orange quand la grille n’atteint pas le minimum, vert sinon', () => {
-      // Oracle indépendant : samedi matin, un M en Réception et un en Club
-      // (effectif 1 chacun) = 2, moins que 3 ; lundi matin 2 = 2.
-      etat.referentiel = avecConsignes()
+    it("les postes de l'accueil n'ont plus d'onglet, le tableau montre le chiffre", () => {
+      // Oracle : « il faut 3 personnes, peu importe qu'il soit réception ou club ».
+      etat.referentiel = avecAccueil()
       monter(<BesoinsPage />)
-      const region = screen.getByRole('region', { name: 'Présence minimum' })
-      expect(region.textContent).toContain(
-        'tous postes de présence confondus (Réception et Club)',
+      const onglets = screen.getAllByRole('tab').map((t) => t.textContent)
+      expect(onglets.some((t) => /Réception|Club|Veille/.test(t ?? ''))).toBe(
+        false,
       )
-      expect(region.textContent).toContain(
-        "La nuit ne compte pas : aucun poste n'a d'horaire de nuit.",
+      const region = screen.getByRole('region', { name: 'Accueil' })
+      expect(region.textContent).toContain('Réception et Club ensemble')
+      expect(region.textContent).toContain('La nuit : Veille de nuit.')
+      expect(caseAccueil('5:matin')?.textContent).toBe('3')
+      expect(caseAccueil('5:matin')?.getAttribute('aria-label')).toBe(
+        'Matin, samedi : 3 personnes.',
       )
-      expect(casePresence('5:matin')?.dataset.etat).toBe('ecart')
-      expect(casePresence('5:matin')?.getAttribute('aria-label')).toBe(
-        'Matin, samedi : au moins 3. Les besoins donnent 2, le minimum est 3.',
-      )
-      expect(casePresence('0:matin')?.dataset.etat).toBe('ok')
-      expect(casePresence('1:matin')?.dataset.etat).toBe('neutre')
+      expect(caseAccueil('1:matin')?.textContent).toBe('–')
+      // Aucun mot de l'ancien réglage.
+      expect(region.textContent).not.toMatch(/minimum|maximum|consigne/i)
     })
 
-    it('le panneau règle le minimum, et Annuler le remet', async () => {
-      // Oracle : « un clic ouvre un panneau avec deux compteurs » ; même
-      // écriture qu'avant (le plafond suit le minimum).
-      etat.referentiel = avecConsignes()
+    it('un lien vers un poste de l’accueil mène au tableau, pas à un onglet', () => {
+      etat.referentiel = avecAccueil()
+      const club = etat.referentiel.postes.find((p) => p.nom === 'Club')
+      monter(<BesoinsPage ouvrir={`poste-${club?.id}`} />)
+      expect(screen.queryByRole('tab', { name: /^Club/ })).toBeNull()
+      expect(screen.getByRole('region', { name: 'Accueil' })).toBeTruthy()
+    })
+
+    it('un compteur écrit un chiffre exact ; 0 retire la case ; Annuler la remet', async () => {
+      // Oracle : contrainte `planning_consignes_exact` (minimum = maximum).
+      etat.referentiel = avecAccueil()
       monter(<BesoinsPage />)
-      fireEvent.click(casePresence('0:soir') as HTMLElement)
+      fireEvent.click(caseAccueil('0:soir') as HTMLElement)
       const panneau = within(
         screen.getByRole('dialog', { name: 'Soir · Lundi' }),
       )
       fireEvent.click(
-        panneau.getByRole('button', { name: 'Au moins : un de plus' }),
+        panneau.getByRole('button', { name: 'Personnes : un de plus' }),
       )
       await waitFor(() =>
         expect(service.reglerConsigne).toHaveBeenCalledWith(
@@ -488,6 +497,19 @@ describe('Besoins', () => {
         expect(service.reglerConsigne).toHaveBeenLastCalledWith(
           { jour: 0, periode: 'soir', minimum: 0, maximum: null },
           undefined,
+        ),
+      )
+      // Samedi matin 3 → 2 : toujours un seul chiffre.
+      fireEvent.click(caseAccueil('5:matin') as HTMLElement)
+      fireEvent.click(
+        within(
+          screen.getByRole('dialog', { name: 'Matin · Samedi' }),
+        ).getByRole('button', { name: 'Personnes : un de moins' }),
+      )
+      await waitFor(() =>
+        expect(service.reglerConsigne).toHaveBeenLastCalledWith(
+          { jour: 5, periode: 'matin', minimum: 2, maximum: 2 },
+          expect.objectContaining({ id: 1 }),
         ),
       )
     })

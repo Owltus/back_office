@@ -15,6 +15,12 @@
  *   toute action de la page ;
  * - la présence minimum du matin, du soir et de la nuit sous la grille.
  *
+ * TABLEAU DE L'ACCUEIL (décision utilisateur du 2026-11-01, plan
+ * `plan/planning-accueil-2026-11-01/`) : la Réception, le Club et la Veille
+ * de nuit n'ont plus de grille ; un seul tableau en tête dit combien de
+ * personnes il faut exactement le matin, le soir et la nuit. Les onglets ne
+ * gardent que les postes à part (Direction, Adjoint, Supervision…).
+ *
  * Le modèle et les écritures ne changent pas : chaque case s'enregistre
  * aussitôt (`reglerBesoin` : crée, modifie, ou supprime à 0 / 0 / 0, avec le
  * besoin RELU en base, les écritures l'une après l'autre), chaque présence
@@ -51,7 +57,7 @@ import type {
   Entree,
   Historique,
 } from '#/components/planning/parametres/besoins/historique.ts'
-import { PresenceMinimum } from '#/components/planning/parametres/besoins/PresenceMinimum.tsx'
+import { TableauAccueil } from '#/components/planning/parametres/besoins/TableauAccueil.tsx'
 import {
   idCible,
   useOuvrirCible,
@@ -60,7 +66,6 @@ import type { PropsOuvrir } from '#/components/planning/parametres/reglages/ouvr
 import { CadreReglages } from '#/components/planning/parametres/reglages/cadre.tsx'
 import {
   RIEN,
-  nouvellesBornes,
   reglerChamp,
   soutienSansBase,
   trouverBesoin,
@@ -79,6 +84,7 @@ import {
 } from '#/components/ui/tabs.tsx'
 import { heures, libelleHoraire } from '#/lib/planning/affichage.ts'
 import { planningKeys } from '#/lib/planning/keys.ts'
+import { accueilActif, estPosteAccueil } from '#/lib/planning/presence.ts'
 import { reglerBesoin, reglerConsigne } from '#/lib/planning/service.ts'
 import { JOURS } from '#/lib/planning/types.ts'
 import type { Consigne, Referentiel } from '#/lib/planning/types.ts'
@@ -132,8 +138,11 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
   }, [])
 
   const [posteChoisi, setPosteChoisi] = useState<number | undefined>(undefined)
-  const poste =
-    data?.postes.find((p) => p.id === posteChoisi) ?? data?.postes[0]
+  // Même règle que le moteur (`estPosteAccueil`) : sans aucun poste coché
+  // « présence », pas de tableau, tous les postes gardent leur grille.
+  const actif = !!data && accueilActif(data.postes)
+  const aPart = data?.postes.filter((p) => !estPosteAccueil(p, actif)) ?? []
+  const poste = aPart.find((p) => p.id === posteChoisi) ?? aPart.at(0)
 
   const [historique, setHistorique] = useState<Historique>(HISTORIQUE_VIDE)
   const historiqueRef = useRef(historique)
@@ -150,8 +159,13 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
         return true
       }
       const id = idCible(cible, 'soutien') ?? idCible(cible, 'poste')
-      if (id === undefined || !data?.postes.some((p) => p.id === id))
-        return false
+      const vise = data?.postes.find((p) => p.id === id)
+      if (!vise) return false
+      // Un poste de l'accueil n'a plus de grille : son réglage est le tableau.
+      if (estPosteAccueil(vise, actif)) {
+        window.setTimeout(() => allerA('besoins-presence'), 0)
+        return true
+      }
       setPosteChoisi(id)
       return true
     },
@@ -184,6 +198,9 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
     )
     return c ? { minimum: c.minimum, maximum: c.maximum } : AUCUNE_BORNE
   }
+  /** Le chiffre exact d'une case de l'accueil (minimum = maximum). */
+  const afficheAccueil = (jour: number, periode: Periode) =>
+    afficheConsigne(jour, periode).minimum
 
   /** Écrit les valeurs APRÈS des changements, dans l'ordre, l'une après
    * l'autre : la même écriture pour une action, son annulation et son
@@ -243,7 +260,7 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
               ),
             )
           }
-        }, "La présence minimum n'a pas pu être enregistrée")
+        }, "L'accueil n'a pas pu être enregistré")
         if (!r.ok) notifier(r.message, 'danger')
       }
       enCours.current--
@@ -366,16 +383,12 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
     ajouterLigne: (cle) => garder(poste.id, [cle]),
   }
 
-  const reglerPresence = (
-    jour: number,
-    periode: Periode,
-    champ: keyof Bornes,
-    v: number,
-  ) => {
+  const reglerAccueil = (jour: number, periode: Periode, n: number) => {
     const avant = afficheConsigne(jour, periode)
-    const apres = nouvellesBornes(avant, champ, v)
+    // Un chiffre exact (contrainte `planning_consignes_exact`) ; 0 retire la case.
+    const apres: Bornes = n > 0 ? { minimum: n, maximum: n } : AUCUNE_BORNE
     faire({
-      libelle: `présence du ${JOURS[jour].toLowerCase()} ${periode}`,
+      libelle: `accueil, ${JOURS[jour].toLowerCase()} ${periode}`,
       changements: [{ type: 'consigne', jour, periode, avant, apres }],
     })
   }
@@ -428,13 +441,12 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
         <div className="flex w-full max-w-6xl min-w-0 flex-col gap-6">
           <div className="flex max-w-3xl flex-col gap-1">
             <p className="text-sm">
-              Indiquez combien de personnes il faut pour chaque horaire, chaque
-              jour. Le planning automatique s'en sert pour placer l'équipe.
+              Indiquez combien de personnes il faut, chaque jour. Le planning
+              automatique s'en sert pour placer l'équipe.
             </p>
             {modifiable && (
               <p className="text-xs text-muted-foreground">
-                Cliquez sur une case pour la régler. Les places pour apprentis
-                ou stagiaires et en plus si besoin sont dans ses options.
+                Cliquez sur une case pour la régler.
               </p>
             )}
             <details className="text-xs text-muted-foreground">
@@ -442,18 +454,28 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
                 Dans quel ordre le planning automatique décide
               </summary>
               <p className="mt-1">
-                La loi d'abord, puis les personnes nécessaires et le minimum de
-                chaque moment, puis le maximum de chaque moment, puis les
-                contrats, puis un titulaire avant un dépannage, puis le confort
-                (repos groupés, jours habituels, partage des week-ends, des
-                soirs et des matins tôt sur les 4 dernières semaines).
+                La loi d'abord, puis le nombre demandé à l'accueil et les
+                personnes nécessaires des autres postes, puis les heures des
+                contrats, puis un titulaire avant un dépannage, et un dépannage
+                avant un extra, puis le confort (repos groupés, jours habituels,
+                partage des week-ends, des soirs et des matins tôt sur les 4
+                dernières semaines).
               </p>
             </details>
           </div>
 
+          <TableauAccueil
+            postes={data.postes}
+            modifiable={modifiable}
+            affiche={afficheAccueil}
+            regler={reglerAccueil}
+          />
+
+          {actif && <h2 className="text-base font-semibold">Autres postes</h2>}
           {!poste ? (
             <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-              Aucun poste : créez d'abord les postes de l'hôtel.
+              Aucun autre poste. Les postes qui ne sont pas à l'accueil
+              (Direction, Technique…) se règlent ici.
             </p>
           ) : (
             <Tabs
@@ -462,7 +484,7 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
               className="min-w-0 gap-3"
             >
               <TabsList className="max-w-full flex-wrap justify-start group-data-[orientation=horizontal]/tabs:h-auto">
-                {data.postes.map((p) => (
+                {aPart.map((p) => (
                   <TabsTrigger
                     key={p.id}
                     value={String(p.id)}
@@ -506,13 +528,6 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
               </TabsContent>
             </Tabs>
           )}
-
-          <PresenceMinimum
-            referentiel={data}
-            modifiable={modifiable}
-            affiche={afficheConsigne}
-            regler={reglerPresence}
-          />
         </div>
       )}
     </CadreReglages>

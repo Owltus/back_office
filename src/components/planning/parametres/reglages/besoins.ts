@@ -37,11 +37,12 @@ export const existe = (r: Reglage) =>
   r.effectif > 0 || r.soutien > 0 || r.renfort > 0
 
 /**
- * Nouveau réglage d'une case quand un de ses trois compteurs change. Mêmes
- * règles que l'écran d'avant le 2026-10-31 :
- * - une case qui ne demandait rien et reçoit une personne nécessaire ouvre
- *   aussi une place pour un apprenti ou un stagiaire (la règle de l'hôtel
- *   fictif du prototype, visible désormais par le repère de la case) ;
+ * Nouveau réglage d'une case quand un de ses trois compteurs change :
+ * - une case qui ne demandait rien n'ouvre PLUS de place d'apprenti
+ *   (2026-11-01 : cette règle de l'hôtel fictif du prototype a semé, en
+ *   production, des places d'apprenti sur la Direction, l'Adjoint, la
+ *   Supervision, la Veille et la Technique, où personne n'est apprenti ;
+ *   les apprentis sont désormais comptés à l'accueil) ;
  * - plus personne nécessaire ni en plus : plus de place d'apprenti (il ne
  *   serait jamais placé, `soutienSansBase`).
  */
@@ -52,7 +53,7 @@ export function reglerChamp(
 ): Reglage {
   const v = Math.max(0, valeur)
   if (champ === 'effectif') {
-    const soutien = v + r.renfort === 0 ? 0 : existe(r) ? r.soutien : 1
+    const soutien = v + r.renfort === 0 ? 0 : r.soutien
     return { effectif: v, soutien, renfort: r.renfort }
   }
   if (champ === 'renfort') {
@@ -61,34 +62,6 @@ export function reglerChamp(
       : { ...r, renfort: v }
   }
   return { ...r, soutien: aUneBase(r) ? v : 0 }
-}
-
-/** Au moins et au plus d'une présence minimum (`maximum` null : sans
- * limite). Le minimum monte : le plafond suit (et un plafond absent prend la
- * valeur du minimum, règle de l'écran d'avant, gardée) ; le plafond
- * descend : le minimum suit. Repris de `ConsignesPresence.tsx` (supprimé le
- * 2026-10-31). */
-export function nouvellesBornes(
-  avant: { minimum: number; maximum: number | null },
-  champ: 'minimum' | 'maximum',
-  valeur: number,
-): { minimum: number; maximum: number | null } {
-  if (champ === 'minimum') {
-    const maximum =
-      avant.maximum === null || avant.maximum < valeur ? valeur : avant.maximum
-    return { minimum: valeur, maximum }
-  }
-  return { minimum: Math.min(avant.minimum, valeur), maximum: valeur }
-}
-
-/** La somme des besoins ne tient pas la présence voulue : moins que le
- * minimum, ou plus que le maximum. */
-export function besoinsEnEcart(
-  besoins: number,
-  b: { minimum: number; maximum: number | null },
-): boolean {
-  if (besoins < b.minimum) return true
-  return b.maximum !== null && besoins > b.maximum
 }
 
 export function correspond(b: Besoin, ligne: LigneBesoin): boolean {
