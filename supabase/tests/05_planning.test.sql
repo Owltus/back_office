@@ -72,9 +72,9 @@ select private.planning_lundi(private.planning_aujourdhui()) - 7 as p,
 
 -- Heures inhabituelles : deux horaires n'ont jamais les mêmes heures
 -- (2026-10-31), et le fichier tourne aussi sur une copie de la prod.
-insert into public.planning_horaires (nom, debut, fin, pause, raccourci)
+insert into public.planning_horaires (nom, debut, fin, pause, raccourci, periode)
   overriding system value
-  values ('Matin test', '05:05', '13:50', 45, 60);
+  values ('Matin test', '05:05', '13:50', 45, 60, 'matin');
 create temp table t_ids as select
   (select id from public.planning_horaires where nom = 'Matin test') as h;
 insert into public.planning_postes (nom, categorie, horaires_autorises)
@@ -133,7 +133,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':R', (select r from t_ids)::text);
 $$;
 
-select plan(62);
+select plan(63);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -275,13 +275,18 @@ select is(pg_temp.essai('ecriture', array[
   pg_temp.q('select debut || ''-'' || fin from public.planning_affectations where lundi = :F and salarie_id = :S1 and jour = 0')]),
   '05:05-13:50', 'retirer la journée courte remet les heures pleines');
 
--- --------------------------------------------------- import du prototype ---
-select is(pg_temp.essai('ecriture', array['select public.planning_importer(''{"format": "planning-prototype-v20"}''::jsonb)']),
-  'err=42501', 'import : réservé à la gestion');
-select is(pg_temp.essai('gestion', array['select public.planning_importer(''{"format": "autre"}''::jsonb)']),
-  'err=PL400', 'import : un fichier qui n''est pas un export du prototype est refusé');
-select is(pg_temp.essai('gestion', array['select public.planning_importer(''{"format": "planning-prototype-v20"}''::jsonb)']),
-  'err=PL409', 'import : jamais dans un planning qui a déjà des données');
+-- ------------------------------- poste de l'accueil (U1 du 2026-11-01) ---
+select is(pg_temp.essai('gestion', array[
+  pg_temp.q('insert into public.planning_postes (nom, presence, accueil_nuit) values (''Veille test'', false, true)'),
+  pg_temp.q('select accueil_nuit::text from public.planning_postes where nom = ''Veille test''')]),
+  'true', 'accueil : un poste peut tenir la nuit');
+select is(pg_temp.essai('gestion', array[
+  pg_temp.q('insert into public.planning_postes (nom, presence, accueil_nuit) values (''Double test'', true, true)')]),
+  'err=23514', 'accueil : un poste ne tient pas à la fois le jour et la nuit');
+select is(pg_temp.essai('gestion', array[
+  pg_temp.q('insert into public.planning_besoins (poste_id, jour, debut, fin, effectif) values (:PA, 6, ''09:00'', ''10:00'', 1)'),
+  pg_temp.q('select soutien::text from public.planning_besoins where poste_id = :PA and jour = 6 and debut = ''09:00''')]),
+  '0', 'besoin : aucune place d''apprenti par défaut');
 
 -- ------------------------------------ consignes de présence (2026-10-28) ---
 select is(pg_temp.essai('aucun', array['select count(*) from public.planning_consignes']),
@@ -337,8 +342,11 @@ select is(pg_temp.essai('gestion', array[
 select hasnt_column('public', 'planning_horaires', 'code',
   'horaires : plus de code, un horaire se lit par ses heures');
 select is(pg_temp.essai('gestion', array[
-  'insert into public.planning_horaires (nom, debut, fin) values (''Doublon test'', ''05:05'', ''13:50'')']),
+  'insert into public.planning_horaires (nom, debut, fin, periode) values (''Doublon test'', ''05:05'', ''13:50'', ''matin'')']),
   'err=23505', 'horaires : deux horaires aux mêmes heures sont refusés');
+select is(pg_temp.essai('gestion', array[
+  'insert into public.planning_horaires (nom, debut, fin) values (''Sans moment test'', ''05:10'', ''13:55'')']),
+  'err=23502', 'horaires : un horaire a toujours un moment (U10)');
 
 select hasnt_column('public', 'planning_salaries', 'heures_ecole_jour',
   'école : pas de durée réglable par personne');

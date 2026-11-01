@@ -165,9 +165,29 @@ export function momentEstPropose(h: SaisieHoraire): boolean {
   )
 }
 
+/** Code court proposé d'après le nom (U10 du 2026-11-01) : les initiales
+ * des mots (« Congé payé » → « CP »), ou les deux premières lettres d'un mot
+ * seul (« Maladie » → « MA »). Jamais vide : « AB » faute de lettres. */
+export function codePropose(nom: string): string {
+  const mots = nom
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .split(/[^A-Z]+/)
+    .filter((m) => m.length > 1 || /^[A-Z]$/.test(m))
+    .filter((m) => !['DE', 'DU', 'LA', 'LE', 'LES', 'D', 'L', 'ET'].includes(m))
+  if (!mots.length) return 'AB'
+  if (mots.length === 1) return mots[0].slice(0, 2)
+  return mots
+    .map((m) => m[0])
+    .join('')
+    .slice(0, 4)
+}
+
 export function erreursMotif(m: SaisieMotif): string[] {
   const erreurs: string[] = []
-  controlerCode(m.code, erreurs)
+  // Un code vide est proposé d'après le nom à l'enregistrement.
+  if (m.code.trim()) controlerCode(m.code, erreurs)
   controlerNom(m.nom, 'au motif', erreurs)
   controlerCouleur(m.couleur, erreurs)
   return erreurs
@@ -190,7 +210,9 @@ export function nettoyerHoraire(h: SaisieHoraire): Omit<Horaire, 'id'> {
 }
 
 export function nettoyerMotif(m: SaisieMotif): SaisieMotif {
-  return { ...m, code: m.code.trim().toUpperCase(), nom: m.nom.trim() }
+  const nom = m.nom.trim()
+  const code = m.code.trim().toUpperCase() || codePropose(nom)
+  return { ...m, code, nom }
 }
 
 export function nettoyerPoste(p: SaisiePoste): SaisiePoste {

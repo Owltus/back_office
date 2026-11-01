@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   brouillonVierge,
+  changerContrat,
   erreurBrouillon,
   heuresSansObjet,
   fusionnerAbsences,
@@ -135,6 +136,42 @@ describe('heures du contrat (audit RH du 2026-11-01)', () => {
     ).toBeNull()
     expect(erreurBrouillon(fiche({ mineur: true, heures_hebdo: 39 }))).toBe(
       'Un mineur ne peut pas dépasser 35 h par semaine.',
+    )
+  })
+})
+
+describe('fin de contrat et bouton Actif (U2 du 2026-11-01)', () => {
+  const fiche = (kw: Partial<ReturnType<typeof brouillonVierge>>) => ({
+    ...brouillonVierge(),
+    prenom: 'Léa',
+    ...kw,
+  })
+  it('CDD, apprenti, stagiaire : la fin est obligatoire', () => {
+    for (const type_contrat of ['cdd', 'apprenti', 'stagiaire'] as const) {
+      expect(erreurBrouillon(fiche({ type_contrat }))).toMatch(
+        /fin du contrat : elle est obligatoire/,
+      )
+      expect(
+        erreurBrouillon(fiche({ type_contrat, date_sortie: '2027-06-30' })),
+      ).toBeNull()
+    }
+    // Refusé : un CDI ou un extra n'y sont pas tenus.
+    expect(erreurBrouillon(fiche({ type_contrat: 'cdi' }))).toBeNull()
+    expect(
+      erreurBrouillon(fiche({ type_contrat: 'extra', heures_hebdo: 0 })),
+    ).toBeNull()
+  })
+  it('passer en extra retire la fin ; quitter extra rend la fiche active', () => {
+    const extra = changerContrat(
+      fiche({ type_contrat: 'cdd', date_sortie: '2027-06-30' }),
+      'extra',
+    )
+    expect(extra.date_sortie).toBeNull()
+    const cdi = changerContrat({ ...extra, actif: false }, 'cdi')
+    expect(cdi.actif).toBe(true)
+    // Refusé : un extra inactif le reste en changeant d'avis sur rien.
+    expect(changerContrat({ ...extra, actif: false }, 'extra').actif).toBe(
+      false,
     )
   })
 })

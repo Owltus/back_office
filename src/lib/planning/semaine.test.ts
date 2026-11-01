@@ -731,7 +731,6 @@ describe('planning de la semaine (test_api.py)', () => {
       categorie: 'autre' as const,
       couleur: '#000000',
       horaires_autorises: [],
-      a_part: false,
       presence: false,
     }
     ref.postes.push(poste)
@@ -1376,7 +1375,6 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
       categorie: 'reception',
       couleur: '#111111',
       horaires_autorises: [1, 2, 3, 4, 5, 6, 7],
-      a_part: false,
       // Poste « à part » depuis le 2026-11-01 (plan planning-accueil,
       // D13) : un poste coché « présence » n'a plus de besoins (le tableau
       // de l'accueil les remplace), or ce bloc éprouve le rattachement par
@@ -1390,7 +1388,6 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
       categorie: 'veille_nuit',
       couleur: '#222222',
       horaires_autorises: [9],
-      a_part: false,
       presence: false,
     },
   ]
@@ -2160,7 +2157,6 @@ describe('Martin V3-I : remplaçants, propriété', () => {
             categorie: 'reception',
             couleur: '#000000',
             horaires_autorises: autorises,
-            a_part: false,
             presence: true,
           }
           const ctx = {

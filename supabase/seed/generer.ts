@@ -2673,6 +2673,7 @@ function genererPlanning(f: Fenetre, tables: Table[], apres: string[]): void {
     'couleur',
     'horaires_autorises',
     'presence',
+    'accueil_nuit',
   ])
   postes.identiteForcee = true
   const idPoste = new Map<string, number>()
@@ -2685,6 +2686,8 @@ function genererPlanning(f: Fenetre, tables: Table[], apres: string[]): void {
       couleur,
       `{${codes.map((c) => idHoraire.get(c)).join(',')}}`,
       PL_PRESENCE.has(nom),
+      // La nuit de l'accueil se règle sur le poste (U1 du 2026-11-01).
+      categorie === 'veille_nuit',
     ])
   })
   const groupes = table('public.planning_groupes', [

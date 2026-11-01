@@ -316,6 +316,10 @@ export function changerContrat(
     type_contrat,
     heures_hebdo: type_contrat === 'extra' ? 0 : b.heures_hebdo || 35,
     forfait_jours: type_contrat === 'extra' ? false : b.forfait_jours,
+    // Un extra vient ponctuellement : jamais de fin de contrat (U2) ; un
+    // autre contrat est toujours actif (sa fin le sort du planning).
+    date_sortie: type_contrat === 'extra' ? null : b.date_sortie,
+    actif: type_contrat === 'extra' ? b.actif : true,
   }
 }
 
@@ -435,7 +439,16 @@ export function heuresSansObjet(
   return b.type_contrat === 'extra' || b.forfait_jours
 }
 
+/** Contrats à durée limitée : la fin est obligatoire (U2 du 2026-11-01). */
+export const FIN_OBLIGATOIRE: ReadonlySet<TypeContrat> = new Set([
+  'cdd',
+  'apprenti',
+  'stagiaire',
+])
+
 function erreurSuite(b: Brouillon): string | null {
+  if (FIN_OBLIGATOIRE.has(b.type_contrat) && !b.date_sortie)
+    return 'Indiquez la fin du contrat : elle est obligatoire pour un CDD, un apprenti ou un stagiaire.'
   if (b.date_entree && !dateValide(b.date_entree))
     return "La date d'arrivée est incomplète."
   if (b.date_sortie && !dateValide(b.date_sortie))

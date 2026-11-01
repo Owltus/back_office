@@ -209,19 +209,33 @@ export function sommeBesoinsPresence(
 /** Un poste au moins est coché « présence » : le tableau de l'accueil est en
  * service. */
 export function accueilActif(
-  postes: Iterable<Pick<Poste, 'presence'>>,
+  postes: Iterable<Pick<Poste, 'presence' | 'ferme'>>,
 ): boolean {
-  for (const p of postes) if (p.presence) return true
+  for (const p of postes) if (p.presence && !p.ferme) return true
   return false
 }
 
-/** Le poste est-il de l'accueil (D12) ? `actif` : `accueilActif` de l'hôtel. */
+type PosteAccueil = Pick<
+  Poste,
+  'presence' | 'categorie' | 'accueil_nuit' | 'ferme'
+>
+
+/** Le poste tient-il la nuit de l'accueil (U1 du 2026-11-01) ? Son réglage
+ * « Accueil : nuit » ; sans réglage (données de test anciennes), la
+ * catégorie Veille de nuit. Un poste fermé ne tient rien. */
+export function tientLaNuit(poste: PosteAccueil | undefined): boolean {
+  if (!poste || poste.ferme) return false
+  return poste.accueil_nuit ?? poste.categorie === 'veille_nuit'
+}
+
+/** Le poste est-il de l'accueil (D12, U1) ? `actif` : `accueilActif` de
+ * l'hôtel. Un poste fermé (U3) n'en est jamais. */
 export function estPosteAccueil(
-  poste: Pick<Poste, 'presence' | 'categorie'> | undefined,
+  poste: PosteAccueil | undefined,
   actif: boolean,
 ): boolean {
-  if (!poste || !actif) return false
-  return poste.presence || poste.categorie === 'veille_nuit'
+  if (!poste || !actif || poste.ferme) return false
+  return poste.presence || tientLaNuit(poste)
 }
 
 /** Moments du tableau où compte un shift (ou un créneau candidat) de ce
@@ -234,7 +248,7 @@ export function estPosteAccueil(
  *   - horaire libre : son heure de début (`periodeLibre`).
  * `actif` : `accueilActif` de l'hôtel (faux : rien ne compte). */
 export function momentsAccueil(
-  poste: Pick<Poste, 'presence' | 'categorie'> | undefined,
+  poste: PosteAccueil | undefined,
   horaire: Pick<Horaire, 'periode'> | undefined,
   debut: string,
   actif = true,
@@ -247,7 +261,7 @@ export function momentsAccueil(
     if (p === 'matin' || p === 'middle') r.push('matin')
     if (p === 'soir' || p === 'middle') r.push('soir')
   }
-  if (poste.categorie === 'veille_nuit' && p === 'nuit') r.push('nuit')
+  if (tientLaNuit(poste) && p === 'nuit') r.push('nuit')
   return r
 }
 

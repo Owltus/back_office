@@ -107,7 +107,7 @@ export function coupureRespectee(
 
 /** Codes d'un poste (tous s'il n'en restreint aucun). */
 export function codesDuPoste<T extends { id: number }>(
-  poste: Pick<Poste, 'horaires_autorises'> | undefined,
+  poste: Pick<Poste, 'horaires_autorises' | 'ferme'> | undefined,
   horaires: readonly T[],
 ): T[] {
   return poste
@@ -139,6 +139,7 @@ export type RaisonCodes =
   | 'repos-fixe'
   | 'hors-contrat'
   | 'coupure-11h'
+  | 'poste-ferme'
 
 /** La raison en clair, pour une ligne grisée du menu. */
 export const TEXTE_RAISON: Record<RaisonCodes, string> = {
@@ -150,6 +151,7 @@ export const TEXTE_RAISON: Record<RaisonCodes, string> = {
   'repos-fixe': 'Repos fixé par sa semaine type',
   'hors-contrat': 'En dehors de son contrat',
   'coupure-11h': 'Coupure de repos non respectée',
+  'poste-ferme': 'Poste fermé',
 }
 
 /** Texte court de la coupure (lu dans un menu), selon le repos dû (11 h,
@@ -195,7 +197,7 @@ export interface CodesPermis<T> {
 
 export interface EntreeCodesPermis<T> {
   personne: Pick<Salarie, 'shifts_autorises' | 'semaine_type' | 'mineur'>
-  poste: Pick<Poste, 'horaires_autorises'> | undefined
+  poste: Pick<Poste, 'horaires_autorises' | 'ferme'> | undefined
   jour: number
   horaires: readonly T[]
   journee?: Journee
@@ -220,6 +222,8 @@ export function codesPermis<
     ecartes: [],
   })
   const jourType = e.personne.semaine_type.at(e.jour)
+  // Un poste fermé (U3 du 2026-11-01) n'est plus proposé, ni planifié.
+  if (e.poste?.ferme) return ferme('poste-ferme')
   if (e.journee?.horsContrat) return ferme('hors-contrat')
   if (jourType?.mode === 'repos') return ferme('repos-fixe')
   // Absence fixe AVANT l'école : une école posée par la semaine type ne se

@@ -246,7 +246,6 @@ export function hotelDemo(lundi: string): {
     categorie,
     couleur: '#000000',
     horaires_autorises: codes.map(idH),
-    a_part: false,
     presence: false,
   }))
   const idP = (n: string) => (postes.find((p) => p.nom === n) as Poste).id
@@ -303,7 +302,11 @@ export function hotelDemo(lundi: string): {
         semaine_type: semaine,
         shifts_autorises: (opt.horaires ?? []).map(idH),
         date_entree: null,
-        date_sortie: null,
+        // Contrat à durée limitée : une fin (U2 du 2026-11-01), loin devant.
+        date_sortie:
+          contrat === 'cdd' || contrat === 'apprenti' || contrat === 'stagiaire'
+            ? '2027-08-31'
+            : null,
         actif: true,
         suite_de: null,
       })

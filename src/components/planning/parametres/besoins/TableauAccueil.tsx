@@ -9,6 +9,7 @@
  * Écritures et Annuler : `BesoinsPage` (une seule pile pour toute la page).
  */
 
+import { tientLaNuit } from '#/lib/planning/presence.ts'
 import { useState } from 'react'
 import { Moon, Sun, Sunset } from 'lucide-react'
 
@@ -47,10 +48,8 @@ export function TableauAccueil({
   affiche: (jour: number, periode: Periode) => number
   regler: (jour: number, periode: Periode, n: number) => void
 }) {
-  const jour = postes.filter((p) => p.presence).map((p) => p.nom)
-  const nuit = postes
-    .filter((p) => p.categorie === 'veille_nuit')
-    .map((p) => p.nom)
+  const jour = postes.filter((p) => p.presence && !p.ferme).map((p) => p.nom)
+  const nuit = postes.filter((p) => tientLaNuit(p)).map((p) => p.nom)
 
   return (
     <section
@@ -68,7 +67,7 @@ export function TableauAccueil({
             : "Aucun poste de l'accueil : dans Postes, activez Poste de l'accueil sur Réception et Club."}{' '}
           {nuit.length
             ? `La nuit : ${listeEt(nuit)}.`
-            : 'Aucun poste de nuit : dans Postes, donnez la catégorie Veille de nuit au poste des veilleurs.'}
+            : 'Aucun poste de nuit : dans Postes, réglez Accueil sur Nuit pour le poste des veilleurs.'}
         </p>
         <p className="text-xs text-muted-foreground">
           Une personne en milieu de journée compte le matin et le soir. Les

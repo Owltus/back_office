@@ -60,6 +60,8 @@ import {
   SelectValue,
 } from '#/components/ui/select.tsx'
 import { Switch } from '#/components/ui/switch.tsx'
+import { Segmente } from '#/components/planning/parametres/equipe/Segmente.tsx'
+import { tientLaNuit } from '#/lib/planning/presence.ts'
 import { dureeHoraire, heures } from '#/lib/planning/affichage.ts'
 import { JOUR_MAX_CATEGORIE } from '#/lib/planning/regles.ts'
 import { enregistrerPoste, supprimerPoste } from '#/lib/planning/service.ts'
@@ -71,9 +73,25 @@ const saisieDe = (p: Poste): SaisiePoste => ({
   categorie: p.categorie,
   couleur: p.couleur,
   horaires_autorises: [...p.horaires_autorises],
-  a_part: p.a_part,
   presence: p.presence,
+  accueil_nuit: tientLaNuit({ ...p, ferme: false }),
+  ferme: p.ferme ?? false,
 })
+
+/** Le choix unique « Accueil » d'un poste (U1 du 2026-11-01). */
+type ChoixAccueil = 'non' | 'jour' | 'nuit'
+const OPTIONS_ACCUEIL = [
+  { valeur: 'non', libelle: 'Non' },
+  { valeur: 'jour', libelle: 'Matin et soir' },
+  { valeur: 'nuit', libelle: 'Nuit' },
+] as const
+const choixAccueil = (p: SaisiePoste): ChoixAccueil =>
+  p.presence ? 'jour' : p.accueil_nuit ? 'nuit' : 'non'
+const TEXTE_ACCUEIL: Record<ChoixAccueil, string> = {
+  non: 'Poste à part : il a sa propre grille dans la page Besoins.',
+  jour: 'Compte le matin et le soir dans le tableau Accueil de la page Besoins, avec les autres postes de l’accueil.',
+  nuit: 'Tient la nuit : compte dans la ligne Nuit du tableau Accueil de la page Besoins.',
+}
 
 export function PostesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
   const droits = useDroitsPlanning()
@@ -113,8 +131,9 @@ export function PostesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
       categorie: 'autre',
       couleur: PALETTE[ref.data.postes.length % PALETTE.length],
       horaires_autorises: [],
-      a_part: false,
       presence: false,
+      accueil_nuit: false,
+      ferme: false,
     })
   }
 
@@ -161,8 +180,11 @@ export function PostesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
                   libelle={
                     <span className="flex min-w-0 items-center gap-2">
                       <span className="truncate font-medium">{p.nom}</span>
-                      {p.a_part && <Etiquette>rangé à part</Etiquette>}
-                      {p.presence && <Etiquette>accueil</Etiquette>}
+                      {p.ferme && <Etiquette>fermé</Etiquette>}
+                      {!p.ferme && p.presence && <Etiquette>accueil</Etiquette>}
+                      {!p.ferme && !p.presence && tientLaNuit(p) && (
+                        <Etiquette>accueil, nuit</Etiquette>
+                      )}
                     </span>
                   }
                   detail={resumePoste(p, ref.data)}
@@ -370,40 +392,36 @@ function CartePoste({
         />
       </div>
 
-      <label className="flex items-start gap-2 text-sm">
-        <Switch
-          checked={p.a_part}
+      <div className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium">Accueil</span>
+        <Segmente<ChoixAccueil>
+          label="Accueil"
+          valeur={choixAccueil(p)}
+          options={OPTIONS_ACCUEIL}
           disabled={!modifiable}
-          onCheckedChange={(a_part) => changer({ a_part })}
-          aria-label="Proposer en second dans la fiche d'une personne"
-          className="mt-0.5"
+          onChange={(v) =>
+            changer({ presence: v === 'jour', accueil_nuit: v === 'nuit' })
+          }
         />
-        <span className="flex flex-col gap-0.5">
-          <span className="font-medium">
-            Proposer en second dans la fiche d'une personne
-          </span>
-          <span className="text-xs text-muted-foreground">
-            Pour la direction, la supervision ou la technique : à l'ajout d'un
-            poste, il vient après les postes courants. Rien d'autre ne change.
-          </span>
+        <span className="text-xs text-muted-foreground">
+          {TEXTE_ACCUEIL[choixAccueil(p)]}
         </span>
-      </label>
+      </div>
 
       <label className="flex items-start gap-2 text-sm">
         <Switch
-          checked={p.presence}
+          checked={p.ferme ?? false}
           disabled={!modifiable}
-          onCheckedChange={(presence) => changer({ presence })}
-          aria-label="Poste de l'accueil"
+          onCheckedChange={(ferme) => changer({ ferme })}
+          aria-label="Poste fermé"
           className="mt-0.5"
         />
-        <span className="text-muted-foreground">
-          <span className="font-medium text-foreground">
-            Poste de l'accueil.
-          </span>{' '}
-          {p.presence
-            ? 'Ses effectifs se règlent dans le tableau Accueil de la page Besoins, le matin et le soir, avec les autres postes de l’accueil.'
-            : 'Il a sa propre grille dans la page Besoins.'}
+        <span className="flex flex-col gap-0.5">
+          <span className="font-medium">Poste fermé</span>
+          <span className="text-xs text-muted-foreground">
+            Plus proposé dans les fiches, les menus ni les besoins. Ses anciens
+            shifts restent dans l'historique.
+          </span>
         </span>
       </label>
 

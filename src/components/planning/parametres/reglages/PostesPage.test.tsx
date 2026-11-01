@@ -120,16 +120,14 @@ describe('Postes', () => {
     ).toBeTruthy()
   })
 
-  it('horaires possibles et poste à part envoyés à Enregistrer', async () => {
+  it('horaires possibles, accueil et fermeture envoyés à Enregistrer (U1, U3)', async () => {
     monter(<PostesPage />)
     const r = carte('Réception')
     fireEvent.click(r.getByRole('button', { name: '23:00–07:45' }))
-    fireEvent.click(
-      r.getByRole('switch', {
-        name: "Proposer en second dans la fiche d'une personne",
-      }),
-    )
-    fireEvent.click(r.getByRole('switch', { name: "Poste de l'accueil" }))
+    // Un seul choix : Nuit retire Matin et soir, et inversement.
+    fireEvent.click(r.getByRole('radio', { name: 'Nuit' }))
+    fireEvent.click(r.getByRole('radio', { name: 'Matin et soir' }))
+    fireEvent.click(r.getByRole('switch', { name: 'Poste fermé' }))
     expect(service.enregistrerPoste).not.toHaveBeenCalled()
     fireEvent.click(r.getByRole('button', { name: 'Enregistrer' }))
     await waitFor(() =>
@@ -139,8 +137,9 @@ describe('Postes', () => {
           categorie: 'reception',
           couleur: '#000000',
           horaires_autorises: [1, 2, 3, 4],
-          a_part: true,
           presence: true,
+          accueil_nuit: false,
+          ferme: true,
         },
         2,
       ),

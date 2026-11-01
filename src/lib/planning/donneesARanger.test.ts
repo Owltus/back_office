@@ -50,7 +50,6 @@ function poste(id: number, nom: string, autorises: number[] = []): Poste {
     categorie: 'reception',
     couleur: '#000',
     horaires_autorises: autorises,
-    a_part: false,
     presence: true,
   }
 }

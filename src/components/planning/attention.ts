@@ -19,7 +19,7 @@ import {
 import type { RaisonClaire } from '#/lib/planning/raisonsPlaces.ts'
 import { POSTE_ID_ACCUEIL } from '#/lib/planning/semaine.ts'
 import type { SemaineOut } from '#/lib/planning/semaine.ts'
-import { ORDRE_PERIODES } from '#/lib/planning/presence.ts'
+import { ORDRE_PERIODES, tientLaNuit } from '#/lib/planning/presence.ts'
 import { ajouterJours } from '#/lib/planning/temps.ts'
 import { JOURS } from '#/lib/planning/types.ts'
 import type {
@@ -194,7 +194,7 @@ export function pointsAttention(
         t.poste_id === POSTE_ID_ACCUEIL
           ? postes
               .filter((p) =>
-                moment === 'nuit' ? p.categorie === 'veille_nuit' : p.presence,
+                moment === 'nuit' ? tientLaNuit(p) : p.presence && !p.ferme,
               )
               .map((p) => p.id)
           : [t.poste_id]

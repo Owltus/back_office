@@ -52,6 +52,7 @@ import {
   Segmente,
 } from '#/components/planning/parametres/reglages/controles.tsx'
 import {
+  codePropose,
   changerHeures,
   erreursHoraire,
   erreursMotif,
@@ -243,7 +244,7 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
   const creerMotif = () => {
     if (!data) return
     setNouveauMotif({
-      code: 'AB',
+      code: '',
       nom: 'Nouveau motif',
       couleur: PALETTE[(data.motifs.length + 5) % PALETTE.length],
       decompte: true,
@@ -1009,6 +1010,8 @@ function CarteMotif({
         <Input
           aria-label="Code court"
           value={m.code}
+          placeholder={codePropose(m.nom)}
+          title="Laissez vide : le code est proposé d'après le nom"
           maxLength={4}
           disabled={desactive}
           onChange={(e) => changer({ code: e.target.value.toUpperCase() })}

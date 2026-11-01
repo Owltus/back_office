@@ -13,26 +13,20 @@
  * coche ne servirait plus à rien ; ils se lisent dans la pastille.
  */
 
-import { useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import {
   ArrowLeft,
   Briefcase,
   Check,
   Clock3,
-  FileUp,
   LayoutGrid,
   Settings,
   Users,
 } from 'lucide-react'
 
 import { ControleReglages } from '#/components/planning/parametres/ControleReglages.tsx'
-import { ImportPrototypeDialog } from '#/components/planning/ImportPrototypeDialog.tsx'
 import { usePretAGenerer } from '#/components/planning/PretAGenerer.tsx'
-import {
-  useDroitsPlanning,
-  useReferentiel,
-} from '#/components/planning/hooks/usePlanning.ts'
+import { useReferentiel } from '#/components/planning/hooks/usePlanning.ts'
 
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
@@ -40,7 +34,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '#/components/ui/dropdown-menu.tsx'
 
@@ -73,13 +66,9 @@ export type CheminParametre = (typeof PARAMETRES)[number]['to']
  * pastille « À vérifier » est alors montrée avant lui). */
 export function MenuParametres({ actif }: { actif?: CheminParametre }) {
   const navigate = useNavigate()
-  const { gerer } = useDroitsPlanning()
   const ref = useReferentiel()
-  const planningVide =
-    !!ref.data && !ref.data.salaries.length && !ref.data.postes.length
   const { etapes } = usePretAGenerer(ref.data)
   const fait = new Set(etapes.filter((e) => e.fait).map((e) => e.ecran))
-  const [importer, setImporter] = useState(false)
   return (
     <>
       {actif && <ControleReglages />}
@@ -121,25 +110,8 @@ export function MenuParametres({ actif }: { actif?: CheminParametre }) {
               )}
             </DropdownMenuItem>
           ))}
-          {/* L'import ne marche que sur un planning vide (audit RH du
-              2026-11-01) : ailleurs, l'entrée ne servirait qu'à un refus. */}
-          {gerer && planningVide && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => setImporter(true)}>
-                <FileUp />
-                Importer le prototype
-              </DropdownMenuItem>
-            </>
-          )}
         </DropdownMenuContent>
       </DropdownMenu>
-      {gerer && (
-        <ImportPrototypeDialog
-          ouvert={importer}
-          onFermer={() => setImporter(false)}
-        />
-      )}
     </>
   )
 }

@@ -48,8 +48,12 @@ export interface Poste {
   categorie: Categorie
   couleur: string
   horaires_autorises: number[] // vide = tous
-  a_part: boolean
-  presence: boolean // compte dans les consignes de présence matin et soir
+  presence: boolean // poste de l'accueil le matin et le soir
+  /** Poste de l'accueil la nuit (U1 du 2026-11-01). Absent (données de
+   * test anciennes) : déduit de la catégorie Veille de nuit. */
+  accueil_nuit?: boolean
+  /** Poste fermé (U3) : plus proposé nulle part, historique gardé. */
+  ferme?: boolean
 }
 
 export interface Groupe {

@@ -266,13 +266,12 @@ export function hotelReel(): { referentiel: Referentiel; absences: Absence[] } {
     nature,
   }))
   const idM = (c: string) => (motifs.find((m) => m.code === c) as Motif).id
-  const postes: Poste[] = POSTES.map(([nom, categorie, codes, aPart], i) => ({
+  const postes: Poste[] = POSTES.map(([nom, categorie, codes], i) => ({
     id: i + 1,
     nom,
     categorie,
     couleur: '#000000',
     horaires_autorises: codes.map(idH),
-    a_part: aPart,
     presence: false,
   }))
   const idP = (n: string) => (postes.find((p) => p.nom === n) as Poste).id

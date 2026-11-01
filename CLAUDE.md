@@ -1977,9 +1977,9 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   pgTAP `05_planning` (35) ; les aides `private.planning_*` sont listées dans
   `00_socle` et `verif_advisor` (n° 9).
 - **Données** : les VRAIS NOMS ne vont jamais dans le dépôt (seed = hôtel fictif de
-  `demo.py` ; tests = pseudonymes). Import : `node scripts/planning-exporter-prototype.mjs`
-  (lecture seule de `planning.db`, JSON sur le Bureau, ignoré par git), puis
-  engrenage → « Importer le prototype » (gestion, planning vide, une transaction).
+  `demo.py` ; tests = pseudonymes). L'import du prototype (`planning_importer`,
+  scripts d'export, « Importer le prototype ») est RETIRÉ le 2026-11-01 : la
+  prod est la référence depuis le 27/10.
 - **Copie de la prod en dev** : le planning est copié TEL QUEL, vrais noms compris
   (décision utilisateur du 2026-10-27 : « sinon c'est confusant »). `anonymiser.sql`
   ne touche jamais une table `planning_*` (figé par `copier-prod-plan.test.ts`).
@@ -2204,6 +2204,22 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   plus tard. Sa LONGUEUR reste une règle des remplaçants : moins de 7 h de
   travail (`estCourt`, cycles.ts), il ne remplace qu'un court et n'est
   remplacé que par un court (comme quand « court » était son propre cycle).
+- **Audit RH du 2026-11-01** (`plan/planning-audit-rh-2026-11-01/00-AUDIT.md`,
+  décisions utilisateur U1-U10) : l'accueil est surveillé d'un veilleur à
+  l'autre quand la nuit est demandée (`plageAccueil` + `nuitDeLaVeille`, mêmes
+  règles moteur / vérificateur / écran) ; « À vérifier » signale un moment
+  vide et les heures de l'accueil. Un poste a UN choix « Accueil : non / matin
+  et soir / nuit » (`presence`, `accueil_nuit`, jamais les deux ; la nuit ne
+  se déduit plus de la catégorie HCR, `tientLaNuit`) et peut être FERMÉ
+  (`ferme` : plus proposé, aucun horaire permis, historique gardé). `a_part`
+  retiré (fiche : l'accueil d'abord, puis « Autres postes »). Fiche : fin de
+  contrat obligatoire pour CDD, apprenti, stagiaire ; interrupteur Actif pour
+  les extras seuls (jamais de fin) ; 0 h refusé hors extra et forfait ; mineur
+  35 h. Semaine type : Libre, Travaille, Repos (mode Absence retiré de
+  l'écran). Code d'un motif proposé d'après le nom. Un manque de l'accueil
+  n'est dit qu'une fois (Places à pourvoir). Semaine fermée = passée ou
+  verrouillée. Vocabulaire : Accueil (jamais « cycle »), Places à pourvoir,
+  Vider la case, Tout recalculer, Veilleur, journée étoile, Compléter.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), jours fériés (décision utilisateur relayée par le binôme), scénario
   « exclus » à l'écran (retiré du prototype aussi).

@@ -64,7 +64,6 @@ function poste(id: number, nom: string, kw: Partial<Poste> = {}): Poste {
     categorie: 'reception',
     couleur: '#000000',
     horaires_autorises: [],
-    a_part: false,
     presence: false,
     ...kw,
   }

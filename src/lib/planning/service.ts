@@ -32,7 +32,7 @@ const COL_HORAIRE =
   'id, nom, debut, fin, couleur, pause, raccourci, raccourci_debut, periode'
 const COL_MOTIF = 'id, code, nom, couleur, decompte, nature'
 const COL_POSTE =
-  'id, nom, categorie, couleur, horaires_autorises, a_part, presence'
+  'id, nom, categorie, couleur, horaires_autorises, presence, accueil_nuit, ferme'
 const COL_CONSIGNE = 'id, jour, periode, minimum, maximum'
 const COL_GROUPE = 'id, nom, ordre, postes_autorises'
 const COL_SALARIE =
@@ -530,16 +530,4 @@ export async function supprimerBesoin(id: number): Promise<void> {
   auMoinsUne(
     await supabase.from('planning_besoins').delete().eq('id', id).select('id'),
   )
-}
-
-// ------------------------------------------------------------------ import
-
-/** Importe un export du prototype (`scripts/planning-exporter-prototype.mjs`)
- * dans un planning vide, en une transaction (gestion). Rend les compteurs. */
-export async function importerPrototype(
-  donnees: unknown,
-): Promise<Record<string, number>> {
-  return verifier(
-    await supabase.rpc('planning_importer', { p: donnees }),
-  ) as Record<string, number>
 }

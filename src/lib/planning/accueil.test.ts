@@ -37,7 +37,8 @@ import type {
   Probleme,
   SalarieSolveur,
 } from '#/lib/planning/modele.ts'
-import { momentsAccueil } from '#/lib/planning/presence.ts'
+import { accueilActif, momentsAccueil } from '#/lib/planning/presence.ts'
+import { codesPermis } from '#/lib/planning/eligibilite.ts'
 import {
   analyser,
   POSTE_ID_ACCUEIL,
@@ -164,6 +165,45 @@ describe('moments du tableau (presence.ts)', () => {
     expect(momentsAccueil(veille, { periode: 'nuit' }, '23:00', false)).toEqual(
       [],
     )
+  })
+})
+
+describe('un seul choix Accueil, poste fermé (U1, U3 du 2026-11-01)', () => {
+  const base = { presence: false, categorie: 'autre' as const }
+  it('la nuit vient du réglage du poste, pas de sa catégorie', () => {
+    const nuit = { ...base, accueil_nuit: true }
+    expect(momentsAccueil(nuit, { periode: 'nuit' }, '23:00')).toEqual(['nuit'])
+    // Refusé : catégorie Veille de nuit mais réglé « Non ».
+    const veilleNon = {
+      ...base,
+      categorie: 'veille_nuit' as const,
+      accueil_nuit: false,
+    }
+    expect(momentsAccueil(veilleNon, { periode: 'nuit' }, '23:00')).toEqual([])
+  })
+  it('un poste fermé ne compte nulle part et n’a aucun horaire permis', () => {
+    const ferme = {
+      presence: true,
+      categorie: 'reception' as const,
+      ferme: true,
+    }
+    expect(momentsAccueil(ferme, { periode: 'matin' }, '07:00')).toEqual([])
+    expect(accueilActif([ferme])).toBe(false)
+    expect(accueilActif([{ ...ferme, ferme: false }])).toBe(true)
+    const r = codesPermis({
+      personne: { shifts_autorises: [], semaine_type: [], mineur: false },
+      poste: { horaires_autorises: [], ferme: true },
+      jour: 0,
+      horaires: [{ id: 1, debut: '07:00', fin: '15:00' }],
+    })
+    expect([r.codes, r.texte]).toEqual([[], 'Poste fermé'])
+    const ouvert = codesPermis({
+      personne: { shifts_autorises: [], semaine_type: [], mineur: false },
+      poste: { horaires_autorises: [], ferme: false },
+      jour: 0,
+      horaires: [{ id: 1, debut: '07:00', fin: '15:00' }],
+    })
+    expect(ouvert.codes).toHaveLength(1)
   })
 })
 

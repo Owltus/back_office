@@ -15,9 +15,6 @@ import type { Referentiel } from '#/lib/planning/types.ts'
 const etat = vi.hoisted((): { referentiel: unknown } => ({ referentiel: null }))
 
 vi.mock('#/lib/supabase.ts', () => ({ supabase: {} }))
-vi.mock('#/components/planning/ImportPrototypeDialog.tsx', () => ({
-  ImportPrototypeDialog: () => null,
-}))
 vi.mock(
   '#/components/planning/hooks/usePlanning.ts',
   async (importOriginal) => ({

@@ -11,6 +11,7 @@ import {
   changerCategorie,
   changerContrat,
   evolutionParDefaut,
+  FIN_OBLIGATOIRE,
   heuresSansObjet,
 } from '#/components/planning/parametres/equipe/brouillon.ts'
 import type {
@@ -183,24 +184,30 @@ export function SectionIdentite({
             />
           )}
         </Champ>
-        <Champ
-          label="Fin de contrat"
-          aide="Fin de CDD, démission, fin de contrat… Après cette date, plus jamais planifié(e) ; reste dans l'historique"
-        >
-          {(id) => (
-            <Input
-              id={id}
-              type="date"
-              disabled={disabled}
-              min={b.date_entree ?? undefined}
-              value={b.date_sortie ?? ''}
-              onChange={(e) => {
-                const v = e.target.value || null
-                maj((x) => ({ ...x, date_sortie: v }))
-              }}
-            />
-          )}
-        </Champ>
+        {b.type_contrat !== 'extra' && (
+          <Champ
+            label={
+              FIN_OBLIGATOIRE.has(b.type_contrat)
+                ? 'Fin de contrat (obligatoire)'
+                : 'Fin de contrat'
+            }
+            aide="Fin de CDD, démission, fin de contrat… Après cette date, plus jamais planifié(e) ; reste dans l'historique"
+          >
+            {(id) => (
+              <Input
+                id={id}
+                type="date"
+                disabled={disabled}
+                min={b.date_entree ?? undefined}
+                value={b.date_sortie ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value || null
+                  maj((x) => ({ ...x, date_sortie: v }))
+                }}
+              />
+            )}
+          </Champ>
+        )}
       </div>
       <div className="flex flex-col gap-2">
         <Interrupteur
@@ -217,15 +224,19 @@ export function SectionIdentite({
         >
           Mineur (16-18 ans)
         </Interrupteur>
-        <Interrupteur
-          coche={b.actif}
-          disabled={disabled}
-          onChange={(v) => maj((x) => ({ ...x, actif: v }))}
-        >
-          {b.actif
-            ? 'Actif'
-            : 'Désactivé : plus proposé ni affiché au planning (historique gardé)'}
-        </Interrupteur>
+        {/* Actif / Inactif : pour un extra seulement (U2) ; une fiche
+            déjà désactivée le garde pour pouvoir la rouvrir. */}
+        {(b.type_contrat === 'extra' || !b.actif) && (
+          <Interrupteur
+            coche={b.actif}
+            disabled={disabled}
+            onChange={(v) => maj((x) => ({ ...x, actif: v }))}
+          >
+            {b.actif
+              ? 'Actif : peut être appelé'
+              : 'Inactif : plus proposé au planning (historique gardé)'}
+          </Interrupteur>
+        )}
       </div>
       {b.id !== null && !disabled && !evolution && (
         <div>

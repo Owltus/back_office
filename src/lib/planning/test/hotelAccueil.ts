@@ -174,13 +174,12 @@ export function hotelAccueil(accueil = true): Referentiel {
     return h.id
   }
   const postes: Poste[] = POSTES.map(
-    ([nom, categorie, codes, aPart, presence], i) => ({
+    ([nom, categorie, codes, , presence], i) => ({
       id: i + 1,
       nom,
       categorie,
       couleur: '#000000',
       horaires_autorises: codes.map(idH),
-      a_part: aPart,
       presence: accueil && presence,
     }),
   )

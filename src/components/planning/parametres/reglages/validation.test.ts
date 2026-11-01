@@ -6,6 +6,7 @@ import {
 } from '#/components/planning/parametres/reglages/besoins.ts'
 import {
   changerHeures,
+  codePropose,
   erreursHoraire,
   erreursMotif,
   erreursPoste,
@@ -13,6 +14,7 @@ import {
   memes,
   momentEstPropose,
   nettoyerHoraire,
+  nettoyerMotif,
   normaliserHeure,
 } from '#/components/planning/parametres/reglages/validation.ts'
 import type { SaisieHoraire } from '#/components/planning/parametres/reglages/validation.ts'
@@ -145,7 +147,6 @@ describe('contrôles de saisie (miroir des contraintes de la base)', () => {
       categorie: 'autre' as const,
       couleur: '#22c55e',
       horaires_autorises: [],
-      a_part: false,
       presence: false,
     }
     expect(erreursPoste(poste)).toEqual([])
@@ -209,5 +210,31 @@ describe('lignes du tableau des besoins', () => {
         (l) => l.cle,
       ),
     ).toEqual(['t1', 'h12:00-14:00', 't3'])
+  })
+})
+
+describe("code d'un motif proposé d'après le nom (U10 du 2026-11-01)", () => {
+  it("initiales, ou deux lettres d'un mot seul", () => {
+    expect(codePropose('Congé payé')).toBe('CP')
+    expect(codePropose('Maladie')).toBe('MA')
+    expect(codePropose('Absence autorisée rémunérée')).toBe('AAR')
+    expect(codePropose('Repos de récupération')).toBe('RR')
+    expect(codePropose('  ')).toBe('AB')
+  })
+  it("un code vide est rempli à l'enregistrement, un code tapé est gardé", () => {
+    const m = {
+      code: '',
+      nom: 'Formation',
+      couleur: '#000000',
+      decompte: true,
+      nature: 'absence' as const,
+    }
+    expect(erreursMotif(m)).toEqual([])
+    expect(nettoyerMotif(m).code).toBe('FO')
+    expect(nettoyerMotif({ ...m, code: 'fx' }).code).toBe('FX')
+    // Refusé : un code tapé trop long reste une erreur.
+    expect(erreursMotif({ ...m, code: 'ABCDE' })).toContain(
+      'Le code fait de 1 à 4 caractères.',
+    )
   })
 })

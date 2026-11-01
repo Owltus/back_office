@@ -141,7 +141,8 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
   // Même règle que le moteur (`estPosteAccueil`) : sans aucun poste coché
   // « présence », pas de tableau, tous les postes gardent leur grille.
   const actif = !!data && accueilActif(data.postes)
-  const aPart = data?.postes.filter((p) => !estPosteAccueil(p, actif)) ?? []
+  const aPart =
+    data?.postes.filter((p) => !p.ferme && !estPosteAccueil(p, actif)) ?? []
   const poste = aPart.find((p) => p.id === posteChoisi) ?? aPart.at(0)
 
   const [historique, setHistorique] = useState<Historique>(HISTORIQUE_VIDE)

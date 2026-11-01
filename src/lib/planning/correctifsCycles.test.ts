@@ -90,7 +90,6 @@ const poste = (
   categorie: id === VEILLE ? 'veille_nuit' : 'reception',
   couleur: '#111111',
   horaires_autorises,
-  a_part: false,
   presence,
 })
 const POSTES: Poste[] = [

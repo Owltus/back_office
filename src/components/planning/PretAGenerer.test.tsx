@@ -98,7 +98,6 @@ function apres(n: number): Referentiel {
       categorie: 'reception',
       couleur: '#000000',
       horaires_autorises: [],
-      a_part: false,
       presence: false,
     })
   if (n >= 3) r.salaries.push(personne(10, 1))

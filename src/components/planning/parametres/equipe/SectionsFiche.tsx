@@ -4,6 +4,7 @@
  * Identité et contrat : `SectionIdentite.tsx`.
  */
 
+import { tientLaNuit } from '#/lib/planning/presence.ts'
 import { useMemo } from 'react'
 import { Plus, Star, Trash2, X } from 'lucide-react'
 
@@ -69,7 +70,6 @@ const MODES: ReadonlyArray<{ valeur: ModeJour; libelle: string }> = [
   { valeur: 'auto', libelle: 'Libre' },
   { valeur: 'travail', libelle: 'Travaille' },
   { valeur: 'repos', libelle: 'Repos' },
-  { valeur: 'absence', libelle: 'Absence' },
 ]
 
 const optionHoraire = (h: Horaire) => ({
@@ -96,11 +96,15 @@ export function SectionCompetences({
   const groupe = groupes.find((g) => g.id === b.groupe_id)
   const niveaux = new Map(b.competences.map((c) => [c.poste_id, c.niveau]))
   const tenus = postes.filter((p) => niveaux.has(p.id))
+  // Un poste fermé n'est plus proposé (U3) ; l'accueil d'abord, les postes
+  // à part ensuite (U10 : déduit, plus de réglage « rangé à part »).
   const ajoutables = postesDuGroupe(postes, groupe).filter(
-    (p) => !niveaux.has(p.id),
+    (p) => !niveaux.has(p.id) && !p.ferme,
   )
-  const courants = ajoutables.filter((p) => !p.a_part)
-  const aPart = ajoutables.filter((p) => p.a_part)
+  const deLAccueil = (p: (typeof postes)[number]) =>
+    p.presence || tientLaNuit(p)
+  const courants = ajoutables.filter(deLAccueil)
+  const aPart = ajoutables.filter((p) => !deLAccueil(p))
   const regler = (posteId: number, niveau: Niveau | 'aucun') =>
     maj((x) => ({
       ...x,
@@ -127,8 +131,8 @@ export function SectionCompetences({
             <span className="flex min-w-0 items-center gap-2 text-sm">
               {pastille(p.couleur)}
               <span className="truncate">{p.nom}</span>
-              {p.a_part && (
-                <small className="text-muted-foreground">· rangé à part</small>
+              {p.ferme && (
+                <small className="text-muted-foreground">· poste fermé</small>
               )}
             </span>
             <span className="flex items-center gap-1">
@@ -168,15 +172,14 @@ export function SectionCompetences({
           }
           groupes={[
             {
-              titre: aPart.length ? 'Postes courants' : undefined,
+              titre: aPart.length && courants.length ? 'Accueil' : undefined,
               options: courants.map((p) => ({
                 valeur: String(p.id),
                 libelle: p.nom,
               })),
             },
             {
-              titre:
-                'Postes rangés à part (direction, supervision, technique…)',
+              titre: 'Autres postes',
               options: aPart.map((p) => ({
                 valeur: String(p.id),
                 libelle: p.nom,
@@ -330,7 +333,7 @@ export function SectionSemaineType({
   return (
     <Section
       titre="Semaine type"
-      aide={`Libre : le planning automatique décide si elle travaille ; avec un horaire choisi, ce sera celui-là les jours où elle travaille (de nuit le week-end, par exemple). Travaille : son jour habituel, le planning la fait travailler ce jour-là dès qu'il le peut. Repos et Absence : jamais planifiée ce jour-là. École : jour hors de l'hôtel, compté comme une journée de travail complète.${
+      aide={`Libre : le planning automatique décide si elle travaille ; avec un horaire choisi, ce sera celui-là les jours où elle travaille (de nuit le week-end, par exemple). Travaille : son jour habituel, le planning la fait travailler ce jour-là dès qu'il le peut. Repos : jamais planifiée ce jour-là. Une absence se pose à sa date, plus bas. École : jour hors de l'hôtel, compté comme une journée de travail complète.${
         etoile
           ? ' ★ : journée étoile (la journée courte) fixée ce jour-là ; sans étoile, le planning automatique la place selon les besoins.'
           : ''
@@ -393,31 +396,6 @@ export function SectionSemaineType({
                     {libelleHoraire(fixeImpossible)} n'est plus possible pour
                     elle ce jour-là. Choisissez un autre horaire.
                   </span>
-                )}
-                {e.mode === 'absence' && (
-                  <Liste
-                    label={`Motif d'absence le ${jour}`}
-                    libelleVisible={false}
-                    className="w-48"
-                    disabled={disabled}
-                    valeur={e.type_absence_id ? String(e.type_absence_id) : ''}
-                    placeholder="Motif"
-                    onChange={(v) =>
-                      maj((x) => ({
-                        ...x,
-                        semaine_type: reglerJour(
-                          x.semaine_type,
-                          j,
-                          { type_absence_id: Number(v) },
-                          motifs,
-                        ),
-                      }))
-                    }
-                    options={motifs.map((m) => ({
-                      valeur: String(m.id),
-                      libelle: m.nom,
-                    }))}
-                  />
                 )}
                 <Segmente<ModeJour>
                   label={`Le ${jour}`}

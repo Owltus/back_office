@@ -66,7 +66,6 @@ function poste(id: number, horaires_autorises: number[] = []): Poste {
     categorie: 'autre',
     couleur: '#444444',
     horaires_autorises,
-    a_part: false,
     presence: false,
   }
 }
