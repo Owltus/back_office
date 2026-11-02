@@ -238,7 +238,7 @@ export function VueSemaine({
     (t: string) => notifier(t, 'danger'),
     [notifier],
   )
-  usePoserFixes(
+  const oublierFixes = usePoserFixes(
     lundi,
     donnees,
     droits.ecrire && !!semaine && !verrou,
@@ -866,10 +866,10 @@ export function VueSemaine({
                 ? 'Validation impossible'
                 : 'Remise en proposition impossible',
             )(),
-          onEffacerPropositions: action(
-            () => service.vider(lundi, true),
-            'Effacement impossible',
-          ),
+          onEffacerPropositions: action(() => {
+            oublierFixes()
+            return service.vider(lundi, true)
+          }, 'Effacement impossible'),
           onVider: () => setConfirmation('vider'),
         }}
       />
@@ -1077,10 +1077,10 @@ export function VueSemaine({
         }
         confirmLabel="Vider la semaine"
         destructive
-        onConfirm={action(
-          () => service.vider(lundi, false),
-          'Vidage impossible',
-        )}
+        onConfirm={action(() => {
+          oublierFixes()
+          return service.vider(lundi, false)
+        }, 'Vidage impossible')}
       />
       <ConfirmDialog
         open={confirmation === 'fullauto'}

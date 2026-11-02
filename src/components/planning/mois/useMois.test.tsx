@@ -107,3 +107,31 @@ describe('usePoserFixesMois', () => {
     expect(generer).toHaveBeenCalledTimes(4)
   })
 })
+
+describe('usePoserFixesMois : après un effacement (2026-11-02)', () => {
+  // Les horaires fixes sont des propositions : « Effacer les propositions du
+  // mois » les retire. Ils doivent revenir à la relecture, sans recharger.
+  it('accepté : oublier les semaines effacées fait reposer leurs fixes', async () => {
+    const { result, rerender } = renderHook(
+      ({ donnees }: { donnees: Map<string, DonneesSemaine> }) =>
+        usePoserFixesMois({
+          donnees,
+          verrous: VERROUS,
+          ecrire: true,
+          aujourdhui: AUJOURDHUI,
+          pendant: (f) => f(),
+          surMessage: vi.fn(),
+        }),
+      { wrapper: enveloppe, initialProps: { donnees: carte() } },
+    )
+    await waitFor(() => expect(generer).toHaveBeenCalledTimes(2))
+    // Relecture après l'effacement, sans oublier : rien ne revient (le défaut).
+    rerender({ donnees: carte() })
+    await new Promise((r) => setTimeout(r, 20))
+    expect(generer).toHaveBeenCalledTimes(2)
+    // Avec oublier : les deux semaines ouvertes sont reposées.
+    result.current(['2026-11-02', '2026-11-09'])
+    rerender({ donnees: carte() })
+    await waitFor(() => expect(generer).toHaveBeenCalledTimes(4))
+  })
+})

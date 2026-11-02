@@ -335,6 +335,12 @@ export function usePoserFixes(
     }
     void (pendant ? pendant(travail) : travail())
   }, [lundi, donnees, ecrire, aujourdhui, generer, surMessage, pendant])
+  /** Après « Effacer les propositions » ou « Vider la semaine » : les
+   * horaires fixes reviennent dès la relecture, comme au rechargement
+   * (2026-11-02). */
+  return useCallback(() => {
+    tentees.current.delete(lundi)
+  }, [lundi])
 }
 
 /**

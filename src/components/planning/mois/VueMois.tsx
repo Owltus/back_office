@@ -205,7 +205,7 @@ export function VueMois({
     (t: string) => notifier(t, 'danger'),
     [notifier],
   )
-  usePoserFixesMois({
+  const oublierFixes = usePoserFixesMois({
     donnees: m.donnees,
     verrous,
     ecrire: droits.ecrire,
@@ -305,6 +305,9 @@ export function VueMois({
       return true
     } finally {
       setProgression(null)
+      // Les horaires fixes effacés avec les propositions reviennent dès la
+      // relecture (sans effet quand rien ne manque).
+      oublierFixes(visees)
       await qc.invalidateQueries({ queryKey: planningKeys.all })
     }
   }

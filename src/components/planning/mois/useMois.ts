@@ -5,7 +5,7 @@
  * par le vérificateur en direct (`analyser`), mémoïsée.
  */
 
-import { useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 
 import {
@@ -127,4 +127,12 @@ export function usePoserFixesMois(args: {
       }
     })
   }, [donnees, verrous, ecrire, aujourdhui, generer, pendant, surMessage])
+  /** Après un effacement (« Effacer les propositions du mois ») : les
+   * horaires fixes, posés en proposition, sont partis avec le reste. Oublier
+   * la tentative de ces semaines les fait reposer dès la relecture, comme au
+   * rechargement de la page (défaut trouvé par l'utilisateur le 2026-11-02 :
+   * il fallait rafraîchir pour que tout se remette d'équerre). */
+  return useCallback((lundis: readonly string[]) => {
+    for (const l of lundis) tentees.current.delete(l)
+  }, [])
 }
