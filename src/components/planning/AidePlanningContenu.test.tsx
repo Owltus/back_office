@@ -9,7 +9,7 @@ import { REPOS_QUOTIDIEN, SEMAINE_MAX } from '#/lib/planning/regles.ts'
 import { heuresLisibles } from '#/lib/planning/temps.ts'
 
 /*
- * Page Comment ça marche : toutes les parties du sommaire sont rendues, les
+ * Aide du planning (bouton « ? », 2026-11-02) : toutes les parties du sommaire sont rendues, les
  * cases montrent les vraies cartes de la grille, les chiffres viennent de
  * `regles.ts`, et le texte respecte les règles d'écriture de l'app (jamais
  * le mot IA, ni guillemets français, ni tiret cadratin).
@@ -37,20 +37,26 @@ vi.mock(
   }),
 )
 
-const { FonctionnementPage, SECTIONS_FONCTIONNEMENT } =
-  await import('#/components/planning/parametres/FonctionnementPage.tsx')
+const { AidePlanningContenu, SECTIONS_FONCTIONNEMENT } =
+  await import('#/components/planning/AidePlanningContenu.tsx')
 
 afterEach(cleanup)
 
 function rendre() {
   return render(
     <TooltipProvider>
-      <FonctionnementPage />
+      <AidePlanningContenu gestes={['Clic : modifier le jour']} />
     </TooltipProvider>,
   )
 }
 
-describe('FonctionnementPage', () => {
+describe('AidePlanningContenu (aide du bouton ?)', () => {
+  it('commence par les gestes de la vue ouverte', () => {
+    rendre()
+    const g = screen.getByRole('region', { name: 'Les gestes' })
+    expect(g.textContent).toContain('Clic : modifier le jour')
+  })
+
   it('rend chaque partie du sommaire, avec son lien', () => {
     rendre()
     const sommaire = screen.getByRole('navigation', { name: 'Sommaire' })

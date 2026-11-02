@@ -67,7 +67,6 @@ describe('MenuParametres', () => {
       '2Postes, réglé',
       '3Équipe, réglé',
       '4Besoins',
-      'Comment ça marche',
     ])
   })
 
@@ -84,7 +83,6 @@ describe('MenuParametres', () => {
       '2Postes',
       '3Équipe',
       '4Besoins',
-      'Comment ça marche',
     ])
   })
 })

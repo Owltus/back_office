@@ -2302,8 +2302,11 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   (provisoire), ajoutés au calcul en absence JF sans rien écrire en base
   (`avecFeriesStagiaires`). MINEURS : évités un jour férié
   (`POIDS_MINEUR_FERIE`), alerte MINEUR-FERIE. En-tête « Férié » dans les
-  vues. Page `/planning/fonctionnement` (« Comment ça marche », menu des
-  paramètres, hors étapes) et PRD des bonnes pratiques
+  vues. AIDE du planning = bouton « ? » des vues mois et semaine
+  (`AideGestes`, fenêtre comme Rapprochement / Parking : les gestes de la
+  vue, puis tout le fonctionnement, `AidePlanningContenu` ; la page
+  `/planning/fonctionnement` du menu des paramètres est RETIRÉE le même jour,
+  demande utilisateur) et PRD des bonnes pratiques
   `plan/planning-bonnes-pratiques/PRD.md` (16 règles morales et
   professionnelles, statut en place / à faire, questions ouvertes Q1-Q14) :
   À TENIR À JOUR à chaque règle ajoutée.
