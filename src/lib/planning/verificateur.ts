@@ -908,6 +908,77 @@ export function ouverturesManquees(
   return r
 }
 
+/** Une transmission d'une équipe de l'accueil à la suivante : `ok` quand
+ * quelqu'un de l'équipe suivante est là avant que la précédente parte,
+ * `manque` sinon, null quand une des deux équipes n'a personne ce jour-là. */
+export type EtatTransmission = 'ok' | 'manque' | null
+
+export interface Transmissions {
+  jour: number
+  /** Le veilleur de la nuit d'avant et le matin. */
+  nuitMatin: EtatTransmission
+  /** Le matin et le soir : la relève réglée (page Besoins). */
+  matinSoir: EtatTransmission
+  /** Le soir et le veilleur. */
+  soirNuit: EtatTransmission
+}
+
+/**
+ * Les transmissions de l'accueil, jour par jour (demande utilisateur du
+ * 2026-11-02 : « un lien entre les points s'il y a quelqu'un pour faire les
+ * transmissions »). Sur les vraies heures des shifts posés de l'accueil, sans
+ * les soutiens. Matin et soir : la relève de `relevesManquantes` quand elle
+ * est réglée (le jour sans relève = `manque`), sinon le simple contact. Nuit :
+ * le veilleur arrive avant que le dernier du soir parte, et le premier du
+ * matin arrive avant que le veilleur parte. Le lundi, la nuit d'avant n'est
+ * pas lue : null.
+ */
+export function transmissions(
+  p: Probleme,
+  affectations: AffectationSolveur[],
+  sansReleve: readonly number[],
+): Transmissions[] {
+  const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
+  const salaries = new Map(p.salaries.map((s) => [s.id, s]))
+  // Les postes de l'accueil se lisent sur ses candidats (comme
+  // `relevesManquantes`) : un shift posé n'en porte pas la marque.
+  const postesAccueil = new Set(
+    p.creneaux.filter((c) => c.accueil).map((c) => c.poste),
+  )
+  const faits = affectationsCompletes(p, affectations).flatMap((a) => {
+    const c = creneaux.get(a.creneauId)
+    const s = salaries.get(a.salarieId)
+    if (!c || !s || !postesAccueil.has(c.poste)) return []
+    if (role(s, c.poste) === 'soutien') return []
+    return [c]
+  })
+  const de = (jour: number, moment: 'matin' | 'soir' | 'nuit') =>
+    faits.filter((c) => jourDe(c) === jour && c.presence.includes(moment))
+  const contact = (avant: Creneau[], apres: Creneau[]): EtatTransmission =>
+    !avant.length || !apres.length
+      ? null
+      : Math.max(...avant.map((c) => c.fin)) >=
+          Math.min(...apres.map((c) => c.debut))
+        ? 'ok'
+        : 'manque'
+  const r: Transmissions[] = []
+  for (let jour = 0; jour < p.nbJours; jour++) {
+    const matins = de(jour, 'matin').filter((c) => !c.presence.includes('nuit'))
+    const soirs = de(jour, 'soir').filter((c) => !c.presence.includes('nuit'))
+    const nuits = de(jour, 'nuit')
+    const veille = jour > 0 ? de(jour - 1, 'nuit') : []
+    let matinSoir = contact(matins, soirs)
+    if (matinSoir && sansReleve.includes(jour)) matinSoir = 'manque'
+    r.push({
+      jour,
+      nuitMatin: jour > 0 ? contact(veille, matins) : null,
+      matinSoir,
+      soirNuit: contact(soirs, nuits),
+    })
+  }
+  return r
+}
+
 /** Jours sans relève : le matin et le soir demandés, des horaires du matin et
  * du soir de l'accueil du jour qui PEUVENT se chevaucher `p.releveMinutes`,
  * et pourtant jamais une personne autonome d'un horaire du matin et une d'un

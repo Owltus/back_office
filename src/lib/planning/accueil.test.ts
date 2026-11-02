@@ -55,6 +55,7 @@ import {
   ouverturesManquees,
   relevesManquantes,
   soutiensSeuls,
+  transmissions,
   violations,
 } from '#/lib/planning/verificateur.ts'
 
@@ -1053,5 +1054,88 @@ describe('relève entre le matin et le soir (réglage, 30 min)', () => {
         { salarieId: 'b', creneauId: 's15' },
       ]),
     ).toEqual([0])
+  })
+})
+
+describe('transmissions entre équipes (points reliés du mois, 2026-11-02)', () => {
+  // Oracle : l'équipe suivante arrive avant que la précédente parte.
+  const salaries = [
+    sal('v0', { postes: new Set(['veille']) }),
+    sal('m'),
+    sal('s'),
+    sal('v1', { postes: new Set(['veille']) }),
+    apprenti('ap'),
+  ]
+  const creneaux = (soirFin: number, matinDebut: number) => [
+    cand('n0', 'veille', 0, 23, 31, ['nuit']),
+    cand('m1', 'rec', 1, matinDebut, matinDebut + 8, ['matin']),
+    cand('s1', 'club', 1, 14.5, soirFin, ['soir']),
+    cand('n1', 'veille', 1, 23, 31, ['nuit']),
+  ]
+  const poses = [
+    { salarieId: 'v0', creneauId: 'n0' },
+    { salarieId: 'm', creneauId: 'm1' },
+    { salarieId: 's', creneauId: 's1' },
+    { salarieId: 'v1', creneauId: 'n1' },
+  ]
+  const jour1 = (
+    soirFin: number,
+    matinDebut: number,
+    sansReleve: number[] = [],
+  ) =>
+    transmissions(
+      probleme({
+        salaries,
+        creneaux: creneaux(soirFin, matinDebut),
+        nbJours: 2,
+      }),
+      poses,
+      sansReleve,
+    )[1]
+
+  it('accepté : chaque équipe arrive avant le départ de la précédente', () => {
+    expect(jour1(23.25, 7)).toEqual({
+      jour: 1,
+      nuitMatin: 'ok',
+      matinSoir: 'ok',
+      soirNuit: 'ok',
+    })
+  })
+
+  it('refusé : un trou avant le veilleur, un matin qui arrive après son départ', () => {
+    expect(jour1(22.5, 8)).toMatchObject({
+      nuitMatin: 'manque',
+      soirNuit: 'manque',
+    })
+  })
+
+  it('la relève réglée qui manque coupe le lien matin → soir', () => {
+    expect(jour1(23.25, 7, [1]).matinSoir).toBe('manque')
+  })
+
+  it('une équipe absente : pas de lien ; le lundi, la nuit d’avant n’est pas lue', () => {
+    const r = transmissions(
+      probleme({ salaries, creneaux: creneaux(23.25, 7), nbJours: 2 }),
+      poses.filter((x) => x.salarieId !== 'v1'),
+      [],
+    )
+    expect(r[1].soirNuit).toBeNull()
+    expect(r[0].nuitMatin).toBeNull()
+  })
+
+  it('un soutien seul ne fait pas la transmission', () => {
+    const r = transmissions(
+      probleme({
+        salaries,
+        creneaux: [
+          ...creneaux(22.5, 7),
+          cand('sa', 'club', 1, 15, 23.5, ['soir']),
+        ],
+        nbJours: 2,
+      }),
+      [...poses, { salarieId: 'ap', creneauId: 'sa' }],
+      [],
+    )
+    expect(r[1].soirNuit).toBe('manque')
   })
 })

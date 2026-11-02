@@ -16,6 +16,10 @@ import { Moon, Sun, Sunset } from 'lucide-react'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { libelleConsigne } from '#/lib/planning/presence.ts'
 import type { PresenceOut } from '#/lib/planning/presence.ts'
+import type {
+  EtatTransmission,
+  Transmissions,
+} from '#/lib/planning/verificateur.ts'
 import { cn } from '#/lib/utils.ts'
 
 const NOM = { matin: 'Matin', soir: 'Soir', nuit: 'Nuit' } as const
@@ -77,13 +81,49 @@ export function PastillesPresence({ presence }: { presence: PresenceOut[] }) {
   )
 }
 
-/** Vue mois : trois points sous le numéro du jour, matin, soir, nuit. Un
+/** Le trait entre deux points : plein quand la transmission est assurée,
+ * pointillé rouge quand personne n'est là pour la faire, rien quand une des
+ * deux équipes est absente. */
+function Lien({
+  etat,
+  demi = false,
+}: {
+  etat: EtatTransmission | undefined
+  demi?: boolean
+}) {
+  return (
+    <span
+      aria-hidden
+      data-transmission={etat ?? 'aucune'}
+      className={cn(
+        'h-0 shrink-0 self-center border-t-2',
+        demi ? 'w-1.5' : 'w-2',
+        etat === 'ok' && 'border-emerald-500/80',
+        etat === 'manque' && 'border-dashed border-red-500',
+        !etat && 'border-transparent',
+      )}
+    />
+  )
+}
+
+const PASSAGE = {
+  nuitMatin: 'Transmission nuit → matin',
+  matinSoir: 'Transmission matin → soir',
+  soirNuit: 'Transmission soir → nuit',
+} as const
+
+/** Vue mois : trois points sous le numéro du jour, matin, soir, nuit, reliés
+ * quand l'équipe suivante arrive avant que la précédente parte (demande
+ * utilisateur du 2026-11-02 : « un lien quand il y a quelqu'un pour faire les
+ * transmissions »). Un petit trait à gauche du matin : la nuit d'avant. Un
  * moment où rien n'est demandé (page Besoins) est un rond vide. Rien tant
  * que la semaine n'est pas lue. */
 export function PointsPresence({
   presence,
+  transmissions,
 }: {
   presence: PresenceOut[] | undefined
+  transmissions?: Omit<Transmissions, 'jour'>
 }) {
   if (!presence) return null
   const points = PERIODES.map((periode) => ({
@@ -95,6 +135,30 @@ export function PointsPresence({
       ? `${NOM[periode]} : ${p.compte} pour ${libelleConsigne(p.minimum, p.maximum)}${p.ecart ? ` (${ecartTexte(p.ecart)})` : ''}`
       : `${NOM[periode]} : ${RIEN}`,
   )
+  if (transmissions)
+    for (const cle of ['nuitMatin', 'matinSoir', 'soirNuit'] as const) {
+      const e = transmissions[cle]
+      if (e)
+        lignes.push(
+          `${PASSAGE[cle]} : ${e === 'ok' ? 'assurée' : 'personne pour la faire'}`,
+        )
+    }
+  const point = (periode: (typeof PERIODES)[number]) => {
+    const p = points.find((x) => x.periode === periode)?.p
+    return (
+      <span
+        key={periode}
+        data-periode={periode}
+        className={cn(
+          'size-2 shrink-0 rounded-full',
+          !p && 'border border-amber-500',
+          p && p.ecart < 0 && 'bg-red-500',
+          p && p.ecart > 0 && 'bg-sky-500',
+          p && p.ecart === 0 && 'bg-emerald-500',
+        )}
+      />
+    )
+  }
   return (
     <Tip
       label={<span className="whitespace-pre-line">{lignes.join('\n')}</span>}
@@ -102,21 +166,24 @@ export function PointsPresence({
       <span
         tabIndex={0}
         aria-label={lignes.join(', ')}
-        className="mt-0.5 flex justify-center gap-0.5"
+        className={cn(
+          'mt-0.5 flex items-center justify-center',
+          !transmissions && 'gap-0.5',
+        )}
       >
-        {points.map(({ periode, p }) => (
-          <span
-            key={periode}
-            data-periode={periode}
-            className={cn(
-              'size-1.5 rounded-full',
-              !p && 'border border-amber-500',
-              p && p.ecart < 0 && 'bg-red-500',
-              p && p.ecart > 0 && 'bg-sky-500',
-              p && p.ecart === 0 && 'bg-emerald-500',
-            )}
-          />
-        ))}
+        {transmissions ? (
+          <>
+            <Lien etat={transmissions.nuitMatin} demi />
+            {point('matin')}
+            <Lien etat={transmissions.matinSoir} />
+            {point('soir')}
+            <Lien etat={transmissions.soirNuit} />
+            {point('nuit')}
+            <span aria-hidden className="w-1.5 shrink-0" />
+          </>
+        ) : (
+          PERIODES.map(point)
+        )}
       </span>
     </Tip>
   )

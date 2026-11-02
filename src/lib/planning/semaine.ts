@@ -106,11 +106,12 @@ import {
   raisonsBlocage,
   raisonsBlocageAccueil,
   relevesManquantes,
+  transmissions,
   reposHebdoTrouve,
   trous,
   violations,
 } from '#/lib/planning/verificateur.ts'
-import type { Violation } from '#/lib/planning/verificateur.ts'
+import type { Transmissions, Violation } from '#/lib/planning/verificateur.ts'
 
 // ----------------------------------------------------------------- sorties
 
@@ -267,6 +268,9 @@ export interface SemaineOut {
   /** Jours (0 à 6) sans relève entre l'équipe du matin et celle de
    * l'après-midi (2026-11-01). Absent : données d'avant. */
   releves_manquantes?: number[]
+  /** Transmissions de l'accueil d'une équipe à l'autre, jour par jour
+   * (`transmissions`). Absent : données d'avant. */
+  transmissions?: Transmissions[]
   stats: {
     places: number
     pourvues: number
@@ -1998,6 +2002,7 @@ export function analyser(d: DonneesSemaine): SemaineOut {
     }),
   )
   const sansReleve = relevesManquantes(pReglages, affs)
+  const passations = accueil ? transmissions(pReglages, affs, sansReleve) : []
 
   const infractions = toutes.filter((v) => v.nature === 'loi').length
   return {
@@ -2018,6 +2023,7 @@ export function analyser(d: DonneesSemaine): SemaineOut {
       ...ouverturesVides,
     ],
     releves_manquantes: sansReleve,
+    transmissions: passations,
     stats: {
       places:
         besoins.reduce((t, b) => t + b.effectif, 0) +

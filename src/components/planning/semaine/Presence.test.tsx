@@ -128,3 +128,43 @@ describe('PastillesPresence (audit RH du 2026-11-01)', () => {
     expect(plein.container.textContent).not.toContain('–')
   })
 })
+
+describe('PointsPresence : les transmissions (2026-11-02)', () => {
+  const presence = (['matin', 'soir', 'nuit'] as const).map((periode) => ({
+    jour: 0,
+    periode,
+    compte: 1,
+    minimum: 1,
+    maximum: 1,
+    ecart: 0,
+  }))
+  const liens = (c: HTMLElement) =>
+    [...c.querySelectorAll<HTMLElement>('[data-transmission]')].map(
+      (e) => e.dataset.transmission,
+    )
+
+  it('un trait par transmission, dans l’ordre nuit, matin, soir, nuit', () => {
+    const { container } = rendre(
+      <PointsPresence
+        presence={presence}
+        transmissions={{ nuitMatin: 'ok', matinSoir: 'manque', soirNuit: null }}
+      />,
+    )
+    expect(liens(container)).toEqual(['ok', 'manque', 'aucune'])
+    expect(
+      [...container.querySelectorAll('[data-periode]')].map(
+        (e) => (e as HTMLElement).dataset.periode,
+      ),
+    ).toEqual(['matin', 'soir', 'nuit'])
+    const nom = container
+      .querySelector('[aria-label]')!
+      .getAttribute('aria-label')!
+    expect(nom).toContain('Transmission matin → soir : personne pour la faire')
+    expect(nom).toContain('Transmission nuit → matin : assurée')
+  })
+
+  it('sans transmissions lues : les points seuls, comme avant', () => {
+    const { container } = rendre(<PointsPresence presence={presence} />)
+    expect(liens(container)).toEqual([])
+  })
+})

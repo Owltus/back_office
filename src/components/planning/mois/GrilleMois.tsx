@@ -47,7 +47,6 @@ import {
   numeroSemaine,
   parGroupe,
 } from '#/lib/planning/affichage.ts'
-import { ferieDe } from '#/lib/planning/feries.ts'
 import { estEcole } from '#/lib/planning/semaine.ts'
 import type { AlerteOut, SemaineOut, ShiftOut } from '#/lib/planning/semaine.ts'
 import { ajouterJours, heureAffichee } from '#/lib/planning/temps.ts'
@@ -373,9 +372,8 @@ export function GrilleMois({
             </tr>
             <tr>
               {jours.map((d) => {
-                const { jour } = reperer(d)
-                // Jour férié (2026-11-02) : discret, son nom au survol.
-                const ferie = ferieDe(d)
+                const { jour, lundi } = reperer(d)
+                const semaine = semaines.get(lundi)
                 return (
                   <th
                     key={d}
@@ -391,21 +389,13 @@ export function GrilleMois({
                     <span className="block text-xs font-medium tabular-nums">
                       {Number(d.slice(8))}
                     </span>
-                    {ferie && (
-                      <Tip label={`Jour férié : ${ferie}`}>
-                        <span
-                          tabIndex={0}
-                          className="mx-auto block w-fit rounded-sm bg-amber-500/15 px-0.5 text-[8.5px] leading-3 font-medium text-amber-700 dark:text-amber-300"
-                          aria-label={`Jour férié : ${ferie}`}
-                        >
-                          Férié
-                        </span>
-                      </Tip>
-                    )}
                     <PointsPresence
-                      presence={semaines
-                        .get(reperer(d).lundi)
-                        ?.presence.filter((p) => p.jour === jour)}
+                      presence={semaine?.presence.filter(
+                        (p) => p.jour === jour,
+                      )}
+                      transmissions={semaine?.transmissions?.find(
+                        (t) => t.jour === jour,
+                      )}
                     />
                   </th>
                 )
