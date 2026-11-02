@@ -2,9 +2,22 @@
  * Appel du solveur depuis l'écran : dans un Web Worker (`solveur.worker.ts`),
  * chargé à la première génération seulement (HiGHS pèse ~3 Mo). Sans Worker,
  * repli dans la page.
+ *
+ * Arrêt (demande utilisateur du 2026-11-02 : « la génération est longue, un
+ * second clic l'arrête ») : `arreterCalcul` coupe le Worker en plein calcul,
+ * le calcul en cours échoue par `CalculArrete`, et un Worker neuf est lancé
+ * au calcul suivant.
  */
 
 import type { Probleme, Resultat } from '#/lib/planning/modele.ts'
+
+/** Calcul arrêté à la demande : rien n'est écrit pour la semaine en cours. */
+export class CalculArrete extends Error {
+  constructor() {
+    super('Calcul arrêté')
+    this.name = 'CalculArrete'
+  }
+}
 
 let worker: Worker | null = null
 let suivant = 0
@@ -36,6 +49,15 @@ function lancer(): Worker | null {
     worker = null
   }
   return worker
+}
+
+/** Coupe le calcul en cours (sans effet sans Worker). */
+export function arreterCalcul() {
+  if (!worker) return
+  worker.terminate()
+  worker = null
+  for (const a of attentes.values()) a.ko(new CalculArrete())
+  attentes.clear()
 }
 
 export async function resoudre(probleme: Probleme): Promise<Resultat> {

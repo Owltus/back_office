@@ -33,7 +33,7 @@ import {
   fetchSemainePourGeneration,
 } from '#/lib/planning/service.ts'
 import type { DonneesShifts } from '#/lib/planning/service.ts'
-import { resoudre } from '#/lib/planning/solveur.ts'
+import { CalculArrete, resoudre } from '#/lib/planning/solveur.ts'
 import { ajouterJours, aujourdhuiParis, lundiDe } from '#/lib/planning/temps.ts'
 import type { Referentiel, Salarie } from '#/lib/planning/types.ts'
 import { useRelireAuRetour } from '#/components/planning/hooks/auRetour.ts'
@@ -222,8 +222,18 @@ export function useGenerer() {
   return useCallback(
     async (
       lundi: string,
-      options: Omit<OptionsGeneration, 'aujourdhui'> & { aujourdhui?: string },
+      {
+        signal,
+        ...options
+      }: Omit<OptionsGeneration, 'aujourdhui'> & {
+        aujourdhui?: string
+        /** Arrêt demandé : vérifié avant le calcul et avant l'écriture. */
+        signal?: AbortSignal
+      },
     ): Promise<BilanGeneration> => {
+      const siArrete = () => {
+        if (signal?.aborted) throw new CalculArrete()
+      }
       const debut = performance.now()
       const etat = await fetchEtatSemaine(lundi)
       const [referentiel, shifts] = await Promise.all([
@@ -241,7 +251,10 @@ export function useGenerer() {
         aujourdhui,
         graine: options.graine ?? Math.floor(Math.random() * 1e9),
       })
+      siArrete()
       const resultat = await resoudre(g.probleme)
+      // Arrêté pendant le calcul : la semaine n'est pas écrite.
+      siArrete()
       if (resultat.statut === 'inconnu') {
         throw new Error(
           "le calcul n'a pas abouti : réessayez, ou retirez un shift validé qui bloque",

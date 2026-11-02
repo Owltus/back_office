@@ -206,7 +206,11 @@ describe('VueSemaine', () => {
     fireEvent.click(
       await screen.findByRole('button', { name: 'Générer quand même' }),
     )
-    await waitFor(() => expect(etat.generer).toHaveBeenCalledWith(LUNDI, {}))
+    await waitFor(() =>
+      expect(etat.generer).toHaveBeenCalledWith(LUNDI, {
+        signal: expect.any(AbortSignal),
+      }),
+    )
     const n = SEMAINE.a_pourvoir.reduce((t, x) => t + x.manquant, 0)
     // Le bouchon de `generer` rend 3 shifts posés.
     expect(

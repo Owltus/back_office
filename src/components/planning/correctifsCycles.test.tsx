@@ -136,14 +136,16 @@ describe('7. Compléter : le calcul se voit', () => {
         />
       </TooltipProvider>,
     )
-  it('pendant le calcul : « Calcul en cours… » sur le bouton grisé', () => {
+  it('pendant le calcul : le bouton actif « Arrêter » (2026-11-02)', () => {
     entete(true)
     const b = screen.getByRole<HTMLButtonElement>('button', {
-      name: 'Compléter le planning',
+      name: 'Arrêter le calcul',
     })
-    expect(b.disabled).toBe(true)
-    expect(b.textContent).toContain('Calcul en cours…')
+    expect(b.disabled).toBe(false)
+    expect(b.textContent).toContain('Arrêter')
     expect(b.getAttribute('aria-busy')).toBe('true')
+    b.click()
+    expect(actions.onCompleter).toHaveBeenCalled()
   })
   it('au repos : « Compléter »', () => {
     entete(false)

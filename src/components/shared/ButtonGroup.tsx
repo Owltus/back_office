@@ -18,8 +18,9 @@ import { cn } from '#/lib/utils.ts'
  * du bouton activé par son propre `data-slot="tooltip-trigger"` ; on ne peut donc
  * PAS cibler le rayon via `[data-slot=button]`. On arrondit donc le slot lui-même
  * (l'enfant direct, quel qu'il soit), plus une passe sur le bouton imbriqué du
- * span des désactivés (là, le span porte `tooltip-trigger` et le bouton conserve
- * bien son `data-slot="button"`).
+ * span des désactivés, visé par sa balise `button` : un `DropdownMenuTrigger
+ * asChild` remplace lui aussi le `data-slot` (la flèche « Autres actions »
+ * grisée pendant un calcul se détachait du groupe, 2026-11-02).
  */
 export function ButtonGroup({
   children,
@@ -44,8 +45,8 @@ export function ButtonGroup({
         '[&>*:not(:last-child)]:rounded-r-none',
         '[&>*:not(:first-child)]:rounded-l-none',
         // Coins internes carrés — bouton imbriqué (span porteur d'un désactivé).
-        '[&>*:not(:last-child)_[data-slot=button]]:rounded-r-none',
-        '[&>*:not(:first-child)_[data-slot=button]]:rounded-l-none',
+        '[&>*:not(:last-child)_button]:rounded-r-none',
+        '[&>*:not(:first-child)_button]:rounded-l-none',
         className,
       )}
     >

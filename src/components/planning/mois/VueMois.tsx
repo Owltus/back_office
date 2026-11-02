@@ -16,7 +16,7 @@
  * le planning ; gestion = en plus, le cadenas du mois.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 
@@ -35,6 +35,7 @@ import {
   useGenerer,
   useOccupation,
 } from '#/components/planning/hooks/usePlanning.ts'
+import { CalculArrete, arreterCalcul } from '#/lib/planning/solveur.ts'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { ConfirmDialog } from '#/components/shared/ConfirmDialog.tsx'
@@ -158,6 +159,9 @@ export function VueMois({
     n: number
   } | null>(null)
   const [menu, setMenu] = useState<OuvertureMenu | null>(null)
+  // « Compléter le mois » en cours : un second clic l'arrête (2026-11-02).
+  const arret = useRef<AbortController | null>(null)
+  const [enCompletion, setEnCompletion] = useState(false)
   // Cadenas d'une semaine : confirmé avant d'agir (décision U7 du 2026-11-01).
   const [verrouSemaine, setVerrouSemaine] = useState<string | null>(null)
   // Éditeur complet d'un jour : la semaine (lundi de la date cliquée) que
@@ -276,6 +280,16 @@ export function VueMois({
         try {
           await action(l)
         } catch (err) {
+          if (err instanceof CalculArrete) {
+            // Arrêt demandé : la semaine en cours n'est pas écrite.
+            notifier(
+              `${libelle} : arrêté à la semaine S${numeroSemaine(l)}. ` +
+                (i
+                  ? `${i > 1 ? `Les ${i} semaines d'avant sont faites` : "La semaine d'avant est faite"}, en proposition.`
+                  : "Rien n'a changé."),
+            )
+            return false
+          }
           // L'arrêt est toujours situé, même quand la base écrit son propre
           // message (PL400, PL409, PL423) : il vient après.
           notifier(
@@ -312,14 +326,21 @@ export function VueMois({
     }
     const visees = [...ouvertes]
     const avant = new Map(semaines)
+    const ctrl = new AbortController()
+    arret.current = ctrl
+    setEnCompletion(true)
     void pendant(async () => {
       const faites = new Map<string, SemaineOut>()
       let proposes = 0
       // Dans l'ordre : chaque semaine voit la précédente (repos de 11 h).
       const ok = await parSemaine('Compléter le mois', visees, async (l) => {
-        const r = await generer(l, { aujourdhui })
+        if (ctrl.signal.aborted) throw new CalculArrete()
+        const r = await generer(l, { aujourdhui, signal: ctrl.signal })
         faites.set(l, r.semaine)
         proposes += r.poses
+      }).finally(() => {
+        arret.current = null
+        setEnCompletion(false)
       })
       if (!ok) return
       const trous = placesAPourvoir(
@@ -347,6 +368,11 @@ export function VueMois({
         trous || equite ? GARDER : undefined,
       )
     })
+  }
+
+  const arreterCompletion = () => {
+    arret.current?.abort()
+    arreterCalcul()
   }
 
   const surLeMois = (
@@ -826,12 +852,16 @@ export function VueMois({
             nbAlertes={nbAlertes}
             onAlertes={() => setAlertesOuvertes(true)}
             verrou={verrou}
-            completer={{
-              inactif:
-                raisonEcriture ?? aucuneOuverte ?? pretGen.blocage?.texte,
-              aide: `Compléter le mois : recalcule les propositions (nouveau tirage à chaque clic) ; le validé ne bouge pas.\n${portee}`,
-              onClick: () => confirmGen.demander(completerLeMois),
-            }}
+            completer={
+              enCompletion
+                ? { aide: '', enCalcul: true, onClick: arreterCompletion }
+                : {
+                    inactif:
+                      raisonEcriture ?? aucuneOuverte ?? pretGen.blocage?.texte,
+                    aide: `Compléter le mois : recalcule les propositions (nouveau tirage à chaque clic) ; le validé ne bouge pas.\n${portee}`,
+                    onClick: () => confirmGen.demander(completerLeMois),
+                  }
+            }
             groupes={groupes}
             menuInactif={raisonEcriture}
             portee={portee}

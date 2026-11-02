@@ -15,6 +15,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   Sparkles,
+  Square,
   TriangleAlert,
 } from 'lucide-react'
 
@@ -168,7 +169,13 @@ export function BarreMois({
   onInfractions: () => void
   /** Cadenas du mois (gestion seule). */
   verrou: { verrouille: boolean; inactif?: string; onClick: () => void }
-  completer: { inactif?: string; aide: string; onClick: () => void }
+  /** `enCalcul` : le calcul tourne, le même bouton l'arrête. */
+  completer: {
+    inactif?: string
+    aide: string
+    enCalcul?: boolean
+    onClick: () => void
+  }
   groupes: Array<{ titre: string; actions: ActionMois[] }>
   /** Raison pour laquelle le menu ⌄ est fermé (droits, chargement, calcul). */
   menuInactif?: string
@@ -246,24 +253,44 @@ export function BarreMois({
           infractions={compteurs?.infractions ?? 0}
           onClick={onInfractions}
         />
-      </ButtonGroup>
-      <ButtonGroup>
+        {/* Un seul groupe pour toute la barre (demande utilisateur du
+            2026-11-02). */}
         <AvecRaison
           desactive={!!completer.inactif}
-          label={completer.inactif ?? completer.aide}
+          label={
+            completer.inactif ??
+            (completer.enCalcul
+              ? 'Calcul en cours : cliquer pour l’arrêter.\nLes semaines déjà faites restent en proposition.'
+              : completer.aide)
+          }
         >
           {/* Étincelles seules (décision utilisateur du 2026-10-28) : le nom
-              reste pour les lecteurs d'écran, l'infobulle dit ce qu'il fait. */}
+              reste pour les lecteurs d'écran, l'infobulle dit ce qu'il fait.
+              Pendant le calcul, un second clic l'arrête (2026-11-02) : la
+              roue tourne, un carré « stop » la remplace au survol. */}
           <Button
             size="icon-sm"
+            className="group/arret"
             disabled={!!completer.inactif}
             onClick={completer.onClick}
-            aria-label="Compléter le mois"
+            aria-label={
+              completer.enCalcul ? 'Arrêter le calcul' : 'Compléter le mois'
+            }
+            aria-busy={completer.enCalcul || undefined}
             aria-describedby={
               completer.inactif ? 'completer-mois-raison' : undefined
             }
           >
-            {occupe ? <Loader2 className="animate-spin" /> : <Sparkles />}
+            {completer.enCalcul ? (
+              <>
+                <Loader2 className="animate-spin group-hover/arret:hidden" />
+                <Square className="hidden fill-current group-hover/arret:block" />
+              </>
+            ) : occupe ? (
+              <Loader2 className="animate-spin" />
+            ) : (
+              <Sparkles />
+            )}
           </Button>
         </AvecRaison>
         <DropdownMenu>

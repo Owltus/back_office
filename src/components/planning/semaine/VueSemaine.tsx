@@ -38,6 +38,7 @@ import {
   usePoserFixes,
   useSemaine,
 } from '#/components/planning/hooks/usePlanning.ts'
+import { CalculArrete, arreterCalcul } from '#/lib/planning/solveur.ts'
 import { GARDER, useNotifier } from '#/components/planning/Messages.tsx'
 import { FicheSalarie } from '#/components/planning/parametres/FicheSalarie.tsx'
 import {
@@ -226,6 +227,8 @@ export function VueSemaine({
   }, [edition])
   const [confirmation, setConfirmation] = useState<Confirmation>(null)
   const [enGeneration, setEnGeneration] = useState(false)
+  // Un second clic sur Compléter arrête le calcul (2026-11-02).
+  const arret = useRef<AbortController | null>(null)
   const [aVerifier, setAVerifier] = useState<(CaseJour & { n: number }) | null>(
     null,
   )
@@ -410,11 +413,13 @@ export function VueSemaine({
 
   const lancerGeneration = async (options: { tout?: boolean }) => {
     if (estOccupe() || !pret || verrou || passee) return
+    const ctrl = new AbortController()
+    arret.current = ctrl
     setEnGeneration(true)
     try {
       await pendant(async () => {
         try {
-          const r = await generer(lundi, options)
+          const r = await generer(lundi, { ...options, signal: ctrl.signal })
           const n = trous(r.semaine)
           // Des places restées vides : le message reste jusqu'à ce qu'on le
           // ferme (il dit quoi faire ensuite).
@@ -424,10 +429,13 @@ export function VueSemaine({
             n ? GARDER : undefined,
           )
         } catch (err) {
-          notifier(messageErreur(err, 'Génération impossible'), 'danger')
+          if (err instanceof CalculArrete)
+            notifier("Calcul arrêté : rien n'a changé.")
+          else notifier(messageErreur(err, 'Génération impossible'), 'danger')
         }
       })
     } finally {
+      arret.current = null
       setEnGeneration(false)
     }
   }
@@ -830,8 +838,12 @@ export function VueSemaine({
           aujourdhui,
           onVerrou: () => setConfirmation('verrou'),
           onAlertes: () => setAlertesOuvertes(true),
-          onCompleter: () =>
-            confirmGen.demander(() => void lancerGeneration({})),
+          onCompleter: () => {
+            if (arret.current) {
+              arret.current.abort()
+              arreterCalcul()
+            } else confirmGen.demander(() => void lancerGeneration({}))
+          },
           onFullAuto: () => setConfirmation('fullauto'),
           onValiderSemaine: (epinglee) =>
             action(

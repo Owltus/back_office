@@ -14,6 +14,7 @@ import {
   Lock,
   LockOpen,
   Sparkles,
+  Square,
   TriangleAlert,
 } from 'lucide-react'
 
@@ -177,9 +178,11 @@ export function EnTeteSemaine({
         ? 'Semaine passée : on ne génère pas le passé'
         : verrou
           ? 'Semaine verrouillée : pas de génération'
-          : occupe
-            ? 'Calcul en cours…'
-            : (blocage ?? null)
+          : enGeneration
+            ? null
+            : occupe
+              ? 'Calcul en cours…'
+              : (blocage ?? null)
   const raisonVerrou = !pret
     ? 'Chargement en cours'
     : !gerer
@@ -197,16 +200,24 @@ export function EnTeteSemaine({
       size="sm"
       disabled={!!raisonCompleter}
       onClick={actions.onCompleter}
-      aria-label="Compléter le planning"
+      className="group/arret"
+      aria-label={enGeneration ? 'Arrêter le calcul' : 'Compléter le planning'}
       aria-busy={enGeneration || undefined}
       aria-describedby={
         raisonCompleter ? 'completer-semaine-raison' : undefined
       }
     >
-      {/* Le calcul dure 1 à 3 s : le bouton le dit, sans toast (le mois
-          affiche déjà sa progression). */}
-      {enGeneration ? <Loader2 className="animate-spin" /> : <Sparkles />}
-      {enGeneration ? 'Calcul en cours…' : 'Compléter'}
+      {/* Pendant le calcul, le bouton le dit et un second clic l'arrête
+          (2026-11-02) : la roue tourne, un carré « stop » au survol. */}
+      {enGeneration ? (
+        <>
+          <Loader2 className="animate-spin group-hover/arret:hidden" />
+          <Square className="hidden fill-current group-hover/arret:block" />
+        </>
+      ) : (
+        <Sparkles />
+      )}
+      {enGeneration ? 'Arrêter' : 'Compléter'}
     </Button>
   )
   const autres = (
@@ -312,13 +323,13 @@ export function EnTeteSemaine({
               disabled={!semaine}
               onClick={actions.onInfractions}
             />
-          </ButtonGroup>
-
-          <ButtonGroup>
+            {/* Un seul groupe : outils et Compléter (2026-11-02). */}
             <Tip
               label={
                 raisonCompleter ??
-                'Recalcule les propositions (nouveau tirage à chaque clic) ; le validé ne bouge pas'
+                (enGeneration
+                  ? "Calcul en cours : cliquer pour l'arrêter. Rien n'est changé."
+                  : 'Recalcule les propositions (nouveau tirage à chaque clic) ; le validé ne bouge pas')
               }
             >
               {raisonCompleter ? (
