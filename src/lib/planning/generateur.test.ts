@@ -58,6 +58,22 @@ function creneau(
   })
 }
 
+/** Version étoile d'un besoin (2026-11-02) : la même place (`place`), une
+ * fin avancée de `moins` minutes, marquée `etoile` (aucun coût de
+ * remplaçant, ses vraies minutes). */
+function versionEtoile(b: Creneau, id: string, moins: number): Creneau {
+  return {
+    ...b,
+    id,
+    fin: b.fin - moins,
+    effectif: 0,
+    facultatif: 0,
+    soutien: 0,
+    place: b.id,
+    etoile: true,
+  }
+}
+
 function receptionniste(
   id: string,
   contratH = 35,
@@ -75,14 +91,9 @@ function receptionniste(
   })
 }
 
-const aff = (
-  salarieId: string,
-  creneauId: string,
-  court = false,
-): AffectationSolveur => ({
+const aff = (salarieId: string, creneauId: string): AffectationSolveur => ({
   salarieId,
   creneauId,
-  court,
 })
 
 const range = (n: number) => Array.from({ length: n }, (_, i) => i)
@@ -226,6 +237,8 @@ describe('générateur', () => {
   })
 
   it('39 heures : quatre jours de 8 h et un jour court, pause déduite', () => {
+    // Journée étoile sur un horaire qui existe (2026-11-02) : chaque matin de
+    // 8 h a sa version étoile de 7 h (`etoile`, même place).
     const matins = range(5).map((j) =>
       creneauModele({
         id: `m${j}`,
@@ -233,17 +246,23 @@ describe('générateur', () => {
         debut: j * MINUTES_PAR_JOUR + 7 * H,
         fin: j * MINUTES_PAR_JOUR + 15 * H + 45,
         pause: 45,
-        raccourci: H,
       }),
     )
+    const versions = matins.map((m, j) => versionEtoile(m, `e${j}`, H))
     const p = probleme({
       salaries: [receptionniste('r0', 39)],
-      creneaux: matins,
+      creneaux: [...matins, ...versions],
     })
     const r = gen(p)
     expect(complet(r)).toBe(true)
-    expect(r.affectations.filter((a) => a.court).length).toBe(1)
+    expect(r.affectations.filter((a) => a.creneauId[0] === 'e').length).toBe(1)
+    expect(r.affectations.length).toBe(5)
     expect(r.ecartTotalMinutes).toBe(0)
+    // Sans version étoile, 39 h ne se font pas en 5 jours de 8 h : 1 h en plus.
+    const sans = gen(
+      probleme({ salaries: [receptionniste('r0', 39)], creneaux: matins }),
+    )
+    expect(sans.ecartTotalMinutes).toBe(H)
 
     const longs = range(5).map((j) =>
       creneauModele({
@@ -435,23 +454,37 @@ describe('générateur', () => {
         debut: j * MINUTES_PAR_JOUR + 8 * H,
         fin: j * MINUTES_PAR_JOUR + 16 * H + 45,
         pause: 45,
-        raccourci: 60,
       }),
     )
+    const versions = jours.map((c, j) => versionEtoile(c, `e${j}`, H))
     for (const fixe of [4, 1]) {
       const p = probleme({
         salaries: [
           salarieSolveur({ id: 't', etoileFixe: new Set([fixe]), ...base39 }),
         ],
-        creneaux: jours,
+        creneaux: [...jours, ...versions],
       })
       const r = gen(p)
-      const courts = new Set(
-        r.affectations.filter((a) => a.court).map((a) => a.creneauId),
+      const etoiles = new Set(
+        r.affectations
+          .filter((a) => a.creneauId[0] === 'e')
+          .map((a) => a.creneauId),
       )
-      expect(courts).toEqual(new Set([`j${fixe}`]))
+      expect(etoiles).toEqual(new Set([`e${fixe}`]))
       expect(r.affectations.length).toBe(5)
+      expect(violations(p, r.affectations)).toEqual([])
     }
+    // Refusé : le jour fixé n'a aucune version étoile, il n'est pas
+    // travaillé (jamais d'horaire de 8 h ce jour-là, contrainte dure).
+    const sansVersion = probleme({
+      salaries: [
+        salarieSolveur({ id: 't', etoileFixe: new Set([4]), ...base39 }),
+      ],
+      creneaux: [...jours, ...versions.filter((c) => c.id !== 'e4')],
+    })
+    const r = gen(sansVersion)
+    expect(pris(r).has('j4')).toBe(false)
+    expect(pris(r).has('e4')).toBe(false)
 
     const plein = creneauModele({
       id: 'v',
@@ -595,12 +628,12 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
       effectif: fc.integer({ min: 0, max: 2 }),
       facultatif: fc.integer({ min: 0, max: 1 }),
       soutien: fc.integer({ min: 0, max: 1 }),
-      raccourci: fc.constantFrom(0, 60),
     })
     // Empreinte relevée de nouveau le 2026-11-01 : le poids des repos
     // accolés (POIDS_REPOS_SEPARES 1 000 → 8 000) et le rythme de 5 jours
     // d'un contrat de 35 h ou plus (POIDS_JOUR_MANQUANT) ; le reste du modèle
-    // est le même.
+    // est le même. Relevée encore le 2026-11-02 : plus de raccourci (les
+    // créneaux tirés n'en ont plus, ni le modèle de variable « court »).
     const textes: string[] = []
     fc.assert(
       fc.property(
@@ -628,7 +661,6 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
             effectif: c.effectif,
             facultatif: c.facultatif,
             soutien: c.soutien,
-            raccourci: c.raccourci,
             soir: c.debutH >= 13,
           }))
           textes.push(
@@ -638,7 +670,7 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
       ),
       { numRuns: 80, seed: 20261030 },
     )
-    expect(empreinte(textes.join('\n=====\n'))).toBe('f243e188')
+    expect(empreinte(textes.join('\n=====\n'))).toBe('83e5b73a')
   })
 })
 
@@ -701,8 +733,7 @@ describe('réduction des remplaçants : même optimum', () => {
     for (const [k, v] of c.x) {
       if (!un(v)) continue
       const i = k.indexOf('|')
-      const vc = c.court.get(k)
-      affs.push(aff(k.slice(0, i), k.slice(i + 1), vc ? un(vc) : false))
+      affs.push(aff(k.slice(0, i), k.slice(i + 1)))
     }
     return affs
   }

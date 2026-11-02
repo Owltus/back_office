@@ -31,7 +31,6 @@ export interface Pose {
   code?: string
   debut?: string
   fin?: string
-  court?: boolean
   pause?: number
   epinglee?: boolean
 }
@@ -129,8 +128,7 @@ export class PlanningMemoire {
     let a: Affectation
     if (p.code) {
       const h = this.horaire(p.code)
-      const court = !!p.court && h.raccourci > 0
-      const { debut, fin } = horaireDe(h, court)
+      const { debut, fin } = horaireDe(h)
       a = this.shift(
         l,
         salarieId,
@@ -139,7 +137,6 @@ export class PlanningMemoire {
         h.id,
         debut,
         fin,
-        court,
         h.pause,
         p.epinglee ?? true,
       )
@@ -152,7 +149,6 @@ export class PlanningMemoire {
         null,
         p.debut ?? '09:00',
         p.fin ?? '17:00',
-        false,
         p.pause ?? 0,
         p.epinglee ?? true,
       )
@@ -174,7 +170,6 @@ export class PlanningMemoire {
     horaireId: number | null,
     debut: string,
     fin: string,
-    court: boolean,
     pause: number,
     epinglee: boolean,
   ): Affectation {
@@ -188,7 +183,6 @@ export class PlanningMemoire {
       debut,
       fin,
       epinglee,
-      court,
       pause,
     }
   }
@@ -243,7 +237,6 @@ export class PlanningMemoire {
           n.horaire_id,
           n.debut,
           n.fin,
-          n.court,
           n.pause,
           false,
         ),

@@ -119,6 +119,7 @@ import type {
  *       remplaçant ne compte jamais plus d'heures dues ni moins d'heures en
  *       plus que son besoin, `minutesDues`, `minutesEnPlus`) :
  *         titulaire à l'horaire imposé              0
+ *         ou à sa VERSION ÉTOILE                    0 (ses vraies minutes)
  *       < titulaire avec un autre horaire du cycle  POIDS_REMPLACANT (2 000)
  *       < dépannage à l'horaire imposé              `coutDepannage` (10 / min
  *                                               + PART_FIXE_DEPANNAGE 4 609)
@@ -129,6 +130,24 @@ import type {
  *                                               ET en 6e jour
  *       < place vide                            P1.
  *   P5  le confort : jours habituels, repos accolés, équité.
+ *
+ * JOURNÉE ÉTOILE (décisions utilisateur du 2026-11-02, D3 à D5). Plus de
+ * raccourci ni de variable « court » : un contrat de plus de 35 h fait sa
+ * journée de 7 h sur un horaire qui EXISTE. Un besoin d'un horaire de 8 h a,
+ * pour chaque version étoile permise au poste (`versionsEtoile`,
+ * `etoile.ts`), un créneau `r…` marqué `etoile` : il tient la place comme
+ * l'horaire demandé, sans `POIDS_REMPLACANT`, ses VRAIES minutes face au
+ * contrat (`minutesDues`, `minutesEnPlus`), et il est là dès le premier temps
+ * du calcul (voir CALCUL EN DEUX TEMPS). Trous, ouverture, relève et plage
+ * d'un veilleur à l'autre se lisent sur ses vraies heures, comme tout
+ * créneau. Une journée étoile coûte ce qu'elle retire au contrat : un 35 h ne
+ * la prend que pour une autre raison (place, trou, plafond) ; un 39 h la
+ * prend une fois (4 × 8 h + 7 h). Règles dures : au plus `journeesCourtesMax`
+ * shifts de moins de 8 h par semaine (39 h : un) ; étoile FIXÉE dans la
+ * fiche = ce jour-là, pas d'horaire de 8 h (`compatible`). Une version étoile
+ * n'est jamais proposée à un contrat indicatif (forfait jours, extra) : ses
+ * heures ne se comptent pas, un horaire plus court lui coûterait moins pour
+ * rien (`compatible`).
  *
  * P1 : ajouter UNE personne libre (rien d'autre ne bouge) sur un créneau `c`
  * coûte au pire, tous termes de l'objectif confondus :
@@ -255,15 +274,21 @@ export const POIDS_REMPLACANT = 2_000
  * plus long rapportait 24 000 d'heures dues et passait devant le code
  * imposé partout). Un créneau qui n'est pas un remplaçant ne coûte rien. */
 export function coutRemplacant(r: Creneau): number {
-  return r.place === null ? 0 : POIDS_REMPLACANT
+  return r.place === null || r.etoile ? 0 : POIDS_REMPLACANT
 }
+
+/** Un remplaçant qui se mesure CONTRE son besoin (heures dues au plus,
+ * heures en plus au moins, celles du besoin) : pas une version étoile, qui
+ * compte ses vraies minutes (une journée de 7 h retire 1 h au contrat). */
+const mesureParLeBesoin = (c: Creneau, besoin?: Creneau): besoin is Creneau =>
+  c.place !== null && !c.etoile && besoin !== undefined
 
 /** Minutes d'un shift COMPTÉES dans les heures dues (contre le manque au
  * contrat) : un remplaçant compte au plus les heures du besoin de sa place,
  * jamais plus. Un remplaçant plus long ne rapporte donc rien de plus ; un
  * plus court coûte ce qu'il ne fait pas. */
 export function minutesDues(c: Creneau, besoin?: Creneau): number {
-  return c.place !== null && besoin
+  return mesureParLeBesoin(c, besoin)
     ? Math.min(travail(c), travail(besoin))
     : travail(c)
 }
@@ -277,25 +302,9 @@ export function minutesDues(c: Creneau, besoin?: Creneau): number {
  * consigne, trou). Les plafonds légaux (48 h, journée) lisent, eux, les
  * minutes réelles. */
 export function minutesEnPlus(c: Creneau, besoin?: Creneau): number {
-  return c.place !== null && besoin
+  return mesureParLeBesoin(c, besoin)
     ? Math.max(travail(c), travail(besoin))
     : travail(c)
-}
-
-/** `minutesDues` du shift fait COURT (`raccourci` en moins) : un
- * remplaçant raccourci compte encore au plus les heures du besoin, sur ses
- * minutes réelles (un horaire de 8 h fait en 7 h sur la place d'un horaire de 7 h : 7 h). */
-export function minutesDuesCourt(c: Creneau, besoin?: Creneau): number {
-  return c.place !== null && besoin
-    ? Math.min(travail(c) - c.raccourci, travail(besoin))
-    : travail(c) - c.raccourci
-}
-
-/** `minutesEnPlus` du shift fait COURT, de même. */
-export function minutesEnPlusCourt(c: Creneau, besoin?: Creneau): number {
-  return c.place !== null && besoin
-    ? Math.max(travail(c) - c.raccourci, travail(besoin))
-    : travail(c) - c.raccourci
 }
 
 /** Le besoin d'un créneau remplaçant, cherché par son id de place. */
@@ -421,8 +430,9 @@ export function pireCoutRemplir(
 ) {
   // Heures en plus comptées pour un remplaçant : au moins celles du besoin
   // (`minutesEnPlus`), donc au plus la plus longue des deux durées.
-  const enPlus =
-    c.place !== null && besoin ? Math.max(duree(c), duree(besoin)) : duree(c)
+  const enPlus = mesureParLeBesoin(c, besoin)
+    ? Math.max(duree(c), duree(besoin))
+    : duree(c)
   return (
     POIDS_SUR_CONTRAT * enPlus +
     POIDS_DEPANNAGE_MINUTE * duree(c) +
@@ -523,10 +533,6 @@ export interface Highs {
   }
 }
 
-export function courtOblige(s: SalarieSolveur, c: Creneau): boolean {
-  return duree(c) > presenceMax(s, c) && c.raccourci > 0
-}
-
 export function reposAvecVoisins(s: SalarieSolveur, c: Creneau): boolean {
   return coupureRespectee(
     s.finServicePrecedent,
@@ -550,7 +556,11 @@ export function compatible(s: SalarieSolveur, c: Creneau): boolean {
     !s.horsContrat.has(j) &&
     dansLeContrat(s, c) &&
     !s.reposFixes.has(j) &&
-    duree(c) - (courtOblige(s, c) ? c.raccourci : 0) <= presenceMax(s, c) &&
+    duree(c) <= presenceMax(s, c) &&
+    // Journée étoile fixée ce jour-là : pas d'horaire de 8 h (D3).
+    !(s.etoileFixe.has(j) && travail(c) >= s.journeePleine) &&
+    // Une version étoile se compte en heures : pas pour un contrat indicatif.
+    !(c.etoile && s.contratIndicatif) &&
     !(s.nuitInterdite && toucheLaNuit(c)) &&
     codeDeLaFiche(s, c.typeShift) &&
     codeImposeRespecte(s, j, c.typeShift) &&
@@ -689,8 +699,8 @@ function enLignes(noms: string[]): string[] {
   return r
 }
 
-/** Les termes à coefficient non nul (un shift court qui ne change pas la
- * mesure ajoute un terme nul). */
+/** Les termes à coefficient non nul (un créneau sans travail ajoute un
+ * terme nul). */
 const nonNuls = (t: Terme[]) => t.filter(([k]) => k !== 0)
 
 function intervalle(debut: number, fin: number): number[] {
@@ -702,7 +712,6 @@ function intervalle(debut: number, fin: number): number[] {
 interface Construit {
   modele: Modele
   x: Map<string, string>
-  court: Map<string, string>
   manque: Map<string, string>
   ecarts: Array<[string, string]>
   /** Variables de trou (une par morceau de plage), voir `trousEntreEquipes`. */
@@ -739,7 +748,6 @@ export function construire(
   const hasard = alea(p.graine)
   const imposees = p.imposees
   const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
-  const salaries = new Map(p.salaries.map((s) => [s.id, s]))
 
   const x = new Map<string, string>()
   for (const s of p.salaries) {
@@ -751,38 +759,6 @@ export function construire(
   for (const k of imposees) {
     const v = x.get(k)
     if (v) m.ajoute([[1, v]], '=', 1)
-  }
-
-  const court = new Map<string, string>()
-  for (const [k, v] of x) {
-    const [sId, cId] = scinder(k)
-    const c = creneaux.get(cId)
-    const s = salaries.get(sId)
-    if (!c || !s || !c.raccourci) continue
-    const vc = m.bool()
-    court.set(k, vc)
-    if (imposees.has(k)) {
-      m.ajoute([[1, vc]], '=', p.courtes.has(k) ? 1 : 0)
-    } else {
-      m.ajoute(
-        [
-          [1, vc],
-          [-1, v],
-        ],
-        '<=',
-        0,
-      )
-      if (s.etoileFixe.has(jourDe(c)) || courtOblige(s, c)) {
-        m.ajoute(
-          [
-            [1, vc],
-            [-1, v],
-          ],
-          '=',
-          0,
-        )
-      }
-    }
   }
 
   const ecarts: Array<[string, string]> = []
@@ -875,14 +851,14 @@ export function construire(
   // trous et de l'accompagnement des soutiens en additionnent des dizaines :
   // écrites variable par variable, une semaine faisait 186 000 coefficients.
   // Chaque candidat reçoit donc trois sommes (continues, définies par une
-  // égalité) : tous ceux qui le tiennent, les autonomes, et les autonomes
-  // qui le font en version courte. Simple substitution linéaire : mêmes
+  // égalité) : tous ceux qui le tiennent et les autonomes. Simple
+  // substitution linéaire : mêmes
   // solutions entières, même relâché, même optimum (propriété « même
   // optimum » d'accueil.test.ts, qui compare aussi à la construction sans
   // réduction). Un shift posé (`a…`) garde ses variables propres.
   const sommesAccueil = new Map<
     string,
-    { tous: Terme[]; autonomes: Terme[]; courts: Terme[]; n: number }
+    { tous: Terme[]; autonomes: Terme[]; n: number }
   >()
   const sommer = (termes: Terme[]): Terme[] => {
     if (termes.length <= 1) return termes
@@ -894,16 +870,12 @@ export function construire(
     if (!c.accueil) continue
     const tous: Terme[] = []
     const autonomes: Terme[] = []
-    const courts: Terme[] = []
     for (const s of p.salaries) {
-      const k = cle(s.id, c.id)
-      const v = x.get(k)
+      const v = x.get(cle(s.id, c.id))
       if (!v) continue
       tous.push([1, v])
       if (role(s, c.poste) === 'soutien') continue
       autonomes.push([1, v])
-      const vc = court.get(k)
-      if (vc) courts.push([1, vc])
     }
     if (!tous.length) continue
     const memes = autonomes.length === tous.length
@@ -911,28 +883,18 @@ export function construire(
     sommesAccueil.set(c.id, {
       tous: memes ? sa : sommer(tous),
       autonomes: sa,
-      courts: sommer(courts),
       n: tous.length,
     })
   }
   /** Les termes d'un créneau qui comptent : sa somme pour un candidat, ses
    * variables une à une sinon. */
-  const termesDe = (
-    c: Creneau,
-    quoi: 'tous' | 'autonomes' | 'courts',
-  ): Terme[] => {
+  const termesDe = (c: Creneau, quoi: 'tous' | 'autonomes'): Terme[] => {
     if (c.accueil) return sommesAccueil.get(c.id)?.[quoi] ?? []
     const r: Terme[] = []
     for (const s of p.salaries) {
-      const k = cle(s.id, c.id)
-      const v = x.get(k)
+      const v = x.get(cle(s.id, c.id))
       if (!v) continue
-      const soutien = role(s, c.poste) === 'soutien'
-      if (quoi === 'tous') r.push([1, v])
-      else if (!soutien) {
-        const t = quoi === 'courts' ? court.get(k) : v
-        if (t) r.push([1, t])
-      }
+      if (quoi === 'tous' || role(s, c.poste) !== 'soutien') r.push([1, v])
     }
     return r
   }
@@ -997,7 +959,7 @@ export function construire(
     }
   })
 
-  const trous = trousEntreEquipes(m, p, x, court, termesDe)
+  const trous = trousEntreEquipes(m, p, x, termesDe)
   // Ouverture (2026-11-01) : la première heure de chaque poste de l'accueil
   // qui a une heure d'ouverture, tenue sur CE poste.
   const ouvertures = (p.ouvertures ?? []).flatMap((o) =>
@@ -1005,7 +967,6 @@ export function construire(
       m,
       p,
       x,
-      court,
       termesDe,
       o.poste,
       o.jour,
@@ -1015,7 +976,7 @@ export function construire(
       POIDS_OUVERTURE_QUART,
     ),
   )
-  const releves = relevesAccueil(m, p, court, termesDe)
+  const releves = relevesAccueil(m, p, termesDe)
 
   // Une « expression » : termes + constante.
   type Expr = { termes: Terme[]; constante: number }
@@ -1214,18 +1175,6 @@ export function construire(
         const besoin = c.place !== null ? besoinDe(c.place) : undefined
         dues.push([minutesDues(c, besoin), xv(c)])
         enPlus.push([minutesEnPlus(c, besoin), xv(c)])
-        const vc = court.get(cle(s.id, c.id))
-        if (vc) {
-          // Fait court : la variable `court` ajoute l'écart entre la mesure
-          // du shift court et celle du shift long (une constante, donc
-          // linéaire et exact) ; sans remplaçant, -raccourci partout.
-          minutes.push([-c.raccourci, vc])
-          dues.push([minutesDuesCourt(c, besoin) - minutesDues(c, besoin), vc])
-          enPlus.push([
-            minutesEnPlusCourt(c, besoin) - minutesEnPlus(c, besoin),
-            vc,
-          ])
-        }
       }
       const memeMesure = dues.every(([k], i) => k === enPlus[i][0])
       // R-ECOLE-HEURES (L6222-24) : chaque jour d'école vaut une journée de
@@ -1333,22 +1282,15 @@ export function construire(
           m.cout(POIDS_JOUR_FIXE, xv(c))
       }
 
+      // R-JOURNEE-ETOILE : au plus `journeesCourtesMax` shifts de moins de
+      // 8 h dans la semaine (39 h : la journée étoile, une fois).
       if (s.journeesCourtesMax !== null) {
         const courtes: string[] = []
         let courtesFixes = 0
         for (const c of siens) {
-          if (!dans(jourDe(c))) continue
-          const k2 = cle(s.id, c.id)
-          if (travail(c) < s.journeePleine) {
-            courtes.push(xv(c))
-            if (imposees.has(k2)) courtesFixes++
-          } else if (
-            court.has(k2) &&
-            travail(c) - c.raccourci < s.journeePleine
-          ) {
-            courtes.push(court.get(k2) as string)
-            if (p.courtes.has(k2)) courtesFixes++
-          }
+          if (!dans(jourDe(c)) || travail(c) >= s.journeePleine) continue
+          courtes.push(xv(c))
+          if (imposees.has(cle(s.id, c.id))) courtesFixes++
         }
         m.ajoute(
           courtes.map((v) => [1, v] as Terme),
@@ -1448,7 +1390,6 @@ export function construire(
   return {
     modele: m,
     x,
-    court,
     manque,
     ecarts,
     trous,
@@ -1710,15 +1651,6 @@ function reposHebdo(
     )
 }
 
-/** La version courte du créneau couvre-t-elle encore [a, b] ? Elle
- * commence `raccourciDebut` plus tard et finit le reste du raccourci plus
- * tôt (même règle que `enVersionCourte` du vérificateur et `horaireDe`).
- * `raccourciDebut` à 0 : seule la fin compte, comme avant. */
-function courteCouvre(c: Creneau, a: number, b: number): boolean {
-  const auDebut = Math.min(Math.max(c.raccourciDebut, 0), c.raccourci)
-  return c.debut + auDebut <= a && c.fin - (c.raccourci - auDebut) >= b
-}
-
 /**
  * Trous entre équipes (D10, contrat de la vague 1 §3), P2, jamais dur. MÊME
  * définition que l'oracle (`trousDuJour`, `cycles.ts`), réécrite ici sans
@@ -1731,13 +1663,11 @@ function courteCouvre(c: Creneau, a: number, b: number): boolean {
  *   - grille des quarts d'heure ABSOLUE en minutes réelles (0, 15, 30…),
  *     coupée aux bords de la plage ; un quart d'heure est tenu quand UNE
  *     présence autonome (pas un soutien) le couvre EN ENTIER ;
- *   - présences : tous les créneaux du poste (besoin, remplaçant, middle,
- *     shift posé), quel que soit le jour où ils sont écrits (la nuit de la
- *     veille couvre le petit matin), version courte appliquée (début
- *     retardé de `raccourciDebut`, fin avancée du reste, `courteCouvre`).
+ *   - présences : tous les créneaux du poste (besoin, remplaçant, version
+ *     étoile, middle, shift posé), quel que soit le jour où ils sont écrits
+ *     (la nuit de la veille couvre le petit matin), sur leurs vraies heures.
  * Une variable par suite de quarts d'heure où les mêmes créneaux couvrent :
- *   Σ x(autonomes qui couvrent) [- court(…) si la version courte ne couvre
- *   plus] + trou >= 1
+ *   Σ x(autonomes qui couvrent) + trou >= 1
  * coût `POIDS_TROU_QUART` par quart d'heure de la suite (au prorata d'un
  * quart coupé au bord de la plage).
  *
@@ -1748,8 +1678,7 @@ function trousEntreEquipes(
   m: Modele,
   p: Probleme,
   x: Map<string, string>,
-  court: Map<string, string>,
-  termesDe: (c: Creneau, quoi: 'autonomes' | 'courts') => Terme[],
+  termesDe: (c: Creneau, quoi: 'autonomes') => Terme[],
 ): Array<Trou & { v: string }> {
   // Postes à part comptés (un besoin `b…` au matin ou au soir) ; un
   // candidat de l'accueil n'en fait pas un (ses trous sont plus bas).
@@ -1776,18 +1705,7 @@ function trousEntreEquipes(
       const debut = Math.min(...besoins.map((c) => c.debut))
       const fin = Math.max(...besoins.map((c) => c.fin))
       r.push(
-        ...variablesTrous(
-          m,
-          p,
-          x,
-          court,
-          termesDe,
-          poste,
-          jour,
-          debut,
-          fin,
-          duPoste,
-        ),
+        ...variablesTrous(m, p, x, termesDe, poste, jour, debut, fin, duPoste),
       )
     }
   }
@@ -1820,7 +1738,6 @@ function trousEntreEquipes(
           m,
           p,
           x,
-          court,
           termesDe,
           POSTE_ACCUEIL,
           jour,
@@ -1846,12 +1763,10 @@ function trousEntreEquipes(
 function relevesAccueil(
   m: Modele,
   p: Probleme,
-  court: Map<string, string>,
-  termesDe: (c: Creneau, quoi: 'autonomes' | 'courts') => Terme[],
+  termesDe: (c: Creneau, quoi: 'autonomes') => Terme[],
 ): Array<{ jour: number; v: string }> {
   const duree = p.releveMinutes ?? 0
   if (duree <= 0) return []
-  void court
   const k = Math.ceil(duree / QUART)
   const r: Array<{ jour: number; v: string }> = []
   for (const { jour, quarts, matins, soirs } of zonesReleve(p)) {
@@ -1860,8 +1775,6 @@ function relevesAccueil(
       for (const c of liste) {
         if (c.debut > a || c.fin < a + QUART) continue
         t.push(...termesDe(c, 'autonomes'))
-        if (!courteCouvre(c, a, a + QUART))
-          t.push(...termesDe(c, 'courts').map(([n, v]) => [-n, v] as Terme))
       }
       return t
     }
@@ -1953,8 +1866,7 @@ function variablesTrous(
   m: Modele,
   p: Probleme,
   x: Map<string, string>,
-  court: Map<string, string>,
-  termesDe: (c: Creneau, quoi: 'autonomes' | 'courts') => Terme[],
+  termesDe: (c: Creneau, quoi: 'autonomes') => Terme[],
   poste: string,
   jour: number,
   debut: number,
@@ -1964,8 +1876,8 @@ function variablesTrous(
 ): Array<Trou & { v: string }> {
   const r: Array<Trou & { v: string }> = []
   const presents = tenus.filter((c) => c.debut < fin && c.fin > debut)
-  // Suites de quarts d'heure couverts par les mêmes créneaux (et la même
-  // part en version courte) : une seule variable.
+  // Suites de quarts d'heure couverts par les mêmes créneaux : une seule
+  // variable.
   const suites: Array<{ debut: number; fin: number; cle: string }> = []
   const premier = Math.floor(debut / QUART) * QUART
   for (let q = premier; q < fin; q += QUART) {
@@ -1973,7 +1885,7 @@ function variablesTrous(
     const b = Math.min(q + QUART, fin)
     const cle = presents
       .filter((c) => c.debut <= a && c.fin >= b)
-      .map((c) => `${c.id}${courteCouvre(c, a, b) ? '' : '~'}`)
+      .map((c) => c.id)
       .join('|')
     const derniere = suites.at(-1)
     if (derniere && derniere.cle === cle && derniere.fin === a) derniere.fin = b
@@ -1983,25 +1895,15 @@ function variablesTrous(
     const termes: Terme[] = []
     for (const c of presents) {
       if (c.debut > suite.debut || c.fin < suite.fin) continue
-      const courte = courteCouvre(c, suite.debut, suite.fin)
       if (c.accueil) {
-        // Les sommes du candidat (AGRÉGATS DE L'ACCUEIL) : ses autonomes,
-        // moins ceux qui le font court quand la version courte ne couvre pas.
+        // Les sommes du candidat (AGRÉGATS DE L'ACCUEIL) : ses autonomes.
         termes.push(...termesDe(c, 'autonomes'))
-        if (!courte)
-          termes.push(
-            ...termesDe(c, 'courts').map(([k, w]) => [-k, w] as Terme),
-          )
         continue
       }
       for (const s of p.salaries) {
-        const k = cle(s.id, c.id)
-        const v = x.get(k)
+        const v = x.get(cle(s.id, c.id))
         if (!v || role(s, c.poste) === 'soutien') continue
         termes.push([1, v])
-        // Fait en version courte, il est parti avant la fin du quart.
-        const vc = court.get(k)
-        if (vc && !courte) termes.push([-1, vc])
       }
     }
     const v = m.continu(0, 1)
@@ -2059,7 +1961,6 @@ function resoudreUneFois(
   const {
     modele,
     x,
-    court,
     manque,
     ecarts,
     trous,
@@ -2070,12 +1971,13 @@ function resoudreUneFois(
   } = construire(p)
   if (modele.impossible) return echec()
   // Moments où un remplaçant compte (`aTenir`) : ceux du problème COMPLET,
-  // pour que le temps 1 (sans remplaçants) les reconnaisse aussi.
+  // pour que le temps 1 (sans remplaçants) les reconnaisse aussi. Une
+  // version étoile est déjà au temps 1 : elle ne compte pas ici.
   const remplacables = new Set(
     (complet ?? p).consignes.flatMap((k, i) =>
       (complet ?? p).creneaux.some(
         (c) =>
-          c.place !== null &&
+          estRemplacant(c) &&
           c.presence.includes(k.periode) &&
           jourDe(c) === k.jour,
       )
@@ -2140,12 +2042,7 @@ function resoudreUneFois(
   for (const [k, v] of x) {
     if (valeur(v) !== 1) continue
     const [salarieId, creneauId] = scinder(k)
-    const vc = court.get(k)
-    affectations.push({
-      salarieId,
-      creneauId,
-      court: vc ? valeur(vc) === 1 : false,
-    })
+    affectations.push({ salarieId, creneauId })
   }
   const manques: Manque[] = []
   for (const [creneauId, v] of manque) {
@@ -2222,7 +2119,10 @@ const rendre = (
  *
  * Temps 1 : le même problème SANS les remplaçants non imposés (un shift
  * posé rattaché par cycle reste : c'est un fait), en au plus
- * `PART_TEMPS_1` du budget. Puis :
+ * `PART_TEMPS_1` du budget. Les VERSIONS ÉTOILE (`Creneau.etoile`) y sont :
+ * elles tiennent la place comme l'horaire demandé (la journée de 7 h des
+ * 39 h, jamais un pis-aller), comme l'ancienne variable « court » qui
+ * existait dès ce temps-là. Puis :
  *   - pas d'optimum prouvé (temps limite, ou rien trouvé), une place
  *     nécessaire vide, un manque à un minimum de consigne ou un trou entre
  *     équipes : temps 2 sur le problème COMPLET ;
@@ -2281,6 +2181,10 @@ const rendre = (
 /** Part du budget au plus laissée au temps 1 (le reste : au temps 2). */
 export const PART_TEMPS_1 = 0.5
 
+/** Un remplaçant du second temps : un créneau `r…` qui n'est pas une
+ * version étoile (celle-ci est au premier temps). */
+export const estRemplacant = (c: Creneau) => c.place !== null && !c.etoile
+
 /** Résout le problème avec HiGHS (chargé par l'appelant : worker ou test). */
 export function generer(p: Probleme, highs: Highs): ResultatGeneration {
   const echeance = Date.now() + p.tempsMaxSecondes * 1000
@@ -2288,9 +2192,9 @@ export function generer(p: Probleme, highs: Highs): ResultatGeneration {
   const garde = (places: ReadonlySet<string>, ids: ReadonlySet<string>) =>
     p.creneaux.filter(
       (c) =>
-        c.place === null ||
+        !estRemplacant(c) ||
         imposes.has(c.id) ||
-        places.has(c.place) ||
+        (c.place !== null && places.has(c.place)) ||
         ids.has(c.id),
     )
   const creneaux1 = garde(new Set(), new Set())
@@ -2345,7 +2249,8 @@ function remplacantsPourHeures(p: Probleme, r: Resolution): Set<string> {
   const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
   const salaries = new Map(p.salaries.map((s) => [s.id, s]))
   const avecRemplacants = new Set<string>()
-  for (const c of p.creneaux) if (c.place !== null) avecRemplacants.add(c.place)
+  for (const c of p.creneaux)
+    if (estRemplacant(c) && c.place !== null) avecRemplacants.add(c.place)
   const occupes = new Set<string>()
   const cedables = new Set<number>()
   for (const a of r.affectations) {
@@ -2370,7 +2275,7 @@ function remplacantsPourHeures(p: Probleme, r: Resolution): Set<string> {
     }
   }
   for (const c of p.creneaux)
-    if (c.place !== null && jours.has(jourDe(c))) ids.add(c.id)
+    if (estRemplacant(c) && jours.has(jourDe(c))) ids.add(c.id)
   return ids
 }
 
@@ -2378,7 +2283,8 @@ function remplacantsPourHeures(p: Probleme, r: Resolution): Set<string> {
  * dépannage (hors shift posé). */
 function placesEnDepannage(p: Probleme, r: Resolution): Set<string> {
   const avecRemplacants = new Set<string>()
-  for (const c of p.creneaux) if (c.place !== null) avecRemplacants.add(c.place)
+  for (const c of p.creneaux)
+    if (estRemplacant(c) && c.place !== null) avecRemplacants.add(c.place)
   const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
   const salaries = new Map(p.salaries.map((s) => [s.id, s]))
   const places = new Set<string>()

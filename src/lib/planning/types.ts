@@ -20,7 +20,9 @@ export type Periode = 'matin' | 'middle' | 'soir' | 'nuit'
 
 /** Un horaire se lit par ses heures et son moment : plus de code depuis le
  * 2026-10-31 (décision utilisateur). Deux horaires n'ont jamais les mêmes
- * heures. */
+ * heures. Plus de raccourci depuis le 2026-11-02 : une journée étoile est un
+ * AUTRE horaire, de moins de 8 h (`etoile.ts`). Un horaire qui commence à
+ * minuit s'écrit « 24:00 » sur le jour où il est posé (`horaireDe`). */
 export interface Horaire {
   id: number
   nom: string
@@ -28,8 +30,6 @@ export interface Horaire {
   fin: string // fin <= debut : le lendemain
   couleur: string
   pause: number // minutes comprises dans la présence, hors temps de travail
-  raccourci: number // minutes en moins en journée courte
-  raccourci_debut: number // dont au début : la journée courte commence plus tard
   periode: Periode | null // proposé d'après les heures, modifiable
 }
 
@@ -81,7 +81,9 @@ export interface JourType {
   mode: ModeJour
   type_shift_id?: number | null
   type_absence_id?: number | null
-  etoile?: boolean // journée étoile (courte) fixée ce jour-là
+  /** Journée étoile fixée ce jour-là : s'il travaille, un horaire de moins
+   * de 8 h (une version étoile de son horaire, `etoile.ts`). */
+  etoile?: boolean
 }
 
 export interface Salarie {
@@ -149,7 +151,6 @@ export interface Affectation {
   debut: string
   fin: string
   epinglee: boolean
-  court: boolean
   pause: number
   updated_at?: string
 }

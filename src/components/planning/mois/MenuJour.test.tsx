@@ -44,7 +44,6 @@ function rendre(
         debut: '07:00',
         fin: '15:45',
         epinglee: true,
-        court: false,
         pause: 45,
       },
     ],
@@ -325,5 +324,98 @@ describe('MenuJour : repos et absences posés d’un clic', () => {
     rendre(referentiel)
     expect(screen.queryByRole('group', { name: 'Repos' })).toBeNull()
     expect(screen.queryByRole('group', { name: 'Absences' })).toBeNull()
+  })
+})
+
+describe('MenuJour : journée étoile (2026-11-02)', () => {
+  // Personne 3 : 39 h ; son shift du mercredi est un Matin (07:00–15:45).
+  const m7 = () => horaireTest(referentiel.horaires, 'M7')
+
+  it("l'horaire de 7 h à part, pas répété dans la liste, posé sur le poste du shift", () => {
+    const { onHoraire } = rendre(referentiel, undefined, 3, 3)
+    const groupe = screen.getByRole('group', { name: 'Journée étoile' })
+    // Plus de bouton qui retirait une heure : des horaires qui existent.
+    expect(
+      within(groupe).queryByRole('menuitem', { name: /^Journée étoile$/ }),
+    ).toBeNull()
+    expect(
+      screen.queryAllByRole('menuitem', { name: /^07:00–14:45/ }),
+    ).toHaveLength(0)
+    fireEvent.click(
+      within(groupe).getByRole('menuitem', {
+        name: 'Journée étoile, 07:00–14:45, 7h',
+      }),
+    )
+    expect(onHoraire).toHaveBeenCalledWith(
+      expect.objectContaining({ id: m7().id }),
+      3,
+    )
+  })
+
+  it('un shift de 7 h propose la journée normale', () => {
+    const ref = referentiel
+    const semaine = analyser({
+      lundi: LUNDI,
+      referentiel: ref,
+      absences,
+      affectations: [
+        {
+          id: 7,
+          lundi: LUNDI,
+          salarie_id: 3,
+          poste_id: 2,
+          jour: 2,
+          horaire_id: m7().id,
+          debut: '07:00',
+          fin: '14:45',
+          epinglee: true,
+          pause: 45,
+        },
+      ],
+      avant: [],
+      apres: [],
+    })
+    const onHoraire = vi.fn()
+    render(
+      <MenuJour
+        ouverture={{ salarieId: 3, date: '2026-11-04', x: 0, y: 0 }}
+        titre="Essai"
+        personne={ref.salaries.find((s) => s.id === 3)!}
+        referentiel={ref}
+        jour={2}
+        source={{ semaine }}
+        shift={semaine.affectations[0]}
+        ecrire
+        onHoraire={onHoraire}
+        onSemaine={vi.fn()}
+        onFermer={vi.fn()}
+      />,
+    )
+    const groupe = screen.getByRole('group', { name: 'Journée étoile' })
+    fireEvent.click(
+      within(groupe).getByRole('menuitem', {
+        name: 'Journée normale, 07:00–15:45, 8h',
+      }),
+    )
+    expect(onHoraire).toHaveBeenCalledWith(
+      expect.objectContaining({ id: horaireTest(ref.horaires, 'M').id }),
+      2,
+    )
+  })
+
+  it('rien pour un contrat de 35 h, ni sans shift', () => {
+    rendre({
+      ...referentiel,
+      salaries: referentiel.salaries.map((s) =>
+        s.id === 3 ? { ...s, heures_hebdo: 35 } : s,
+      ),
+    })
+    expect(screen.queryByRole('group', { name: 'Journée étoile' })).toBeNull()
+    expect(
+      screen.getByRole('menuitem', { name: '07:00–14:45, 7h' }),
+    ).toBeTruthy()
+    cleanup()
+    rendre(referentiel, { posteId: 2 })
+    expect(screen.queryByRole('group', { name: 'Journée étoile' })).toBeNull()
   })
 })

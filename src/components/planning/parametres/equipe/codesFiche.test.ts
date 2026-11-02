@@ -14,8 +14,10 @@ import type { JourType, Salarie } from '#/lib/planning/types.ts'
 /*
  * Les codes vus depuis la fiche (étape 4) : union des postes, ce qui reste
  * par poste, codes morts, et la semaine type qui ne propose que ce que la
- * règle unique permet. Hôtel fictif : M=1, MI=2, AM=3, N=4, D=5, T=6, TV=7 ;
- * Réception=2 et Club=3 (M, MI, AM), Veille de nuit=4 (N).
+ * règle unique permet. Hôtel fictif : M=1, MI=2, AM=3, N=4, D=5, T=6, TV=7,
+ * et les versions étoile M7=8, MI7=9, AM7=10, N7=11 (2026-11-02) ;
+ * Réception=2 et Club=3 (M, MI, AM et leurs versions), Veille de nuit=4 (N,
+ * N7).
  */
 
 const { referentiel } = hotelDemo('2026-11-02')
@@ -49,9 +51,9 @@ function fiche(
 describe('codes de la fiche', () => {
   it('union des codes de ses postes, tous sans poste', () => {
     expect(ids(codesDeSesPostes(fiche([2, 4]), postes, horaires))).toEqual([
-      1, 2, 3, 4,
+      1, 2, 3, 4, 8, 9, 10, 11,
     ])
-    expect(codesDeSesPostes(fiche([]), postes, horaires)).toHaveLength(7)
+    expect(codesDeSesPostes(fiche([]), postes, horaires)).toHaveLength(11)
   })
 
   it('par poste : ses codes, et ce qui en reste pour elle', () => {
@@ -59,8 +61,8 @@ describe('codes de la fiche', () => {
     expect(
       lignes.map((l) => [l.poste.id, ids(l.codes), ids(l.utilisables)]),
     ).toEqual([
-      [2, [1, 2, 3], [3]],
-      [4, [4], []],
+      [2, [1, 2, 3, 8, 9, 10], [3]],
+      [4, [4, 11], []],
     ])
   })
 
@@ -80,7 +82,7 @@ describe('codes de la fiche', () => {
     semaine[1] = { mode: 'travail', type_shift_id: 4, type_absence_id: null }
     expect(
       ids(codesSemaineType(fiche([2], [], semaine), postes, horaires, 1)),
-    ).toEqual([1, 2, 3])
+    ).toEqual([1, 2, 3, 8, 9, 10])
   })
 
   it('propriété : chaque code proposé passe codesPermis sur un de ses postes, aucun code mort', () => {

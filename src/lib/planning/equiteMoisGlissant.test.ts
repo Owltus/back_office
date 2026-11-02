@@ -66,7 +66,6 @@ function shift(
     debut,
     fin: debut === '08:00' ? '15:00' : '23:00',
     epinglee: false,
-    court: false,
     pause: 0,
   }
 }

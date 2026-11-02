@@ -202,7 +202,8 @@ describe('FicheSalarie', () => {
     const choix = await screen.findByRole('radiogroup', {
       name: 'Horaires autorisés',
     })
-    expect(screen.getByText('Les 3 horaires de ses postes.')).toBeTruthy()
+    // M, MI, AM et leurs versions étoile (2026-11-02).
+    expect(screen.getByText('Les 6 horaires de ses postes.')).toBeTruthy()
     fireEvent.click(
       within(choix).getByRole('radio', { name: 'Seulement ceux-ci' }),
     )
@@ -210,6 +211,10 @@ describe('FicheSalarie', () => {
     const horaire = (nom: string) => screen.getByRole('button', { name: nom })
     for (const c of ['07:00–15:45', '09:00–17:45', '15:00–23:45'])
       expect(horaire(c).getAttribute('aria-pressed')).toBe('true')
+    for (const c of ['07:00–14:45', '09:00–16:45', '15:00–22:45']) {
+      expect(horaire(c).getAttribute('aria-pressed')).toBe('true')
+      fireEvent.click(horaire(c))
+    }
     fireEvent.click(horaire('15:00–23:45'))
     fireEvent.click(horaire('09:00–17:45'))
     fireEvent.click(horaire('07:00–15:45'))
@@ -550,7 +555,6 @@ describe('FicheSalarie', () => {
         debut: '07:00',
         fin: '15:00',
         epinglee: true,
-        court: false,
         pause: 0,
       },
     ]

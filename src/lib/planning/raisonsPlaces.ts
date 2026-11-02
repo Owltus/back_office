@@ -179,7 +179,7 @@ export function raisonClaire(
             'R-JOURNEE-ETOILE:fixee',
           )
         : r(
-            'Une seule journée courte au contrat',
+            'Une seule journée étoile au contrat',
             mention('au-delà de son contrat'),
             'R-JOURNEE-ETOILE:nombre',
           )
@@ -251,7 +251,7 @@ export function raisonsClaires(
 }
 
 /** La personne peut prendre la place : rien ne l'en empêche, sinon ses
- * heures (6e jour, journée courte) ou un appel (extra). */
+ * heures (6e jour, journée étoile) ou un appel (extra). */
 export const estPossible = (raisons: readonly RaisonClaire[]) =>
   raisons.every(
     (r) =>
@@ -283,7 +283,7 @@ const PHRASES_COMMUNES: Record<(typeof REGLES_BLOCAGE)[number], string> = {
   'R-REPOS-HEBDO-HCR': 'Tout le monde a déjà trop de jours de travail.',
   'SIXIEME-JOUR': 'Ce serait un 6e jour pour tout le monde.',
   'R-SEMAINE-MAX': 'Tout le monde est au maximum de ses heures.',
-  'R-JOURNEE-ETOILE': 'Tout le monde a déjà sa journée courte.',
+  'R-JOURNEE-ETOILE': 'Tout le monde a déjà sa journée étoile.',
   'R-REPOS-HEBDO-35H': 'Personne ne garderait son repos de 35 h.',
   'R-REPOS-HEBDO-MINEUR':
     'Tout le monde est mineur : deux jours de repos de suite.',
@@ -291,7 +291,7 @@ const PHRASES_COMMUNES: Record<(typeof REGLES_BLOCAGE)[number], string> = {
 }
 
 /** Phrase de la règle commune, ou null si la règle est inconnue ou si elle
- * ne BLOQUE pas vraiment (6e jour, journée courte au contrat, extra à
+ * ne BLOQUE pas vraiment (6e jour, journée étoile au contrat, extra à
  * appeler : quelqu'un peut prendre la place, ses heures ou un appel
  * mis à part, donc « Je ne peux pas » serait faux). */
 export function phraseCommune(regle: string | null | undefined): string | null {

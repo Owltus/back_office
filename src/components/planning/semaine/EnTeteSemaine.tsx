@@ -50,7 +50,8 @@ export const AIDE_VALIDATION = [
 
 export const AIDE_GESTES = [
   'Glisser un shift : le déplacer (Alt maintenu : le dupliquer)',
-  "Clic droit sur une case : changer l'horaire, poser un repos ou une absence, valider, journée étoile",
+  "Clic droit sur une case : changer l'horaire, poser un repos ou une absence, valider, passer en journée étoile",
+  'Journée étoile : un horaire de 7 h, une fois par semaine pour les 39 h',
   'Clic sur un shift : tout modifier',
   'Double-clic sur un shift ou un repos : le valider, ou le remettre en proposition',
   'Posez et validez quelques shifts : Compléter fait le reste',

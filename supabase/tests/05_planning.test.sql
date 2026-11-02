@@ -72,9 +72,11 @@ select private.planning_lundi(private.planning_aujourdhui()) - 7 as p,
 
 -- Heures inhabituelles : deux horaires n'ont jamais les mêmes heures
 -- (2026-10-31), et le fichier tourne aussi sur une copie de la prod.
-insert into public.planning_horaires (nom, debut, fin, pause, raccourci, periode)
+insert into public.planning_horaires (nom, debut, fin, pause, periode)
   overriding system value
-  values ('Matin test', '05:05', '13:50', 45, 60, 'matin');
+  values ('Matin test', '05:05', '13:50', 45, 'matin'),
+         -- Commence à minuit : s'écrit 24:00 sur son jour (2026-11-02).
+         ('Nuit test', '00:00', '06:55', 0, 'nuit');
 create temp table t_ids as select
   (select id from public.planning_horaires where nom = 'Matin test') as h;
 insert into public.planning_postes (nom, categorie, horaires_autorises)
@@ -266,14 +268,16 @@ select lives_ok(pg_temp.q('update public.planning_affectations set created_by = 
   'verrouillée : l''auteur peut être effacé (suppression d''un compte)');
 
 -- --------------------------------------- heures recalées sur l'horaire ---
+-- Plus de journée courte (2026-11-02) : un shift a toujours les heures de
+-- son horaire ; la journée étoile est un autre horaire.
 select is(pg_temp.essai('ecriture', array[
-  pg_temp.q('insert into public.planning_affectations (lundi, salarie_id, poste_id, jour, horaire_id, debut, fin, court, pause) values (:F, :S3, :PA, 4, (select id from public.planning_horaires where nom = ''Matin test''), ''09:00'', ''10:00'', true, 0)'),
-  pg_temp.q('select debut || ''-'' || fin || ''/'' || pause || ''/'' || court from public.planning_affectations where lundi = :F and salarie_id = :S3 and jour = 4')]),
-  '05:05-12:50/45/true', 'un shift prend les heures de son horaire (journée courte comprise)');
+  pg_temp.q('insert into public.planning_affectations (lundi, salarie_id, poste_id, jour, horaire_id, debut, fin, pause) values (:F, :S3, :PA, 4, (select id from public.planning_horaires where nom = ''Matin test''), ''09:00'', ''10:00'', 0)'),
+  pg_temp.q('select debut || ''-'' || fin || ''/'' || pause from public.planning_affectations where lundi = :F and salarie_id = :S3 and jour = 4')]),
+  '05:05-13:50/45', 'un shift prend les heures et la pause de son horaire');
 select is(pg_temp.essai('ecriture', array[
-  pg_temp.q('update public.planning_affectations set court = false where lundi = :F and salarie_id = :S1 and jour = 0'),
+  pg_temp.q('update public.planning_affectations set horaire_id = (select id from public.planning_horaires where nom = ''Nuit test''), debut = ''00:00'' where lundi = :F and salarie_id = :S1 and jour = 0'),
   pg_temp.q('select debut || ''-'' || fin from public.planning_affectations where lundi = :F and salarie_id = :S1 and jour = 0')]),
-  '05:05-13:50', 'retirer la journée courte remet les heures pleines');
+  '24:00-06:55', 'un horaire qui commence à minuit s''écrit 24:00 sur son jour');
 
 -- ------------------------------- poste de l'accueil (U1 du 2026-11-01) ---
 select is(pg_temp.essai('gestion', array[

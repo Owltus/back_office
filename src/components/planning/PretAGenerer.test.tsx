@@ -87,8 +87,6 @@ function apres(n: number): Referentiel {
       fin: '15:00',
       couleur: '#888888',
       pause: 0,
-      raccourci: 0,
-      raccourci_debut: 0,
       periode: 'matin',
     })
   if (n >= 2)

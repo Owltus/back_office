@@ -72,7 +72,7 @@ export function texteCarte(c: ContenuCarte): string[] {
     `${!c.horaire ? 'Horaire spécifique · ' : c.horaire.periode ? `${libelleMoment(c.horaire.periode)} · ` : ''}${heureAffichee(c.debut)}–${heureAffichee(c.fin)}`,
     ligneAuLieuDe(c.horaire, c.demande),
     c.poste?.nom,
-    c.etoile && 'Journée étoile : une heure de moins',
+    c.etoile && 'Journée étoile : un horaire de 7 h',
     c.role === 'soutien' && 'En soutien (ne compte pas seul)',
     c.role === 'occasionnel' && 'En dépannage sur ce poste',
     c.epinglee
@@ -121,7 +121,8 @@ export function CarteShift({ c, enVol }: { c: ContenuCarte; enVol?: boolean }) {
         {heureAffichee(c.fin)}
       </span>
       {c.etoile && (
-        // Pastille au coin haut droit : l'étoile dit « une heure de moins ».
+        // Pastille au coin haut droit : l'étoile dit « journée étoile », un
+        // horaire de moins de 8 h pour un contrat de plus de 35 h (calculé).
         <span className="planning-etoile-badge" aria-label="Journée étoile">
           <Star aria-hidden />
         </span>

@@ -335,7 +335,7 @@ export function SectionSemaineType({
       titre="Semaine type"
       aide={`Libre : le planning automatique décide si elle travaille ; avec un horaire choisi, ce sera celui-là les jours où elle travaille (de nuit le week-end, par exemple). Travaille : son jour habituel, le planning la fait travailler ce jour-là dès qu'il le peut. Repos : jamais planifiée ce jour-là. Une absence se pose à sa date, plus bas. École : jour hors de l'hôtel, compté comme une journée de travail complète.${
         etoile
-          ? ' ★ : journée étoile (la journée courte) fixée ce jour-là ; sans étoile, le planning automatique la place selon les besoins.'
+          ? ' ★ : journée étoile fixée, un horaire de 7 h ce jour-là ; sans étoile, le planning automatique la place selon les besoins.'
           : ''
       }`}
     >
@@ -419,7 +419,7 @@ export function SectionSemaineType({
                     label={
                       e.etoile
                         ? `Journée étoile fixée le ${jour} : cliquez pour la laisser variable`
-                        : `Fixer la journée étoile (une heure de moins) le ${jour}`
+                        : `Fixer la journée étoile (un horaire de 7 h) le ${jour}`
                     }
                   >
                     <Button

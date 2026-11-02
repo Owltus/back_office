@@ -1,8 +1,10 @@
 /*
  * Aides pures de la vue semaine (prototype `pages/planning/edition.ts` et
  * `PlanningPage.tsx` : `statutDe`, `indice`, `journeeEtoile`, `titreHeures`).
- * Sans React : testées à part. Les écritures composées (poser un horaire,
- * déplacer la journée étoile) rendent une fonction qui appelle le service.
+ * Sans React : testées à part. Les écritures composées (poser un horaire)
+ * rendent une fonction qui appelle le service. La journée étoile n'a plus
+ * d'écriture à part depuis le 2026-11-02 : c'est un autre horaire, posé comme
+ * les autres (`etoileDeLaCase`, `codesCase.ts`).
  */
 
 import { dureeHoraire, heures, jourDeRepos } from '#/lib/planning/affichage.ts'
@@ -194,22 +196,14 @@ export function indiceDe(
   return niveau === 'titulaire' ? 'ok' : 'depannage'
 }
 
-/** Journée étoile d'une carte : pas au forfait, plus de 35 h, et court ou 7 h. */
-export function estEtoile(
-  s: Salarie | undefined,
-  a: Pick<ShiftOut, 'court' | 'duree'>,
-): boolean {
-  if (!s || s.forfait_jours || Number(s.heures_hebdo) <= 35) return false
-  return a.court || a.duree === 7 * 60
-}
-
 /** Temps de travail d'un code (pause déduite). */
 export const travailCode = (h: Pick<Horaire, 'debut' | 'fin' | 'pause'>) =>
   dureeHoraire(h.debut, h.fin) - h.pause
 
 /**
- * Pose ou change l'horaire d'une case (clic droit). Un shift : il prend ce
- * code (journée étoile retirée). Un jour d'absence non fixe : l'absence est
+ * Pose ou change l'horaire d'une case (clic droit). Un shift : il prend cet
+ * horaire (une journée étoile est un horaire comme un autre). Un jour
+ * d'absence non fixe : l'absence est
  * retirée, puis le shift posé ; si le shift est refusé, l'absence est remise
  * avec son motif (deux appels, pas une transaction : rien ne doit se perdre).
  * Sinon : un shift validé sur le poste de référence.
@@ -222,13 +216,7 @@ export function poserHoraire(
   h: Horaire,
   posteId: number,
 ): () => Promise<void> {
-  const valeurs = {
-    horaire_id: h.id,
-    debut: h.debut,
-    fin: h.fin,
-    court: false,
-    pause: h.pause,
-  }
+  const valeurs = { horaire_id: h.id, ...horaireDe(h), pause: h.pause }
   // Un code choisi dans une autre rubrique (casquette) change aussi le poste.
   if (shift)
     return () =>
@@ -261,40 +249,6 @@ export function poserHoraire(
       }
       throw err
     }
-  }
-}
-
-/** La journée étoile d'une case, si elle peut l'être : contrat au-delà de
- * 35 h, pas au forfait, code avec une version courte. Unique dans la semaine. */
-export function etoileProposee(
-  semaine: SemaineOut | null,
-  personne: Salarie | undefined,
-  horaires: Horaire[],
-  o: CaseJour,
-): { active: boolean; basculer: () => Promise<void> } | undefined {
-  const shift = shiftDe(semaine, o)
-  const code = horaires.find((h) => h.id === shift?.type_shift_id)
-  if (!semaine || !shift || !personne || personne.forfait_jours)
-    return undefined
-  if (Number(personne.heures_hebdo) <= 35 || !code?.raccourci) return undefined
-  const versCourt = (a: ShiftOut, court: boolean) => {
-    const c = horaires.find((h) => h.id === a.type_shift_id)
-    // Les heures finales sont calculées ici : la base les enregistre telles quelles.
-    return service.modifierShift(a.id, {
-      court,
-      ...(c ? horaireDe(c, court) : {}),
-    })
-  }
-  return {
-    active: shift.court,
-    basculer: async () => {
-      if (shift.court) return versCourt(shift, false)
-      const autres = semaine.affectations.filter(
-        (a) => a.salarie_id === o.salarie_id && a.court && a.id !== shift.id,
-      )
-      for (const a of autres) await versCourt(a, false)
-      await versCourt(shift, true)
-    },
   }
 }
 

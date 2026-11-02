@@ -260,12 +260,15 @@ export function violationsSalarie(
         semaine,
       )
     }
+    // R-JOURNEE-ETOILE (décisions utilisateur du 2026-11-02) : la journée
+    // étoile est un horaire de moins de 8 h ; fixée un jour, ce jour-là n'a
+    // pas d'horaire de 8 h ; au plus `journeesCourtesMax` dans la semaine.
     const courtes = semaine.filter((c) => travail(c) < s.journeePleine)
     for (const c of semaine) {
       if (s.etoileFixe.has(jourDe(c)) && travail(c) >= s.journeePleine) {
         ajoute(
           'R-JOURNEE-ETOILE',
-          'sa journée étoile (une heure de moins) est fixée ce jour-là',
+          `sa journée étoile est fixée ce jour-là : un horaire de moins de ${h(s.journeePleine)}`,
           [c],
           'organisation',
         )
@@ -277,7 +280,7 @@ export function violationsSalarie(
     ) {
       ajoute(
         'R-JOURNEE-ETOILE',
-        `${courtes.length} journées courtes dans la semaine, une seule prévue au contrat`,
+        `${courtes.length} journées de moins de ${h(s.journeePleine)} dans la semaine, une seule journée étoile prévue au contrat`,
         courtes,
         'organisation',
       )
@@ -368,20 +371,6 @@ export function entreFiches(
   return erreurs
 }
 
-/** Le créneau tel qu'il est fait en journée courte : début retardé de
- * `raccourciDebut`, fin avancée du reste (`horaireDe`, `temps.ts`, qui
- * écrit le shift court). */
-export function enVersionCourte(c: Creneau): Creneau {
-  const auDebut = Math.min(Math.max(c.raccourciDebut, 0), c.raccourci)
-  return {
-    ...c,
-    debut: c.debut + auDebut,
-    fin: c.fin - (c.raccourci - auDebut),
-    raccourci: 0,
-    raccourciDebut: 0,
-  }
-}
-
 export function violations(
   p: Probleme,
   affectations: AffectationSolveur[],
@@ -394,10 +383,7 @@ export function violations(
     const c = creneaux.get(a.creneauId)
     const s = salaries.get(a.salarieId)
     if (!c || !s) continue
-    parSalarie.set(s.id, [
-      ...(parSalarie.get(s.id) ?? []),
-      a.court ? enVersionCourte(c) : c,
-    ])
+    parSalarie.set(s.id, [...(parSalarie.get(s.id) ?? []), c])
   }
   // Une place se compte avec ses remplaçants (`c.place ?? c.id`) : un
   // titulaire en 08:00–16:45 sur la place d'un 07:00–15:45 la tient, et l'effectif plus les
@@ -512,9 +498,9 @@ export function manquants(
 
 // ------------------------------------------ présences : trous et consignes
 
-/** Affectations faites, épinglées comprises (`p.imposees`, version courte
- * selon `p.courtes`), une seule fois par (salarié, créneau) : les shifts
- * posés comptent même si l'appelant ne passe que les propositions. */
+/** Affectations faites, épinglées comprises (`p.imposees`), une seule fois
+ * par (salarié, créneau) : les shifts posés comptent même si l'appelant ne
+ * passe que les propositions. */
 function affectationsCompletes(
   p: Probleme,
   affectations: AffectationSolveur[],
@@ -527,11 +513,7 @@ function affectationsCompletes(
   for (const k of p.imposees) {
     if (vues.has(k)) continue
     const i = k.indexOf('|')
-    vues.set(k, {
-      salarieId: k.slice(0, i),
-      creneauId: k.slice(i + 1),
-      court: p.courtes.has(k),
-    })
+    vues.set(k, { salarieId: k.slice(0, i), creneauId: k.slice(i + 1) })
   }
   return [...vues.values()]
 }
@@ -552,8 +534,8 @@ export interface Trou {
  * dernier. Besoins : les créneaux `b…` (ni posés hors besoins, ni
  * remplaçants) d'au moins une personne nécessaire, rangés au jour où ils
  * sont écrits. Présences : toutes les affectations du poste, quel que soit
- * leur jour (remplaçants, shifts posés et épinglés compris), version courte
- * appliquée. `postes` : par défaut `postesAPresence` et l'accueil entier
+ * leur jour (remplaçants, versions étoile, shifts posés et épinglés compris),
+ * sur leurs vraies heures. `postes` : par défaut `postesAPresence` et l'accueil entier
  * (`POSTE_ACCUEIL`, `trousAccueil`) ; une liste donnée ne voit l'accueil que
  * si elle contient `POSTE_ACCUEIL`. */
 export function trous(
@@ -571,12 +553,11 @@ export function trous(
     const c = creneaux.get(a.creneauId)
     const s = salaries.get(a.salarieId)
     if (!c || !s || !postes.has(c.poste) || c.accueil) continue
-    const fait = a.court ? enVersionCourte(c) : c
     presences.set(c.poste, [
       ...(presences.get(c.poste) ?? []),
       {
-        debut: fait.debut,
-        fin: fait.fin,
+        debut: c.debut,
+        fin: c.fin,
         autonome: role(s, c.poste) !== 'soutien',
       },
     ])
@@ -614,7 +595,7 @@ export function trous(
  * sur les candidats de l'accueil écrits ce jour (`trousAccueilDuJour`, la
  * définition de `cycles.ts`). Présences : TOUTES les affectations des postes
  * de ces candidats (shifts posés, épinglés et candidats, quel que soit leur
- * jour), version courte appliquée, un soutien jamais autonome. Recompté ici
+ * jour), un soutien jamais autonome. Recompté ici
  * sans rien du générateur ; le poste du trou est `POSTE_ACCUEIL`. */
 export function trousAccueil(
   p: Probleme,
@@ -634,10 +615,9 @@ export function trousAccueil(
     const c = creneaux.get(a.creneauId)
     const s = salaries.get(a.salarieId)
     if (!c || !s || !postes.has(c.poste)) continue
-    const fait = a.court ? enVersionCourte(c) : c
     presences.push({
-      debut: fait.debut,
-      fin: fait.fin,
+      debut: c.debut,
+      fin: c.fin,
       autonome: role(s, c.poste) !== 'soutien',
     })
   }
@@ -857,12 +837,11 @@ export function ouverturesManquees(
     const c = creneaux.get(a.creneauId)
     const s = salaries.get(a.salarieId)
     if (!c || !s) continue
-    const fait = a.court ? enVersionCourte(c) : c
     parPoste.set(c.poste, [
       ...(parPoste.get(c.poste) ?? []),
       {
-        debut: fait.debut,
-        fin: fait.fin,
+        debut: c.debut,
+        fin: c.fin,
         autonome: role(s, c.poste) !== 'soutien',
       },
     ])
@@ -907,7 +886,7 @@ export function relevesManquantes(
     const s = salaries.get(a.salarieId)
     if (!c || !s || !postesJour.has(c.poste)) return []
     if (role(s, c.poste) === 'soutien') return []
-    return [{ c, fait: a.court ? enVersionCourte(c) : c }]
+    return [{ c, fait: c }]
   })
   const r: number[] = []
   for (let jour = 0; jour < p.nbJours; jour++) {

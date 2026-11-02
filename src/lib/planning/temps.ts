@@ -176,19 +176,17 @@ export function toucheLaNuit(
   return toucheLaNuitMinutes(jour, d, f)
 }
 
-/** Début et fin d'un shift posé avec cet horaire, en version courte ou
- * non : la version courte commence `raccourci_debut` plus tard et finit le
- * reste plus tôt. La nuit courte de 23:00 commence à « 24:00 » (le lendemain
- * à minuit), comme sur les plannings imprimés. */
-export function horaireDe(
-  h: { debut: string; fin: string; raccourci: number; raccourci_debut: number },
-  court: boolean,
-): { debut: string; fin: string } {
-  if (!(court && h.raccourci)) return { debut: h.debut, fin: h.fin }
-  const debut = h.raccourci_debut
-    ? hhmm(minutes(h.debut) + h.raccourci_debut)
-    : h.debut
-  return { debut, fin: avancer(h.fin, h.raccourci - h.raccourci_debut) }
+/** Début et fin d'un shift posé avec cet horaire : ses heures, et un
+ * horaire qui commence à minuit commence à « 24:00 » (la FIN du jour où il
+ * est posé : la nuit de minuit à 7 h du lundi est celle du lundi au mardi),
+ * comme l'ancienne nuit étoile et comme sur les plannings imprimés. Même
+ * règle en base (`private.planning_horaire_de`). Plus de version courte
+ * depuis le 2026-11-02 : une journée étoile est un autre horaire. */
+export function horaireDe(h: { debut: string; fin: string }): {
+  debut: string
+  fin: string
+} {
+  return { debut: h.debut === '00:00' ? '24:00' : h.debut, fin: h.fin }
 }
 
 /** « 7 h 45 » ; « 8 h » pour une heure ronde. */

@@ -24,6 +24,7 @@ import {
   codesDuPoste,
   codesImposes,
 } from '#/lib/planning/eligibilite.ts'
+import { versionsEtoile } from '#/lib/planning/etoile.ts'
 import {
   creneau,
   duree,
@@ -119,7 +120,10 @@ export interface ShiftOut {
   fin: string
   duree: number // travail effectif, pause déduite
   pause: number
-  court: boolean
+  /** Journée étoile (D5 du 2026-11-02, calculée, rien n'est stocké) : un
+   * contrat à journée étoile (plus de 35 h, ni forfait ni extra) sur un
+   * horaire de moins de 8 h. L'écran y met l'étoile. */
+  etoile: boolean
   epinglee: boolean
   besoin_id: number | null
   /** Horaire imposé par le besoin quand le shift posé en a un autre du même
@@ -160,7 +164,8 @@ export interface APourvoirOut {
   manquant: number
   /** Pourquoi chacun ne peut pas prendre la place avec l'horaire imposé. */
   raisons: RaisonOut[]
-  /** Les autres horaires du même cycle qui pourraient tenir la place
+  /** Les autres horaires qui pourraient tenir la place : ses versions étoile
+   * (`versionsEtoileDe`) puis les autres horaires du même cycle
    * (`remplacantsDe`), et pourquoi chacun ne peut pas les prendre non plus.
    * Vide pour un horaire sans moment ou sans voisin. Ajouté le 2026-10-30
    * (plan planning-cycles-2026-10-30, étape 5) ; absent du prototype. */
@@ -330,7 +335,8 @@ export function contexte(d: DonneesSemaine): Contexte {
   const besoins = [...d.referentiel.besoins]
     .map((b) => {
       const h = b.horaire_id !== null ? horaires.get(b.horaire_id) : undefined
-      return h ? { ...b, debut: h.debut, fin: h.fin } : { ...b }
+      // Les heures de l'horaire, minuit en début écrit 24:00 (`horaireDe`).
+      return h ? { ...b, ...horaireDe(h) } : { ...b }
     })
     .sort(
       (a, b) =>
@@ -429,7 +435,8 @@ export function borneContrat(
 export function fiche(
   x: Salarie,
   lundi: string,
-  ctx: Pick<Contexte, 'sansDecompte' | 'ecole' | 'absences'>,
+  ctx: Pick<Contexte, 'sansDecompte' | 'ecole' | 'absences'> &
+    Partial<Pick<Contexte, 'horaires'>>,
   exclu = false,
 ): Fiche {
   const semaine = x.semaine_type
@@ -491,7 +498,9 @@ export function fiche(
     joursEcole: ecole,
     reposFixes,
     travailFixe,
-    shiftImpose: codesImposes(semaine),
+    // L'horaire fixé ET ses versions étoile (`codesImposes`) ; un jour de
+    // journée étoile fixée, le moteur n'y pose que les secondes (`compatible`).
+    shiftImpose: codesImposes(semaine, [...(ctx.horaires?.values() ?? [])]),
     shiftsAutorises: codesDeLaFiche(x),
     etoileFixe: etoile,
     contratDebut: borneContrat(lundi, x.date_entree, 0),
@@ -603,8 +612,6 @@ export function creneauBesoin(
     typeShift: b.horaire_id === null ? null : String(b.horaire_id),
     soutien: soutien ?? b.soutien,
     pause: h ? h.pause : 0,
-    raccourci: h ? h.raccourci : 0,
-    raccourciDebut: h ? h.raccourci_debut : 0,
     facultatif: facultatif ?? b.renfort,
     jourPlanning: b.jour,
     presenceMax: presenceMaxDe(ctx, b.poste_id),
@@ -644,7 +651,8 @@ export function creneauAffectation(ctx: Contexte, a: Affectation): Creneau {
  * (`periode === null` : direction, supervision) n'a jamais de remplaçant et
  * n'en est jamais un ; un besoin en horaire libre non plus. Un horaire court
  * (moins de 7 h de travail, `estCourt`) ne remplace qu'un court et n'est
- * remplacé que par un court. Aucun code n'est
+ * remplacé que par un court. Les versions étoile de l'horaire n'en sont pas :
+ * elles tiennent la place comme lui (`versionsEtoileDe`). Aucun code n'est
  * créé ni modifié : on choisit parmi ceux qui existent. Triés par id. */
 export function remplacantsDe(
   ctx: Pick<Contexte, 'horaires' | 'postes'>,
@@ -655,15 +663,35 @@ export function remplacantsDe(
   if (!h || h.periode === null) return []
   const cycle = cycleDe(h, h.debut)
   const court = estCourt(h)
+  const etoiles = new Set(versionsEtoileDe(ctx, b).map((v) => v.id))
   return codesDuPoste(ctx.postes.get(b.poste_id), [...ctx.horaires.values()])
     .filter(
       (c) =>
         c.id !== h.id &&
         c.periode !== null &&
+        !etoiles.has(c.id) &&
         cycleDe(c, c.debut) === cycle &&
         estCourt(c) === court,
     )
     .sort((a, c) => a.id - c.id)
+}
+
+/** Versions étoile de l'horaire d'un besoin permises au poste (`etoile.ts`,
+ * décisions utilisateur du 2026-11-02) : la journée de 7 h d'un horaire de
+ * 8 h, sur un horaire qui existe. Elles tiennent la place comme l'horaire
+ * demandé (`creneauEtoile`). Vide pour un besoin sans horaire ou de moins de
+ * 8 h. Triées par id. */
+export function versionsEtoileDe(
+  ctx: Pick<Contexte, 'horaires' | 'postes'>,
+  b: Pick<Besoin, 'poste_id' | 'horaire_id'>,
+): Horaire[] {
+  if (b.horaire_id === null) return []
+  const h = ctx.horaires.get(b.horaire_id)
+  if (!h) return []
+  return versionsEtoile(
+    h,
+    codesDuPoste(ctx.postes.get(b.poste_id), [...ctx.horaires.values()]),
+  )
 }
 
 /** Id du créneau remplaçant d'un besoin pour un horaire. */
@@ -673,7 +701,7 @@ export const idRemplacant = (besoinId: number, horaireId: number) =>
 /** Créneau remplaçant (`r<besoin>-<horaire>`, contrat de la vague 1, §2) : la
  * place du besoin `b<id>` tenue avec un autre horaire du même cycle. Aucune
  * place propre (effectif, facultatif et soutien à 0) : le moteur compte ses
- * autonomes avec ceux de `b<id>` (`place`). Bornes, pause, raccourci et
+ * autonomes avec ceux de `b<id>` (`place`). Bornes, pause et
  * présence sont ceux de l'horaire remplaçant, le jour et le poste ceux du
  * besoin. */
 export function creneauRemplacant(
@@ -681,8 +709,9 @@ export function creneauRemplacant(
   b: Besoin,
   h: Horaire,
 ): Creneau {
-  const [d, f] = bornes(ctx.lundi, b.jour, h.debut, h.fin)
-  const x = { poste_id: b.poste_id, horaire_id: h.id, debut: h.debut }
+  const ecrit = horaireDe(h)
+  const [d, f] = bornes(ctx.lundi, b.jour, ecrit.debut, ecrit.fin)
+  const x = { poste_id: b.poste_id, horaire_id: h.id, debut: ecrit.debut }
   return creneau({
     id: idRemplacant(b.id, h.id),
     poste: String(b.poste_id),
@@ -692,17 +721,26 @@ export function creneauRemplacant(
     typeShift: String(h.id),
     soutien: 0,
     pause: h.pause,
-    raccourci: h.raccourci,
-    raccourciDebut: h.raccourci_debut,
     facultatif: 0,
     jourPlanning: b.jour,
     ferme: false,
     presenceMax: presenceMaxDe(ctx, b.poste_id),
-    nuit: toucheLaNuit(b.jour, h.debut, h.fin),
+    nuit: toucheLaNuit(b.jour, ecrit.debut, ecrit.fin),
     presence: presenceDe(ctx, x),
     place: `b${b.id}`,
     ...equiteDe(ctx, x),
   })
+}
+
+/** Créneau d'une VERSION ÉTOILE (`r<besoin>-<horaire>`, comme un remplaçant,
+ * marqué `etoile`) : la place du besoin tenue sur un horaire de 7 h contenu
+ * dans le sien. Sans coût de remplaçant, ses vraies minutes face au contrat,
+ * présent dès le premier temps du calcul (`generateur.ts`). Il ouvre aussi
+ * les places de SOUTIEN du besoin (`soutien`, plafonnées sur toute la place
+ * par le moteur) : un apprenti fait sa journée de 7 h comme les autres,
+ * comme l'ancienne journée courte sur le besoin lui-même. */
+export function creneauEtoile(ctx: Contexte, b: Besoin, h: Horaire): Creneau {
+  return { ...creneauRemplacant(ctx, b, h), soutien: b.soutien, etoile: true }
 }
 
 // ------------------------------------------------- candidats de l'accueil
@@ -720,8 +758,9 @@ export function creneauCandidat(
   poste: Poste,
   h: Horaire,
 ): Creneau {
-  const [d, f] = bornes(ctx.lundi, jour, h.debut, h.fin)
-  const x = { poste_id: poste.id, horaire_id: h.id, debut: h.debut }
+  const ecrit = horaireDe(h)
+  const [d, f] = bornes(ctx.lundi, jour, ecrit.debut, ecrit.fin)
+  const x = { poste_id: poste.id, horaire_id: h.id, debut: ecrit.debut }
   return creneau({
     id: idCandidat(jour, poste.id, h.id),
     poste: String(poste.id),
@@ -730,11 +769,9 @@ export function creneauCandidat(
     effectif: 0,
     typeShift: String(h.id),
     pause: h.pause,
-    raccourci: h.raccourci,
-    raccourciDebut: h.raccourci_debut,
     jourPlanning: jour,
     presenceMax: presenceMaxPoste(poste.categorie),
-    nuit: toucheLaNuit(jour, h.debut, h.fin),
+    nuit: toucheLaNuit(jour, ecrit.debut, ecrit.fin),
     presence: presenceDe(ctx, x),
     accueil: true,
     ...equiteDe(ctx, x),
@@ -865,22 +902,27 @@ export interface Correspondances {
   soutien: Map<number, number>
   /** shift rattaché PAR CYCLE (seconde passe) → horaire imposé par le besoin
    * (`horaire_id`) : « 08:00–16:45 au lieu de 07:00–15:45 ». Absent : rattaché
-   * par son horaire exact,
+   * par son horaire exact, par une version étoile,
    * ou pas rattaché. Sous-ensemble des clés de `lien` et `soutien`. */
   demande: Map<number, number>
+  /** Shifts rattachés (seconde passe) par une VERSION ÉTOILE de l'horaire du
+   * besoin (`versionsEtoileDe`) : ils tiennent la place comme l'horaire
+   * demandé, sans « au lieu de ». Sous-ensemble des clés de `lien` et
+   * `soutien`, jamais dans `demande`. */
+  etoile: Set<number>
 }
 
 /** Rattache chaque shift au besoin qu'il couvre, en deux passes (plan
  * planning-cycles-2026-10-30, D6) :
  *
  * 1. horaire exact, comme avant : même poste, jour et horaire (l'horaire, c'est
- *    le code quand il y en a un : un shift en journée courte couvre le
- *    besoin de son horaire) ;
+ *    le code quand il y en a un) ;
  * 2. les shifts encore libres prennent les places encore libres du MÊME
- *    poste, du MÊME jour et du MÊME cycle, quand leur horaire est un remplaçant
- *    de l'horaire du besoin (`remplacantsDe` : codes du poste, même cycle, un
- *    middle pour un middle, jamais un horaire sans moment ni un horaire libre).
- *    Le début le plus proche d'abord. Marqués dans `demande`.
+ *    poste et du MÊME jour, quand leur horaire est une version étoile de
+ *    l'horaire du besoin (`versionsEtoileDe`, marqués dans `etoile`) ou un
+ *    remplaçant (`remplacantsDe` : codes du poste, même cycle, un middle pour
+ *    un middle, jamais un horaire sans moment ni un horaire libre ; marqués
+ *    dans `demande`). Le début le plus proche d'abord.
  *
  * Dans chaque passe, épinglés d'abord ; un profil soutien ne prend qu'une
  * place de soutien. L'horaire exact passe toujours avant un voisin : la
@@ -916,6 +958,7 @@ export function correspondances(
   const lien = new Map<number, number>()
   const soutien = new Map<number, number>()
   const demande = new Map<number, number>()
+  const etoile = new Set<number>()
   const ordre = [...ctx.affectations].sort(
     (a, b) => Number(!a.epinglee) - Number(!b.epinglee) || a.id - b.id,
   )
@@ -936,14 +979,26 @@ export function correspondances(
     }
   }
 
-  // 2. Même poste, même jour, même cycle.
+  // 2. Même poste, même jour : version étoile, ou même cycle.
+  const etoiles = new Map(
+    besoins.map((b) => [
+      b.id,
+      new Set(versionsEtoileDe(ctx, b).map((h) => h.id)),
+    ]),
+  )
   const voisins = new Map(
-    besoins.map((b) => [b.id, new Set(remplacantsDe(ctx, b).map((h) => h.id))]),
+    besoins.map((b) => [
+      b.id,
+      new Set([
+        ...(etoiles.get(b.id) ?? []),
+        ...remplacantsDe(ctx, b).map((h) => h.id),
+      ]),
+    ]),
   )
   for (const a of ordre) {
     if (lien.has(a.id) || soutien.has(a.id) || a.horaire_id === null) continue
     const h = ctx.horaires.get(a.horaire_id)
-    if (!h || h.periode === null) continue
+    if (!h) continue
     const soutienIci = enSoutien(a)
     const reserve = soutienIci ? renforts : places
     let choisi: Besoin | undefined
@@ -962,9 +1017,10 @@ export function correspondances(
     const pool = reserve.get(cleDe(choisi)) as number[]
     pool.splice(pool.lastIndexOf(choisi.id), 1)
     ;(soutienIci ? soutien : lien).set(a.id, choisi.id)
-    demande.set(a.id, choisi.horaire_id)
+    if (etoiles.get(choisi.id)?.has(h.id)) etoile.add(a.id)
+    else demande.set(a.id, choisi.horaire_id)
   }
-  return { lien, soutien, demande }
+  return { lien, soutien, demande, etoile }
 }
 
 /** Fiches d'une même personne (contrats liés par `suite_de`) : id → clé. */
@@ -1325,7 +1381,6 @@ export function analyser(d: DonneesSemaine): SemaineOut {
     .map((a) => ({
       salarieId: String(a.salarie_id),
       creneauId: `a${a.id}`,
-      court: false,
     }))
   const p = probleme({
     salaries: [...salaries.values()],
@@ -1373,7 +1428,12 @@ export function analyser(d: DonneesSemaine): SemaineOut {
       fin: a.fin,
       duree: travail(c),
       pause: c.pause,
-      court: a.court,
+      // Contrat à journée étoile (`journeesCourtesMax` posé, `versSolveur`)
+      // et horaire de moins de 8 h.
+      etoile:
+        sol !== undefined &&
+        sol.journeesCourtesMax !== null &&
+        travail(c) < sol.journeePleine,
       epinglee: a.epinglee,
       besoin_id: lien.get(a.id) ?? enSoutien.get(a.id) ?? null,
       code_demande: demande.get(a.id) ?? null,
@@ -1384,14 +1444,17 @@ export function analyser(d: DonneesSemaine): SemaineOut {
 
   const pourvus = new Map<number, number>()
   for (const id of lien.values()) pourvus.set(id, (pourvus.get(id) ?? 0) + 1)
-  // Places vides : raisons sur l'horaire imposé ET sur chaque remplaçant. Les
-  // créneaux remplaçants ne servent qu'ici : ils restent hors de `p`, donc
-  // hors des alertes de la semaine.
+  // Places vides : raisons sur l'horaire imposé ET sur chaque version étoile
+  // et chaque remplaçant. Ces créneaux ne servent qu'ici : ils restent hors
+  // de `p`, donc hors des alertes de la semaine.
   const vides = besoins.filter((b) => b.effectif - (pourvus.get(b.id) ?? 0) > 0)
   const voisins = new Map(
     vides.map((b) => [
       b.id,
-      remplacantsDe(ctx, b).map((h) => creneauRemplacant(ctx, b, h)),
+      [
+        ...versionsEtoileDe(ctx, b).map((h) => creneauEtoile(ctx, b, h)),
+        ...remplacantsDe(ctx, b).map((h) => creneauRemplacant(ctx, b, h)),
+      ],
     ]),
   )
   const pRaisons: Probleme = {
@@ -1704,7 +1767,6 @@ export interface NouveauShift {
   horaire_id: number | null
   debut: string
   fin: string
-  court: boolean
   pause: number
   /** Remplaçant seulement : l'horaire imposé par le besoin dont il tient la
    * place (« 08:00–16:45 au lieu de 07:00–15:45 »). Absent pour un shift à
@@ -1844,6 +1906,9 @@ export function preparerGeneration(
   }
   const corr = correspondances(ctx, besoins, salaries)
   const { lien, demande } = corr
+  // Rattaché par une version étoile ou par cycle : posé sur un créneau `r…`.
+  const parAutreHoraire = (aId: number) =>
+    demande.has(aId) || corr.etoile.has(aId)
   // Un soutien rattaché par cycle reste un shift posé à part (son créneau
   // `a…`, ses vraies heures) : les remplaçants n'ont pas de place de soutien
   // (contrat de la vague 1, §2), et le poser sur `b…` lui donnerait les
@@ -1851,7 +1916,7 @@ export function preparerGeneration(
   // comme dans `analyser` (`besoin_id`) : cette place est retirée de `b…`,
   // sinon le moteur pouvait y poser un second apprenti (2 pour 1 place).
   const enSoutien = new Map(
-    [...corr.soutien].filter(([aId]) => !demande.has(aId)),
+    [...corr.soutien].filter(([aId]) => !parAutreHoraire(aId)),
   )
   const deja = new Map<number, number>()
   const dejaSoutien = new Map<number, number>()
@@ -1860,7 +1925,7 @@ export function preparerGeneration(
   for (const id of enSoutien.values())
     dejaSoutien.set(id, (dejaSoutien.get(id) ?? 0) + 1)
   for (const [aId, id] of corr.soutien)
-    if (demande.has(aId))
+    if (parAutreHoraire(aId))
       soutienParCycle.set(id, (soutienParCycle.get(id) ?? 0) + 1)
 
   const creneaux: Creneau[] = besoins.map((b) =>
@@ -1874,27 +1939,34 @@ export function preparerGeneration(
       Math.max(b.renfort, (deja.get(b.id) ?? 0) - b.effectif),
     ),
   )
-  // Remplaçants (`r<besoin>-<code>`, étape 4) : pour une place encore
-  // ouverte, chaque autre horaire du même cycle ; pour une place pleine, aucun,
-  // sauf celui qui porte un shift posé rattaché par cycle (il y est imposé,
-  // avec ses vraies heures de code).
-  const remplacants = new Map<string, { b: Besoin; h: Horaire }>()
-  const ajouteRemplacant = (b: Besoin, h: Horaire) => {
+  // Versions étoile et remplaçants (`r<besoin>-<horaire>`, étape 4) : pour
+  // une place encore ouverte, chaque version étoile de son horaire
+  // (`creneauEtoile`, dès le premier temps) et chaque autre horaire du même
+  // cycle ; pour une place pleine, aucun, sauf celui qui porte un shift posé
+  // rattaché ainsi (il y est imposé, avec ses vraies heures).
+  const remplacants = new Map<
+    string,
+    { b: Besoin; h: Horaire; etoile: boolean }
+  >()
+  const ajouteRemplacant = (b: Besoin, h: Horaire, etoile: boolean) => {
     const id = idRemplacant(b.id, h.id)
     if (remplacants.has(id)) return
-    remplacants.set(id, { b, h })
-    creneaux.push(creneauRemplacant(ctx, b, h))
+    remplacants.set(id, { b, h, etoile })
+    creneaux.push(
+      etoile ? creneauEtoile(ctx, b, h) : creneauRemplacant(ctx, b, h),
+    )
   }
   const parBesoin = new Map(besoins.map((b) => [b.id, b]))
   for (const a of ctx.affectations) {
     const bId = lien.get(a.id)
     const h = a.horaire_id !== null ? ctx.horaires.get(a.horaire_id) : undefined
-    if (bId === undefined || !demande.has(a.id) || !h) continue
-    ajouteRemplacant(parBesoin.get(bId) as Besoin, h)
+    if (bId === undefined || !parAutreHoraire(a.id) || !h) continue
+    ajouteRemplacant(parBesoin.get(bId) as Besoin, h, corr.etoile.has(a.id))
   }
   for (const b of besoins) {
     if ((deja.get(b.id) ?? 0) >= b.effectif + b.renfort) continue
-    for (const h of remplacantsDe(ctx, b)) ajouteRemplacant(b, h)
+    for (const h of versionsEtoileDe(ctx, b)) ajouteRemplacant(b, h, true)
+    for (const h of remplacantsDe(ctx, b)) ajouteRemplacant(b, h, false)
   }
   // Candidats de l'accueil (D1) : à partir d'aujourd'hui seulement (avant,
   // personne n'est libre ; les shifts posés y restent des faits).
@@ -1917,15 +1989,12 @@ export function preparerGeneration(
   const creneauDe = (a: Affectation) => {
     const bId = rattache.get(a.id)
     if (bId === undefined) return `a${a.id}`
-    return demande.has(a.id) && a.horaire_id !== null
+    return parAutreHoraire(a.id) && a.horaire_id !== null
       ? idRemplacant(bId, a.horaire_id)
       : `b${bId}`
   }
   const paire = (a: Affectation) => cle(String(a.salarie_id), creneauDe(a))
   const imposees = new Set(ctx.affectations.map(paire))
-  const courtes = new Set(
-    ctx.affectations.filter((a) => a.court && rattache.has(a.id)).map(paire),
-  )
   const p = probleme({
     salaries: [...salaries.values()],
     creneaux,
@@ -1935,7 +2004,6 @@ export function preparerGeneration(
     graine:
       (versJour(lundi) * 100 + (o.graine ?? 0) + empreinte(aEviter)) >>> 0,
     imposees,
-    courtes,
     aEviter,
     consignes: chiffresAccueil(ctx),
     ouvertures: ouverturesAccueil(ctx),
@@ -1961,25 +2029,24 @@ export function preparerGeneration(
           poste_id: cand.poste.id,
           jour: cand.jour,
           horaire_id: cand.h.id,
-          ...horaireDe(cand.h, a.court),
-          court: a.court,
+          ...horaireDe(cand.h),
           pause: cand.h.pause,
         })
         continue
       }
       const rempl = remplacants.get(a.creneauId)
       if (rempl) {
-        // Un remplaçant : le code réel sur le poste et le jour du besoin.
-        const { b, h } = rempl
+        // Une version étoile ou un remplaçant : l'horaire réel sur le poste
+        // et le jour du besoin ; « au lieu de » pour un remplaçant seulement.
+        const { b, h, etoile } = rempl
         nouveaux.push({
           salarie_id: Number(a.salarieId),
           poste_id: b.poste_id,
           jour: b.jour,
           horaire_id: h.id,
-          ...horaireDe(h, a.court),
-          court: a.court,
+          ...horaireDe(h),
           pause: h.pause,
-          code_demande: b.horaire_id as number,
+          ...(etoile ? {} : { code_demande: b.horaire_id as number }),
         })
         continue
       }
@@ -1987,9 +2054,7 @@ export function preparerGeneration(
       if (!b) continue
       const h =
         b.horaire_id !== null ? ctx.horaires.get(b.horaire_id) : undefined
-      const { debut, fin } = h
-        ? horaireDe(h, a.court)
-        : { debut: b.debut, fin: b.fin }
+      const { debut, fin } = h ? horaireDe(h) : { debut: b.debut, fin: b.fin }
       nouveaux.push({
         salarie_id: Number(a.salarieId),
         poste_id: b.poste_id,
@@ -1997,7 +2062,6 @@ export function preparerGeneration(
         horaire_id: b.horaire_id,
         debut,
         fin,
-        court: a.court,
         pause: h ? h.pause : 0,
       })
     }

@@ -2242,6 +2242,25 @@ référence des règles (`docs/regles-hcr.md` là-bas).
     le 6e jour), hors de la part fixe du dépannage.
   - Budget du solveur : 40 s par semaine (10 s ne suffisaient pas pour
     l'optimum).
+- **Journée étoile sur de VRAIS horaires (2026-11-02, migration
+  `20261102100000_planning_journee_etoile_horaires`, décisions utilisateur :
+  « utiliser seulement les horaires déjà disponibles », le bouton qui retirait
+  une heure disparaît)**. Plus de raccourci : colonnes `raccourci`,
+  `raccourci_debut`, `planning_affectations.court` SUPPRIMÉES ; TOUS les shifts
+  effacés (historique et semaines verrouillées compris, décision utilisateur
+  « Tout, historique compris ») ; livraison = `--supprimer` + `--avec-donnees`.
+  Version étoile d'un horaire de 8 h EXACTEMENT = un horaire existant de 7 h à
+  moins de 8 h CONTENU dans ses heures, moment libre (09:00–16:45 middle est
+  celle de 08:00–16:45 matin) ; une seule source `lib/planning/etoile.ts`, même
+  calcul en SQL dans la migration (qui ajoute les versions aux listes non vides
+  des postes et des fiches). L'étoile se CALCULE (contrat > 35 h, horaire de
+  moins de 8 h), ★ et mot « Journée étoile » gardés. Moteur : un créneau
+  `r<besoin>-<horaire>` par version étoile permise, place pourvue sans coût de
+  remplaçant, dès le premier temps ; jamais pour un forfait jours ni un extra
+  (décision utilisateur). Écrans : rubrique « Journée étoile » du clic droit et
+  du volet (versions, ou « Journée normale »), « Déjà une journée étoile le
+  … » ; une version n'est jamais choisie d'office. Un horaire à 00:00 s'écrit
+  24:00 sur son jour (`horaireDe`).
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), jours fériés (décision utilisateur relayée par le binôme), scénario
   « exclus » à l'écran (retiré du prototype aussi).

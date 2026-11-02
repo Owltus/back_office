@@ -93,7 +93,6 @@ import {
 import { PanneauAlertes } from '#/components/planning/semaine/PanneauAlertes.tsx'
 import {
   absenceDe,
-  etoileProposee,
   reposAValider,
   reposDe,
   poserHoraire as poserHoraireCase,
@@ -518,7 +517,6 @@ export function VueMois({
     horaire_id: s.type_shift_id,
     debut: s.debut,
     fin: s.fin,
-    court: s.court,
     pause: s.pause,
     epinglee: true,
   })
@@ -799,29 +797,6 @@ export function VueMois({
           absenceMenu.motif?.nature === 'repos'
         ? { valide: !absenceMenu.proposition, deduit: false }
         : null
-  // Même écriture que la semaine : une seule journée étoile, et début et fin
-  // recalculés à chaque bascule (la base enregistre les heures telles quelles).
-  const etoile =
-    shiftMenu && semaineMenu && personneMenu && referentiel
-      ? etoileProposee(semaineMenu, personneMenu, referentiel.horaires, {
-          salarie_id: shiftMenu.salarie_id,
-          jour: shiftMenu.jour,
-        })
-      : undefined
-  const etoileMenu =
-    etoile && shiftMenu && reperesMenu
-      ? {
-          active: etoile.active,
-          onBasculer: () =>
-            void executer(
-              reperesMenu.lundi,
-              etoile.basculer,
-              "La journée étoile n'a pas été changée",
-              { salarieId: shiftMenu.salarie_id, jour: shiftMenu.jour },
-            ),
-        }
-      : undefined
-
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
       <PageHeader
@@ -976,7 +951,6 @@ export function VueMois({
                   }
                 : undefined
           }
-          etoile={etoileMenu}
           onVider={
             shiftMenu
               ? () =>

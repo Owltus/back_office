@@ -64,8 +64,6 @@ const code = (
       fin,
       couleur: '#888888',
       pause: 30,
-      raccourci: 0,
-      raccourci_debut: 0,
       periode,
       ...kw,
     },
@@ -156,7 +154,6 @@ const shift = (
   debut: h.debut,
   fin: h.fin,
   epinglee: true,
-  court: false,
   pause: h.pause,
   ...kw,
 })
@@ -329,8 +326,8 @@ describe('4. personnes par cycle : une affectation = une présence, partout', ()
     ]
     const p = probleme({ salaries: [s], creneaux: [c1, c2], consignes })
     const affs: AffectationSolveur[] = [
-      { salarieId: 'a', creneauId: 'c1', court: false },
-      { salarieId: 'a', creneauId: 'c2', court: false },
+      { salarieId: 'a', creneauId: 'c1' },
+      { salarieId: 'a', creneauId: 'c2' },
     ]
     const verif = presenceParCycle(p, affs)[0]
     const analyse = bilanPresence(consignes, [
@@ -363,11 +360,13 @@ describe('A. minimum par cycle tenable par un code court', () => {
 
 // ------------------------------------------------------------------ B
 
-describe('B. version courte qui commence plus tard (raccourci_debut)', () => {
-  const S4c = code(3, 'S4', '15:00', '23:00', 'soir', {
-    raccourci: 60,
-    raccourci_debut: 30,
-  })
+describe('B. journée étoile sur un horaire qui existe : ses vraies heures', () => {
+  // Plus de raccourci (2026-11-02) : une journée plus courte est un AUTRE
+  // horaire, ici un soir de 15:30 à 23:00 (SE). Repos et trous se lisent sur
+  // ses heures, comme pour tout shift. (Il finit à 23:00 : le poste
+  // Polyvalent, qui permet tous les horaires, en fait un candidat, et un
+  // candidat qui finirait plus tôt avancerait la fin de la plage.)
+  const SE = code(11, 'SE', '15:30', '23:00', 'soir')
   const s = (id: string) =>
     salarieSolveur({
       id,
@@ -380,58 +379,43 @@ describe('B. version courte qui commence plus tard (raccourci_debut)', () => {
     })
 
   it('vérificateur : repos de 11 h compté depuis la VRAIE fin (22:30)', () => {
-    const soir = (raccourciDebut: number) =>
-      creneau({
-        id: 's',
-        poste: '1',
-        debut: 15 * H,
-        fin: 23 * H,
-        raccourci: 60,
-        raccourciDebut,
-      })
+    const soir = (finH: number) =>
+      creneau({ id: 's', poste: '1', debut: 15.5 * H, fin: finH * H })
     const lendemain = (debut: number) =>
       creneau({ id: 'm', poste: '1', debut: J + debut, fin: J + debut + 6 * H })
-    const repos = (raccourciDebut: number, debut: number) =>
+    const repos = (finH: number, debut: number) =>
       violations(
         probleme({
           salaries: [s('a')],
-          creneaux: [soir(raccourciDebut), lendemain(debut)],
+          creneaux: [soir(finH), lendemain(debut)],
         }),
         [
-          { salarieId: 'a', creneauId: 's', court: true },
-          { salarieId: 'a', creneauId: 'm', court: false },
+          { salarieId: 'a', creneauId: 's' },
+          { salarieId: 'a', creneauId: 'm' },
         ],
       ).filter((v) => v.regle === 'R-REPOS-QUOTIDIEN')
-    // Court 15:30-22:30 : 09:15 le lendemain = 10 h 45, refusé.
-    expect(repos(30, 9 * H + 15)).toHaveLength(1)
+    // Fin à 22:30 : 09:15 le lendemain = 10 h 45, refusé.
+    expect(repos(22.5, 9 * H + 15)).toHaveLength(1)
     // 09:30 = 11 h, accepté.
-    expect(repos(30, 9 * H + 30)).toEqual([])
-    // Tout le raccourci en fin (22:00) : 09:15 = 11 h 15, accepté.
-    expect(repos(0, 9 * H + 15)).toEqual([])
+    expect(repos(22.5, 9 * H + 30)).toEqual([])
+    // Fin à 22:00 : 09:15 = 11 h 15, accepté.
+    expect(repos(22, 9 * H + 15)).toEqual([])
   })
 
-  const semaineCourte = (h: Horaire) => {
-    const court = shift(BRAVO, h, 1, {
-      court: true,
-      debut: '15:30',
-      fin: '22:30',
-    })
-    if (!h.raccourci_debut)
-      Object.assign(court, { debut: '15:00', fin: '22:00' })
+  const semaineEtoile = (h: Horaire) =>
     // Révisé le 2026-11-01 (D13, D15) : l'Accueil n'a plus de besoins ; le
     // matin et le soir du mardi sont demandés au tableau, la plage va de
     // 08:00 (M6, le matin le plus tard) à 23:00 (le soir).
-    return donnees(
+    donnees(
       [],
-      [shift(ALPHA, M3), court],
+      [shift(ALPHA, M3), shift(BRAVO, h)],
       [ALPHA, BRAVO],
       [
         { id: 1, jour: 1, periode: 'matin', minimum: 1, maximum: 1 },
         { id: 2, jour: 1, periode: 'soir', minimum: 1, maximum: 1 },
       ],
-      HORAIRES.map((x) => (x.id === S4.id ? h : x)),
+      [...HORAIRES, SE],
     )
-  }
   /** Les trous de l'analyse (oracle `trousAccueilDuJour`), en heures. */
   const deLAnalyse = (d: DonneesSemaine) =>
     analyser(d).trous.map((t) => [t.debut, t.fin])
@@ -441,23 +425,19 @@ describe('B. version courte qui commence plus tard (raccourci_debut)', () => {
   ]
 
   it('générateur et analyse voient les mêmes trous de l’accueil (début décalé)', () => {
-    const d = semaineCourte(S4c)
+    const d = semaineEtoile(SE)
     const g = preparerGeneration(d, { aujourdhui: AUJOURDHUI })
     const r = generer(g.probleme, highs)
-    const attendus = [
-      ['15:00', '15:30'],
-      ['22:30', '23:00'],
-    ]
+    const attendus = [['15:00', '15:30']]
     expect(r.trous.map(murale)).toEqual(attendus)
     expect(deLAnalyse(d)).toEqual(attendus)
   })
 
-  it('sans raccourci au début : seule la fin manque, comme avant', () => {
-    const S4f = { ...S4c, raccourci_debut: 0 }
-    const d = semaineCourte(S4f)
+  it('le soir entier : aucun trou', () => {
+    const d = semaineEtoile(S4)
     const g = preparerGeneration(d, { aujourdhui: AUJOURDHUI })
     const r = generer(g.probleme, highs)
-    expect(r.trous.map(murale)).toEqual([['22:00', '23:00']])
-    expect(deLAnalyse(d)).toEqual([['22:00', '23:00']])
+    expect(r.trous).toEqual([])
+    expect(deLAnalyse(d)).toEqual([])
   })
 })

@@ -3,8 +3,9 @@
  * horaires que la personne peut faire sur ses postes, chacun une seule fois,
  * rangés par moment, posés d'un clic sur le poste déduit (jamais affiché :
  * heures seulement) ;
- * valider le shift, la journée étoile ; un repos (en tête) ou une absence
- * (en bas) posés d'un clic comme un horaire. Le
+ * valider le shift ; la journée étoile (les horaires de 7 h de son horaire,
+ * ou l'horaire de 8 h dont il est la version, 2026-11-02) ; un repos (en
+ * tête) ou une absence (en bas) posés d'un clic comme un horaire. Le
  * positionnement au curseur et la fermeture (Échap, clic ailleurs) sont ceux
  * du `ContextMenu` de shadcn.
  */
@@ -27,8 +28,12 @@ import {
   heuresEtDuree,
   nomLigneCode,
   texteChangementPoste,
+  texteEtoileDeja,
 } from '#/components/planning/codesCase.ts'
-import type { CodesUniquesCase } from '#/components/planning/codesCase.ts'
+import type {
+  CodesUniquesCase,
+  EtoileCase,
+} from '#/components/planning/codesCase.ts'
 import { PastilleHoraire } from '#/components/planning/PastilleHoraire.tsx'
 import { JOURS } from '#/lib/planning/types.ts'
 import type { Horaire, Motif } from '#/lib/planning/types.ts'
@@ -45,7 +50,9 @@ export interface OuvertureMenu {
    * permis est montré grisé. */
   codes: CodesUniquesCase
   validation?: { active: boolean; onBasculer: () => void; repos?: boolean }
-  etoile?: { active: boolean; onBasculer: () => void }
+  /** Rubrique « Journée étoile » du shift (`etoileDeLaCase`) : un clic pose
+   * l'horaire choisi sur le poste du shift. */
+  etoile?: EtoileCase
   /** La case a un shift : la remettre à « Non attribué ». */
   vider?: () => void
   /** Repos et absences posables (`motifsDuJour`), le motif posé ici, et la
@@ -113,7 +120,56 @@ export function MenuCase({
       </>
     )
   const horsPermis = codes.actuel
-  const parId = new Map(codes.codes.map((c) => [c.horaire.id, c]))
+  // Les horaires de la rubrique « Journée étoile » ne sont pas répétés dans
+  // la liste : chaque horaire une seule fois.
+  const dansEtoile = new Set(
+    [...(etoile?.versions ?? []), ...(etoile?.normales ?? [])].map(
+      (c) => c.horaire.id,
+    ),
+  )
+  const liste = codes.codes.filter((c) => !dansEtoile.has(c.horaire.id))
+  const parId = new Map(liste.map((c) => [c.horaire.id, c]))
+  const dejaEtoile = etoile?.versions.length
+    ? texteEtoileDeja(etoile.deja)
+    : null
+  const ligneEtoile = (
+    c: { horaire: Horaire; alerte: string | null },
+    normale: boolean,
+  ) => (
+    <ContextMenuItem
+      key={c.horaire.id}
+      aria-label={[
+        normale ? 'Journée normale' : 'Journée étoile',
+        nomLigneCode(c),
+      ].join(', ')}
+      onSelect={() => etoile && onHoraire(c.horaire, etoile.posteId)}
+    >
+      {normale ? (
+        <Undo2 className="text-muted-foreground" />
+      ) : (
+        <Star className="fill-amber-400 text-amber-400" />
+      )}
+      <span className="grid flex-1">
+        {normale && (
+          <span className="text-sm font-medium">Journée normale</span>
+        )}
+        <span
+          className={
+            normale
+              ? 'text-xs whitespace-nowrap text-muted-foreground tabular-nums'
+              : 'text-sm whitespace-nowrap tabular-nums'
+          }
+        >
+          {heuresEtDuree(c.horaire)}
+        </span>
+        {c.alerte && (
+          <span className="text-xs text-amber-600 dark:text-amber-400">
+            {c.alerte}
+          </span>
+        )}
+      </span>
+    </ContextMenuItem>
+  )
   return (
     <ContextMenuContent className="w-60">
       <ContextMenuLabel className="text-xs text-muted-foreground">
@@ -147,18 +203,23 @@ export function MenuCase({
       {etoile && (
         <>
           <ContextMenuSeparator />
-          <ContextMenuItem onSelect={etoile.onBasculer}>
-            <Star className="fill-amber-400 text-amber-400" />
-            <span className="font-medium">Journée étoile</span>
-            {etoile.active && (
-              <Check className="ml-auto size-3.5 text-primary" />
+          <ContextMenuGroup aria-label="Journée étoile">
+            <ContextMenuLabel className="pt-1 pb-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+              Journée étoile
+            </ContextMenuLabel>
+            {etoile.versions.map((c) => ligneEtoile(c, false))}
+            {etoile.normales.map((c) => ligneEtoile(c, true))}
+            {dejaEtoile && (
+              <ContextMenuItem disabled className="text-xs">
+                {dejaEtoile}
+              </ContextMenuItem>
             )}
-          </ContextMenuItem>
+          </ContextMenuGroup>
         </>
       )}
       {groupeMotifs('Repos', absences?.repos ?? [])}
       <ContextMenuSeparator />
-      {grouperHoraires(codes.codes.map((c) => c.horaire)).map((g, i) => (
+      {grouperHoraires(liste.map((c) => c.horaire)).map((g, i) => (
         <ContextMenuGroup key={g.libelle} aria-label={g.libelle}>
           {i > 0 && <ContextMenuSeparator />}
           <ContextMenuLabel className="pt-1 pb-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
@@ -204,7 +265,7 @@ export function MenuCase({
           })}
         </ContextMenuGroup>
       ))}
-      {(horsPermis || codes.texte) && codes.codes.length > 0 && (
+      {(horsPermis || codes.texte) && liste.length > 0 && (
         <ContextMenuSeparator />
       )}
       {horsPermis && (

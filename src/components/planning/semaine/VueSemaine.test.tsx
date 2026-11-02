@@ -66,7 +66,6 @@ function donneesDemo(): DonneesSemaine {
     debut: nuit.debut,
     fin: nuit.fin,
     epinglee: false,
-    court: false,
     pause: nuit.pause,
   }
   return {

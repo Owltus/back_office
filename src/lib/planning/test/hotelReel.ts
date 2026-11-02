@@ -24,19 +24,47 @@ import type {
   TypeContrat,
 } from '#/lib/planning/types.ts'
 
-// (code, nom, début, fin, pause, raccourci[, dont au début])
-const HORAIRES: Array<
-  [string, string, string, string, number, number, number?]
-> = [
-  ['M', 'Matin', '07:00', '15:45', 45, 60],
-  ['MI', 'Middle', '11:00', '19:45', 45, 60],
-  ['S', 'Soir', '14:30', '23:15', 45, 60, 30],
-  ['SD', 'Soir du dimanche', '15:15', '00:00', 45, 0],
-  ['N', 'Nuit', '23:00', '07:00', 0, 60, 60],
-  ['D', 'Direction', '08:00', '18:00', 15, 0],
-  ['AD', 'Adjoint de direction', '11:00', '19:45', 45, 60],
-  ['SR', 'Supervision', '12:00', '20:45', 45, 60],
-  ['T', 'Technique', '08:00', '16:45', 45, 60],
+// (code, nom, début, fin, pause). Plus de raccourci (2026-11-02) : chaque
+// horaire de 8 h qui en avait un a sa version étoile, un horaire de 7 h qui
+// existe (`etoile.ts`), aux heures de l'ancienne journée courte (le soir
+// commençait 30 min plus tard, la nuit à minuit).
+const HORAIRES: Array<[string, string, string, string, number]> = [
+  ['M', 'Matin', '07:00', '15:45', 45],
+  ['MI', 'Middle', '11:00', '19:45', 45],
+  ['S', 'Soir', '14:30', '23:15', 45],
+  ['SD', 'Soir du dimanche', '15:15', '00:00', 45],
+  ['N', 'Nuit', '23:00', '07:00', 0],
+  ['D', 'Direction', '08:00', '18:00', 15],
+  ['AD', 'Adjoint de direction', '11:00', '19:45', 45],
+  ['SR', 'Supervision', '12:00', '20:45', 45],
+  ['T', 'Technique', '08:00', '16:45', 45],
+  ['M7', 'Matin étoile', '07:00', '14:45', 45],
+  ['MI7', 'Middle étoile', '11:00', '18:45', 45],
+  ['S7', 'Soir étoile', '15:00', '22:45', 45],
+  ['N7', 'Nuit étoile', '00:00', '07:00', 0],
+  ['SR7', 'Supervision étoile', '12:00', '19:45', 45],
+  ['T7', 'Technique étoile', '08:00', '15:45', 45],
+]
+/** Versions étoile ajoutées aux listes d'horaires (postes, fiches) qui ont
+ * leur horaire de 8 h (comme la migration 20261102100000). */
+const VERSIONS: Record<string, string> = {
+  M: 'M7',
+  MI: 'MI7',
+  AD: 'MI7',
+  S: 'S7',
+  N: 'N7',
+  SR: 'SR7',
+  T: 'T7',
+}
+const avecVersions = (codes: readonly string[]) => [
+  ...codes,
+  ...[
+    ...new Set(
+      codes.flatMap((c) =>
+        VERSIONS[c] && !codes.includes(VERSIONS[c]) ? [VERSIONS[c]] : [],
+      ),
+    ),
+  ],
 ]
 // (code, nom, compté dans les heures, nature)
 const MOTIFS: Array<[string, string, boolean, 'absence' | 'ecole']> = [
@@ -240,7 +268,7 @@ const SEMAINES_ALTERNANCE = 26
 
 export function hotelReel(): { referentiel: Referentiel; absences: Absence[] } {
   const horaires: Horaire[] = HORAIRES.map(
-    ([code, nom, debut, fin, pause, raccourci, rd], i) =>
+    ([code, nom, debut, fin, pause], i) =>
       avecCode<Horaire>(
         {
           id: i + 1,
@@ -249,8 +277,6 @@ export function hotelReel(): { referentiel: Referentiel; absences: Absence[] } {
           fin,
           couleur: '#000000',
           pause,
-          raccourci,
-          raccourci_debut: rd ?? 0,
           periode: null,
         },
         code,
@@ -271,7 +297,7 @@ export function hotelReel(): { referentiel: Referentiel; absences: Absence[] } {
     nom,
     categorie,
     couleur: '#000000',
-    horaires_autorises: codes.map(idH),
+    horaires_autorises: avecVersions(codes).map(idH),
     presence: false,
   }))
   const idP = (n: string) => (postes.find((p) => p.nom === n) as Poste).id
@@ -335,7 +361,7 @@ export function hotelReel(): { referentiel: Referentiel; absences: Absence[] } {
           niveau,
         })),
         semaine_type: semaine,
-        shifts_autorises: (opt.horaires ?? []).map(idH),
+        shifts_autorises: avecVersions(opt.horaires ?? []).map(idH),
         date_entree: null,
         date_sortie: null,
         actif: true,

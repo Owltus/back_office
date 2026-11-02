@@ -105,7 +105,6 @@ const messages = (
 const aff = (salarieId: string, creneauId: string): AffectationSolveur => ({
   salarieId,
   creneauId,
-  court: false,
 })
 
 const range = (a: number, b?: number) => {
@@ -802,15 +801,26 @@ describe('trous entre deux équipes (vérificateur)', () => {
   })
 
   it('une journée courte (fin avancée) ouvre un trou', () => {
-    const matinCourt = { ...matin, fin: 16 * H, raccourci: 60 }
-    const p = probleme({ salaries: gens, creneaux: [matinCourt, soir] })
+    // La version étoile d'un matin jusqu'à 16 h : un horaire qui finit à
+    // 15 h, sur la même place (2026-11-02, plus de raccourci).
+    const matinLong = { ...matin, fin: 16 * H }
+    const etoile = {
+      ...matin,
+      id: 'em',
+      effectif: 0,
+      place: 'bm',
+      etoile: true,
+    }
+    const p = probleme({
+      salaries: gens,
+      creneaux: [matinLong, etoile, soir],
+    })
     expect(trous(p, [aff('a', 'bm'), aff('c', 'bs')])).toEqual([])
-    expect(
-      trous(p, [
-        { salarieId: 'a', creneauId: 'bm', court: true },
-        aff('c', 'bs'),
-      ]),
-    ).toEqual([{ poste: 'rec', jour: 0, debut: 15 * H, fin: 16 * H }])
+    expect(trous(p, [aff('a', 'em'), aff('c', 'bs')])).toEqual([
+      { poste: 'rec', jour: 0, debut: 15 * H, fin: 16 * H },
+    ])
+    // Elle tient la place : aucun manque.
+    expect(manquants(p, [aff('a', 'em'), aff('c', 'bs')]).size).toBe(0)
   })
 
   it('seuls les postes qui comptent dans la présence sont regardés', () => {
@@ -1112,15 +1122,24 @@ describe('tableau de l’accueil (vérificateur)', () => {
     expect(trous(p, [aff('a', 'px'), aff('b', 'psc')])).toEqual([
       { poste: POSTE_ACCUEIL, jour: 0, debut: 7 * H, fin: 11 * H },
     ])
-    // La version courte : un soir raccourci d'une heure finit à 22 h.
+    // La journée étoile : un soir d'une heure de moins, posé (un autre
+    // horaire, qui finit à 22 h ; 2026-11-02, plus de raccourci). Posé, pas
+    // candidat : la plage reste celle des candidats.
+    const sEtoile = {
+      ...sC,
+      id: 'ase',
+      fin: sC.fin - 60,
+      accueil: false,
+      ferme: true,
+    }
     const court = probleme({
       salaries: p.salaries,
-      creneaux: [mR, { ...sC, raccourci: 60 }],
+      creneaux: [mR, sC, sEtoile],
       consignes: chiffres,
     })
-    expect(
-      trous(court, [aff('a', 'pm'), { ...aff('b', 'psc'), court: true }]),
-    ).toEqual([{ poste: POSTE_ACCUEIL, jour: 0, debut: 22 * H, fin: 23 * H }])
+    expect(trous(court, [aff('a', 'pm'), aff('b', 'ase')])).toEqual([
+      { poste: POSTE_ACCUEIL, jour: 0, debut: 22 * H, fin: 23 * H },
+    ])
     expect(trous(court, [aff('a', 'pm'), aff('b', 'psc')])).toEqual([])
     // Une liste de postes sans l'accueil ne le voit pas.
     expect(trous(p, [aff('b', 'psc')], new Set(['rec']))).toEqual([])

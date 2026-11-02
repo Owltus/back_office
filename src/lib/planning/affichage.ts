@@ -2,6 +2,7 @@
  * Aides d'affichage du planning, pures (prototype `frontend/src/api.ts`).
  */
 
+import { estJourneeEtoile } from '#/lib/planning/etoile.ts'
 import { posteEquite } from '#/lib/planning/semaine.ts'
 import type { BilanOut, SemaineOut } from '#/lib/planning/semaine.ts'
 import {
@@ -406,16 +407,14 @@ export function genreMotif(m?: Motif): string {
   return m.nature === 'ecole' ? 'École' : 'Absence'
 }
 
-/** Journée étoile d'une carte : pas au forfait, plus de 35 h, et court ou 7 h. */
+/** Journée étoile d'une carte (D5 du 2026-11-02, calculée) : contrat de
+ * plus de 35 h, ni forfait ni extra, sur un horaire de moins de 8 h
+ * (`duree` : travail, pause déduite). Même règle que `ShiftOut.etoile`. */
 export function journeeEtoile(
-  s: Pick<Salarie, 'forfait_jours' | 'heures_hebdo'>,
-  shift: { court: boolean; duree: number },
+  s: Pick<Salarie, 'forfait_jours' | 'heures_hebdo' | 'type_contrat'>,
+  shift: { duree: number },
 ): boolean {
-  return (
-    !s.forfait_jours &&
-    Number(s.heures_hebdo) > 35 &&
-    (shift.court || shift.duree === 7 * 60)
-  )
+  return estJourneeEtoile(s, shift.duree)
 }
 
 export function horaireLibelle(h: Horaire | undefined): string {

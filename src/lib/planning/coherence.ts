@@ -58,6 +58,12 @@ import {
 } from '#/lib/planning/eligibilite.ts'
 import { travail } from '#/lib/planning/modele.ts'
 import {
+  contratEtoile,
+  estVersionEtoile,
+  travailHoraire,
+} from '#/lib/planning/etoile.ts'
+import { JOURNEE_PLEINE } from '#/lib/planning/regles.ts'
+import {
   accueilActif,
   chiffreAccueil,
   estPosteAccueil,
@@ -72,6 +78,7 @@ import {
   contexte,
   creneauBesoin,
   remplacantsDe,
+  versionsEtoileDe,
 } from '#/lib/planning/semaine.ts'
 import { JOURS } from '#/lib/planning/types.ts'
 import type {
@@ -270,13 +277,17 @@ const contratIndicatif = (s: Salarie) =>
  * fiche et sa semaine type ? Le poste est déjà vérifié par `besoinsValides`.
  * Un besoin sans horaire ne peut pas être tenu par une fiche qui restreint ses
  * codes (même règle que le moteur). */
-function peutTenir(s: Salarie, b: Besoin): boolean {
+function peutTenir(
+  s: Salarie,
+  b: Besoin,
+  horaires: readonly Horaire[] = [],
+): boolean {
   const jourType = s.semaine_type.at(b.jour)
   if (jourType?.mode === 'repos' || jourType?.mode === 'absence') return false
   const code = b.horaire_id === null ? null : String(b.horaire_id)
   const fiche = {
     shiftsAutorises: codesDeLaFiche(s),
-    shiftImpose: codesImposes(s.semaine_type),
+    shiftImpose: codesImposes(s.semaine_type, horaires),
   }
   return codeDeLaFiche(fiche, code) && codeImposeRespecte(fiche, b.jour, code)
 }
@@ -497,9 +508,10 @@ export function verifierReglages(
   }
 
   // Besoin que personne ne peut tenir : le poste a des autonomes, mais
-  // aucun n'a cet horaire permis ce jour-là (fiche, semaine type), ni un autre
-  // code du même cycle que le planning prendrait à sa place (`remplacantsDe`,
-  // D12). Regroupé par poste et horaire, avec les jours.
+  // aucun n'a cet horaire permis ce jour-là (fiche, semaine type), ni une
+  // version étoile (`versionsEtoileDe`), ni un autre code du même cycle que
+  // le planning prendrait à sa place (`remplacantsDe`, D12). Regroupé par
+  // poste et horaire, avec les jours.
   const intenables = new Map<
     string,
     { poste: Poste; besoin: Besoin; jours: number[]; tenants: Salarie[] }
@@ -509,11 +521,13 @@ export function verifierReglages(
     if (!poste) continue
     const autonomes = tenants(b.poste_id, autonome)
     if (!autonomes.length) continue // déjà dit par « sans-autonome »
-    if (autonomes.some((s) => peutTenir(s, b))) continue
-    const remplacants = remplacantsDe(ctx, b)
+    if (autonomes.some((s) => peutTenir(s, b, r.horaires))) continue
+    const remplacants = [...versionsEtoileDe(ctx, b), ...remplacantsDe(ctx, b)]
     if (
       remplacants.some((h) =>
-        autonomes.some((s) => peutTenir(s, { ...b, horaire_id: h.id })),
+        autonomes.some((s) =>
+          peutTenir(s, { ...b, horaire_id: h.id }, r.horaires),
+        ),
       )
     )
       continue
@@ -657,6 +671,39 @@ export function verifierReglages(
         )
       }
     })
+
+    // Journée étoile fixée (décisions utilisateur du 2026-11-02) : ce
+    // jour-là, un horaire de moins de 8 h qui existe (une version étoile de
+    // l'horaire fixé, s'il y en a un). Aucun n'est permis sur ses postes :
+    // le planning automatique ne pourra pas la placer ce jour-là.
+    if (contratEtoile(s)) {
+      s.semaine_type.forEach((e, j) => {
+        if (!e.etoile || e.mode === 'repos' || e.mode === 'absence') return
+        const fixe = e.type_shift_id ? horaires.get(e.type_shift_id) : undefined
+        const possible = tenus.some(({ poste }) =>
+          codesPermis({
+            personne: s,
+            poste,
+            jour: j,
+            horaires: r.horaires,
+          }).codes.some((h) =>
+            fixe
+              ? estVersionEtoile(h, fixe)
+              : travailHoraire(h) < JOURNEE_PLEINE,
+          ),
+        )
+        if (possible) return
+        ajouter(
+          `etoile-sans-horaire:${s.id}:${j}`,
+          'a-voir',
+          'equipe',
+          fixe
+            ? `${nom} : sa journée étoile est fixée le ${jour(j)}, mais aucun horaire de 7 h contenu dans ${libelleHoraire(fixe)} n'est permis sur ses postes. Le planning automatique ne pourra pas placer cette personne ce jour-là.`
+            : `${nom} : sa journée étoile est fixée le ${jour(j)}, mais aucun horaire de moins de 8 h n'est permis sur ses postes. Le planning automatique ne pourra pas placer cette personne ce jour-là.`,
+          cibleFiche(s.id, 'horaires'),
+        )
+      })
+    }
   }
 
   // -------------------------------------------------------------- besoins

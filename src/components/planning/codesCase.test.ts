@@ -60,7 +60,6 @@ const apresMidiMardi: SourceCase = {
         debut: '15:00',
         fin: '23:45',
         epinglee: true,
-        court: false,
         pause: 45,
       },
     ],

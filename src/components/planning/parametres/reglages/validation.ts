@@ -98,22 +98,12 @@ export function erreursHoraire(
   if (h.debut === '24:00')
     erreurs.push("L'horaire ne peut pas commencer à 24:00.")
   if (!entier(h.pause, 0, 180)) erreurs.push('La pause va de 0 à 180 minutes.')
-  if (!entier(h.raccourci, 0, 240))
-    erreurs.push('La journée étoile retire de 0 à 240 minutes.')
-  if (!entier(h.raccourci_debut, 0, 240)) {
-    erreurs.push('Les minutes retirées au début vont de 0 à 240.')
-  } else if (h.raccourci_debut > h.raccourci) {
-    erreurs.push(
-      'Le raccourci du début ne peut pas dépasser le raccourci total.',
-    )
-  }
+  // Plus de raccourci depuis le 2026-11-02 : une journée étoile est un autre
+  // horaire, de 7 h (`etoile.ts`).
   if (heures && h.debut !== '24:00') {
     const p = presence(h.debut, h.fin)
     if (h.pause >= p)
       erreurs.push("La pause doit être plus courte que l'horaire.")
-    else if (h.raccourci >= p - h.pause) {
-      erreurs.push('La journée étoile doit garder du temps de travail.')
-    }
   }
   if (horaireAuxMemesHeures(h, horaires, id))
     erreurs.push('Cet horaire existe déjà.')

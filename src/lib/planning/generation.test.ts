@@ -43,7 +43,6 @@ function poser(
     debut: n.debut,
     fin: n.fin,
     epinglee: false,
-    court: n.court,
     pause: n.pause,
   }))
 }
@@ -216,7 +215,6 @@ describe('repos de 35 h : la semaine d’avant relue avec celle d’avant-avant'
     debut,
     fin,
     epinglee: true,
-    court: false,
     pause: 0,
   })
   // Semaine d'avant : lundi libre, mardi à vendredi 7 h - 15 h, samedi

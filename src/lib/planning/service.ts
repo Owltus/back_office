@@ -29,8 +29,7 @@ import type {
 } from '#/lib/planning/types.ts'
 import { supabase } from '#/lib/supabase.ts'
 
-const COL_HORAIRE =
-  'id, nom, debut, fin, couleur, pause, raccourci, raccourci_debut, periode'
+const COL_HORAIRE = 'id, nom, debut, fin, couleur, pause, periode'
 const COL_MOTIF = 'id, code, nom, couleur, decompte, nature'
 const COL_POSTE =
   'id, nom, categorie, couleur, horaires_autorises, presence, accueil_nuit, ferme, ouverture'
@@ -41,7 +40,7 @@ const COL_SALARIE =
 const COL_BESOIN =
   'id, poste_id, jour, horaire_id, debut, fin, effectif, soutien, renfort'
 const COL_AFFECTATION =
-  'id, lundi, salarie_id, poste_id, jour, horaire_id, debut, fin, epinglee, court, pause, updated_at'
+  'id, lundi, salarie_id, poste_id, jour, horaire_id, debut, fin, epinglee, pause, updated_at'
 const COL_ABSENCE = 'id, salarie_id, jour, motif_id, epinglee'
 
 function verifier<T>(r: { data: T | null; error: unknown }): T {
@@ -262,7 +261,6 @@ export interface ShiftSaisi {
   horaire_id: number | null
   debut: string
   fin: string
-  court: boolean
   pause: number
   epinglee: boolean
 }

@@ -81,13 +81,12 @@ import {
 import { PanneauAlertes } from '#/components/planning/semaine/PanneauAlertes.tsx'
 import {
   codesUniques,
+  etoileDeLaCase,
   motifsDuJour,
   rubriquesDeLaCase,
 } from '#/components/planning/codesCase.ts'
 import {
   absenceDe,
-  estEtoile,
-  etoileProposee,
   indiceDe,
   poserHoraire,
   reposAValider,
@@ -161,7 +160,9 @@ function contenuCarte(
         ? ref.horaires.find((h) => h.id === a.code_demande)
         : undefined,
     epinglee: a.epinglee,
-    etoile: estEtoile(s, a),
+    // Calculée par la semaine (contrat à journée étoile, horaire de moins de
+    // 8 h) : rien n'est stocké depuis le 2026-11-02.
+    etoile: a.etoile,
     role: a.role,
     alertes: a.alertes,
   }
@@ -174,7 +175,6 @@ const champs = (s: ShiftOut) => ({
   horaire_id: s.type_shift_id,
   debut: s.debut,
   fin: s.fin,
-  court: s.court,
   pause: s.pause,
 })
 
@@ -668,7 +668,19 @@ export function VueSemaine({
     }
     const o = { salarie_id: sid, jour: j }
     const shift = shiftDe(affichee, o)
-    const etoile = etoileProposee(affichee, p, referentiel.horaires, o)
+    // Journée étoile : les horaires de 7 h de son horaire (ou l'horaire de
+    // 8 h, s'il en est déjà un), posés d'un clic comme un horaire.
+    const etoile = shift
+      ? etoileDeLaCase({
+          referentiel,
+          personne: p,
+          posteId: shift.poste_id,
+          jour: j,
+          source,
+          sauf: shift.id,
+          horaireId: shift.type_shift_id,
+        })
+      : null
     // Absence ou école posée ici (pas celle de la semaine type) : se retire.
     const st = shift ? null : statutDe(sid, j)
     const absenceRetirable =
@@ -736,13 +748,7 @@ export function VueSemaine({
                 ),
             }
           : undefined,
-      etoile: etoile && {
-        active: etoile.active,
-        onBasculer: () =>
-          siOuverte(
-            () => void executer(etoile.basculer, 'Journée étoile non posée', o),
-          ),
-      },
+      etoile: etoile ?? undefined,
       vider: shift
         ? () =>
             siOuverte(

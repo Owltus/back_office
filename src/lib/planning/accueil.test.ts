@@ -51,7 +51,6 @@ import {
 } from '#/lib/planning/test/hotelAccueil.ts'
 import { PlanningMemoire } from '#/lib/planning/test/planningMemoire.ts'
 import {
-  enVersionCourte,
   presenceParCycle,
   ouverturesManquees,
   relevesManquantes,
@@ -569,7 +568,7 @@ describe('trous sur l’accueil entier (D15)', () => {
 
   /*
    * Propriété : des semaines tirées au hasard (candidats, chiffres,
-   * personnes, soutiens, extras, versions courtes) ; (a) la réduction des
+   * personnes, soutiens, extras) ; (a) la réduction des
    * paires garde le même optimum ; (b) les trous du générateur sont ceux que
    * l'oracle (`trousAccueilDuJour`, cycles.ts) recompte sur la solution ;
    * (c) aucune règle de la loi enfreinte, aucun soutien seul ; (d) le compte
@@ -582,8 +581,6 @@ describe('trous sur l’accueil entier (D15)', () => {
       jour: fc.integer({ min: 0, max: 2 }),
       debutQ: fc.integer({ min: 24, max: 72 }), // 6 h à 18 h
       dureeQ: fc.integer({ min: 16, max: 36 }), // 4 h à 9 h
-      raccourci: fc.constantFrom(0, 60),
-      raccourciDebut: fc.constantFrom(0, 30),
     })
     const arbSal = fc.record({
       genre: fc.constantFrom('tit', 'tit', 'dep', 'ext', 'app'),
@@ -621,8 +618,6 @@ describe('trous sur l’accueil entier (D15)', () => {
               fin: c.jour * J + debut + c.dureeQ * 15,
               effectif: 0,
               jourPlanning: c.jour,
-              raccourci: c.raccourci,
-              raccourciDebut: c.raccourci ? c.raccourciDebut : 0,
               presence,
               accueil: true,
             })
@@ -674,10 +669,9 @@ describe('trous sur l’accueil entier (D15)', () => {
           const parSal = new Map(salaries.map((s) => [s.id, s]))
           const presences: PresencePoste[] = r.affectations.map((a) => {
             const c = parId.get(a.creneauId) as Creneau
-            const fait = a.court ? enVersionCourte(c) : c
             return {
-              debut: fait.debut,
-              fin: fait.fin,
+              debut: c.debut,
+              fin: c.fin,
               autonome:
                 role(parSal.get(a.salarieId) as SalarieSolveur, c.poste) !==
                 'soutien',
@@ -827,28 +821,21 @@ describe('d’un veilleur à l’autre (audit du 2026-11-01)', () => {
   })
 
   it('nuit étoile : la journée est tenue jusqu’à minuit (2026-11-01)', () => {
-    // Oracle : la nuit de 23:00 peut se faire en version courte, de 00:00 ;
+    // Oracle : la nuit étoile est l'horaire de minuit (00:00 à 07:00, écrit
+    // 24:00 sur son jour, 2026-11-02), candidat à côté de la nuit de 23:00 ;
     // la journée doit donc tenir jusqu'à 00:00 (l'arrivée la plus tardive).
-    const etoile = cand('n', 'veille', 6, 23, 31, ['nuit'], {
-      raccourci: 60,
-      raccourciDebut: 60,
-    })
     const cs = [
       cand('m', 'rec', 6, 7, 15, ['matin']),
       cand('s', 'rec', 6, 14, 22.75, ['soir']),
-      etoile,
+      nuit('n', 6),
+      cand('n7', 'veille', 6, 24, 31, ['nuit']),
     ]
     expect(plageAccueil(cs, tout)?.fin).toBe(6 * J + 24 * H)
-    // Refusé : sans version courte, la journée s'arrête à 23:00.
-    expect(plageAccueil([...cs.slice(0, 2), nuit('n2', 6)], tout)?.fin).toBe(
-      6 * J + 23 * H,
-    )
-    // Le matin suivant commence au départ le plus tôt du veilleur.
-    const courteFin = cand('n3', 'veille', 5, 23, 31, ['nuit'], {
-      raccourci: 60,
-      raccourciDebut: 0,
-    })
-    expect(nuitDeLaVeille([courteFin], jourDe, 6, () => true)).toEqual([
+    // Refusé : sans l'horaire de minuit, la journée s'arrête à 23:00.
+    expect(plageAccueil(cs.slice(0, 3), tout)?.fin).toBe(6 * J + 23 * H)
+    // Le matin suivant commence au départ du veilleur, sur ses vraies heures.
+    const tot = cand('n3', 'veille', 5, 23, 30, ['nuit'])
+    expect(nuitDeLaVeille([tot], jourDe, 6, () => true)).toEqual([
       { debut: 5 * J + 23 * H, fin: 6 * J + 6 * H },
     ])
   })
@@ -1062,8 +1049,8 @@ describe('relève entre le matin et le soir (réglage, 30 min)', () => {
     })
     expect(
       relevesManquantes(avec, [
-        { salarieId: 'a', creneauId: 'rm', court: false },
-        { salarieId: 'b', creneauId: 's15', court: false },
+        { salarieId: 'a', creneauId: 'rm' },
+        { salarieId: 'b', creneauId: 's15' },
       ]),
     ).toEqual([0])
   })

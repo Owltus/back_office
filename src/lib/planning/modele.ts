@@ -20,12 +20,6 @@ export interface Creneau {
   soutien: number
   /** Minutes de pause comprises dans la présence, hors temps de travail. */
   pause: number
-  /** Minutes retirées quand le shift est fait en « journée courte ». */
-  raccourci: number
-  /** Dont au DÉBUT (`raccourci_debut` de l'horaire) : la version courte commence
-   * `raccourciDebut` plus tard et finit `raccourci - raccourciDebut` plus
-   * tôt (`horaireDe`, `temps.ts`). 0 : toute la journée courte en fin. */
-  raccourciDebut: number
   /** Places en plus de l'effectif, jamais obligatoires. */
   facultatif: number
   /** Jour du planning où le shift est écrit, quand ce n'est pas celui où il
@@ -50,6 +44,12 @@ export interface Creneau {
    * horaire permis du même cycle (plan planning-cycles-2026-10-30, D13). Null
    * pour un besoin ou un shift posé hors besoins. */
   place: string | null
+  /** Version étoile (2026-11-02, `etoile.ts`) : un créneau `r…` dont
+   * l'horaire est une version étoile de celui de sa place (un horaire de 7 h
+   * contenu dans un horaire de 8 h). Il TIENT la place comme
+   * l'horaire demandé : aucun coût de remplaçant, ses vraies minutes face au
+   * contrat, présent dès le premier temps du calcul. Faux partout ailleurs. */
+  etoile: boolean
   /** Équité (D15) : un soir (période soir de l'horaire). */
   soir: boolean
   /** Équité (D15) : un matin tôt (début à l'heure la plus tôt des matins
@@ -65,8 +65,6 @@ export function creneau(
     typeShift: null,
     soutien: 0,
     pause: 0,
-    raccourci: 0,
-    raccourciDebut: 0,
     facultatif: 0,
     jourPlanning: null,
     ferme: false,
@@ -75,6 +73,7 @@ export function creneau(
     presence: [],
     accueil: false,
     place: null,
+    etoile: false,
     soir: false,
     matinTot: false,
     ...c,
@@ -269,8 +268,6 @@ export interface Probleme {
   graine: number
   /** (salarié, créneau) posés à la main et épinglés : gardés tels quels. */
   imposees: ReadonlySet<string>
-  /** Imposées faites en journée courte. */
-  courtes: ReadonlySet<string>
   /** Propositions de la génération précédente « salarié|jour|poste|code ». */
   aEviter: ReadonlySet<string>
   /** Tableau de l'accueil : le chiffre de chaque moment, jour par jour. */
@@ -298,7 +295,6 @@ export function probleme(
     tempsMaxSecondes: 10,
     graine: 0,
     imposees: new Set(),
-    courtes: new Set(),
     aEviter: new Set(),
     consignes: [],
     ...p,
@@ -317,7 +313,6 @@ export type Statut = 'optimal' | 'realisable' | 'inconnu'
 export interface AffectationSolveur {
   salarieId: string
   creneauId: string
-  court: boolean
 }
 
 export interface Manque {

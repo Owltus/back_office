@@ -8,6 +8,9 @@
  * Mode manuel (`rubriquesDeLaCase`) : tous les codes de la personne, rangés
  * par casquette (un poste de sa fiche), la coupure de repos choisissable
  * avec son alerte.
+ *
+ * Journée étoile (`etoileDeLaCase`, décision utilisateur du 2026-11-02) : les
+ * horaires de 7 h qui remplacent l'horaire de 8 h d'un shift, ou l'inverse.
  */
 
 import {
@@ -16,10 +19,20 @@ import {
   libelleHoraire,
   trierHoraires,
 } from '#/lib/planning/affichage.ts'
-import { codesPermis, posteDeReference } from '#/lib/planning/eligibilite.ts'
-import type { CodesPermis, Voisin } from '#/lib/planning/eligibilite.ts'
+import {
+  codesPermis,
+  posteDeReference,
+  rubriqueEtoile,
+} from '#/lib/planning/eligibilite.ts'
+import type {
+  CodesPermis,
+  EntreeCodesPermis,
+  RubriqueEtoile,
+  Voisin,
+} from '#/lib/planning/eligibilite.ts'
 import { estEcole } from '#/lib/planning/semaine.ts'
 import type { SemaineOut } from '#/lib/planning/semaine.ts'
+import { JOURS } from '#/lib/planning/types.ts'
 import type {
   Horaire,
   Motif,
@@ -88,14 +101,7 @@ export function actuelNonPermis(
   }
 }
 
-export function codesDeLaCase({
-  referentiel,
-  personne,
-  posteId,
-  jour,
-  source,
-  sauf,
-}: {
+interface EntreeCase {
   referentiel: Pick<Referentiel, 'horaires' | 'postes' | 'motifs'>
   personne: Salarie
   posteId: number | undefined
@@ -103,12 +109,23 @@ export function codesDeLaCase({
   source: SourceCase
   /** Shift en cours de modification : il ne compte pas comme voisin. */
   sauf?: number
-}): CodesPermis<Horaire> {
+}
+
+/** Ce que la règle unique attend, lu sur l'écran (bilan de la semaine,
+ * shifts voisins). */
+function entreeDeLaCase({
+  referentiel,
+  personne,
+  posteId,
+  jour,
+  source,
+  sauf,
+}: EntreeCase): EntreeCodesPermis<Horaire> & { personne: Salarie } {
   const semaine = source.semaine
   const bilan = semaine?.bilan.find((b) => b.salarie_id === personne.id)
   const motifId = bilan && jour in bilan.absences ? bilan.absences[jour] : null
   const motif = referentiel.motifs.find((m) => m.id === motifId)
-  return codesPermis({
+  return {
     personne,
     poste: referentiel.postes.find((p) => p.id === posteId),
     jour,
@@ -119,7 +136,59 @@ export function codesDeLaCase({
     },
     lundi: semaine?.lundi,
     voisins: voisinsDe(source, personne.id, jour, sauf),
-  })
+  }
+}
+
+export function codesDeLaCase(e: EntreeCase): CodesPermis<Horaire> {
+  return codesPermis(entreeDeLaCase(e))
+}
+
+/** Rubrique « Journée étoile » d'une case : celle du moteur
+ * (`rubriqueEtoile`), sur le poste du shift, et les autres jours de la
+ * semaine où la personne a déjà une journée étoile (une seule par semaine
+ * pour un 39 h : l'écran le rappelle, la règle le signale). */
+export interface EtoileCase extends RubriqueEtoile<Horaire> {
+  /** Poste du shift : l'horaire choisi y reste. */
+  posteId: number
+  /** Jours (0 à 6) des autres journées étoile de la semaine. */
+  deja: number[]
+}
+
+/**
+ * La rubrique « Journée étoile » d'un shift (décision utilisateur du
+ * 2026-11-02, remplace le bouton qui retirait une heure) : les horaires de
+ * 7 h contenus dans son horaire de 8 h (`versionsEtoile`), ou, s'il en est
+ * déjà un, l'horaire de 8 h dont il est la version (« Journée normale »),
+ * permis pour la personne sur ce poste ce jour-là. Null : rien à montrer
+ * (contrat sans journée étoile, horaire spécifique, rien de permis).
+ */
+export function etoileDeLaCase(
+  e: EntreeCase & { posteId: number; horaireId: number | null },
+): EtoileCase | null {
+  const r = rubriqueEtoile({ ...entreeDeLaCase(e), horaireId: e.horaireId })
+  if (!r) return null
+  const deja = (e.source.semaine?.affectations ?? [])
+    .filter(
+      (a) =>
+        a.salarie_id === e.personne.id &&
+        a.etoile &&
+        a.jour !== e.jour &&
+        a.id !== e.sauf,
+    )
+    .map((a) => a.jour)
+    .sort((a, b) => a - b)
+  return { ...r, posteId: e.posteId, deja }
+}
+
+/** « Déjà une journée étoile le mardi. » (null : aucune autre). */
+export function texteEtoileDeja(deja: readonly number[]): string | null {
+  if (!deja.length) return null
+  const jours = deja.map((j) => JOURS[j].toLowerCase())
+  const liste =
+    jours.length === 1
+      ? jours[0]
+      : `${jours.slice(0, -1).join(', ')} et ${jours.at(-1)}`
+  return `Déjà une journée étoile le ${liste}.`
 }
 
 // ------------------------------------------------- rubriques (mode manuel)

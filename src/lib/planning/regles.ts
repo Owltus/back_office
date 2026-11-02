@@ -32,9 +32,15 @@ export const JOURS_TRAVAILLES_PREFERES = 5
 export const REPOS_DEUX_SEMAINES = 3
 export const TEMPS_PLEIN = 35 * H
 /** R-JOURNEE-ETOILE (organisation de l'hôtel) : au-delà de 35 h, une seule
- * journée courte par semaine, 39 h = 4 × 8 h + 1 × 7 h. */
+ * journée courte par semaine, 39 h = 4 × 8 h + 1 × 7 h. La journée étoile est
+ * le jour d'un horaire de MOINS de `JOURNEE_PLEINE` (décision utilisateur du
+ * 2026-11-02 : un horaire qui existe, plus aucun raccourci). */
 export const JOURNEE_PLEINE = 8 * H
 export const JOURNEES_COURTES_MAX = 1
+/** Version étoile d'un horaire de 8 h (`etoile.ts`) : un horaire d'AU MOINS
+ * 7 h (et de moins de 8 h), la journée de 7 h des 39 h. Un horaire plus
+ * court (3 h, 5 h) n'est pas proposé comme journée étoile. */
+export const JOURNEE_ETOILE_MIN = JOURNEE_PLEINE - H
 /** R-ABSENCE-HEURES : un jour d'absence compté vaut une journée ; 5 au plus. */
 export const JOURS_CONTRAT = 5
 /** R-CADRE-FJ : seuls le repos de 11 h et le repos hebdo, soit 13 h d'amplitude. */

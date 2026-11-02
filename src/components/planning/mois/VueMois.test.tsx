@@ -7,6 +7,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react'
 
 import { TooltipProvider } from '#/components/ui/tooltip.tsx'
@@ -250,7 +251,6 @@ describe('VueMois', { timeout: 20_000 }, () => {
         debut: '07:00',
         fin: '15:45',
         epinglee: false,
-        court: false,
         pause: 45,
       },
     ]
@@ -318,19 +318,35 @@ describe('VueMois', { timeout: 20_000 }, () => {
     ])
   })
 
-  it('journée étoile : début et fin recalculés pour chaque shift touché', async () => {
+  it("journée étoile : le clic droit propose l'horaire de 7 h, posé comme un horaire", async () => {
     droits = { pret: true, lire: true, ecrire: true, gerer: false }
+    const h = demo.referentiel.horaires
+    const matin = h.find((x) => x.debut === '07:00' && x.fin === '15:45')!
+    const matin7 = h.find((x) => x.debut === '07:00' && x.fin === '14:45')!
     const base = {
       lundi: '2026-11-16',
       salarie_id: 3,
       poste_id: 2,
-      horaire_id: 1,
       epinglee: true,
       pause: 45,
     }
     affectations = [
-      { ...base, id: 1, jour: 0, debut: '07:00', fin: '15:45', court: false },
-      { ...base, id: 2, jour: 2, debut: '07:00', fin: '14:45', court: true },
+      {
+        ...base,
+        id: 1,
+        jour: 0,
+        horaire_id: matin.id,
+        debut: '07:00',
+        fin: '15:45',
+      },
+      {
+        ...base,
+        id: 2,
+        jour: 2,
+        horaire_id: matin7.id,
+        debut: '07:00',
+        fin: '14:45',
+      },
     ]
     monter()
     await charge()
@@ -340,21 +356,102 @@ describe('VueMois', { timeout: 20_000 }, () => {
         name: /^Lucas Petit, .*16.* · 07:00–15:45/,
       }),
     )
+    const groupe = await screen.findByRole('group', { name: 'Journée étoile' })
+    // Une seule journée étoile par semaine : celle du mercredi est rappelée.
+    expect(
+      within(groupe).getByText('Déjà une journée étoile le mercredi.'),
+    ).toBeTruthy()
+    // L'horaire de 7 h n'est pas répété dans la liste.
+    expect(
+      screen.queryAllByRole('menuitem', { name: /^07:00–14:45/ }),
+    ).toHaveLength(0)
     fireEvent.click(
-      await screen.findByRole('menuitem', { name: /Journée étoile/ }),
+      within(groupe).getByRole('menuitem', {
+        name: /^Journée étoile, 07:00–14:45/,
+      }),
     )
-    await waitFor(() => expect(service.modifierShift).toHaveBeenCalledTimes(2))
-    // L'ancienne journée courte reprend ses heures pleines, la nouvelle les perd.
-    expect(service.modifierShift).toHaveBeenNthCalledWith(1, 2, {
-      court: false,
-      debut: '07:00',
-      fin: '15:45',
-    })
-    expect(service.modifierShift).toHaveBeenNthCalledWith(2, 1, {
-      court: true,
+    await waitFor(() => expect(service.modifierShift).toHaveBeenCalledTimes(1))
+    // Plus aucune heure retirée : un autre horaire, avec ses heures.
+    expect(service.modifierShift).toHaveBeenCalledWith(1, {
+      horaire_id: matin7.id,
       debut: '07:00',
       fin: '14:45',
+      pause: 45,
     })
+  })
+
+  it('journée étoile : un shift de 7 h revient à sa journée normale', async () => {
+    droits = { pret: true, lire: true, ecrire: true, gerer: false }
+    const h = demo.referentiel.horaires
+    const matin = h.find((x) => x.debut === '07:00' && x.fin === '15:45')!
+    const matin7 = h.find((x) => x.debut === '07:00' && x.fin === '14:45')!
+    affectations = [
+      {
+        lundi: '2026-11-16',
+        salarie_id: 3,
+        poste_id: 2,
+        epinglee: true,
+        pause: 45,
+        id: 2,
+        jour: 2,
+        horaire_id: matin7.id,
+        debut: '07:00',
+        fin: '14:45',
+      },
+    ]
+    monter()
+    await charge()
+    fireEvent.contextMenu(
+      screen.getByRole('button', {
+        name: /^Lucas Petit, .*18.* · 07:00–14:45/,
+      }),
+    )
+    const groupe = await screen.findByRole('group', { name: 'Journée étoile' })
+    fireEvent.click(
+      within(groupe).getByRole('menuitem', {
+        name: /^Journée normale, 07:00–15:45/,
+      }),
+    )
+    await waitFor(() =>
+      expect(service.modifierShift).toHaveBeenCalledWith(2, {
+        horaire_id: matin.id,
+        debut: '07:00',
+        fin: '15:45',
+        pause: 45,
+      }),
+    )
+  })
+
+  it('journée étoile : rien pour un contrat de 35 h', async () => {
+    droits = { pret: true, lire: true, ecrire: true, gerer: false }
+    const h = demo.referentiel.horaires
+    const matin = h.find((x) => x.debut === '07:00' && x.fin === '15:45')!
+    const chloe = demo.referentiel.salaries.find(
+      (x) => x.heures_hebdo === 35 && x.type_contrat === 'apprenti',
+    )!
+    affectations = [
+      {
+        lundi: '2026-11-16',
+        salarie_id: chloe.id,
+        poste_id: 2,
+        epinglee: true,
+        pause: 45,
+        id: 1,
+        jour: 0,
+        horaire_id: matin.id,
+        debut: '07:00',
+        fin: '15:45',
+      },
+    ]
+    monter()
+    await charge()
+    fireEvent.contextMenu(
+      screen.getByRole('button', {
+        name: new RegExp(`^${chloe.prenom} ${chloe.nom}, .*16.* · 07:00–15:45`),
+      }),
+    )
+    await screen.findByRole('menu')
+    expect(screen.queryByRole('group', { name: 'Journée étoile' })).toBeNull()
   })
 
   it('poser un horaire sur une absence : refusé, l’absence est remise', async () => {
@@ -410,7 +507,6 @@ describe('VueMois', { timeout: 20_000 }, () => {
         debut: '15:00',
         fin: '23:45',
         epinglee: true,
-        court: false,
         pause: 45,
       },
     ]
@@ -482,7 +578,6 @@ describe('VueMois', { timeout: 20_000 }, () => {
         debut: '07:00',
         fin: '15:45',
         epinglee: true,
-        court: false,
         pause: 45,
       },
     ]
@@ -580,7 +675,6 @@ describe('VueMois', { timeout: 20_000 }, () => {
         debut: nuit.debut,
         fin: nuit.fin,
         epinglee: true,
-        court: false,
         pause: nuit.pause,
       },
     ]

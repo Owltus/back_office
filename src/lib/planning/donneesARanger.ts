@@ -40,7 +40,7 @@ import {
   codesDeLaFiche,
   codesDuPoste,
 } from '#/lib/planning/eligibilite.ts'
-import { ajouterJours, lundiDe } from '#/lib/planning/temps.ts'
+import { ajouterJours, horaireDe, lundiDe } from '#/lib/planning/temps.ts'
 import type {
   Affectation,
   Horaire,
@@ -159,10 +159,11 @@ function codesAuxMemesHeures(
   horaires: readonly Horaire[],
 ): Horaire[] {
   const fiche = { shiftsAutorises: s ? codesDeLaFiche(s) : new Set<string>() }
+  // Heures écrites d'un shift de cet horaire (minuit en début : 24:00).
   return codesDuPoste(poste, horaires).filter(
     (h) =>
-      h.debut === shift.debut &&
-      h.fin === shift.fin &&
+      horaireDe(h).debut === shift.debut &&
+      horaireDe(h).fin === shift.fin &&
       h.pause === shift.pause &&
       codeDeLaFiche(fiche, String(h.id)),
   )
@@ -291,8 +292,7 @@ function rediger(
       correction: {
         type: 'code',
         horaireId: h.id,
-        debut: h.debut,
-        fin: h.fin,
+        ...horaireDe(h),
         pause: h.pause,
       },
       lien: { page: '/planning/horaires', cible: `horaire-${h.id}` },

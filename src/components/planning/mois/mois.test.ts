@@ -68,7 +68,6 @@ describe('cases et compteurs', () => {
     debut: '07:00',
     fin: '15:45',
     epinglee,
-    court: false,
     pause: 45,
   })
   const sem = analyser({

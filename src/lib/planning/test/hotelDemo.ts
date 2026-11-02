@@ -19,14 +19,36 @@ import type {
   TypeContrat,
 } from '#/lib/planning/types.ts'
 
-const HORAIRES: Array<[string, string, string, string, number, number]> = [
-  ['M', 'Matin', '07:00', '15:45', 45, 60],
-  ['MI', 'Middle', '09:00', '17:45', 45, 60],
-  ['AM', 'Après-midi', '15:00', '23:45', 45, 60],
-  ['N', 'Nuit', '23:00', '07:45', 45, 60],
-  ['D', 'Direction', '08:00', '18:00', 60, 0],
-  ['T', 'Technique', '08:00', '16:45', 45, 0],
-  ['TV', 'Technique vendredi', '08:00', '15:45', 45, 0],
+// (code, nom, début, fin, pause). Plus de raccourci (2026-11-02) : chaque
+// horaire de 8 h qui en avait un a sa version étoile, un horaire de 7 h qui
+// existe (`etoile.ts`), là où l'ancienne journée courte finissait une heure
+// plus tôt ; TV est celle de T.
+const HORAIRES: Array<[string, string, string, string, number]> = [
+  ['M', 'Matin', '07:00', '15:45', 45],
+  ['MI', 'Middle', '09:00', '17:45', 45],
+  ['AM', 'Après-midi', '15:00', '23:45', 45],
+  ['N', 'Nuit', '23:00', '07:45', 45],
+  ['D', 'Direction', '08:00', '18:00', 60],
+  ['T', 'Technique', '08:00', '16:45', 45],
+  ['TV', 'Technique vendredi', '08:00', '15:45', 45],
+  ['M7', 'Matin étoile', '07:00', '14:45', 45],
+  ['MI7', 'Middle étoile', '09:00', '16:45', 45],
+  ['AM7', 'Après-midi étoile', '15:00', '22:45', 45],
+  ['N7', 'Nuit étoile', '23:00', '06:45', 45],
+]
+/** Versions étoile ajoutées aux listes d'horaires qui ont leur horaire de
+ * 8 h (comme la migration 20261102100000). */
+const VERSIONS: Record<string, string> = {
+  M: 'M7',
+  MI: 'MI7',
+  AM: 'AM7',
+  N: 'N7',
+}
+const avecVersions = (codes: readonly string[]) => [
+  ...codes,
+  ...codes.flatMap((c) =>
+    VERSIONS[c] && !codes.includes(VERSIONS[c]) ? [VERSIONS[c]] : [],
+  ),
 ]
 const MOTIFS: Array<[string, string, boolean, 'absence' | 'ecole']> = [
   ['CP', 'Congés', true, 'absence'],
@@ -214,7 +236,7 @@ export function hotelDemo(lundi: string): {
   absences: Absence[]
 } {
   const horaires: Horaire[] = HORAIRES.map(
-    ([code, nom, debut, fin, pause, raccourci], i) =>
+    ([code, nom, debut, fin, pause], i) =>
       avecCode<Horaire>(
         {
           id: i + 1,
@@ -223,8 +245,6 @@ export function hotelDemo(lundi: string): {
           fin,
           couleur: '#000000',
           pause,
-          raccourci,
-          raccourci_debut: 0,
           periode: null,
         },
         code,
@@ -245,7 +265,7 @@ export function hotelDemo(lundi: string): {
     nom,
     categorie,
     couleur: '#000000',
-    horaires_autorises: codes.map(idH),
+    horaires_autorises: avecVersions(codes).map(idH),
     presence: false,
   }))
   const idP = (n: string) => (postes.find((p) => p.nom === n) as Poste).id
@@ -300,7 +320,7 @@ export function hotelDemo(lundi: string): {
           niveau: niveau as 'titulaire',
         })),
         semaine_type: semaine,
-        shifts_autorises: (opt.horaires ?? []).map(idH),
+        shifts_autorises: avecVersions(opt.horaires ?? []).map(idH),
         date_entree: null,
         // Contrat à durée limitée : une fin (U2 du 2026-11-01), loin devant.
         date_sortie:

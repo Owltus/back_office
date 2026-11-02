@@ -35,8 +35,6 @@ function horaire(
       fin,
       couleur: '#000',
       pause,
-      raccourci: 0,
-      raccourci_debut: 0,
       periode: 'matin',
     },
     code,

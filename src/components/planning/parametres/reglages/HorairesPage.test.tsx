@@ -166,8 +166,6 @@ describe('Horaires et absences', () => {
         fin: '15:30',
         couleur: '#000000',
         pause: 30,
-        raccourci: 60,
-        raccourci_debut: 0,
         periode: 'matin',
       },
       1,
@@ -196,36 +194,53 @@ describe('Horaires et absences', () => {
     expect(service.enregistrerHoraire).not.toHaveBeenCalled()
   })
 
-  it('la journée courte doit garder du temps de travail ; dont au début plafonné', () => {
+  it("plus de minutes en moins : l'aperçu dit les horaires de 7 h compris dans celui-ci", () => {
     monter(<HorairesPage />)
     const carte = within(carteMatin())
-    fireEvent.change(carte.getByLabelText('Minutes retirées au début'), {
-      target: { value: '90' },
+    // Le réglage qui retirait une heure a disparu (2026-11-02).
+    expect(carte.queryByLabelText(/minutes en moins/)).toBeNull()
+    expect(carte.queryByLabelText('Minutes retirées au début')).toBeNull()
+    const apercu = within(carte.getByLabelText('Aperçu des heures'))
+    expect(apercu.getByText('Journée normale')).toBeTruthy()
+    expect(apercu.getByText(/07:00 → 15:45 · 8h de travail/)).toBeTruthy()
+    // Ses versions étoile, des horaires qui existent (`versionsEtoile`).
+    expect(apercu.getByText('Journée étoile')).toBeTruthy()
+    expect(apercu.getByText('08:00–15:45, 07:00–14:45')).toBeTruthy()
+    // Un horaire de 8 h sans version : dit aussi.
+    fireEvent.change(carte.getByLabelText('Début'), {
+      target: { value: '05:00' },
     })
-    expect(
-      carte.getByLabelText<HTMLInputElement>('Minutes retirées au début').value,
-    ).toBe('60')
-    fireEvent.change(
-      carte.getByLabelText('Journée étoile : minutes en moins'),
-      {
-        target: { value: '240' },
-      },
-    )
     fireEvent.change(carte.getByLabelText('Fin'), {
-      target: { value: '11:00' },
+      target: { value: '13:45' },
     })
     expect(
-      carte.getByText('La journée étoile doit garder du temps de travail.'),
+      apercu.getByText('aucun horaire de 7 h contenu dans celui-ci'),
     ).toBeTruthy()
   })
 
-  it('aperçu des heures normales et courtes', () => {
+  it('un horaire de 7 h dit de quel horaire il est la journée étoile', () => {
     monter(<HorairesPage />)
+    // Sa ligne le dit, et son aperçu nomme l'horaire de 8 h.
+    const ligne = (libelle: string) =>
+      screen.getByRole('button', { name: `Régler l'horaire ${libelle}` })
+    expect(
+      within(ligne('07:00–14:45')).getByText(
+        '7h · pause 45 min · journée étoile',
+      ),
+    ).toBeTruthy()
+    // L'horaire de 8 h, lui, n'est la journée étoile d'aucun autre.
+    expect(
+      within(ligne('07:00–15:45')).getByText('8h · pause 45 min'),
+    ).toBeTruthy()
+    ouvrir(/^Régler l'horaire 07:00–14:45$/)
     const apercu = within(
-      within(carteMatin()).getByLabelText('Aperçu des heures'),
+      within(
+        screen.getByRole('region', { name: 'Horaire 07:00–14:45' }),
+      ).getByLabelText('Aperçu des heures'),
     )
-    expect(apercu.getByText(/07:00 → 15:45 · 8h de travail/)).toBeTruthy()
-    expect(apercu.getByText(/07:00 → 14:45 · 7h de travail/)).toBeTruthy()
+    expect(apercu.getByText('Heures')).toBeTruthy()
+    expect(apercu.getByText('Journée étoile de')).toBeTruthy()
+    expect(apercu.getByText('07:00–15:45')).toBeTruthy()
   })
 
   it('un nouvel horaire : ni code ni nom à saisir, créé à Enregistrer seulement', async () => {

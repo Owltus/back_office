@@ -15,7 +15,7 @@ import {
 export const AIDE_POINTS = [
   'Sous chaque jour : l’accueil du matin, du soir et de la nuit.',
   'Vert : au complet. Rouge : il manque quelqu’un. Bleu : quelqu’un en plus. Orange : personne de demandé.',
-  'Journée étoile : la journée courte du contrat (une heure de moins).',
+  'Journée étoile : un horaire de 7 h, une fois par semaine pour les 39 h.',
 ]
 
 export function AideGestes({

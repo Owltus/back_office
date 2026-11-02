@@ -176,7 +176,7 @@ function Groupe({
   onAller: (lien: LienReglage) => void
   onPlacer?: (d: DemandePlacement) => void
 }) {
-  // Heures de la place (une journée courte peut différer de l'horaire).
+  // Heures de la place (celles du besoin).
   const heures = libelleHoraire(g)
   const nom = g.poste?.nom ?? 'Poste'
   // Une place de l'accueil n'a ni poste ni horaire : son moment (2026-11-01).

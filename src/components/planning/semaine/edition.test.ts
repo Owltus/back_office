@@ -5,8 +5,8 @@ import type { Horaire, Motif, Salarie } from '#/lib/planning/types.ts'
 
 /*
  * Aides pures de la vue semaine : statut d'un jour libre, indices de dépôt,
- * colonne Heures, compteurs, et les écritures composées (poser un horaire,
- * journée étoile) contre un service simulé.
+ * colonne Heures, compteurs, et les écritures composées (poser un horaire)
+ * contre un service simulé.
  */
 
 const service = vi.hoisted(() => ({
@@ -22,7 +22,6 @@ const {
   reposAValider,
   reposProposesParJour,
   validationRepos,
-  etoileProposee,
   indiceDe,
   poserHoraire,
   reposDe,
@@ -72,8 +71,6 @@ const MATIN: Horaire = {
   fin: '15:45',
   couleur: '#ff0000',
   pause: 45,
-  raccourci: 60,
-  raccourci_debut: 0,
   periode: null,
 }
 
@@ -87,7 +84,7 @@ const shift = (s: Partial<ShiftOut> = {}): ShiftOut => ({
   fin: '15:45',
   duree: 480,
   pause: 45,
-  court: false,
+  etoile: false,
   epinglee: true,
   besoin_id: null,
   code_demande: null,
@@ -352,13 +349,12 @@ describe('colonne Heures et compteurs', () => {
 
 describe('poserHoraire', () => {
   const o = { salarie_id: 1, jour: 2 }
-  it('un shift : change le code, retire la journée étoile', async () => {
+  it("un shift : change l'horaire (une journée étoile en est un autre)", async () => {
     await poserHoraire('2026-11-02', o, shift({ id: 7 }), null, MATIN, 10)()
     expect(service.modifierShift).toHaveBeenCalledWith(7, {
       horaire_id: 5,
       debut: '07:00',
       fin: '15:45',
-      court: false,
       pause: 45,
     })
   })
@@ -416,44 +412,29 @@ describe('poserHoraire', () => {
   })
 })
 
-describe('etoileProposee', () => {
-  it('unique dans la semaine : l’ancienne journée courte est retirée', async () => {
-    const semaine = {
-      affectations: [
-        shift({ id: 1, jour: 0 }),
-        shift({ id: 2, jour: 3, court: true }),
-      ],
-    } as SemaineOut
-    const e = etoileProposee(semaine, salarie(), [MATIN], {
-      salarie_id: 1,
-      jour: 0,
+describe('poserHoraire : horaire de minuit', () => {
+  it("commence à 24:00 sur son jour : c'est la nuit vers le lendemain", async () => {
+    const NUIT_ETOILE: Horaire = {
+      ...MATIN,
+      id: 9,
+      debut: '00:00',
+      fin: '07:00',
+      pause: 0,
+      periode: 'nuit',
+    }
+    await poserHoraire(
+      '2026-11-02',
+      { salarie_id: 1, jour: 2 },
+      shift({ id: 7 }),
+      null,
+      NUIT_ETOILE,
+      10,
+    )()
+    expect(service.modifierShift).toHaveBeenCalledWith(7, {
+      horaire_id: 9,
+      debut: '24:00',
+      fin: '07:00',
+      pause: 0,
     })
-    expect(e?.active).toBe(false)
-    await e?.basculer()
-    expect(service.modifierShift).toHaveBeenNthCalledWith(1, 2, {
-      court: false,
-      debut: '07:00',
-      fin: '15:45',
-    })
-    expect(service.modifierShift).toHaveBeenNthCalledWith(2, 1, {
-      court: true,
-      debut: '07:00',
-      fin: '14:45',
-    })
-  })
-  it('rien à 35 h ni au forfait', () => {
-    const semaine = { affectations: [shift()] } as SemaineOut
-    expect(
-      etoileProposee(semaine, salarie({ heures_hebdo: 35 }), [MATIN], {
-        salarie_id: 1,
-        jour: 0,
-      }),
-    ).toBeUndefined()
-    expect(
-      etoileProposee(semaine, salarie({ forfait_jours: true }), [MATIN], {
-        salarie_id: 1,
-        jour: 0,
-      }),
-    ).toBeUndefined()
   })
 })

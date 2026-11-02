@@ -49,8 +49,6 @@ function horaire(
       fin,
       couleur: '#888888',
       pause: 0,
-      raccourci: 0,
-      raccourci_debut: 0,
       periode,
     },
     code,
@@ -1560,5 +1558,50 @@ describe("verifierReglages, tableau de l'accueil", () => {
     expect(textes.length).toBeGreaterThan(3)
     for (const t of textes)
       expect(t).not.toMatch(/consigne|minimum|maximum|—|«|»/i)
+  })
+})
+
+describe('journée étoile fixée sans horaire de 7 h (2026-11-02)', () => {
+  const M7 = horaire(6, 'M7', '07:00', '14:00', 'matin')
+  const etoileLundi = (r: Referentiel, fixe: number | null) => {
+    const s = r.salaries[0]
+    s.semaine_type[0] = fixe
+      ? { mode: 'travail', type_shift_id: fixe, etoile: true }
+      : { mode: 'auto', etoile: true }
+    return r
+  }
+
+  it('refusé : aucun horaire de moins de 8 h sur ses postes', () => {
+    const r = etoileLundi(propre(), null)
+    expect(seul(r)).toMatchObject({
+      id: 'etoile-sans-horaire:10:0',
+      gravite: 'a-voir',
+      ecran: 'equipe',
+      lien: { cible: 'salarie-10.horaires' },
+    })
+    // Horaire fixé sans version étoile permise : même point.
+    const fixe = etoileLundi(propre(), M)
+    fixe.horaires.push(M7)
+    fixe.postes[0].horaires_autorises = [M, S, N, J, D]
+    expect(ids(verifierReglages(fixe))).toContain('etoile-sans-horaire:10:0')
+  })
+
+  it('accepté : un horaire de 7 h qui existe, ou la version de l’horaire fixé', () => {
+    const libre = etoileLundi(propre(), null)
+    libre.horaires.push(M7)
+    expect(ids(verifierReglages(libre))).not.toContain(
+      'etoile-sans-horaire:10:0',
+    )
+    const fixe = etoileLundi(propre(), M)
+    fixe.horaires.push(M7)
+    expect(ids(verifierReglages(fixe))).not.toContain(
+      'etoile-sans-horaire:10:0',
+    )
+    // Un contrat de 35 h n'a pas de journée étoile : rien à dire.
+    const trenteCinq = etoileLundi(propre(), null)
+    trenteCinq.salaries[0].heures_hebdo = 35
+    expect(ids(verifierReglages(trenteCinq))).not.toContain(
+      'etoile-sans-horaire:10:0',
+    )
   })
 })

@@ -21,8 +21,14 @@
  * générateur ne la passe jamais, le vérificateur signale le shift posé.
  */
 
+import {
+  contratEtoile,
+  horairesNormaux,
+  versionsEtoile,
+} from '#/lib/planning/etoile.ts'
+import type { HoraireEtoile } from '#/lib/planning/etoile.ts'
 import { reposQuotidienMin } from '#/lib/planning/regles.ts'
-import { bornes } from '#/lib/planning/temps.ts'
+import { bornes, horaireDe } from '#/lib/planning/temps.ts'
 import type { JourType, Poste, Salarie } from '#/lib/planning/types.ts'
 
 // ------------------------------------------------- prédicats du moteur
@@ -46,14 +52,25 @@ export function codesDeLaFiche(
   return new Set(x.shifts_autorises.map(String))
 }
 
-/** Codes fixés par la semaine type, (jour, code) au format du moteur. */
+/** Codes fixés par la semaine type, (jour, code) au format du moteur :
+ * l'horaire fixé ET ses versions étoile prises dans `horaires` (`etoile.ts`,
+ * décisions utilisateur du 2026-11-02). Comme l'ancienne journée courte, qui
+ * se posait sur l'horaire fixé de n'importe quel jour : un 39 h à horaire
+ * fixé tous les jours fait sa journée de 7 h sur la version étoile. Un jour de
+ * journée étoile fixée (`etoile`), l'horaire de 8 h reste permis à la main
+ * (le vérificateur le signale, R-JOURNEE-ETOILE) ; le moteur n'y pose que la
+ * version étoile (`compatible`). */
 export function codesImposes(
   semaine: readonly JourType[],
+  horaires: readonly HoraireEtoile[] = [],
 ): Array<readonly [number, string]> {
   const r: Array<readonly [number, string]> = []
   semaine.forEach((e, j) => {
     if ((e.mode === 'auto' || e.mode === 'travail') && e.type_shift_id) {
       r.push([j, String(e.type_shift_id)])
+      const h = horaires.find((x) => x.id === e.type_shift_id)
+      if (h)
+        for (const v of versionsEtoile(h, horaires)) r.push([j, String(v.id)])
     }
   })
   return r
@@ -212,9 +229,9 @@ export interface EntreeCodesPermis<T> {
  * `raison` dit pourquoi. Aucun repli : ce que rend cette fonction, le moteur
  * l'accepte.
  */
-export function codesPermis<
-  T extends { id: number; debut: string; fin: string },
->(e: EntreeCodesPermis<T>): CodesPermis<T> {
+export function codesPermis<T extends HoraireEtoile>(
+  e: EntreeCodesPermis<T>,
+): CodesPermis<T> {
   const ferme = (raison: RaisonCodes): CodesPermis<T> => ({
     codes: [],
     raison,
@@ -233,7 +250,7 @@ export function codesPermis<
 
   const fiche = {
     shiftsAutorises: codesDeLaFiche(e.personne),
-    shiftImpose: codesImposes(e.personne.semaine_type),
+    shiftImpose: codesImposes(e.personne.semaine_type, e.horaires),
   }
   const communs = codesDuPoste(e.poste, e.horaires).filter((h) =>
     codeDeLaFiche(fiche, String(h.id)),
@@ -254,7 +271,10 @@ export function codesPermis<
   const codes: T[] = []
   const ecartes: Ecarte<T>[] = []
   for (const h of permis) {
-    const [d, f] = lundi ? bornes(lundi, e.jour, h.debut, h.fin) : [0, 0]
+    const ecrit = horaireDe(h)
+    const [d, f] = lundi
+      ? bornes(lundi, e.jour, ecrit.debut, ecrit.fin)
+      : [0, 0]
     const casse = voisins.find(({ v, b: [vd, vf] }) =>
       v.jour < e.jour
         ? !coupureRespectee(vf, null, d, f, minimum)
@@ -281,4 +301,54 @@ export function codesPermis<
     }
   }
   return { codes, raison: null, texte: null, ecartes }
+}
+
+// ------------------------------------------------------- journée étoile
+
+/** Un horaire proposé dans la rubrique « Journée étoile », avec l'alerte de
+ * coupure de repos s'il la casse (choisissable à la main, comme `ecartes`). */
+export interface ChoixEtoile<T> {
+  horaire: T
+  /** Phrase de la coupure de repos non respectée ; null : rien à dire. */
+  alerte: string | null
+}
+
+export interface RubriqueEtoile<T> {
+  /** Versions étoile de l'horaire du shift, permises pour la personne sur ce
+   * poste ce jour-là (`codesPermis`), triées par id. */
+  versions: Array<ChoixEtoile<T>>
+  /** Le shift est déjà une version étoile : le ou les horaires de 8 h dont
+   * il est la version (« Journée normale »), permis de même. Vide sinon. */
+  normales: Array<ChoixEtoile<T>>
+}
+
+/**
+ * Rubrique « Journée étoile » d'un shift (D6 du 2026-11-02) : remplace le
+ * bouton qui retirait une heure. Null quand elle n'a pas à être montrée :
+ * contrat sans journée étoile (`contratEtoile`), shift sans horaire connu, ou
+ * rien à proposer. Les horaires viennent de `codesPermis` (poste, fiche,
+ * semaine type, jour fermé) ; un horaire qui casse la coupure de repos est
+ * gardé avec son alerte, comme dans le reste du menu.
+ */
+export function rubriqueEtoile<T extends HoraireEtoile>(
+  e: EntreeCodesPermis<T> & {
+    personne: Pick<Salarie, 'heures_hebdo' | 'forfait_jours' | 'type_contrat'>
+    /** Horaire du shift (null : horaire spécifique). */
+    horaireId: number | null
+  },
+): RubriqueEtoile<T> | null {
+  if (!contratEtoile(e.personne) || e.horaireId === null) return null
+  const h = e.horaires.find((x) => x.id === e.horaireId)
+  if (!h) return null
+  const permis = codesPermis(e)
+  const choix = (liste: readonly T[]): Array<ChoixEtoile<T>> =>
+    liste.flatMap((x): Array<ChoixEtoile<T>> => {
+      if (permis.codes.some((c) => c.id === x.id))
+        return [{ horaire: x, alerte: null }]
+      const ecarte = permis.ecartes.find((c) => c.horaire.id === x.id)
+      return ecarte ? [{ horaire: x, alerte: ecarte.texte }] : []
+    })
+  const versions = choix(versionsEtoile(h, e.horaires))
+  const normales = choix(horairesNormaux(h, e.horaires))
+  return versions.length || normales.length ? { versions, normales } : null
 }

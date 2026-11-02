@@ -3,8 +3,7 @@
  * `HorairesPage.tsx`, spec §5.2). Différence voulue avec le prototype : rien
  * ne part à la frappe (anomalie 12) ; chaque carte s'enregistre par son
  * bouton, après contrôle des mêmes règles que la base (pause plus courte que
- * l'horaire, journée courte qui garde du temps de travail, deux horaires aux
- * mêmes heures…). Depuis le 2026-10-31 (décision utilisateur), un horaire
+ * l'horaire, deux horaires aux mêmes heures…). Depuis le 2026-10-31 (décision utilisateur), un horaire
  * n'a plus de code ni de nom à saisir : il se lit par ses heures et son
  * moment ; le moment est proposé d'après les heures puis modifiable, et le
  * nom rangé en base est écrit par l'app (`nomHoraire`). Un horaire modifié
@@ -94,12 +93,9 @@ import {
   supprimerHoraire,
   supprimerMotif,
 } from '#/lib/planning/service.ts'
-import {
-  heureAffichee,
-  horaireDe,
-  minutes,
-  presence,
-} from '#/lib/planning/temps.ts'
+import { horairesNormaux, versionsEtoile } from '#/lib/planning/etoile.ts'
+import { JOURNEE_PLEINE } from '#/lib/planning/regles.ts'
+import { heureAffichee, minutes, presence } from '#/lib/planning/temps.ts'
 import type {
   Horaire,
   Motif,
@@ -141,8 +137,6 @@ const saisieHoraire = (h: Horaire): SaisieHoraire => ({
   fin: h.fin,
   couleur: h.couleur,
   pause: h.pause,
-  raccourci: h.raccourci,
-  raccourci_debut: h.raccourci_debut,
   periode: h.periode,
 })
 
@@ -236,8 +230,6 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
     setNouvelHoraire({
       ...heuresNeuves,
       couleur: PALETTE[data.horaires.length % PALETTE.length],
-      raccourci: 60,
-      raccourci_debut: 0,
       periode: momentPropose(heuresNeuves),
     })
   }
@@ -300,6 +292,7 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
                     <LigneHoraire
                       key={h.id}
                       h={h}
+                      etoile={horairesNormaux(h, data.horaires).length > 0}
                       onOuvrir={() => setOuvert({ type: 'horaire', id: h.id })}
                     />
                   ))}
@@ -453,7 +446,16 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
 
 /** Une ligne : la couleur, les heures, puis le temps
  * de travail et la pause. */
-function LigneHoraire({ h, onOuvrir }: { h: Horaire; onOuvrir: () => void }) {
+function LigneHoraire({
+  h,
+  etoile,
+  onOuvrir,
+}: {
+  h: Horaire
+  /** Version étoile d'un autre horaire (`etoile.ts`) : dit sur la ligne. */
+  etoile: boolean
+  onOuvrir: () => void
+}) {
   const libelle = libelleHoraire(h)
   return (
     <LigneCompacte
@@ -466,7 +468,7 @@ function LigneHoraire({ h, onOuvrir }: { h: Horaire; onOuvrir: () => void }) {
         />
       }
       libelle={<span className="font-medium tabular-nums">{libelle}</span>}
-      detail={`${heures(dureeHoraire(h.debut, h.fin) - h.pause)}${h.pause > 0 ? ` · pause ${h.pause} min` : ''}${h.raccourci > 0 ? ' · étoile' : ''}`}
+      detail={`${heures(dureeHoraire(h.debut, h.fin) - h.pause)}${h.pause > 0 ? ` · pause ${h.pause} min` : ''}${etoile ? ' · journée étoile' : ''}`}
       onOuvrir={onOuvrir}
     />
   )
@@ -656,9 +658,7 @@ function CarteHoraire({
     !neuf &&
     (h.debut !== enregistre.debut ||
       h.fin !== enregistre.fin ||
-      h.pause !== enregistre.pause ||
-      h.raccourci !== enregistre.raccourci ||
-      h.raccourci_debut !== enregistre.raccourci_debut)
+      h.pause !== enregistre.pause)
 
   const enregistrer = async () => {
     if (erreurs.length || envoi || (!modifie && !neuf)) return
@@ -705,20 +705,18 @@ function CarteHoraire({
   const p = heuresOk ? presence(h.debut, h.fin) : 0
   const travail = p - (Number.isNaN(h.pause) ? 0 : h.pause)
   const lendemain = heuresOk && minutes(h.fin) <= minutes(h.debut)
-  const raccourci = Number.isNaN(h.raccourci) ? 0 : h.raccourci
-  const court =
-    heuresOk && raccourci > 0
-      ? horaireDe(
-          {
-            ...h,
-            raccourci,
-            raccourci_debut: Number.isNaN(h.raccourci_debut)
-              ? 0
-              : h.raccourci_debut,
-          },
-          true,
-        )
-      : null
+  // Journée étoile (2026-11-02) : plus de minutes en moins, un AUTRE horaire
+  // de 7 h contenu dans celui-ci (`etoile.ts`). Dit dans l'aperçu, pour
+  // savoir ce que le planning prendra.
+  const ceHoraire = { ...h, id: id ?? -1 }
+  const versions = heuresOk
+    ? versionsEtoile(ceHoraire, referentiel.horaires)
+    : []
+  const normaux = heuresOk
+    ? horairesNormaux(ceHoraire, referentiel.horaires)
+    : []
+  const listeHoraires = (l: readonly Horaire[]) =>
+    l.map((x) => libelleHoraire(x)).join(', ')
   const utilise =
     id === null
       ? 0
@@ -788,46 +786,6 @@ function CarteHoraire({
           />
           min
         </Champ>
-        <Champ libelle="Journée étoile">
-          <ChampMinutes
-            etiquette="Journée étoile : minutes en moins"
-            valeur={h.raccourci}
-            max={240}
-            pas={15}
-            disabled={desactive}
-            onChange={(v) =>
-              changer({
-                raccourci: v,
-                // « dont au début » plafonné au raccourci (prototype).
-                raccourci_debut:
-                  !Number.isNaN(v) && h.raccourci_debut > v
-                    ? Math.max(0, v)
-                    : h.raccourci_debut,
-              })
-            }
-          />
-          min de moins
-        </Champ>
-        {raccourci > 0 && (
-          <Champ
-            libelle="dont"
-            aide="Minutes retirées au début : la journée étoile commence plus tard"
-          >
-            <ChampMinutes
-              etiquette="Minutes retirées au début"
-              valeur={h.raccourci_debut}
-              max={raccourci}
-              pas={15}
-              disabled={desactive}
-              onChange={(v) =>
-                changer({
-                  raccourci_debut: Number.isNaN(v) ? v : Math.min(raccourci, v),
-                })
-              }
-            />
-            min au début
-          </Champ>
-        )}
       </div>
 
       {heuresOk && erreurs.length === 0 && (
@@ -836,18 +794,29 @@ function CarteHoraire({
           aria-label="Aperçu des heures"
         >
           <div className="flex justify-between gap-2">
-            <span className="text-muted-foreground">Journée normale</span>
+            <span className="text-muted-foreground">
+              {travail >= JOURNEE_PLEINE ? 'Journée normale' : 'Heures'}
+            </span>
             <span className="tabular-nums">
               {heureAffichee(h.debut)} → {heureAffichee(h.fin)} ·{' '}
               {heures(travail)} de travail
             </span>
           </div>
-          {court && (
+          {travail >= JOURNEE_PLEINE && (
             <div className="flex justify-between gap-2">
               <span className="text-muted-foreground">Journée étoile</span>
-              <span className="tabular-nums">
-                {heureAffichee(court.debut)} → {heureAffichee(court.fin)} ·{' '}
-                {heures(travail - raccourci)} de travail
+              <span className="text-right tabular-nums">
+                {versions.length
+                  ? listeHoraires(versions)
+                  : 'aucun horaire de 7 h contenu dans celui-ci'}
+              </span>
+            </div>
+          )}
+          {normaux.length > 0 && (
+            <div className="flex justify-between gap-2">
+              <span className="text-muted-foreground">Journée étoile de</span>
+              <span className="text-right tabular-nums">
+                {listeHoraires(normaux)}
               </span>
             </div>
           )}

@@ -27,8 +27,6 @@ const matin: SaisieHoraire = {
   fin: '15:45',
   couleur: '#3b82f6',
   pause: 45,
-  raccourci: 60,
-  raccourci_debut: 0,
   periode: null,
 }
 
@@ -58,18 +56,6 @@ describe('contrôles de saisie (miroir des contraintes de la base)', () => {
     )
     expect(erreursHoraire({ ...matin, fin: '07:45', pause: 45 })).toContain(
       "La pause doit être plus courte que l'horaire.",
-    )
-    expect(erreursHoraire({ ...matin, raccourci: 480 - 1 })).toContain(
-      'La journée étoile retire de 0 à 240 minutes.',
-    )
-    expect(
-      erreursHoraire({ ...matin, fin: '10:00', raccourci: 135 }),
-    ).toContain('La journée étoile doit garder du temps de travail.')
-    expect(erreursHoraire({ ...matin, fin: '10:00', raccourci: 134 })).toEqual(
-      [],
-    )
-    expect(erreursHoraire({ ...matin, raccourci_debut: 75 })).toContain(
-      'Le raccourci du début ne peut pas dépasser le raccourci total.',
     )
     expect(erreursHoraire({ ...matin, couleur: 'bleu' })).toContain(
       'Choisissez une couleur.',
@@ -182,7 +168,10 @@ describe('lignes du tableau des besoins', () => {
     const rien = new Set<string>()
     const lignes = lignesDuPoste(siens, ref.horaires, rien)
     expect(lignes.map((l) => l.cle)).toEqual(['t1', 't3'])
-    expect(horairesAAjouter(possibles, lignes).map((h) => h.id)).toEqual([2])
+    // MI, et les versions étoile du Club (2026-11-02), rangées par heures.
+    expect(horairesAAjouter(possibles, lignes).map((h) => h.id)).toEqual([
+      8, 9, 2, 10,
+    ])
     // Ajouté par l'utilisateur : sa ligne apparaît, vide.
     expect(
       lignesDuPoste(siens, ref.horaires, new Set(['t2'])).map((l) => l.cle),

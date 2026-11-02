@@ -4,7 +4,9 @@
  * personne peut faire sur ses postes, chacun une seule fois, rangés par
  * moment (heures seulement : le poste est déduit sans être affiché),
  * pour changer d'un clic ; valider ou remettre en
- * proposition, la journée étoile, un repos ou une absence posés d'un clic
+ * proposition, la journée étoile (les horaires de 7 h de son horaire, ou
+ * l'horaire de 8 h dont il est la version, 2026-11-02), un repos ou une
+ * absence posés d'un clic
  * comme un horaire (repos en tête, absences en bas), et l'ouverture de la
  * semaine pour le reste.
  */
@@ -28,11 +30,13 @@ import {
 import type { ShiftOut } from '#/lib/planning/semaine.ts'
 import {
   codesUniques,
+  etoileDeLaCase,
   heuresEtDuree,
   motifsDuJour,
   nomLigneCode,
   rubriquesDeLaCase,
   texteChangementPoste,
+  texteEtoileDeja,
 } from '#/components/planning/codesCase.ts'
 import type { CodeUnique, SourceCase } from '#/components/planning/codesCase.ts'
 import { PastilleHoraire } from '#/components/planning/PastilleHoraire.tsx'
@@ -77,7 +81,6 @@ export function MenuJour({
   ecrire,
   onHoraire,
   validation,
-  etoile,
   onVider,
   absences,
   onSemaine,
@@ -97,7 +100,6 @@ export function MenuJour({
   ecrire: boolean
   onHoraire: (h: Horaire, posteId: number) => void
   validation?: { active: boolean; onBasculer: () => void; repos?: boolean }
-  etoile?: { active: boolean; onBasculer: () => void }
   /** La case a un shift : la remettre à « Non attribué ». */
   onVider?: () => void
   absences?: AbsencesDuMenu
@@ -157,7 +159,32 @@ export function MenuJour({
             c.horaire.id === ouverture.horaireId && c.poste.id === placePoste,
         )
       : undefined
-  const liste = (u?.codes ?? []).filter((c) => c !== place)
+  // Journée étoile d'un shift : les horaires de 7 h de son horaire (ou
+  // l'horaire de 8 h, s'il en est déjà un), sur son poste. Ils ne sont pas
+  // répétés dans la liste.
+  const etoile =
+    ecrire && shift
+      ? etoileDeLaCase({
+          referentiel,
+          personne,
+          posteId: shift.poste_id,
+          jour,
+          source,
+          sauf: shift.id,
+          horaireId: shift.type_shift_id,
+        })
+      : null
+  const dansEtoile = new Set(
+    [...(etoile?.versions ?? []), ...(etoile?.normales ?? [])].map(
+      (c) => c.horaire.id,
+    ),
+  )
+  const dejaEtoile = etoile?.versions.length
+    ? texteEtoileDeja(etoile.deja)
+    : null
+  const liste = (u?.codes ?? []).filter(
+    (c) => c !== place && !dansEtoile.has(c.horaire.id),
+  )
   const parId = new Map(liste.map((c) => [c.horaire.id, c]))
   const choisir = (action: () => void) => () => {
     onFermer()
@@ -201,6 +228,50 @@ export function MenuJour({
       </button>
     )
   }
+
+  const boutonEtoile = (
+    c: { horaire: Horaire; alerte: string | null },
+    normale: boolean,
+  ) => (
+    <button
+      key={`e${c.horaire.id}`}
+      type="button"
+      role="menuitem"
+      aria-label={[
+        normale ? 'Journée normale' : 'Journée étoile',
+        nomLigneCode(c),
+      ].join(', ')}
+      className={ITEM}
+      onClick={choisir(() => {
+        if (etoile) onHoraire(c.horaire, etoile.posteId)
+      })}
+    >
+      {normale ? (
+        <Undo2 className="size-4 shrink-0 text-muted-foreground" />
+      ) : (
+        <Star className="size-4 shrink-0 fill-amber-400 text-amber-400" />
+      )}
+      <span className="grid flex-1">
+        {normale && (
+          <span className="text-sm font-medium">Journée normale</span>
+        )}
+        <span
+          className={
+            normale
+              ? 'text-xs whitespace-nowrap text-muted-foreground tabular-nums'
+              : 'text-sm whitespace-nowrap tabular-nums'
+          }
+        >
+          {heuresEtDuree(c.horaire)}
+        </span>
+        {c.alerte && (
+          <span className="text-xs text-amber-600 dark:text-amber-400">
+            {c.alerte}
+          </span>
+        )}
+      </span>
+    </button>
+  )
 
   const motifs =
     ecrire && absences ? motifsDuJour(referentiel.motifs, personne) : null
@@ -322,20 +393,20 @@ export function MenuJour({
             </button>
           </>
         )}
-        {ecrire && etoile && (
-          <>
+        {etoile && (
+          <div role="group" aria-label="Journée étoile">
             <div className="-mx-1 my-1 h-px bg-border" />
-            <button
-              type="button"
-              role="menuitem"
-              className={ITEM}
-              onClick={choisir(etoile.onBasculer)}
-            >
-              <Star className="size-4 text-amber-500" />
-              <span className="flex-1 font-medium">Journée étoile</span>
-              {etoile.active && <Check className="size-4 text-primary" />}
-            </button>
-          </>
+            <div className="px-2 pt-1 pb-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+              Journée étoile
+            </div>
+            {etoile.versions.map((c) => boutonEtoile(c, false))}
+            {etoile.normales.map((c) => boutonEtoile(c, true))}
+            {dejaEtoile && (
+              <div className="px-2 py-1 text-xs text-muted-foreground">
+                {dejaEtoile}
+              </div>
+            )}
+          </div>
         )}
         {ecrire && <div className="-mx-1 my-1 h-px bg-border" />}
         <button

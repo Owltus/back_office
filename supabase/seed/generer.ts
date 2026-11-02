@@ -2391,29 +2391,41 @@ function genererClasseurs(
 // arrivent par l'import du prototype (gestion), plan planning-portage D8.
 // ---------------------------------------------------------------------------
 
-/** (clé, nom, début, fin, couleur, pause, raccourci, moment). Plus de code
- * horaire depuis le 2026-10-31 : la clé ne sert qu'à relier les lignes du
- * seed entre elles, elle n'est jamais écrite. Nom et moment comme les écrit
- * l'app (`nomHoraire`, `momentPropose` de lib/planning/affichage.ts). */
+/** (clé, nom, début, fin, couleur, pause, moment). Plus de code horaire
+ * depuis le 2026-10-31 : la clé ne sert qu'à relier les lignes du seed entre
+ * elles, elle n'est jamais écrite. Nom et moment comme les écrit l'app
+ * (`nomHoraire`, `momentPropose` de lib/planning/affichage.ts). Plus de
+ * raccourci depuis le 2026-11-02 : la journée étoile d'un horaire de 8 h est
+ * un horaire de 7 h qui existe (`etoile.ts`), ici les quatre derniers (TV
+ * est celle de T). Mêmes horaires que lib/planning/test/hotelDemo.ts. */
 const PL_HORAIRES: ReadonlyArray<
-  readonly [string, string, string, string, string, number, number, string]
+  readonly [string, string, string, string, string, number, string]
 > = [
-  ['M', 'Matin de 7 h à 15 h 45', '07:00', '15:45', '#f59e0b', 45, 60, 'matin'],
-  [
-    'MI',
-    'Middle de 9 h à 17 h 45',
-    '09:00',
-    '17:45',
-    '#14b8a6',
-    45,
-    60,
-    'middle',
-  ],
-  ['AM', 'Soir de 15 h à 23 h 45', '15:00', '23:45', '#6366f1', 45, 60, 'soir'],
-  ['N', 'Nuit de 23 h à 7 h 45', '23:00', '07:45', '#7c3aed', 45, 60, 'nuit'],
-  ['D', 'Middle de 8 h à 18 h', '08:00', '18:00', '#475569', 60, 0, 'middle'],
-  ['T', 'Matin de 8 h à 16 h 45', '08:00', '16:45', '#f97316', 45, 0, 'matin'],
-  ['TV', 'Matin de 8 h à 15 h 45', '08:00', '15:45', '#fb923c', 45, 0, 'matin'],
+  ['M', 'Matin de 7 h à 15 h 45', '07:00', '15:45', '#f59e0b', 45, 'matin'],
+  ['MI', 'Middle de 9 h à 17 h 45', '09:00', '17:45', '#14b8a6', 45, 'middle'],
+  ['AM', 'Soir de 15 h à 23 h 45', '15:00', '23:45', '#6366f1', 45, 'soir'],
+  ['N', 'Nuit de 23 h à 7 h 45', '23:00', '07:45', '#7c3aed', 45, 'nuit'],
+  ['D', 'Middle de 8 h à 18 h', '08:00', '18:00', '#475569', 60, 'middle'],
+  ['T', 'Matin de 8 h à 16 h 45', '08:00', '16:45', '#f97316', 45, 'matin'],
+  ['TV', 'Matin de 8 h à 15 h 45', '08:00', '15:45', '#fb923c', 45, 'matin'],
+  ['M7', 'Matin de 7 h à 14 h 45', '07:00', '14:45', '#fbbf24', 45, 'matin'],
+  ['MI7', 'Middle de 9 h à 16 h 45', '09:00', '16:45', '#2dd4bf', 45, 'middle'],
+  ['AM7', 'Soir de 15 h à 22 h 45', '15:00', '22:45', '#818cf8', 45, 'soir'],
+  ['N7', 'Nuit de 23 h à 6 h 45', '23:00', '06:45', '#a78bfa', 45, 'nuit'],
+]
+/** Versions étoile ajoutées aux listes d'horaires (postes, fiches) qui ont
+ * leur horaire de 8 h (même règle que la migration 20261102100000). */
+const PL_VERSIONS: Readonly<Record<string, string>> = {
+  M: 'M7',
+  MI: 'MI7',
+  AM: 'AM7',
+  N: 'N7',
+}
+const plAvecVersions = (codes: readonly string[]): string[] => [
+  ...codes,
+  ...codes.flatMap((c) =>
+    PL_VERSIONS[c] && !codes.includes(PL_VERSIONS[c]) ? [PL_VERSIONS[c]] : [],
+  ),
 ]
 /** (code, nom, couleur, compté dans les heures, nature) */
 const PL_MOTIFS: ReadonlyArray<
@@ -2632,26 +2644,14 @@ function genererPlanning(f: Fenetre, tables: Table[], apres: string[]): void {
     'fin',
     'couleur',
     'pause',
-    'raccourci',
     'periode',
   ])
   horaires.identiteForcee = true
   const idHoraire = new Map<string, number>()
-  PL_HORAIRES.forEach(
-    ([cle, nom, debut, fin, couleur, pause, raccourci, moment], i) => {
-      idHoraire.set(cle, i + 1)
-      horaires.lignes.push([
-        i + 1,
-        nom,
-        debut,
-        fin,
-        couleur,
-        pause,
-        raccourci,
-        moment,
-      ])
-    },
-  )
+  PL_HORAIRES.forEach(([cle, nom, debut, fin, couleur, pause, moment], i) => {
+    idHoraire.set(cle, i + 1)
+    horaires.lignes.push([i + 1, nom, debut, fin, couleur, pause, moment])
+  })
   const motifs = table('public.planning_motifs', [
     'id',
     'code',
@@ -2685,7 +2685,9 @@ function genererPlanning(f: Fenetre, tables: Table[], apres: string[]): void {
       nom,
       categorie,
       couleur,
-      `{${codes.map((c) => idHoraire.get(c)).join(',')}}`,
+      `{${plAvecVersions(codes)
+        .map((c) => idHoraire.get(c))
+        .join(',')}}`,
       PL_PRESENCE.has(nom),
       // La nuit de l'accueil se règle sur le poste (U1 du 2026-11-01).
       categorie === 'veille_nuit',
@@ -2788,7 +2790,9 @@ function genererPlanning(f: Fenetre, tables: Table[], apres: string[]): void {
           })),
         ),
         JSON.stringify(semaine),
-        `{${(opt.horaires ?? []).map((c) => idHoraire.get(c)).join(',')}}`,
+        `{${plAvecVersions(opt.horaires ?? [])
+          .map((c) => idHoraire.get(c))
+          .join(',')}}`,
       ])
       const jours = new Map<number, number>()
       if (opt.absence) {

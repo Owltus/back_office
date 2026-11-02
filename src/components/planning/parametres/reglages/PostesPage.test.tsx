@@ -136,7 +136,8 @@ describe('Postes', () => {
           nom: 'Réception',
           categorie: 'reception',
           couleur: '#000000',
-          horaires_autorises: [1, 2, 3, 4],
+          // M, MI, AM, leurs versions étoile (2026-11-02), puis N ajouté.
+          horaires_autorises: [1, 2, 3, 8, 9, 10, 4],
           presence: true,
           accueil_nuit: false,
           ferme: true,
@@ -160,7 +161,7 @@ describe('Postes', () => {
     expect(tous.getAttribute('aria-checked')).toBe('true')
     expect(r.queryByRole('button', { name: '07:00–15:45' })).toBeNull()
     expect(
-      r.getByText('Tous les horaires (7), y compris ceux créés plus tard.'),
+      r.getByText('Tous les horaires (11), y compris ceux créés plus tard.'),
     ).toBeTruthy()
     // Retour à Seulement : la sélection d'avant revient.
     fireEvent.click(r.getByRole('radio', { name: 'Seulement ceux-ci' }))
@@ -188,13 +189,16 @@ describe('Postes', () => {
   it('Seulement : le dernier horaire ne se décoche pas', () => {
     monter(<PostesPage />)
     const r = carte('Veille de nuit')
+    // La nuit et sa version étoile (2026-11-02) : la version d'abord.
+    const nuit7 = r.getByRole('button', { name: '23:00–06:45' })
+    fireEvent.click(nuit7)
+    expect(nuit7.getAttribute('aria-pressed')).toBe('false')
     const nuit = r.getByRole('button', { name: '23:00–07:45' })
     fireEvent.click(nuit)
     expect(nuit.getAttribute('aria-pressed')).toBe('true')
     expect(
       r.getByText('Gardez au moins un horaire, ou choisissez Tous.'),
     ).toBeTruthy()
-    expect(r.queryByText('Non enregistré')).toBeNull()
     // La famille entière non plus.
     fireEvent.click(r.getByRole('button', { name: 'tout cocher' }))
     fireEvent.click(r.getByRole('button', { name: 'tout décocher' }))
@@ -215,12 +219,12 @@ describe('Postes', () => {
     }
     monter(<PostesPage />)
     const r = carte('Club')
-    expect(r.getByText(/^Tous les horaires \(7\)/)).toBeTruthy()
+    expect(r.getByText(/^Tous les horaires \(11\)/)).toBeTruthy()
     fireEvent.click(r.getByRole('radio', { name: 'Seulement ceux-ci' }))
     const boutons = within(r.getByRole('group', { name: 'Horaires possibles' }))
       .getAllByRole('button')
       .filter((b) => b.hasAttribute('aria-pressed'))
-    expect(boutons).toHaveLength(7)
+    expect(boutons).toHaveLength(11)
     for (const b of boutons) expect(b.getAttribute('aria-pressed')).toBe('true')
   })
 

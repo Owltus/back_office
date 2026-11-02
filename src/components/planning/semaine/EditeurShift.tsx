@@ -2,8 +2,9 @@
  * Éditeur d'un shift, en tiroir (prototype `EditeurShift.tsx`) : créer ou
  * modifier un shift (horaire choisi parmi TOUTES les casquettes de la
  * personne, rangé par moment : l'horaire choisi fixe aussi le poste ; ou
- * heures libres avec pause et poste, journée courte, personne, jour,
- * validé), ou poser une absence à la place,
+ * heures libres avec pause et poste, personne, jour, validé ; la journée
+ * étoile est un autre horaire, proposé à part), ou poser une absence à la
+ * place,
  * ou supprimer le shift. Le tiroir se ferme aussitôt l'action lancée : le
  * résultat arrive par le fil de messages. Partagé par la vue semaine et la
  * vue mois (`dateEnLettres` : le jour s'y lit en toutes lettres, prototype
@@ -12,7 +13,7 @@
 
 import { useEffect, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
-import { BadgeCheck, Trash2, Undo2 } from 'lucide-react'
+import { BadgeCheck, Star, Trash2, Undo2 } from 'lucide-react'
 
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
@@ -43,13 +44,13 @@ import {
   texteSur,
 } from '#/lib/planning/affichage.ts'
 import { codesDuPoste, posteDeReference } from '#/lib/planning/eligibilite.ts'
+import { horairesNormaux } from '#/lib/planning/etoile.ts'
 import type { CodesPermis, RaisonCodes } from '#/lib/planning/eligibilite.ts'
 import { estEcole } from '#/lib/planning/semaine.ts'
 import type { ShiftOut } from '#/lib/planning/semaine.ts'
 import type { ShiftSaisi } from '#/lib/planning/service.ts'
 import {
   ajouterJours,
-  heureAffichee,
   horaireDe,
   minutes,
   presence,
@@ -63,9 +64,11 @@ import {
   changementDePoste,
   codesDeLaCase,
   codesUniques,
+  etoileDeLaCase,
   ligneDe,
   motifsDuJour,
   rubriquesDeLaCase,
+  texteEtoileDeja,
 } from '#/components/planning/codesCase.ts'
 import { PastilleHoraire } from '#/components/planning/PastilleHoraire.tsx'
 import type {
@@ -123,7 +126,6 @@ interface Brouillon {
   horaire_id: number | null
   debut: string
   fin: string
-  court: boolean
   pause: number
 }
 
@@ -232,16 +234,22 @@ export function EditeurShift({
       garderActuel: true,
     })
   }
+  // Une journée étoile (horaire de 7 h, version d'un horaire de 8 h) n'est
+  // jamais choisie d'office : elle se choisit, une fois par semaine.
+  const pasEtoile = (h: Horaire) => horairesNormaux(h, horaires).length === 0
   /** Premier code sans alerte : sur ce poste s'il est donné, sinon dans la
    * première rubrique qui en a un (métier habituel d'abord). Jamais un code
-   * qui casse la coupure de repos d'office. */
+   * qui casse la coupure de repos d'office ; une journée étoile seulement
+   * s'il n'y a qu'elle. */
   const premierLibre = (
     r: RubriquesCase,
     posteId?: number,
   ): { poste: number; horaire: Horaire } | undefined => {
     for (const rub of r.rubriques) {
       if (posteId !== undefined && rub.poste.id !== posteId) continue
-      const l = rub.lignes.find((x) => !x.alerte)
+      const l =
+        rub.lignes.find((x) => !x.alerte && pasEtoile(x.horaire)) ??
+        rub.lignes.find((x) => !x.alerte)
       if (l) return { poste: rub.poste.id, horaire: l.horaire }
     }
     return undefined
@@ -263,7 +271,11 @@ export function EditeurShift({
     if (!m) return undefined
     for (const rub of r.rubriques) {
       if (posteDemande !== undefined && rub.poste.id !== posteDemande) continue
-      const l = rub.lignes.find((x) => !x.alerte && x.horaire.periode === m)
+      const duMomentLibre = (x: (typeof rub.lignes)[number]) =>
+        !x.alerte && x.horaire.periode === m
+      const l =
+        rub.lignes.find((x) => duMomentLibre(x) && pasEtoile(x.horaire)) ??
+        rub.lignes.find(duMomentLibre)
       if (l) return { poste: rub.poste.id, horaire: l.horaire }
     }
     return undefined
@@ -285,7 +297,6 @@ export function EditeurShift({
       : (horaireInitial?.id ?? null),
     debut: existant?.debut ?? horaireInitial?.debut ?? '09:00',
     fin: existant?.fin ?? horaireInitial?.fin ?? '17:00',
-    court: existant?.court ?? false,
     pause: existant?.pause ?? 0,
   }))
   // Sans code horaire permis, rien n'est choisi d'office : l'horaire
@@ -342,7 +353,6 @@ export function EditeurShift({
         horaire_id: existant.type_shift_id,
         debut: existant.debut,
         fin: existant.fin,
-        court: existant.court,
         pause: existant.pause,
       })
       setLibre(existant.type_shift_id === null)
@@ -365,17 +375,16 @@ export function EditeurShift({
             horaire_id: premier.horaire.id,
             debut: premier.horaire.debut,
             fin: premier.horaire.fin,
-            court: false,
           }
-        : { ...champs, horaire_id: null, court: false },
+        : { ...champs, horaire_id: null },
     )
   }
 
   const dateDuJour = (jour: number) => ajouterJours(lundi, jour)
+  const choisi = salaries.find((s) => s.id === b.salarie_id)
   const choisissables = salaries.filter(
     (s) => disponibleLe(s, dateDuJour(b.jour)) || s.id === b.salarie_id,
   )
-  const choisi = salaries.find((s) => s.id === b.salarie_id)
   const inchange =
     !!existant &&
     existant.salarie_id === b.salarie_id &&
@@ -412,6 +421,42 @@ export function EditeurShift({
   )
   const parId = new Map(uniques.codes.map((c) => [c.horaire.id, c]))
   const enCours = !vider && motif === null && !libre
+  // Journée étoile (2026-11-02) : les horaires de 7 h de l'horaire choisi,
+  // ou l'horaire de 8 h dont il est la version, sur le poste choisi. Ils
+  // sont proposés à part, et pas répétés dans la liste : choisir l'un fait
+  // passer l'autre dans la rubrique.
+  const etoile =
+    enCours && choisi && b.horaire_id !== null
+      ? etoileDeLaCase({
+          referentiel,
+          personne: choisi,
+          posteId: b.poste_id,
+          jour: b.jour,
+          source,
+          sauf: existant?.id,
+          horaireId: b.horaire_id,
+        })
+      : null
+  const dansEtoile = new Set(
+    [...(etoile?.versions ?? []), ...(etoile?.normales ?? [])].map(
+      (c) => c.horaire.id,
+    ),
+  )
+  const dejaEtoile = etoile?.versions.length
+    ? texteEtoileDeja(etoile.deja)
+    : null
+  const choisirHoraire = (h: Horaire, posteId: number) => {
+    setVider(false)
+    setLibre(false)
+    setMotif(null)
+    maj({
+      poste_id: posteId,
+      horaire_id: h.id,
+      debut: h.debut,
+      fin: h.fin,
+      pause: h.pause,
+    })
+  }
   const choisiUnique = parId.get(b.horaire_id ?? -1)
   const permis = permisPour(b.poste_id, b.salarie_id, b.jour)
   const surPlace =
@@ -438,32 +483,24 @@ export function EditeurShift({
 
   const valeurs = (): ShiftSaisi => {
     if (libre) {
-      return { ...b, horaire_id: null, court: false, epinglee }
+      return { ...b, horaire_id: null, epinglee }
     }
     const h = code
-    const court = !!(b.court && h?.raccourci)
-    // Code et journée courte inchangés : on garde les heures enregistrées (la
-    // pause est celle du shift, un code retouché depuis ne les réécrit pas).
-    if (
-      existant &&
-      h &&
-      existant.type_shift_id === h.id &&
-      existant.court === court
-    ) {
+    // Horaire inchangé : on garde les heures enregistrées (la pause est celle
+    // du shift, un horaire retouché depuis ne les réécrit pas).
+    if (existant && h && existant.type_shift_id === h.id) {
       return {
         ...b,
         debut: existant.debut,
         fin: existant.fin,
         pause: existant.pause,
-        court,
         epinglee,
       }
     }
     return {
       ...b,
-      ...(h ? horaireDe(h, court) : {}),
+      ...(h ? horaireDe(h) : {}),
       pause: h ? h.pause : b.pause,
-      court,
       epinglee,
     }
   }
@@ -603,7 +640,11 @@ export function EditeurShift({
                   }}
                 />
               )}
-              {grouperHoraires(uniques.codes.map((c) => c.horaire)).map((g) => [
+              {grouperHoraires(
+                uniques.codes
+                  .filter((c) => !dansEtoile.has(c.horaire.id))
+                  .map((c) => c.horaire),
+              ).map((g) => [
                 <span
                   key={`titre-${g.libelle}`}
                   className="col-span-2 pt-1.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase"
@@ -620,22 +661,44 @@ export function EditeurShift({
                       detail={`${heures(travailCode(h))} de travail`}
                       alerte={c.alerte}
                       choisi={enCours && b.horaire_id === h.id}
-                      onClick={() => {
-                        setVider(false)
-                        setLibre(false)
-                        setMotif(null)
-                        maj({
-                          poste_id: c.poste.id,
-                          horaire_id: h.id,
-                          debut: h.debut,
-                          fin: h.fin,
-                          pause: h.pause,
-                        })
-                      }}
+                      onClick={() => choisirHoraire(h, c.poste.id)}
                     />
                   )
                 }),
               ])}
+              {etoile && (
+                <>
+                  <span className="col-span-2 pt-1.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                    Journée étoile
+                  </span>
+                  {[
+                    ...etoile.versions.map((c) => ({ ...c, normale: false })),
+                    ...etoile.normales.map((c) => ({ ...c, normale: true })),
+                  ].map((c) => (
+                    <Choix
+                      key={`etoile-${c.horaire.id}`}
+                      couleur={c.horaire.couleur}
+                      icone={
+                        c.normale ? (
+                          <Undo2 className="size-4 text-muted-foreground" />
+                        ) : (
+                          <Star className="size-4 fill-amber-400 text-amber-400" />
+                        )
+                      }
+                      titre={libelleHoraire(c.horaire)}
+                      detail={`${c.normale ? 'journée normale' : 'journée étoile'} · ${heures(travailCode(c.horaire))} de travail`}
+                      alerte={c.alerte}
+                      choisi={false}
+                      onClick={() => choisirHoraire(c.horaire, etoile.posteId)}
+                    />
+                  ))}
+                  {dejaEtoile && (
+                    <span className="col-span-2 text-xs text-muted-foreground">
+                      {dejaEtoile}
+                    </span>
+                  )}
+                </>
+              )}
               {enCours && choisiUnique && choisiUnique.postes.length > 1 && (
                 <div className="col-span-2 flex flex-wrap items-center gap-2 pt-1">
                   <span className="text-xs text-muted-foreground">
@@ -746,18 +809,6 @@ export function EditeurShift({
                   </div>
                 </div>
               ))}
-
-            {motif === null && code && code.raccourci > 0 && (
-              <Interrupteur
-                id="planning-court"
-                coche={b.court}
-                onChange={(court) => maj({ court })}
-              >
-                Journée étoile : {heureAffichee(horaireDe(code, true).debut)} →{' '}
-                {heureAffichee(horaireDe(code, true).fin)} (
-                {heures(travailCode(code) - code.raccourci)} de travail)
-              </Interrupteur>
-            )}
 
             {motif === null && libre && (
               <div className="space-y-3 pt-2">
@@ -989,6 +1040,7 @@ export function EditeurShift({
 function Choix({
   couleur,
   code,
+  icone,
   titre,
   detail,
   choisi,
@@ -1000,6 +1052,8 @@ function Choix({
   /** Badge d'un motif (CP, MA…) ou d'un choix à part ; sans badge, une
    * pastille de la couleur : un horaire se lit par ses heures. */
   code?: string
+  /** Icône à la place de la pastille (journée étoile, journée normale). */
+  icone?: ReactNode
   titre: string
   detail: string
   /** Règle passée à la main (coupure de repos) : dite sur la ligne. */
@@ -1022,7 +1076,11 @@ function Choix({
       )}
       style={{ '--couleur': couleur } as CSSProperties}
     >
-      {code === undefined ? (
+      {icone ? (
+        <span className="inline-grid h-[18px] min-w-6 shrink-0 place-items-center">
+          {icone}
+        </span>
+      ) : code === undefined ? (
         <span className="inline-grid h-[18px] min-w-6 shrink-0 place-items-center">
           <PastilleHoraire couleur={couleur} />
         </span>

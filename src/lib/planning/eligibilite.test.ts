@@ -24,6 +24,7 @@ import {
 } from '#/lib/planning/regles.ts'
 import { analyser } from '#/lib/planning/semaine.ts'
 import type { SemaineOut } from '#/lib/planning/semaine.ts'
+import { horaireDe } from '#/lib/planning/temps.ts'
 import type {
   Absence,
   Affectation,
@@ -53,8 +54,6 @@ function horaire(id: number, debut: string, fin: string): Horaire {
     fin,
     couleur: '#888888',
     pause: 0,
-    raccourci: 0,
-    raccourci_debut: 0,
     periode: null,
   }
 }
@@ -453,10 +452,9 @@ describe('propriété : le menu et le moteur disent la même chose', () => {
           poste_id: 1,
           jour,
           horaire_id: h.id,
-          debut: h.debut,
-          fin: h.fin,
+          // Comme la base (`planning_horaire_de`) : minuit en début, 24:00.
+          ...horaireDe(h),
           epinglee: true,
-          court: false,
           pause: 0,
         })
         const voisins: Affectation[] = []
@@ -628,7 +626,6 @@ describe('bords de semaine et changement d’heure', () => {
       debut: h.debut,
       fin: h.fin,
       epinglee: true,
-      court: false,
       pause: 0,
     })
     const alertesRepos = (h: Horaire) =>

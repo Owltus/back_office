@@ -45,7 +45,6 @@ const SHIFT = analyser({
       debut: '07:00',
       fin: '15:45',
       epinglee: true,
-      court: false,
       pause: 45,
     },
   ],
@@ -519,7 +518,6 @@ describe('EditeurShift : règle des codes', () => {
           debut: '15:00',
           fin: '23:45',
           epinglee: true,
-          court: false,
           pause: 45,
         },
       ],
@@ -546,5 +544,121 @@ describe('EditeurShift : règle des codes', () => {
     expect(onCreer).toHaveBeenCalledWith(
       expect.objectContaining({ poste_id: 2, horaire_id: idCode('M') }),
     )
+  })
+})
+
+describe('EditeurShift : journée étoile (2026-11-02)', () => {
+  // Personne 3 : 39 h, titulaire Réception et Club ; le shift est un Matin
+  // (07:00–15:45) du mercredi. Sa version étoile : 07:00–14:45 (M7).
+  const etoile = () =>
+    screen.queryByText('Journée étoile', { selector: 'span' })
+  const boutons = (heures: RegExp) =>
+    screen.queryAllByRole('button', { name: heures })
+
+  it("propose l'horaire de 7 h à part, pas répété dans la liste, posé tel quel", () => {
+    const { onModifier } = rendreAvec(referentiel, {
+      mode: 'modification',
+      shift: SHIFT,
+    })
+    expect(etoile()).toBeTruthy()
+    // Plus d'interrupteur qui retirait une heure.
+    expect(screen.queryByRole('switch', { name: /étoile/i })).toBeNull()
+    const sept = boutons(/^07:00–14:45/)
+    expect(sept).toHaveLength(1)
+    expect(sept[0].textContent).toContain('journée étoile · 7h de travail')
+    fireEvent.click(sept[0])
+    // Choisi : il passe dans la liste, et l'horaire de 8 h dans la rubrique.
+    expect(boutons(/^07:00–14:45/)[0].getAttribute('aria-pressed')).toBe('true')
+    const normale = boutons(/^07:00–15:45/)
+    expect(normale).toHaveLength(1)
+    expect(normale[0].textContent).toContain('journée normale')
+    fireEvent.click(principal('Enregistrer'))
+    expect(onModifier).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({
+        poste_id: 2,
+        horaire_id: idCode('M7'),
+        debut: '07:00',
+        fin: '14:45',
+        pause: 45,
+      }),
+    )
+    expect(onModifier.mock.calls[0][1]).not.toHaveProperty('court')
+  })
+
+  it('un horaire de 7 h choisi revient à sa journée normale', () => {
+    const { onModifier } = rendreAvec(referentiel, {
+      mode: 'modification',
+      shift: { ...SHIFT, type_shift_id: idCode('M7'), fin: '14:45' },
+    })
+    const normale = boutons(/^07:00–15:45/)
+    expect(normale).toHaveLength(1)
+    expect(normale[0].textContent).toContain('journée normale')
+    fireEvent.click(normale[0])
+    fireEvent.click(principal('Enregistrer'))
+    expect(onModifier).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({
+        horaire_id: idCode('M'),
+        debut: '07:00',
+        fin: '15:45',
+      }),
+    )
+  })
+
+  it("jamais choisie d'office, et rien pour un contrat de 35 h", () => {
+    rendreAvec(referentiel, { mode: 'creation', salarie_id: 3, jour: 2 })
+    expect(boutons(/^07:00–15:45/)[0].getAttribute('aria-pressed')).toBe('true')
+    expect(boutons(/^07:00–14:45/)[0].getAttribute('aria-pressed')).toBe(
+      'false',
+    )
+    cleanup()
+    rendreAvec(referentielAvec({ heures_hebdo: 35 }), {
+      mode: 'modification',
+      shift: SHIFT,
+    })
+    expect(etoile()).toBeNull()
+    // L'horaire de 7 h reste un horaire comme un autre dans la liste.
+    expect(boutons(/^07:00–14:45/)).toHaveLength(1)
+  })
+
+  it('rappelle la journée étoile déjà posée dans la semaine', () => {
+    const semaine = analyser({
+      lundi: LUNDI,
+      referentiel,
+      absences,
+      affectations: [
+        {
+          id: 7,
+          lundi: LUNDI,
+          salarie_id: 3,
+          poste_id: 2,
+          jour: 2,
+          horaire_id: idCode('M'),
+          debut: '07:00',
+          fin: '15:45',
+          epinglee: true,
+          pause: 45,
+        },
+        {
+          id: 9,
+          lundi: LUNDI,
+          salarie_id: 3,
+          poste_id: 2,
+          jour: 4,
+          horaire_id: idCode('M7'),
+          debut: '07:00',
+          fin: '14:45',
+          epinglee: true,
+          pause: 45,
+        },
+      ],
+      avant: [],
+      apres: [],
+    })
+    rendreAvec(referentiel, { mode: 'modification', shift: SHIFT }, { semaine })
+    expect(
+      screen.getByText('Déjà une journée étoile le vendredi.'),
+    ).toBeTruthy()
   })
 })

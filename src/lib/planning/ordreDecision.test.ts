@@ -4,17 +4,17 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import {
   BRUIT_MAX,
+  compatible,
   coutConsigne,
   coutDepannage,
   coutManqueMinimum,
   coutPlaceVide,
   coutPlaceVideGroupe,
+  coutRemplacant,
   EQUITE_MAX_PAR_SHIFT,
   generer,
   minutesDues,
-  minutesDuesCourt,
   minutesEnPlus,
-  minutesEnPlusCourt,
   PART_FIXE_DEPANNAGE,
   PART_TEMPS_1,
   pireCoutRemplir,
@@ -736,9 +736,7 @@ describe('la loi d’une semaine à l’autre : R-REPOS-HEBDO-35H', () => {
     ).toEqual(['R-REPOS-HEBDO-35H'])
     const p2 = probleme({ salaries: [t], creneaux: [tard] })
     expect(qui(gen(p2), 'tard')).toEqual(['a'])
-    expect(
-      violations(p2, [{ salarieId: 'a', creneauId: 'tard', court: false }]),
-    ).toEqual([])
+    expect(violations(p2, [{ salarieId: 'a', creneauId: 'tard' }])).toEqual([])
   })
 })
 
@@ -1251,19 +1249,29 @@ describe('cycles : ce que le lot C pose et ce que l’oracle compte', () => {
   })
 
   it('une journée courte qui part avant l’équipe du soir laisse un trou', () => {
-    // a fait sa journée étoile (courte, une heure de moins) ce lundi.
+    // a fait sa journée étoile ce lundi : la version étoile du matin, un
+    // horaire de 7 h qui existe (07:00–14:00), sur la même place.
+    const etoile = matin(14 * H, {
+      id: 'mat7',
+      typeShift: 'M7',
+      effectif: 0,
+      place: 'mat',
+      etoile: true,
+    })
     const p = probleme({
       salaries: [
         personne('a', 7, {
           etoileFixe: new Set([0]),
-          shiftsAutorises: new Set(['M']),
+          journeePleine: 8 * H,
+          shiftsAutorises: new Set(['M', 'M7']),
         }),
         personne('b', 8, { shiftsAutorises: new Set(['S']) }),
       ],
-      creneaux: [matin(15 * H, { raccourci: H }), soirDe(15 * H)],
+      creneaux: [matin(15 * H), etoile, soirDe(15 * H)],
     })
     const r = gen(p)
-    expect(r.affectations.find((x) => x.creneauId === 'mat')?.court).toBe(true)
+    expect(qui(r, 'mat7')).toEqual(['a'])
+    expect(qui(r, 'mat')).toEqual([])
     const attendu = [{ poste: 'r', jour: 0, debut: 14 * H, fin: 15 * H }]
     expect(r.trous).toEqual(attendu)
     expect(trousVerifies(p, r.affectations)).toEqual(attendu)
@@ -1678,36 +1686,51 @@ describe('deux temps : résultats sans solution, heures dues, budget', () => {
     expect(r.manques).toEqual([])
   })
 
-  it('remplaçant fait court : heures dues sur ses minutes réelles', () => {
-    const besoin = creneau('b', 0, 7, 14, { typeShift: 'M3' })
-    const long = creneau('r', 0, 9, 17, {
+  it('version étoile : ses minutes réelles, aucun coût de remplaçant (2026-11-02)', () => {
+    // Un M de 8 h et sa version étoile de 7 h (même début, une heure de
+    // moins, un horaire qui existe) ; à côté, un remplaçant ordinaire de
+    // 7 h du même cycle.
+    const besoin = creneau('b', 0, 7, 15, { typeShift: 'M' })
+    const etoile = creneau('e', 0, 7, 14, {
+      typeShift: 'M7',
+      place: 'b',
+      effectif: 0,
+      etoile: true,
+    })
+    const remplacant = creneau('r', 0, 8, 15, {
       typeShift: 'M6',
       place: 'b',
       effectif: 0,
-      raccourci: H,
     })
-    // M6 de 8 h fait en 7 h sur un M3 de 7 h : 7 h comptées, pas 6.
-    expect(minutesDuesCourt(long, besoin)).toBe(7 * H)
-    expect(minutesEnPlusCourt(long, besoin)).toBe(7 * H)
-    expect(minutesDues(long, besoin)).toBe(7 * H)
-    expect(minutesEnPlus(long, besoin)).toBe(8 * H)
-    // Sans remplaçant : le raccourci seul.
-    const seul = { ...long, place: null }
-    expect(minutesDuesCourt(seul)).toBe(7 * H)
-    expect(minutesEnPlusCourt(seul)).toBe(7 * H)
-    // Dans le modèle : le CDI de 7 h, M3 interdit, M6 obligatoirement
-    // court (7 h par jour au plus) : aucun écart au contrat.
-    const a = personne('a', 7, {
-      finServicePrecedent: -2 * H,
-      minutesJourMax: 7 * H,
-    })
+    // Accepté : la version étoile compte ses 7 h des deux côtés du contrat
+    // et ne coûte rien de plus que l'horaire demandé.
+    expect(minutesDues(etoile, besoin)).toBe(7 * H)
+    expect(minutesEnPlus(etoile, besoin)).toBe(7 * H)
+    expect(coutRemplacant(etoile)).toBe(0)
+    // Refusé : un remplaçant ordinaire se mesure contre son besoin (au
+    // moins 8 h d'heures en plus) et coûte POIDS_REMPLACANT.
+    expect(minutesDues(remplacant, besoin)).toBe(7 * H)
+    expect(minutesEnPlus(remplacant, besoin)).toBe(8 * H)
+    expect(coutRemplacant(remplacant)).toBe(POIDS_REMPLACANT)
+    // Dans le modèle : le CDI de 7 h, 7 h par jour au plus, prend la version
+    // étoile dès le premier temps du calcul, sans écart au contrat.
+    const a = personne('a', 7, { minutesJourMax: 7 * H })
     for (const graine of graines) {
       const r = gen(
-        probleme({ salaries: [a], creneaux: [besoin, long], graine }),
+        probleme({ salaries: [a], creneaux: [besoin, etoile], graine }),
       )
-      expect(qui(r, 'r')).toEqual(['a'])
-      expect(r.affectations[0].court).toBe(true)
+      expect(qui(r, 'e')).toEqual(['a'])
       expect(r.ecartTotalMinutes).toBe(0)
+      expect(r.manques).toEqual([])
+      expect(r.etapes).toBe(1)
     }
+    // Refusé : un contrat indicatif (forfait jours, extra) ne prend jamais
+    // une version étoile (ses heures ne se comptent pas).
+    expect(
+      compatible(personne('f', 0, { contratIndicatif: true }), etoile),
+    ).toBe(false)
+    expect(
+      compatible(personne('f', 0, { contratIndicatif: true }), besoin),
+    ).toBe(true)
   })
 })

@@ -128,14 +128,9 @@ function creneau(
   })
 }
 
-const aff = (
-  salarieId: string,
-  creneauId: string,
-  court = false,
-): AffectationSolveur => ({
+const aff = (salarieId: string, creneauId: string): AffectationSolveur => ({
   salarieId,
   creneauId,
-  court,
 })
 
 function hotel(): PlanningMemoire {
@@ -443,7 +438,8 @@ describe('7. fin de contrat à l’heure réelle', () => {
     ).toEqual([])
     expect(sem.stats.infractions).toBe(0)
     const nuit = p.poste('Veille de nuit')
-    sem = p.poser('2026-11-02', yohan.id, nuit, 6, { code: 'N', court: true })
+    // La nuit étoile du dimanche : l'horaire de minuit (24:00 → lundi 07:00).
+    sem = p.poser('2026-11-02', yohan.id, nuit, 6, { code: 'N7' })
     expect(alertesDe(sem, yohan.id, 6)).toContain('HORS-CONTRAT')
     p.vider('2026-11-02')
     sem = p.poser('2026-11-02', yohan.id, nuit, 6, {
@@ -571,6 +567,9 @@ describe('9. mineurs', () => {
   })
 
   it('un mineur fait le matin en version courte', () => {
+    // Plus de raccourci (2026-11-02) : le matin de 8 h 45 de présence a sa
+    // version étoile de 7 h 45 (un horaire qui existe, même place) ; le
+    // mineur (8 h au plus) prend celle-ci.
     const s = versSolveur({
       id: 'm',
       postes: new Set(['r']),
@@ -584,11 +583,20 @@ describe('9. mineurs', () => {
       debut: 7 * H,
       fin: 15 * H + 45,
       pause: 45,
-      raccourci: 60,
     })
-    const p = probleme({ salaries: [s], creneaux: [matin] })
+    const version = creneauModele({
+      id: 'e',
+      poste: 'r',
+      debut: 7 * H,
+      fin: 14 * H + 45,
+      pause: 45,
+      effectif: 0,
+      place: 'c',
+      etoile: true,
+    })
+    const p = probleme({ salaries: [s], creneaux: [matin, version] })
     const r = generer(p, highs)
-    expect(r.affectations).toEqual([aff('m', 'c', true)])
+    expect(r.affectations).toEqual([aff('m', 'e')])
     expect(violations(p, r.affectations)).toEqual([])
     expect(new Set(violations(p, [aff('m', 'c')]).map((v) => v.regle))).toEqual(
       new Set(['R-JOUR-MAX']),

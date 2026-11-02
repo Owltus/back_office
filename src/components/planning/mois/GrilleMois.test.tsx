@@ -38,7 +38,6 @@ const shift: Affectation = {
   debut: nuit.debut,
   fin: nuit.fin,
   epinglee: false,
-  court: false,
   pause: nuit.pause,
 }
 const SEMAINE = analyser({

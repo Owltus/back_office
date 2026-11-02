@@ -157,7 +157,6 @@ describe('compétences, semaine type et shifts épinglés (test_semaine_type.py)
   const aff = (s: string, c: string): AffectationSolveur => ({
     salarieId: s,
     creneauId: c,
-    court: false,
   })
   const gen = (p: Probleme) => generer(p, highs)
   const paires = (p: Probleme) =>
@@ -718,8 +717,6 @@ describe('planning de la semaine (test_api.py)', () => {
         fin: '14:00',
         couleur: '#000000',
         pause: 0,
-        raccourci: 0,
-        raccourci_debut: 0,
         periode: null,
       },
       'C',
@@ -786,7 +783,8 @@ describe('planning de la semaine (test_api.py)', () => {
     const bilan = bilanDe(sem, lucas)
     expect(bilan.minutes).toBe(39 * 60)
     expect(bilan.minutes_contrat).toBe(39 * 60)
-    const courts = siens(sem, lucas).filter((a) => a.court)
+    // Journée étoile sur un horaire de 7 h qui existe (2026-11-02).
+    const courts = siens(sem, lucas).filter((a) => a.etoile)
     expect(courts.length).toBe(1)
     expect(courts[0].duree).toBe(7 * 60)
     expect(courts[0].pause).toBe(45)
@@ -798,7 +796,7 @@ describe('planning de la semaine (test_api.py)', () => {
     )
     sem = p.generer(LUNDI, { graine: 3 })
     const garde = sem.affectations.find((a) => a.id === courts[0].id)!
-    expect(garde.court).toBe(true)
+    expect(garde.etoile).toBe(true)
     expect(garde.fin).toBe(courts[0].fin)
     expect(sem.stats.pourvues).toBe(sem.stats.places)
   })
@@ -943,7 +941,7 @@ describe('planning de la semaine (test_api.py)', () => {
       }
     }
     expect(
-      siens(sem, p.salarie('Yannis').id).filter((a) => a.court).length,
+      siens(sem, p.salarie('Yannis').id).filter((a) => a.etoile).length,
     ).toBe(1)
   })
 
@@ -1065,10 +1063,8 @@ describe('planning de la semaine (test_api.py)', () => {
     // Les quelques shifts de la S42 utiles ici, tels que le chargeur les pose.
     const S42 = '2026-10-12'
     p.absent(tech, S42, ajouterJours(S42, 4), 'CP')
-    p.poser(S42, yohan, p.poste('Veille de nuit'), 6, {
-      code: 'N',
-      court: true,
-    })
+    // La nuit étoile : l'horaire de minuit à 7 h, écrit 24:00 sur son jour.
+    p.poser(S42, yohan, p.poste('Veille de nuit'), 6, { code: 'N7' })
     p.poser(S42, jeanne, p.poste('Direction'), 0, {
       debut: '08:00',
       fin: '17:30',
@@ -1115,7 +1111,7 @@ describe('planning de la semaine (test_api.py)', () => {
     expect([
       shift(tech, 4).debut,
       shift(tech, 4).fin,
-      shift(tech, 4).court,
+      shift(tech, 4).etoile,
     ]).toEqual(['08:00', '15:45', true])
     expect([shift(yohan, 6).debut, shift(yohan, 6).fin]).toEqual([
       '24:00',
@@ -1299,8 +1295,6 @@ describe('shift sans code (test_audit_api.py)', () => {
           fin: '17:00',
           couleur: '#000000',
           pause: 60,
-          raccourci: 0,
-          raccourci_debut: 0,
           periode: null,
         },
         'Z',
@@ -1352,8 +1346,6 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
         fin,
         couleur: '#888888',
         pause: 30,
-        raccourci: 0,
-        raccourci_debut: 0,
         periode,
       },
       c,
@@ -1463,7 +1455,6 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
     debut: h ? h.debut : '07:00',
     fin: h ? h.fin : '15:00',
     epinglee: true,
-    court: false,
     pause: h ? h.pause : 0,
     ...kw,
   })
@@ -1605,7 +1596,7 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
       typeShift: '2',
       ferme: false,
       pause: M6.pause,
-      raccourci: M6.raccourci,
+      etoile: false,
       // Poste à part (D13 du 2026-11-01) : aucun moment du tableau.
       presence: [],
       jourPlanning: 1,
@@ -2018,36 +2009,62 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
     )
   })
 
-  it('Martin V3-I (corrigé) : trous d’une journée courte qui commence plus tard (raccourci_debut)', () => {
-    // Oracle à la main, d'après `horaireDe` (temps.ts) : un S4 de 15:00 à
-    // 23:00 raccourci de 60 min dont 30 au début se fait de 15:30 à 22:30.
-    // Avec un M3 de 07:00 à 15:00, il y a donc personne de 15:00 à 15:30 et
-    // de 22:30 à 23:00. Le vérificateur (`enVersionCourte`) avance la fin de
-    // 60 min sans décaler le début : il voit 22:00 à 23:00 seulement.
-    const S4c: Horaire = { ...S4, raccourci: 60, raccourci_debut: 30 }
-    const d = donnees([besoin(100, M3), besoin(101, S4c)], [])
-    d.referentiel.horaires = HORAIRES.map((h) => (h.id === S4.id ? S4c : h))
+  it('version étoile : place tenue sans « au lieu de », trous sur ses vraies heures', () => {
+    // Remplace le cas Martin V3-I de la journée courte (raccourci retiré le
+    // 2026-11-02). Un soir de 8 h (15:00–23:30, pause 30) et sa version
+    // étoile de 7 h qui EXISTE (15:30–23:00) : posée sur la place du soir,
+    // elle la tient, sans coût ni « au lieu de » ; avec un M3 de 07:00 à
+    // 15:00, il n'y a personne de 15:00 à 15:30 ni de 23:00 à 23:30.
+    const SL = code(20, 'SL', '15:00', '23:30', 'soir')
+    const SE = code(21, 'SE', '15:30', '23:00', 'soir')
+    const d = donnees([besoin(100, M3), besoin(101, SL)], [])
+    d.referentiel.horaires = [...HORAIRES, SL, SE]
+    d.referentiel.postes = POSTES.map((x) =>
+      x.id === ACCUEIL
+        ? { ...x, horaires_autorises: [...x.horaires_autorises, 20, 21] }
+        : x,
+    )
+    const ctx = contexte(d)
+    expect(remplacantsDe(ctx, besoin(101, SL)).map((h) => h.id)).not.toContain(
+      21,
+    )
     const g = preparerGeneration(d, { aujourdhui: AUJOURDHUI })
+    const etoile = g.probleme.creneaux.find(
+      (c) => c.id === idRemplacant(101, 21),
+    )
+    expect(etoile).toMatchObject({ place: 'b101', etoile: true })
     const affs: AffectationSolveur[] = [
-      { salarieId: String(ALPHA.id), creneauId: 'b100', court: false },
-      { salarieId: String(BRAVO.id), creneauId: 'b101', court: true },
+      { salarieId: String(ALPHA.id), creneauId: 'b100' },
+      { salarieId: String(BRAVO.id), creneauId: idRemplacant(101, 21) },
     ]
-    // Ce que l'app écrira pour le shift court (même fonction que traduire).
     const ecrit = g.traduire({ affectations: affs } as never)
-    expect(ecrit.find((n) => n.salarie_id === BRAVO.id)).toMatchObject({
+    const bravo = ecrit.find((n) => n.salarie_id === BRAVO.id)
+    expect(bravo).toMatchObject({
+      horaire_id: 21,
       debut: '15:30',
-      fin: '22:30',
+      fin: '23:00',
     })
-    // Poste à part depuis le 2026-11-01 (bloc ci-dessus) : il n'est plus
-    // « compté », on demande ses trous explicitement.
+    expect(bravo?.code_demande).toBeUndefined()
     const vus = trous(g.probleme, affs, new Set([String(ACCUEIL)])).map((t) => [
       heureMurale(LUNDI, t.debut),
       heureMurale(LUNDI, t.fin),
     ])
     expect(vus).toEqual([
       ['15:00', '15:30'],
-      ['22:30', '23:00'],
+      ['23:00', '23:30'],
     ])
+    // Posée à la main, la version étoile tient la place sans « au lieu de ».
+    const a = shift(BRAVO, SE)
+    const sem = analyser({
+      ...d,
+      referentiel: { ...d.referentiel, besoins: [besoin(101, SL)] },
+      affectations: [a],
+    })
+    expect(shiftOut(sem, a.id)).toMatchObject({
+      besoin_id: 101,
+      code_demande: null,
+    })
+    expect(sem.a_pourvoir).toEqual([])
   })
 })
 
@@ -2144,8 +2161,6 @@ describe('Martin V3-I : remplaçants, propriété', () => {
             fin: `${String((s.h + (s.long ? 8 : 6)) % 24).padStart(2, '0')}:00`,
             couleur: '#888888',
             pause: 0,
-            raccourci: 0,
-            raccourci_debut: 0,
             periode: s.periode,
           }))
           const autorises = horaires
