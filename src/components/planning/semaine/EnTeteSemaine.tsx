@@ -323,7 +323,9 @@ export function EnTeteSemaine({
               disabled={!semaine}
               onClick={actions.onInfractions}
             />
-            {/* Un seul groupe : outils et Compléter (2026-11-02). */}
+          </ButtonGroup>
+
+          <ButtonGroup>
             <Tip
               label={
                 raisonCompleter ??

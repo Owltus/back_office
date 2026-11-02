@@ -253,8 +253,8 @@ export function BarreMois({
           infractions={compteurs?.infractions ?? 0}
           onClick={onInfractions}
         />
-        {/* Un seul groupe pour toute la barre (demande utilisateur du
-            2026-11-02). */}
+      </ButtonGroup>
+      <ButtonGroup>
         <AvecRaison
           desactive={!!completer.inactif}
           label={
