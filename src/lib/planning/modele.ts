@@ -147,6 +147,10 @@ export interface SalarieSolveur {
   reposDeuxSemaines: number
   joursSemainePrecedente: number | null
   joursSemaineSuivante: number | null
+  /** Jours travaillés d'affilée à la fin de la semaine d'avant, et au début
+   * de celle d'après (`JOURS_AFFILES_MAX`) ; 0 : inconnus ou aucun. */
+  serieAvant: number
+  serieApres: number
   reposHebdoMin: number
   jourMaxPoste: boolean
   contratDebut: number | null
@@ -213,6 +217,8 @@ export function salarieSolveur(
     reposDeuxSemaines: 0,
     joursSemainePrecedente: null,
     joursSemaineSuivante: null,
+    serieAvant: 0,
+    serieApres: 0,
     reposHebdoMin: 0,
     jourMaxPoste: true,
     contratDebut: null,

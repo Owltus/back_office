@@ -70,6 +70,9 @@ const MESSAGES: Record<(typeof REGLES_BLOCAGE)[number], string[]> = {
   'SIXIEME-JOUR': [
     '6 jours travaillés : un seul jour de repos cette semaine, la semaine voisine doit en compter au moins 2',
   ],
+  'JOURS-AFFILES': [
+    "8 jours de travail d'affilée sans repos (au plus 6 conseillés)",
+  ],
   'R-SEMAINE-MAX': ['50 h dans la semaine, maximum 48 h'],
   'R-JOURNEE-ETOILE': [
     'sa journée étoile est fixée ce jour-là : un horaire de moins de 8 h',
@@ -541,7 +544,12 @@ describe('table complète des raisons (test de mutation)', () => {
 describe('place que rien ne remplit : la raison commune en clair', () => {
   // Ne bloquent pas : quelqu'un peut prendre la place (ses heures ou un
   // appel mis à part), « Je ne peux pas » serait faux.
-  const NON_BLOQUANTES = ['SIXIEME-JOUR', 'R-JOURNEE-ETOILE', 'EXTRA']
+  const NON_BLOQUANTES = [
+    'SIXIEME-JOUR',
+    'JOURS-AFFILES',
+    'R-JOURNEE-ETOILE',
+    'EXTRA',
+  ]
 
   it('exhaustif : une phrase courte pour chaque règle qui bloque', () => {
     for (const regle of REGLES_BLOCAGE) {

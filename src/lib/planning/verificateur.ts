@@ -33,6 +33,7 @@ import type {
   Probleme,
   SalarieSolveur,
 } from '#/lib/planning/modele.ts'
+import { JOURS_AFFILES_MAX } from '#/lib/planning/regles.ts'
 import { heuresLisibles as h } from '#/lib/planning/temps.ts'
 import type { PeriodePresence } from '#/lib/planning/types.ts'
 
@@ -185,6 +186,37 @@ export function violationsSalarie(
         duJour,
         'organisation',
       )
+    }
+  }
+
+  // JOURS-AFFILES (2026-11-02) : plus de 6 jours de travail d'affilée,
+  // semaines voisines comprises. Permis par la loi : une alerte.
+  {
+    const travaille = (d: number) =>
+      d < 0
+        ? d >= -s.serieAvant
+        : d >= nbJours
+          ? d < nbJours + s.serieApres
+          : parJour.has(d) || s.joursHorsSite.has(d)
+    let d = -s.serieAvant
+    while (d < nbJours + s.serieApres) {
+      if (!travaille(d)) {
+        d++
+        continue
+      }
+      let f = d
+      while (f + 1 < nbJours + s.serieApres && travaille(f + 1)) f++
+      const n = f - d + 1
+      const ici = liste.filter((c) => jourDe(c) >= d && jourDe(c) <= f)
+      const uneSemaine = d >= 0 && Math.floor(d / 7) === Math.floor(f / 7)
+      if (n > JOURS_AFFILES_MAX && ici.length && !uneSemaine)
+        ajoute(
+          'JOURS-AFFILES',
+          `${n} jours de travail d'affilée sans repos (au plus ${JOURS_AFFILES_MAX} conseillés)`,
+          ici,
+          'organisation',
+        )
+      d = f + 1
     }
   }
 

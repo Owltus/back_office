@@ -1177,6 +1177,8 @@ export function avecSemainesVoisines(
       joursSemaineSuivante: d.apres.length
         ? (joursApres.get(key)?.size ?? 0)
         : null,
+      serieAvant: serie(joursAvant.get(key), [6, 5, 4, 3, 2, 1, 0]),
+      serieApres: serie(joursApres.get(key), [0, 1, 2, 3, 4, 5, 6]),
       debutAuPlusTot: debutApresReposHebdo(
         x,
         servicesAvant.get(key) ?? [],
@@ -1186,6 +1188,16 @@ export function avecSemainesVoisines(
     })
   }
   return r
+}
+
+/** Jours de `jours` travaillés d'affilée, lus dans l'ordre donné. */
+function serie(jours: ReadonlySet<number> | undefined, ordre: number[]) {
+  let n = 0
+  for (const j of ordre) {
+    if (!jours?.has(j)) break
+    n++
+  }
+  return n
 }
 
 /** R-REPOS-HEBDO-35H d'une semaine à l'autre. Si la semaine d'avant n'a de

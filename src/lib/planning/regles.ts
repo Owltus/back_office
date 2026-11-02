@@ -29,6 +29,11 @@ export const JOURS_TRAVAILLES_MAX = 6 // R-SIX-JOURS-MAX
 /** R-REPOS-HEBDO-HCR : 5 jours de préférence, 6 en cas de besoin, et au
  * moins 3 jours de repos sur deux semaines consécutives. */
 export const JOURS_TRAVAILLES_PREFERES = 5
+/** Jours de travail d'affilée, semaines voisines comprises (demande
+ * utilisateur du 2026-11-02 : « 9 jours d'affilée sans pause… il faut les
+ * laisser se reposer »). Le générateur l'évite (`POIDS_JOUR_AFFILE`), le
+ * vérificateur le signale (JOURS-AFFILES) ; la loi en permet jusqu'à 12. */
+export const JOURS_AFFILES_MAX = 6
 export const REPOS_DEUX_SEMAINES = 3
 export const TEMPS_PLEIN = 35 * H
 /** R-JOURNEE-ETOILE (organisation de l'hôtel) : au-delà de 35 h, une seule

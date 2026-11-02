@@ -734,6 +734,29 @@ describe('garde-fous (test_garde_fous.py)', () => {
     expect(bilanDe(sem, x.id).repos_deduits).toHaveLength(2)
   })
 
+  it('deux semaines générées à la suite : jamais plus de 6 jours d’affilée', () => {
+    // Demande utilisateur du 2026-11-02 : repos lundi-mardi puis samedi-
+    // dimanche donnaient 9 jours d'affilée. La semaine d'avant compte.
+    const p = demo()
+    const lundis = ['2026-11-09', '2026-11-16', '2026-11-23']
+    const semaines = lundis.map((l) => p.generer(l))
+    for (const x of p.referentiel.salaries) {
+      if (x.type_contrat === 'extra') continue
+      const jours = new Set(
+        semaines.flatMap((sem, k) =>
+          [...joursDe(sem, x.id)].map((j) => 7 * k + j),
+        ),
+      )
+      let serie = 0
+      let max = 0
+      for (let d = 0; d < 21; d++) {
+        serie = jours.has(d) ? serie + 1 : 0
+        max = Math.max(max, serie)
+      }
+      expect(max, `${x.prenom} ${x.nom}`).toBeLessThanOrEqual(6)
+    }
+  })
+
   it('semaineRemplie : les horaires fixes seuls ne remplissent pas la semaine', () => {
     const p = demo()
     const [fixe, libre] = p.referentiel.salaries

@@ -2274,7 +2274,14 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   6 absences décomptées dans la semaine, jamais l'école). Moteur :
   `POIDS_JOUR_ISOLE` (4 000) sur un jour travaillé voisin d'un jour sans
   travail possible et sans travail de l'autre côté (bord, école, hors
-  contrat = travail ; partout, il doublait le temps de calcul) ; (2) fin ou début de contrat en cours de semaine : seuls les jours
+  contrat = travail ; partout, il doublait le temps de calcul). Au plus
+  6 JOURS D'AFFILÉE, semaines voisines comprises (`JOURS_AFFILES_MAX`,
+  demande utilisateur : « 9 jours d'affilée… il faut les laisser se
+  reposer ») : `serieAvant` / `serieApres` (jours enchaînés au bord des
+  semaines voisines), fenêtres de 7 jours qui traversent une semaine
+  voisine au moteur (`POIDS_JOUR_AFFILE` 12 000 par jour en trop, 7 × dans
+  le pire coût d'une place), alerte JOURS-AFFILES au vérificateur (non
+  bloquante ; une semaine civile de 7 jours reste R-SIX-JOURS-MAX) ; (2) fin ou début de contrat en cours de semaine : seuls les jours
   de contrat manquants sont décomptés (`joursContratManquants` : départ le
   jeudi = 32 h sur 4 jours, le week-end d'après ne réduit rien), même règle
   pour le rythme de 5 jours du générateur ; (3) un poste tenu SEULEMENT par

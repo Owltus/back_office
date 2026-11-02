@@ -225,10 +225,33 @@ describe('jours travaillés, semaines', () => {
   it('chaque semaine civile compte à part', () => {
     const jours = [...range(6), ...range(7, 14), ...range(14, 20)]
     const v = controle(sal(), jours.map(jourDe9a17), 21)
-    expect(v.map((x) => [x.regle, x.message])).toEqual([
+    const six = v.filter((x) => x.regle !== 'JOURS-AFFILES')
+    expect(six.map((x) => [x.regle, x.message])).toEqual([
       ['R-SIX-JOURS-MAX', '7 jours travaillés, maximum 6'],
     ])
-    expect(v[0].creneaux).toEqual(range(7, 14).map((j) => `j${j}`))
+    expect(six[0].creneaux).toEqual(range(7, 14).map((j) => `j${j}`))
+    // Du jour 7 au jour 19 : 13 jours d'affilée, sur deux semaines.
+    expect(messages(sal(), jours.map(jourDe9a17), 'JOURS-AFFILES', 21)).toEqual(
+      ["13 jours de travail d'affilée sans repos (au plus 6 conseillés)"],
+    )
+  })
+
+  it('jours d’affilée : la semaine d’avant compte, 6 passent, 7 non (2026-11-02)', () => {
+    // 4 jours à la fin de la semaine d'avant + lundi à mercredi = 7.
+    const s = sal('a', { serieAvant: 4 })
+    expect(messages(s, range(3).map(jourDe9a17), 'JOURS-AFFILES')).toEqual([
+      "7 jours de travail d'affilée sans repos (au plus 6 conseillés)",
+    ])
+    expect(messages(s, range(2).map(jourDe9a17), 'JOURS-AFFILES')).toEqual([])
+    // La semaine d'après aussi : vendredi à dimanche + 4 jours = 7.
+    const t = sal('a', { serieApres: 4 })
+    expect(
+      messages(t, range(4, 7).map(jourDe9a17), 'JOURS-AFFILES'),
+    ).toHaveLength(1)
+    // Une semaine civile de 7 jours reste R-SIX-JOURS-MAX seul.
+    expect(regles(sal(), range(7).map(jourDe9a17))).not.toContain(
+      'JOURS-AFFILES',
+    )
   })
 
   it('une semaine entamée est contrôlée', () => {

@@ -56,6 +56,7 @@ export const REGLES_BLOCAGE = [
   'R-SIX-JOURS-MAX',
   'R-REPOS-HEBDO-HCR',
   'SIXIEME-JOUR',
+  'JOURS-AFFILES',
   'R-SEMAINE-MAX',
   'R-JOURNEE-ETOILE',
   'R-REPOS-HEBDO-35H',
@@ -162,6 +163,11 @@ export function raisonClaire(
       )
     case 'SIXIEME-JOUR':
       return r('Ce serait un 6e jour', mention('au-delà de son contrat'))
+    case 'JOURS-AFFILES':
+      return r(
+        'Plus de 6 jours de travail d’affilée',
+        mention('au-delà de son contrat'),
+      )
     case 'R-SEMAINE-MAX':
       return r(
         // L'école compte dans la semaine (R-ECOLE-HEURES) : le dire.
@@ -282,6 +288,7 @@ const PHRASES_COMMUNES: Record<(typeof REGLES_BLOCAGE)[number], string> = {
   'R-SIX-JOURS-MAX': 'Tout le monde a déjà trop de jours de travail.',
   'R-REPOS-HEBDO-HCR': 'Tout le monde a déjà trop de jours de travail.',
   'SIXIEME-JOUR': 'Ce serait un 6e jour pour tout le monde.',
+  'JOURS-AFFILES': 'Tout le monde enchaînerait plus de 6 jours de travail.',
   'R-SEMAINE-MAX': 'Tout le monde est au maximum de ses heures.',
   'R-JOURNEE-ETOILE': 'Tout le monde a déjà sa journée étoile.',
   'R-REPOS-HEBDO-35H': 'Personne ne garderait son repos de 35 h.',
