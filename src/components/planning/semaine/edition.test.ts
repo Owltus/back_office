@@ -135,6 +135,19 @@ describe('statutDuJour', () => {
       fixe: false,
     })
   })
+  it('congé en trop dans la semaine : un des 2 repos, en proposition (2026-11-02)', () => {
+    const b = bilan({ absences: { 5: 1, 6: 1 }, repos_deduits: [5] })
+    expect(statutDuJour(b, 5, MOTIFS)).toMatchObject({
+      nom: 'Repos',
+      genre: 'repos',
+      proposition: true,
+    })
+    expect(validationRepos(b, 5, MOTIFS)).toEqual({
+      valide: false,
+      deduit: true,
+    })
+    expect(statutDuJour(b, 6, MOTIFS)).toMatchObject({ nom: 'Congés' })
+  })
   it('hors contrat avant tout, fixe', () => {
     const s = statutDuJour(
       bilan({ hors_contrat: [2], absences: { 2: 1 } }),

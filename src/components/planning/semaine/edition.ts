@@ -93,6 +93,17 @@ export function statutDuJour(
       genre: 'hors',
     }
   }
+  // Repos proposé sur un jour de congé en trop (plus de 5 dans la semaine,
+  // `reposDeduits`) : « Valider » l'écrit à la place du congé.
+  if (jour in bilan.absences && bilan.repos_deduits.includes(jour))
+    return {
+      nom: 'Repos',
+      couleur: NEUTRE,
+      fixe: false,
+      repos: true,
+      proposition: !verrouillee,
+      genre: 'repos',
+    }
   if (jour in bilan.absences) {
     const m = motifs.find((x) => x.id === bilan.absences[jour])
     if (m?.nature === 'repos')

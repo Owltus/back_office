@@ -98,6 +98,9 @@ export function caseDe(
   )
   if (!bilan) return null
   if (bilan.hors_contrat.includes(jour)) return { type: 'hors', fixe: true }
+  // Repos proposé sur un jour de congé en trop (`reposDeduits`).
+  if (jour in bilan.absences && bilan.repos_deduits.includes(jour))
+    return { type: 'repos', fixe: false, proposition: !sem.verrouillee }
   if (jour in bilan.absences) {
     const motifId = bilan.absences[jour]
     const fixe = bilan.absences_semaine_type.includes(jour)

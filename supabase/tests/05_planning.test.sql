@@ -135,7 +135,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':R', (select r from t_ids)::text);
 $$;
 
-select plan(71);
+select plan(73);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -413,6 +413,21 @@ select is(pg_temp.essai('ecriture', array[pg_temp.q(
 select is(pg_temp.essai('lecture', array[pg_temp.q(
   'select public.planning_valider_avec_repos(:F, null, null, true, null)')]),
   'err=42501', 'repos : la lecture ne valide rien');
+
+-- ------------------- deux repos par semaine, même en congé (2026-11-02) ---
+-- Congé toute la semaine F pour s3 : deux jours de congé deviennent des
+-- repos à la validation, pas un troisième (5 jours ouvrés de congé).
+select is(pg_temp.essai('ecriture', array[pg_temp.q(
+  'insert into public.planning_absences (salarie_id, jour, motif_id) select :S3, :F::date + d, :M from generate_series(0, 6) d'),
+  pg_temp.q('select public.planning_valider_avec_repos(:F, :S3, null, true, jsonb_build_array(jsonb_build_object(''salarie_id'', :S3, ''jour'', 5), jsonb_build_object(''salarie_id'', :S3, ''jour'', 6)))'),
+  pg_temp.q('select string_agg(m.nature, '','' order by ab.jour) from public.planning_absences ab join public.planning_motifs m on m.id = ab.motif_id where ab.salarie_id = :S3 and ab.jour between :F::date and :F::date + 6')]),
+  'absence,absence,absence,absence,absence,repos,repos',
+  'repos : une semaine de congé garde 2 repos, écrits à la place du congé');
+select is(pg_temp.essai('ecriture', array[pg_temp.q(
+  'insert into public.planning_absences (salarie_id, jour, motif_id) select :S3, :F::date + d, :M from generate_series(0, 6) d'),
+  pg_temp.q('select public.planning_valider_avec_repos(:F, :S3, null, true, jsonb_build_array(jsonb_build_object(''salarie_id'', :S3, ''jour'', 5), jsonb_build_object(''salarie_id'', :S3, ''jour'', 6)))'),
+  pg_temp.q('select public.planning_valider_avec_repos(:F, :S3, null, true, jsonb_build_array(jsonb_build_object(''salarie_id'', :S3, ''jour'', 4)))')]),
+  '0', 'repos : jamais moins de 5 jours de congé dans une semaine de congé');
 
 select * from finish();
 rollback;

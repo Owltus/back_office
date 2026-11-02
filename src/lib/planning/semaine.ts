@@ -303,6 +303,8 @@ export interface Contexte {
   affectations: Affectation[]
   sansDecompte: Set<number>
   ecole: Set<number>
+  /** Motifs de nature repos (un repos posé à une date). */
+  motifsRepos: Set<number>
   /** salarié → (date → motif) */
   absences: Map<number, Map<string, number>>
   /** Repos posés encore en proposition : « salarié|date ». */
@@ -359,6 +361,9 @@ export function contexte(d: DonneesSemaine): Contexte {
       d.referentiel.motifs.filter((m) => !m.decompte).map((m) => m.id),
     ),
     ecole: new Set(d.referentiel.motifs.filter(estEcole).map((m) => m.id)),
+    motifsRepos: new Set(
+      d.referentiel.motifs.filter((m) => m.nature === 'repos').map((m) => m.id),
+    ),
     absences: indexerAbsences(d.absences),
     reposProposes: new Set(
       d.absences
@@ -1301,18 +1306,85 @@ export function equitesAvant(
   return r
 }
 
-/** Jours libres qui sont du repos : heures dues couvertes (par l'école, les
- * absences ou les shifts), ou 5 jours déjà pris (moins les jours hors
- * contrat au-delà de 2). Un jour pris = un shift, l'école, ou une absence
- * DÉCOMPTÉE (congé, maladie, formation…) : une semaine de 4 shifts et un
- * congé a ses 2 repos (demande utilisateur du 2026-11-02 : « même si
- * quelqu'un a des congés, il faut malgré tout poser des repos et être
- * logique »). Jamais pour un extra. Pour un apprenti ou
- * un stagiaire, seulement sur une semaine REMPLIE (`semaineRemplie`) : sa
- * ligne vide sauf l'école tant qu'on n'a ni généré ni posé à la main, puis
- * ses jours libres en repos comme pour les autres, week-end d'une semaine
- * entière d'école compris (décisions utilisateur du 2026-10-27). Affichage
- * seulement : le moteur garde ses règles de repos et l'école. */
+/** Ce qu'est un jour pour placer les repos (`placerRepos`). L'école compte
+ * comme du travail (journée de contrat hors de l'hôtel) ; un jour hors
+ * contrat ou une absence non décomptée (repos exceptionnel…), comme `autre`. */
+export type EtatJour = 'travail' | 'libre' | 'conge' | 'repos' | 'autre'
+
+/**
+ * Deux repos par semaine, toujours (décisions utilisateur du 2026-11-02,
+ * congés comptés en jours ouvrés : 5 par semaine). Rend les jours à mettre en
+ * repos pour en avoir `voulus`, repos déjà là compris (fiche, repos posé).
+ * Pur et déterministe : la même semaine donne toujours les mêmes jours.
+ *
+ * Règles, de la plus forte à la plus faible :
+ *   1. un jour libre avant un jour de congé : un congé ne devient repos que
+ *      s'il n'y a pas assez de jours libres (« les jours de congé ne comptent
+ *      pas comme des jours de repos » : 3 semaines d'arrêt = 2 repos par
+ *      semaine) ;
+ *   2. les repos se suivent ;
+ *   3. jamais un jour de travail isolé entre deux jours sans travail (le bord
+ *      de la semaine compte comme du travail : continuité avec la semaine
+ *      d'à côté) ;
+ *   4. s'il y a un congé, les repos se collent au bloc d'absence ;
+ *   5. à égalité, le plus tard dans la semaine (samedi et dimanche).
+ */
+export function placerRepos(
+  etats: readonly EtatJour[],
+  voulus: number,
+): number[] {
+  const deja = etats.filter((e) => e === 'repos').length
+  const candidats = [0, 1, 2, 3, 4, 5, 6].filter(
+    (j) => etats[j] === 'libre' || etats[j] === 'conge',
+  )
+  const n = Math.min(Math.max(0, voulus - deja), candidats.length)
+  if (!n) return []
+  const choix: number[][] =
+    n === 1
+      ? candidats.map((a) => [a])
+      : candidats.flatMap((a, i) => candidats.slice(i + 1).map((b) => [a, b]))
+  const avecConge = etats.includes('conge')
+  const cout = (pris: number[]) => {
+    const fin = etats.map((e, j) => (pris.includes(j) ? 'repos' : e))
+    const sansTravail = (j: number) =>
+      j >= 0 && j <= 6 && fin[j] !== 'travail' && fin[j] !== 'libre'
+    let c = 0
+    for (const j of pris) if (etats[j] === 'conge') c += 1000
+    const repos = [0, 1, 2, 3, 4, 5, 6].filter((j) => fin[j] === 'repos')
+    let blocs = 0
+    for (const j of repos) if (fin[j - 1] !== 'repos') blocs++
+    c += 100 * Math.max(0, blocs - 1)
+    for (let j = 0; j < 7; j++)
+      if (fin[j] === 'travail' && sansTravail(j - 1) && sansTravail(j + 1))
+        c += 30
+    if (avecConge)
+      for (const j of pris)
+        if (!sansTravail(j - 1) && !sansTravail(j + 1)) c += 10
+    for (const j of pris) c += 6 - j
+    return c
+  }
+  let meilleur = choix[0]
+  let coutMin = cout(meilleur)
+  for (const k of choix.slice(1)) {
+    const v = cout(k)
+    if (v < coutMin) {
+      meilleur = k
+      coutMin = v
+    }
+  }
+  return meilleur
+}
+
+/** Repos de la semaine d'une personne : deux par semaine (`placerRepos`),
+ * un de moins par jour hors contrat au-delà de 2 ; plus, quand ses heures
+ * dues sont faites, ses autres jours libres. Posés sur une semaine REMPLIE
+ * (générée ou faite à la main), ou dès que ses heures sont couvertes (congé
+ * toute la semaine) ou 5 jours pris (shift, école, absence décomptée).
+ * Peut tomber sur un jour de congé en trop (plus de 5 dans la semaine) :
+ * l'écran y montre « Repos », « Valider » l'écrit à la place du congé
+ * (migration 20261102110000). Jamais pour un extra ; pour un apprenti ou un
+ * stagiaire, seulement sur une semaine remplie (décisions utilisateur du
+ * 2026-10-27). Affichage et validation : le moteur garde ses règles. */
 const ALTERNANCE: ReadonlySet<Salarie['type_contrat']> = new Set([
   'apprenti',
   'stagiaire',
@@ -1326,33 +1398,40 @@ export function reposDeduits(
   absences: Map<number, Map<string, number>>,
   remplie = true,
   sansDecompte: ReadonlySet<number> = new Set(),
+  motifsRepos: ReadonlySet<number> = new Set(),
 ): number[] {
   if (x.type_contrat === 'extra') return []
   if (ALTERNANCE.has(x.type_contrat) && !remplie) return []
-  const decomptees = [...joursAbsents(x, lundi, absences)]
-    .filter(([j]) => !sol.horsContrat.has(j))
-    .filter(([, m]) => m === null || !sansDecompte.has(m))
-    .map(([j]) => j)
-  const pris = new Set([
-    ...siens.map(jourDe),
-    ...sol.joursHorsSite,
-    ...decomptees,
-  ])
+  const absents = joursAbsents(x, lundi, absences)
+  const travailles = new Set([...siens.map(jourDe), ...sol.joursHorsSite])
+  const etats: EtatJour[] = [0, 1, 2, 3, 4, 5, 6].map((j) => {
+    if (sol.horsContrat.has(j)) return 'autre'
+    if (travailles.has(j)) return 'travail'
+    if (sol.reposFixes.has(j)) return 'repos'
+    if (absents.has(j)) {
+      const m = absents.get(j) ?? null
+      if (m !== null && motifsRepos.has(m)) return 'repos'
+      return m === null || !sansDecompte.has(m) ? 'conge' : 'autre'
+    }
+    return 'libre'
+  })
+  const pris = etats.filter((e) => e === 'travail' || e === 'conge').length
   const faites = siens.reduce((t, c) => t + travail(c), 0)
   const couvert =
     !sol.contratIndicatif &&
     Number(x.heures_hebdo) > 0 &&
     (sol.minutesHebdoContrat === 0 ||
       (siens.length > 0 && faites >= sol.minutesHebdoContrat))
-  const attendus = Math.min(sol.joursPreferesSemaine, 7 - sol.horsContrat.size)
-  if (!(couvert || pris.size >= attendus)) return []
-  const occupes = new Set([
-    ...pris,
-    ...joursAbsents(x, lundi, absences).keys(),
-    ...sol.reposFixes,
-    ...sol.horsContrat,
-  ])
-  return [0, 1, 2, 3, 4, 5, 6].filter((j) => !occupes.has(j))
+  const enContrat = 7 - sol.horsContrat.size
+  const attendus = Math.min(sol.joursPreferesSemaine, enContrat)
+  if (!(remplie || couvert || pris >= attendus)) return []
+  const voulus = Math.min(2, Math.max(0, enContrat - JOURS_CONTRAT))
+  const choisis = new Set(placerRepos(etats, voulus))
+  if (couvert)
+    etats.forEach((e, j) => {
+      if (e === 'libre') choisis.add(j)
+    })
+  return [...choisis].sort((a, b) => a - b)
 }
 
 /** La semaine a été remplie (génération ou à la main) : au moins un shift qui
@@ -1613,6 +1692,7 @@ export function analyser(d: DonneesSemaine): SemaineOut {
         ctx.absences,
         remplie,
         ctx.sansDecompte,
+        ctx.motifsRepos,
       ),
       repos_proposes: [0, 1, 2, 3, 4, 5, 6].filter((j) =>
         ctx.reposProposes.has(`${x.id}|${ajouterJours(lundi, j)}`),

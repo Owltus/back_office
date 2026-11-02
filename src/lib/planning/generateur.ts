@@ -158,6 +158,7 @@ import type {
  *     de c et de son besoin, `minutesEnPlus`)
  *   + POIDS_SIXIEME_JOUR                                        un jour de plus = au plus un 6e jour
  *   + POIDS_REPOS_SEPARES                                       la paire de repos accolés perdue
+ *   + POIDS_JOUR_ISOLE                                          un jour de travail isolé
  *   + `coutExtra` (si `c` est un candidat de l'accueil)          un extra
  *   + le plus cher des surplus                                  une personne en plus d'un autre moment
  *                                                               (un middle compte matin et soir)
@@ -237,6 +238,13 @@ export const POIDS_EQUITE = 100
  * équité), sous les contrats et les places : les poids P1 et le surplus en
  * dérivent. */
 export const POIDS_REPOS_SEPARES = 8_000
+/** Un jour de travail seul entre deux jours sans travail (congé, repos,
+ * absence ; demande utilisateur du 2026-11-02 : « je ne vais pas prendre 4
+ * jours de congé, enchaîner avec 1 jour de travail et reprendre avec mes
+ * repos »). L'école, un jour hors contrat et le bord du calcul comptent
+ * comme du travail : continuité avec la semaine d'à côté. Confort, sous les
+ * repos accolés. */
+export const POIDS_JOUR_ISOLE = 4_000
 /** Un jour de travail en moins que le rythme du contrat (5 jours pour un
  * contrat de 35 h ou plus, école et absences décomptées ; demande
  * utilisateur du 2026-11-01 : « 39 h en 4 jours de 10 h », c'est non).
@@ -441,6 +449,7 @@ export function pireCoutRemplir(
     (c.accueil ? coutExtra(c) : 0) +
     POIDS_SIXIEME_JOUR +
     POIDS_REPOS_SEPARES +
+    POIDS_JOUR_ISOLE +
     presenceLaPlusChere +
     EQUITE_MAX_PAR_SHIFT +
     POIDS_DEJA_PROPOSE +
@@ -1267,6 +1276,38 @@ export function construire(
           )
           m.cout(-POIDS_REPOS_SEPARES, deux)
         }
+      }
+
+      // Jour isolé : isole >= travaille(j) - travaille(j-1) - travaille(j+1).
+      for (const j of jours) {
+        const t = travaille.get(j)
+        if (!t) continue
+        const voisins: string[] = []
+        let continu = false
+        for (const v of [j - 1, j + 1]) {
+          if (
+            v < 0 ||
+            v >= p.nbJours ||
+            s.joursHorsSite.has(v) ||
+            s.horsContrat.has(v)
+          ) {
+            continu = true
+            break
+          }
+          const tv = travaille.get(v)
+          if (tv) voisins.push(tv)
+        }
+        // Seulement contre un jour sans travail possible (congé, absence,
+        // repos fixe) : ailleurs, les repos accolés suffisent, et la règle
+        // partout doublait le temps de calcul (mesuré : 2,2 s -> 5 s).
+        if (continu || voisins.length === 2) continue
+        const isole = m.bool()
+        m.ajoute(
+          [[1, isole], [-1, t], ...voisins.map((v) => [1, v] as Terme)],
+          '>=',
+          0,
+        )
+        m.cout(POIDS_JOUR_ISOLE, isole)
       }
 
       for (const j of s.travailFixe) {

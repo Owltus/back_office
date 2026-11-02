@@ -28,6 +28,7 @@ import {
   estEcole,
   fiche,
   heureMurale,
+  placerRepos,
   POSTE_ID_ACCUEIL,
   idRemplacant,
   preparerGeneration,
@@ -668,6 +669,69 @@ describe('garde-fous (test_garde_fous.py)', () => {
     const avantQ = q.analyser(lundi).stats
     q.absent(dir.id, '2026-11-11', '2026-11-11', 'CP')
     expect(q.analyser(lundi).stats.places_jour[2]).toBe(avantQ.places_jour[2])
+  })
+
+  describe('placerRepos : deux repos par semaine, logiques (2026-11-02)', () => {
+    const T = 'travail' as const
+    const L = 'libre' as const
+    const C = 'conge' as const
+    const R = 'repos' as const
+
+    it('semaine entière de congé : 2 repos, samedi et dimanche', () => {
+      expect(placerRepos([C, C, C, C, C, C, C], 2)).toEqual([5, 6])
+    })
+
+    it('un jour libre passe avant un congé', () => {
+      // 6 congés + dimanche libre : le dimanche, puis le samedi collé.
+      expect(placerRepos([C, C, C, C, C, C, L], 2)).toEqual([5, 6])
+      // 5 congés + 2 libres : les 2 libres, aucun congé touché.
+      expect(placerRepos([L, C, C, C, C, C, L], 2)).toEqual([0, 6])
+    })
+
+    it('congé du lundi au jeudi, travail le dimanche : repos vendredi et samedi', () => {
+      expect(placerRepos([C, C, C, C, L, L, T], 2)).toEqual([4, 5])
+    })
+
+    it('jamais un jour de travail isolé entre congé et repos', () => {
+      // Travail le vendredi : repos plutôt samedi-dimanche que lundi-mardi…
+      // mais le vendredi reste entre un congé et un repos : c'est le moteur
+      // qui évite ce cas (POIDS_JOUR_ISOLE). Ici, les repos se suivent.
+      expect(placerRepos([C, C, C, C, T, L, L], 2)).toEqual([5, 6])
+      // Libres mardi et dimanche, travail le lundi : choisir mardi isolerait
+      // le lundi (bord = travail, donc non) ; les deux libres restent repos.
+      expect(placerRepos([T, L, C, C, C, C, L], 2)).toEqual([1, 6])
+    })
+
+    it('les repos déjà là comptent (fiche, repos posé)', () => {
+      expect(placerRepos([T, T, T, T, T, R, R], 2)).toEqual([])
+      expect(placerRepos([C, C, C, C, C, C, R], 2)).toEqual([5])
+    })
+
+    it('les repos se suivent quand c’est possible', () => {
+      expect(placerRepos([T, L, T, T, L, L, T], 2)).toEqual([4, 5])
+    })
+  })
+
+  it('congé toute la semaine : 2 repos sur le congé, le reste en congé', () => {
+    const lundi = '2026-11-09'
+    const p = demo()
+    const [x] = libres(p)
+    p.absent(x.id, '2026-11-09', '2026-11-15', 'CP')
+    const sem = p.analyser(lundi)
+    expect(bilanDe(sem, x.id).repos_deduits).toEqual([5, 6])
+    expect(bilanDe(sem, x.id).minutes_contrat).toBe(0)
+  })
+
+  it('congé du lundi au jeudi : le jour travaillé n’est pas le vendredi isolé', () => {
+    const lundi = '2026-11-09'
+    const p = demo()
+    const [x] = libres(p)
+    p.absent(x.id, '2026-11-09', '2026-11-12', 'CP')
+    const sem = p.generer(lundi)
+    const jours = joursDe(sem, x.id)
+    expect(jours.size).toBe(1)
+    expect(jours.has(4)).toBe(false)
+    expect(bilanDe(sem, x.id).repos_deduits).toHaveLength(2)
   })
 
   it('semaineRemplie : les horaires fixes seuls ne remplissent pas la semaine', () => {

@@ -670,7 +670,8 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
       ),
       { numRuns: 80, seed: 20261030 },
     )
-    expect(empreinte(textes.join('\n=====\n'))).toBe('83e5b73a')
+    // 10444920 : jour de travail isolé contre un congé (2026-11-02).
+    expect(empreinte(textes.join('\n=====\n'))).toBe('10444920')
   })
 })
 

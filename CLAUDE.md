@@ -2262,10 +2262,19 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   … » ; une version n'est jamais choisie d'office. Un horaire à 00:00 s'écrit
   24:00 sur son jour (`horaireDe`).
 - **Pas de case vide qui ressemble à un trou (2026-11-02, demandes
-  utilisateur après essai de novembre)** : (1) repos déduits (`reposDeduits`)
-  dès que les heures dues sont faites OU que 5 jours sont pris, un jour pris
-  étant un shift, l'école ou une absence DÉCOMPTÉE (4 shifts + 1 congé = 2
-  repos) ; (2) fin ou début de contrat en cours de semaine : seuls les jours
+  utilisateur après essai de novembre)** : (1) DEUX REPOS PAR SEMAINE,
+  toujours, congés en JOURS OUVRÉS (5 par semaine, décision utilisateur) :
+  `placerRepos` (pur) choisit les jours — un jour libre avant un congé, repos
+  qui se suivent, jamais un jour de travail isolé, collés au bloc d'absence,
+  samedi-dimanche à égalité ; `reposDeduits` les pose sur une semaine remplie,
+  couverte ou à 5 jours pris (shift, école, absence décomptée), plus les
+  autres jours libres quand les heures sont faites. Un congé posé 7 jours :
+  2 des jours montrent « Repos » (proposition), « Valider » les écrit à la
+  place du congé (migration `20261102110000_planning_repos_sur_conge` : garde
+  6 absences décomptées dans la semaine, jamais l'école). Moteur :
+  `POIDS_JOUR_ISOLE` (4 000) sur un jour travaillé voisin d'un jour sans
+  travail possible et sans travail de l'autre côté (bord, école, hors
+  contrat = travail ; partout, il doublait le temps de calcul) ; (2) fin ou début de contrat en cours de semaine : seuls les jours
   de contrat manquants sont décomptés (`joursContratManquants` : départ le
   jeudi = 32 h sur 4 jours, le week-end d'après ne réduit rien), même règle
   pour le rythme de 5 jours du générateur ; (3) un poste tenu SEULEMENT par
