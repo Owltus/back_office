@@ -670,9 +670,10 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
       ),
       { numRuns: 80, seed: 20261030 },
     )
-    // 01413b52 : jour isolé contre un congé, plus de 6 jours d'affilée, et
-    // mineur un jour férié, dans le pire coût d'une place (2026-11-02).
-    expect(empreinte(textes.join('\n=====\n'))).toBe('01413b52')
+    // 05fa1c2a : jour isolé contre un congé, plus de 6 jours d'affilée, et
+    // mineur un jour férié, plus de 5 jours d'affilée, dans le pire coût
+    // d'une place (2026-11-02).
+    expect(empreinte(textes.join('\n=====\n'))).toBe('05fa1c2a')
   })
 })
 

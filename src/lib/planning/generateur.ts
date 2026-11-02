@@ -43,7 +43,10 @@ import {
   toucheLaNuit,
   travail,
 } from '#/lib/planning/modele.ts'
-import { JOURS_AFFILES_MAX } from '#/lib/planning/regles.ts'
+import {
+  JOURS_AFFILES_CONSEILLES,
+  JOURS_AFFILES_MAX,
+} from '#/lib/planning/regles.ts'
 import type {
   AffectationSolveur,
   Creneau,
@@ -163,6 +166,7 @@ import type {
  *   + POIDS_REPOS_SEPARES                                       la paire de repos accolés perdue
  *   + POIDS_JOUR_ISOLE                                          un jour de travail isolé
  *   + 7 × POIDS_JOUR_AFFILE                                     plus de 6 jours d'affilée
+ *   + 6 × POIDS_JOUR_AFFILE_CONSEILLE                           plus de 5 jours d'affilée
  *   + POIDS_MINEUR_FERIE                                        un mineur un jour férié
  *   + `coutExtra` (si `c` est un candidat de l'accueil)          un extra
  *   + le plus cher des surplus                                  une personne en plus d'un autre moment
@@ -259,6 +263,12 @@ export const POIDS_JOUR_ISOLE = 4_000
  * coûtent 3. Au-dessus du confort et du 6e jour, sous les contrats. Une
  * semaine seule est déjà bornée à 6 jours (R-SIX-JOURS-MAX). */
 export const POIDS_JOUR_AFFILE = 12_000
+/** Par jour au-delà de 5 d'affilée, sur chaque fenêtre de 6 jours qui
+ * traverse une semaine voisine (`JOURS_AFFILES_CONSEILLES`, demande
+ * utilisateur du 2026-11-02) : un 6e jour enchaîné coûte presque autant
+ * qu'un 7e. Au-dessus des repos accolés : on déplace les repos plutôt que
+ * d'enchaîner. */
+export const POIDS_JOUR_AFFILE_CONSEILLE = 10_000
 /** Un mineur placé un jour férié (permis en hôtellerie par dérogation, à
  * éviter : décision utilisateur du 2026-11-02). Au-dessus du confort et du
  * 6e jour, sous les contrats et les places. */
@@ -485,8 +495,9 @@ export function pireCoutRemplir(
     POIDS_SIXIEME_JOUR +
     POIDS_REPOS_SEPARES +
     POIDS_JOUR_ISOLE +
-    // Un jour de plus entre dans au plus 7 fenêtres de 7 jours.
+    // Un jour de plus entre dans au plus 7 fenêtres de 7 jours et 6 de 6.
     7 * POIDS_JOUR_AFFILE +
+    6 * POIDS_JOUR_AFFILE_CONSEILLE +
     POIDS_MINEUR_FERIE +
     presenceLaPlusChere +
     EQUITE_MAX_PAR_SHIFT +
@@ -1398,34 +1409,48 @@ export function construire(
         }
       }
 
-      // Plus de 6 jours d'affilée, semaines voisines comprises : chaque
-      // fenêtre de 7 jours qui n'est pas une semaine du calcul (celles-là
-      // sont déjà bornées) compte ses jours au-delà de 6.
+      // Jours d'affilée, semaines voisines comprises : chaque fenêtre de
+      // `taille` jours qui n'est pas DANS une semaine du calcul (celles-là
+      // sont déjà bornées par le 6e jour et R-SIX-JOURS-MAX) compte ses
+      // jours au-delà du plafond. 7 jours : plus de 6 d'affilée ; 6 jours :
+      // plus de 5 (le rythme visé, 2026-11-02).
       if (k === 0) {
         for (const c of siens)
           if (s.feriesEvites.has(jourDe(c))) m.cout(POIDS_MINEUR_FERIE, xv(c))
         const debut = -s.serieAvant
         const fin = p.nbJours + s.serieApres
-        for (let a = Math.max(debut, -6); a + 7 <= fin; a++) {
-          if (a >= 0 && a % 7 === 0 && a + 7 <= p.nbJours) continue
-          const termes: Terme[] = []
-          let constante = 0
-          for (let d = a; d < a + 7; d++) {
-            if (d < 0 || d >= p.nbJours) constante++
-            else if (s.joursHorsSite.has(d)) constante++
-            else {
-              const t = travaille.get(d)
-              if (t) termes.push([1, t])
+        for (const [plafond, poids] of [
+          [JOURS_AFFILES_MAX, POIDS_JOUR_AFFILE],
+          [JOURS_AFFILES_CONSEILLES, POIDS_JOUR_AFFILE_CONSEILLE],
+        ] as const) {
+          const taille = plafond + 1
+          for (let a = Math.max(debut, 1 - taille); a + taille <= fin; a++) {
+            const derniere = a + taille - 1
+            if (
+              a >= 0 &&
+              derniere < p.nbJours &&
+              Math.floor(a / 7) === Math.floor(derniere / 7)
+            )
+              continue
+            const termes: Terme[] = []
+            let constante = 0
+            for (let d = a; d <= derniere; d++) {
+              if (d < 0 || d >= p.nbJours) constante++
+              else if (s.joursHorsSite.has(d)) constante++
+              else {
+                const t = travaille.get(d)
+                if (t) termes.push([1, t])
+              }
             }
+            if (constante + termes.length <= plafond) continue
+            const exces = m.entier(0, taille)
+            m.ajoute(
+              [[1, exces], ...termes.map(([c, v]) => [-c, v] as Terme)],
+              '>=',
+              constante - plafond,
+            )
+            m.cout(poids, exces)
           }
-          if (constante + termes.length <= JOURS_AFFILES_MAX) continue
-          const exces = m.entier(0, 7)
-          m.ajoute(
-            [[1, exces], ...termes.map(([c, v]) => [-c, v] as Terme)],
-            '>=',
-            constante - JOURS_AFFILES_MAX,
-          )
-          m.cout(POIDS_JOUR_AFFILE, exces)
         }
       }
 

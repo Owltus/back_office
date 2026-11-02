@@ -757,6 +757,30 @@ describe('garde-fous (test_garde_fous.py)', () => {
     }
   })
 
+  it('trois semaines générées à la suite : 5 jours d’affilée visés (2026-11-02)', () => {
+    // Demande utilisateur : « tu abuses beaucoup trop des 6 jours
+    // d'affilée ». Le 6e jour enchaîné d'une semaine à l'autre coûte.
+    const p = demo()
+    const semaines = ['2026-11-09', '2026-11-16', '2026-11-23'].map((l) =>
+      p.generer(l),
+    )
+    let six = 0
+    for (const x of p.referentiel.salaries) {
+      if (x.type_contrat === 'extra') continue
+      const jours = new Set(
+        semaines.flatMap((sem, k) =>
+          [...joursDe(sem, x.id)].map((j) => 7 * k + j),
+        ),
+      )
+      let serie = 0
+      for (let d = 0; d < 21; d++) {
+        serie = jours.has(d) ? serie + 1 : 0
+        if (serie === 6) six++
+      }
+    }
+    expect(six).toBe(0)
+  })
+
   it('semaineRemplie : les horaires fixes seuls ne remplissent pas la semaine', () => {
     const p = demo()
     const [fixe, libre] = p.referentiel.salaries

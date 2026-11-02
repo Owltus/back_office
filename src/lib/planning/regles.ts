@@ -34,6 +34,10 @@ export const JOURS_TRAVAILLES_PREFERES = 5
  * laisser se reposer »). Le générateur l'évite (`POIDS_JOUR_AFFILE`), le
  * vérificateur le signale (JOURS-AFFILES) ; la loi en permet jusqu'à 12. */
 export const JOURS_AFFILES_MAX = 6
+/** Jours d'affilée visés (demande utilisateur du 2026-11-02 : « tu abuses
+ * encore beaucoup trop des 6 jours d'affilée ») : le 6e jour enchaîné d'une
+ * semaine à l'autre coûte déjà (`POIDS_JOUR_AFFILE_CONSEILLE`). */
+export const JOURS_AFFILES_CONSEILLES = 5
 export const REPOS_DEUX_SEMAINES = 3
 export const TEMPS_PLEIN = 35 * H
 /** R-JOURNEE-ETOILE (organisation de l'hôtel) : au-delà de 35 h, une seule
