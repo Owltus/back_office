@@ -115,7 +115,9 @@ import type {
  *       l'accueil entier, D15) : `POIDS_TROU_QUART` par quart d'heure (D10).
  *   P3  les contrats : heures dues (`POIDS_SOUS_CONTRAT`) > une personne en
  *       plus du chiffre d'un moment (`coutSurplus`, D8, plafonné sous les
- *       heures dues) > 6e jour > heures au-delà (`POIDS_SUR_CONTRAT`).
+ *       heures dues) > jour manquant au rythme de 5 jours > jour férié
+ *       rattrapé en attente (`POIDS_JFR_EN_ATTENTE`, R-FERIE-RATTRAPE) >
+ *       6e jour > heures au-delà (`POIDS_SUR_CONTRAT`).
  *   P4  le métier d'abord (D13), à heures de contrat égales (un
  *       remplaçant ne compte jamais plus d'heures dues ni moins d'heures en
  *       plus que son besoin, `minutesDues`, `minutesEnPlus`) :
@@ -161,11 +163,16 @@ import type {
  *   + POIDS_REPOS_SEPARES                                       la paire de repos accolés perdue
  *   + POIDS_JOUR_ISOLE                                          un jour de travail isolé
  *   + 7 × POIDS_JOUR_AFFILE                                     plus de 6 jours d'affilée
+ *   + POIDS_MINEUR_FERIE                                        un mineur un jour férié
  *   + `coutExtra` (si `c` est un candidat de l'accueil)          un extra
  *   + le plus cher des surplus                                  une personne en plus d'un autre moment
  *                                                               (un middle compte matin et soir)
  *   + EQUITE_MAX_PAR_SHIFT                                      équité, au pire
  *   + POIDS_DEJA_PROPOSE + BRUIT_MAX                            rebattre, hasard
+ *   + `pireJfr` (s'il y a un JFR à placer dans la semaine)       le JFR perdu ce jour-là,
+ *                                                               sa préférence, et les heures
+ *                                                               dues qu'il retirait
+ *                                                               (compté avec le surplus)
  * (les heures dues ne peuvent que baisser ; travail(c) <= durée(c) ; un
  * contrat indicatif coûte 1 par minute <= POIDS_SUR_CONTRAT). La place vide
  * coûte strictement plus : à l'optimum, une place nécessaire n'est vide que
@@ -252,12 +259,33 @@ export const POIDS_JOUR_ISOLE = 4_000
  * coûtent 3. Au-dessus du confort et du 6e jour, sous les contrats. Une
  * semaine seule est déjà bornée à 6 jours (R-SIX-JOURS-MAX). */
 export const POIDS_JOUR_AFFILE = 12_000
+/** Un mineur placé un jour férié (permis en hôtellerie par dérogation, à
+ * éviter : décision utilisateur du 2026-11-02). Au-dessus du confort et du
+ * 6e jour, sous les contrats et les places. */
+export const POIDS_MINEUR_FERIE = 30_000
 /** Un jour de travail en moins que le rythme du contrat (5 jours pour un
  * contrat de 35 h ou plus, école et absences décomptées ; demande
  * utilisateur du 2026-11-01 : « 39 h en 4 jours de 10 h », c'est non).
  * Au-dessus d'une personne en plus à l'accueil (le surplus d'un shift,
  * plafonné, reste en dessous), sous les heures dues et les places. */
 export const POIDS_JOUR_MANQUANT = 80_000
+/** R-FERIE-RATTRAPE : un jour férié travaillé à rattraper que la semaine ne
+ * place pas (aucun JFR posé). Au-dessus du 6e jour et du confort, sous les
+ * heures dues, les places et le jour manquant : le rattrapage ne laisse
+ * jamais une place vide ni un contrat sans ses heures. */
+export const POIDS_JFR_EN_ATTENTE = 20_000
+/** R-FERIE-RATTRAPE : le JFR collé à un jour sans travail (repos, congé),
+ * pour une coupure plus longue. Confort, sous les repos accolés. */
+export const POIDS_JFR_COLLE = 1_000
+/** P1 : ce que peut coûter, au pire, l'ajout d'une personne qui avait un JFR
+ * ce jour-là et le perd : le rattrapage en attente, sa préférence, et les
+ * heures dues que le JFR retirait (`reduction`, au plus `reductionMax`).
+ * 0 sans JFR dans la semaine : les places vides gardent leur prix. */
+export function pireJfr(reductionMax: number): number {
+  return reductionMax > 0
+    ? POIDS_JFR_EN_ATTENTE + POIDS_JFR_COLLE + POIDS_SOUS_CONTRAT * reductionMax
+    : 0
+}
 /** Contrats à rythme de 5 jours : 35 h et plus. */
 export const RYTHME_CONTRAT_MIN = 35 * 60
 /** Ouverture d'un poste de l'accueil (07:00 Réception et Club, réglage du
@@ -459,6 +487,7 @@ export function pireCoutRemplir(
     POIDS_JOUR_ISOLE +
     // Un jour de plus entre dans au plus 7 fenêtres de 7 jours.
     7 * POIDS_JOUR_AFFILE +
+    POIDS_MINEUR_FERIE +
     presenceLaPlusChere +
     EQUITE_MAX_PAR_SHIFT +
     POIDS_DEJA_PROPOSE +
@@ -744,6 +773,9 @@ interface Construit {
   /** Minutes sous et au-dessus du contrat des personnes à contrat NON
    * indicatif, par personne et par semaine : [fiche, moins, plus]. */
   sousContrat: Array<[string, string, string]>
+  /** Jours fériés rattrapés possibles (R-FERIE-RATTRAPE), une variable par
+   * personne et par jour permis. */
+  jfrs: Array<{ salarieId: string; jour: number; v: string }>
 }
 
 /** Réglages internes de la construction (tests et mesures seulement). */
@@ -796,7 +828,12 @@ export function construire(
   )
   const besoinDe: BesoinDe = (place) => creneaux.get(place)
   const coutsSurplus = comptent.map((cs) => coutSurplus(cs))
-  const presenceLaPlusChere = Math.max(0, ...coutsSurplus)
+  // Une personne ajoutée peut aussi perdre son JFR (R-FERIE-RATTRAPE) : son
+  // pire est compté avec celui du surplus dans les places nécessaires.
+  // Sans JFR dans la semaine, rien ne change (même texte LP qu'avant).
+  const presenceLaPlusChere =
+    Math.max(0, ...coutsSurplus) +
+    pireJfr(Math.max(0, ...p.salaries.map((s) => s.jfr?.reduction ?? 0)))
   const coutsMinimum = comptent.map((cs) =>
     coutManqueMinimum(cs, presenceLaPlusChere, besoinDe),
   )
@@ -1001,6 +1038,7 @@ export function construire(
   const semainesJours = new Map<string, Expr>()
   const figes = new Map<string, number>()
   const travailleDe = new Map<string, Map<number, string>>()
+  const jfrs: Array<{ salarieId: string; jour: number; v: string }> = []
 
   for (const s of p.salaries) {
     const siens = p.creneaux.filter((c) => x.has(cle(s.id, c.id)))
@@ -1034,6 +1072,72 @@ export function construire(
         )
       m.ajoute([[1, t], ...liste.map((c) => [-1, xv(c)] as Terme)], '<=', 0)
     }
+
+    // R-FERIE-RATTRAPE : un jour férié rattrapé au plus, sur un jour permis
+    // (`jfr.jours`, déjà sans absence, école, jour fixé ni jour passé) et
+    // sans travail ce jour-là. Il compte comme un congé : `reduction` en
+    // moins dans les heures dues, un jour en moins au rythme de 5 jours
+    // (plus bas). Pas pris : POIDS_JFR_EN_ATTENTE (constante retirée, donc
+    // un gain sur chaque variable). Collé à un jour sans travail :
+    // POIDS_JFR_COLLE de mieux.
+    const jfrDuJour = new Map<number, string>()
+    if (s.jfr) {
+      for (const d of [...s.jfr.jours].sort((a, b) => a - b)) {
+        if (d < 0 || d >= p.nbJours) continue
+        const v = m.bool()
+        jfrDuJour.set(d, v)
+        jfrs.push({ salarieId: s.id, jour: d, v })
+        const t = travaille.get(d)
+        if (t)
+          m.ajoute(
+            [
+              [1, v],
+              [1, t],
+            ],
+            '<=',
+            1,
+          )
+        m.cout(-POIDS_JFR_EN_ATTENTE, v)
+        // colle <= jfr ; colle <= 2 - t(d-1) - t(d+1) : un voisin libre.
+        // Le bord du calcul compte comme du travail (semaine voisine).
+        const voisins: Terme[] = []
+        let constante = 0
+        for (const w of [d - 1, d + 1]) {
+          if (w < 0 || w >= p.nbJours) constante++
+          else {
+            const tw = travaille.get(w)
+            if (tw) voisins.push([1, tw])
+          }
+        }
+        if (constante + voisins.length < 2) {
+          // Un voisin ne peut pas travailler : toujours collé.
+          m.cout(-POIDS_JFR_COLLE, v)
+          continue
+        }
+        const colle = m.bool()
+        m.ajoute(
+          [
+            [1, colle],
+            [-1, v],
+          ],
+          '<=',
+          0,
+        )
+        m.ajoute([[1, colle], ...voisins], '<=', 2 - constante)
+        m.cout(-POIDS_JFR_COLLE, colle)
+      }
+      if (jfrDuJour.size > 1)
+        m.ajoute(
+          [...jfrDuJour.values()].map((v) => [1, v] as Terme),
+          '<=',
+          1,
+        )
+    }
+    const jfrTermes = (jours: number[], coef: number): Terme[] =>
+      jours.flatMap((j) => {
+        const v = jfrDuJour.get(j)
+        return v ? [[coef, v] as Terme] : []
+      })
 
     // Chevauchement et repos quotidien : paires interdites.
     //
@@ -1154,8 +1258,9 @@ export function construire(
           Math.min(s.joursPreferesSemaine, enContrat.length) - absents
         if (attendu > nbJours.constante) {
           const ecart = m.entier(0, 7)
+          // Un JFR pris compte comme un jour d'absence (R-FERIE-RATTRAPE).
           m.ajoute(
-            [[1, ecart], ...nbJours.termes],
+            [[1, ecart], ...nbJours.termes, ...jfrTermes(jours, 1)],
             '>=',
             attendu - nbJours.constante,
           )
@@ -1198,6 +1303,12 @@ export function construire(
         enPlus.push([minutesEnPlus(c, besoin), xv(c)])
       }
       const memeMesure = dues.every(([k], i) => k === enPlus[i][0])
+      // R-FERIE-RATTRAPE : un JFR pris retire `reduction` aux heures dues,
+      // comme un congé ; écrit comme des minutes faites, dans les deux
+      // mesures du contrat (jamais dans le plafond de la semaine).
+      const rattrape = jfrTermes(jours, s.jfr?.reduction ?? 0).filter(
+        ([coef]) => coef !== 0,
+      )
       // R-ECOLE-HEURES (L6222-24) : chaque jour d'école vaut une journée de
       // contrat (`journeeContrat`) ; les heures d'école de la semaine sont
       // une constante de la somme ; des fixes déjà au-delà restent tenables.
@@ -1291,6 +1402,8 @@ export function construire(
       // fenêtre de 7 jours qui n'est pas une semaine du calcul (celles-là
       // sont déjà bornées) compte ses jours au-delà de 6.
       if (k === 0) {
+        for (const c of siens)
+          if (s.feriesEvites.has(jourDe(c))) m.cout(POIDS_MINEUR_FERIE, xv(c))
         const debut = -s.serieAvant
         const fin = p.nbJours + s.serieApres
         for (let a = Math.max(debut, -6); a + 7 <= fin; a++) {
@@ -1386,7 +1499,7 @@ export function construire(
       const plus = m.continu(0, 7 * 24 * 60)
       if (memeMesure) {
         m.ajoute(
-          [...minutes, [-1, plus], [1, moins]],
+          [...minutes, ...rattrape, [-1, plus], [1, moins]],
           '=',
           s.minutesHebdoContrat,
         )
@@ -1397,8 +1510,16 @@ export function construire(
         // plus = max(0, enPlus - contrat), comme l'égalité quand les deux
         // mesures coïncident. (`ecartTotalMinutes` lit donc ces minutes
         // comptées, pas les minutes réelles, sur une telle semaine.)
-        m.ajoute([...nonNuls(dues), [1, moins]], '>=', s.minutesHebdoContrat)
-        m.ajoute([...nonNuls(enPlus), [-1, plus]], '<=', s.minutesHebdoContrat)
+        m.ajoute(
+          [...nonNuls(dues), ...rattrape, [1, moins]],
+          '>=',
+          s.minutesHebdoContrat,
+        )
+        m.ajoute(
+          [...nonNuls(enPlus), ...rattrape, [-1, plus]],
+          '<=',
+          s.minutesHebdoContrat,
+        )
       }
       ecarts.push([plus, moins])
       if (s.contratIndicatif) {
@@ -1479,6 +1600,7 @@ export function construire(
     releves,
     minimums,
     sousContrat,
+    jfrs,
   }
 }
 
@@ -2050,6 +2172,7 @@ function resoudreUneFois(
     releves,
     minimums,
     sousContrat,
+    jfrs,
   } = construire(p)
   if (modele.impossible) return echec()
   // Moments où un remplaçant compte (`aTenir`) : ceux du problème COMPLET,
@@ -2075,7 +2198,8 @@ function resoudreUneFois(
     manque.size === 0 &&
     minimums.length === 0 &&
     trous.length === 0 &&
-    ouvertures.length === 0
+    ouvertures.length === 0 &&
+    jfrs.length === 0
   ) {
     return {
       statut: 'optimal',
@@ -2159,6 +2283,9 @@ function resoudreUneFois(
     ),
     trous: restes,
     ouvertures: reunir(ouvertures),
+    jfr: jfrs
+      .filter(({ v }) => valeur(v) === 1)
+      .map(({ salarieId, jour }) => ({ salarieId, jour })),
     relevesManquantes: releves
       .filter(({ v }) => valeur(v) > 0.5)
       .map(({ jour }) => jour),

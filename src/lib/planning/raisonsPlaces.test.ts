@@ -40,6 +40,7 @@ const MENTIONS: readonly Mention[] = [
   'déjà placé',
   'à appeler',
   'à placer',
+  'à éviter',
 ]
 
 /** Chaque message que `violationsSalarie` et `raisonsBlocage` écrivent,
@@ -73,6 +74,10 @@ const MESSAGES: Record<(typeof REGLES_BLOCAGE)[number], string[]> = {
   'JOURS-AFFILES': [
     "8 jours de travail d'affilée sans repos (au plus 6 conseillés)",
   ],
+  'MINEUR-FERIE': [
+    'mineur : travaille un jour férié (permis en hôtellerie, à éviter)',
+  ],
+  'JOUR-FERIE': ['jour férié du 11/11 travaillé : à rattraper'],
   'R-SEMAINE-MAX': ['50 h dans la semaine, maximum 48 h'],
   'R-JOURNEE-ETOILE': [
     'sa journée étoile est fixée ce jour-là : un horaire de moins de 8 h',
@@ -547,6 +552,8 @@ describe('place que rien ne remplit : la raison commune en clair', () => {
   const NON_BLOQUANTES = [
     'SIXIEME-JOUR',
     'JOURS-AFFILES',
+    'MINEUR-FERIE',
+    'JOUR-FERIE',
     'R-JOURNEE-ETOILE',
     'EXTRA',
   ]

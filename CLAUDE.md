@@ -2288,9 +2288,27 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   des cadres au forfait jours (la Direction) n'a pas de place à pourvoir le
   jour où aucun d'eux n'est là (`sansSonCadre`) : « si elle n'est pas là,
   elle n'est pas là ».
+- **JOURS FÉRIÉS (2026-11-02, décisions utilisateur ; remplace « jours
+  fériés non portés »)** : les 11 jours fériés français (`feries.ts`, Pâques
+  calculée). Première année : aucun jour férié ; après un an (date d'entrée ;
+  vide = moins d'un an), un jour férié TRAVAILLÉ ouvre un JOUR FÉRIÉ RATTRAPÉ
+  (motif JFR, décompté, migration `20261102120000_planning_jour_ferie_rattrape`,
+  `--avec-donnees` à la livraison). Le moteur le propose dans les 4 semaines
+  (`FERIE_RATTRAPAGE_JOURS`), un par semaine, jamais le jour de l'étoile
+  fixée (`POIDS_JFR_EN_ATTENTE`), écrit en absence PROPOSÉE (part avec les
+  propositions, se valide comme un repos) ; un JFR ne rattrape qu'un jour
+  férié, le plus ancien d'abord ; alerte JOUR-FERIE tant qu'il manque ; les
+  vues lisent 8 semaines en arrière. STAGIAIRES : tous leurs jours fériés
+  (provisoire), ajoutés au calcul en absence JF sans rien écrire en base
+  (`avecFeriesStagiaires`). MINEURS : évités un jour férié
+  (`POIDS_MINEUR_FERIE`), alerte MINEUR-FERIE. En-tête « Férié » dans les
+  vues. Page `/planning/fonctionnement` (« Comment ça marche », menu des
+  paramètres, hors étapes) et PRD des bonnes pratiques
+  `plan/planning-bonnes-pratiques/PRD.md` (16 règles morales et
+  professionnelles, statut en place / à faire, questions ouvertes Q1-Q14) :
+  À TENIR À JOUR à chaque règle ajoutée.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
-  (D10), jours fériés (décision utilisateur relayée par le binôme), scénario
-  « exclus » à l'écran (retiré du prototype aussi).
+  (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 
 ## Audit complet du 2026-09-28 (relecture de code, 6 zones)
 

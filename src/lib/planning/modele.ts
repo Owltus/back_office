@@ -164,6 +164,16 @@ export interface SalarieSolveur {
    * pas là (hors contrat, absente) compte pour sa part (`equitesAvant`) :
    * peut être fractionnaire. */
   equiteAvant: EquiteFaite
+  /** R-FERIE-RATTRAPE : un jour férié rattrapé (JFR) à placer cette
+   * semaine, sur l'un de ces `jours` ; il retire `reduction` minutes aux
+   * heures dues et un jour au rythme de 5 jours. null : rien à placer. */
+  jfr: { jours: ReadonlySet<number>; reduction: number } | null
+  /** Jours fériés travaillés encore à rattraper (AAAA-MM-JJ), pour l'alerte
+   * du vérificateur (JOUR-FERIE). */
+  feriesARattraper: readonly string[]
+  /** Mineur : jours fériés de la semaine, évités par le générateur
+   * (`POIDS_MINEUR_FERIE`) et signalés par le vérificateur (MINEUR-FERIE). */
+  feriesEvites: ReadonlySet<number>
 }
 
 /** Équité (D15) : semaines d'avant comptées, à poids égal (mois glissant,
@@ -226,6 +236,9 @@ export function salarieSolveur(
     personne: null,
     groupeEquite: null,
     equiteAvant: EQUITE_VIDE,
+    jfr: null,
+    feriesARattraper: [],
+    feriesEvites: new Set(),
     ...s,
   }
 }
@@ -331,4 +344,7 @@ export interface Resultat {
   affectations: AffectationSolveur[]
   manques: Manque[]
   ecartTotalMinutes: number | null
+  /** Jours fériés rattrapés placés (R-FERIE-RATTRAPE) : au plus un par
+   * personne. Absent : aucun. */
+  jfr?: Array<{ salarieId: string; jour: number }>
 }

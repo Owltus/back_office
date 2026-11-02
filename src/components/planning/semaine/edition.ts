@@ -8,6 +8,7 @@
  */
 
 import { dureeHoraire, heures, jourDeRepos } from '#/lib/planning/affichage.ts'
+import { estJfr } from '#/lib/planning/feries.ts'
 import { estEcole } from '#/lib/planning/semaine.ts'
 import type { BilanOut, SemaineOut, ShiftOut } from '#/lib/planning/semaine.ts'
 import * as service from '#/lib/planning/service.ts'
@@ -35,6 +36,9 @@ export interface ContenuStatut {
   /** Repos encore en proposition (déduit, ou posé non validé) : pointillés,
    * comme un shift proposé (2026-10-31). */
   proposition?: boolean
+  /** Jour férié rattrapé (motif JFR, 2026-11-02) : se valide comme un repos
+   * posé ; en proposition quand la génération l'a placé. */
+  jfr?: boolean
   genre: 'repos' | 'ecole' | 'absence' | 'hors'
 }
 
@@ -119,11 +123,22 @@ export function statutDuJour(
           bilan.repos_proposes.includes(jour),
         genre: 'absence',
       }
+    const fixe = bilan.absences_semaine_type.includes(jour)
+    const jfr = !!m && estJfr(m)
     return {
       nom: m?.nom ?? 'Absent',
       couleur: m?.couleur ?? NEUTRE,
-      fixe: bilan.absences_semaine_type.includes(jour),
+      fixe,
       repos: false,
+      ...(jfr
+        ? {
+            jfr: true,
+            proposition:
+              !verrouillee &&
+              !fixe &&
+              (bilan.jfr_proposes ?? []).includes(jour),
+          }
+        : {}),
       genre: m && estEcole(m) ? 'ecole' : 'absence',
     }
   }
@@ -152,7 +167,7 @@ export function validationRepos(
 ): { valide: boolean; deduit: boolean } | null {
   const st = statutDuJour(bilan, jour, motifs)
   if (!st || st.fixe) return null
-  if (st.reposPose) return { valide: !st.proposition, deduit: false }
+  if (st.reposPose || st.jfr) return { valide: !st.proposition, deduit: false }
   if (st.genre === 'repos') return { valide: false, deduit: true }
   return null
 }
@@ -174,13 +189,19 @@ export function reposAValider(
   )
 }
 
-/** Repos en proposition d'une semaine (déduits et posés non validés), par
- * jour 0 à 6 : ils comptent avec les shifts proposés. */
+/** Repos en proposition d'une semaine (déduits et posés non validés), et
+ * jours fériés rattrapés en proposition, par jour 0 à 6 : ils comptent avec
+ * les shifts proposés. */
 export function reposProposesParJour(semaine: SemaineOut): number[] {
   const n = [0, 0, 0, 0, 0, 0, 0]
   if (semaine.verrouillee) return n
   for (const b of semaine.bilan)
-    for (const j of [...b.repos_deduits, ...b.repos_proposes]) n[j]++
+    for (const j of [
+      ...b.repos_deduits,
+      ...b.repos_proposes,
+      ...(b.jfr_proposes ?? []),
+    ])
+      n[j]++
   return n
 }
 

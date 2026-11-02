@@ -16,6 +16,7 @@
 import { Link, useNavigate } from '@tanstack/react-router'
 import {
   ArrowLeft,
+  BookOpen,
   Briefcase,
   Check,
   Clock3,
@@ -34,6 +35,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '#/components/ui/dropdown-menu.tsx'
 
@@ -62,18 +64,31 @@ export const PARAMETRES = [
 
 export type CheminParametre = (typeof PARAMETRES)[number]['to']
 
+/** La page qui explique l'application (2026-11-02). Hors des étapes
+ * numérotées : elle ne règle rien, ne compte pas dans « Prêt à générer » et
+ * n'a pas de pastille « À vérifier ». */
+export const AIDE_FONCTIONNEMENT = {
+  to: '/planning/fonctionnement',
+  libelle: 'Comment ça marche',
+  icone: BookOpen,
+} as const
+
+type CheminMenu = CheminParametre | (typeof AIDE_FONCTIONNEMENT)['to']
+
 /** L'engrenage et son menu. `actif` : l'écran de paramètres ouvert (la
- * pastille « À vérifier » est alors montrée avant lui). */
-export function MenuParametres({ actif }: { actif?: CheminParametre }) {
+ * pastille « À vérifier » est alors montrée avant lui, sauf sur la page
+ * d'explication). */
+export function MenuParametres({ actif }: { actif?: CheminMenu }) {
   const navigate = useNavigate()
   const ref = useReferentiel()
   const { etapes } = usePretAGenerer(ref.data)
   const fait = new Set(etapes.filter((e) => e.fait).map((e) => e.ecran))
+  const IconeAide = AIDE_FONCTIONNEMENT.icone
   return (
     <>
-      {actif && <ControleReglages />}
+      {actif && actif !== AIDE_FONCTIONNEMENT.to && <ControleReglages />}
       <DropdownMenu>
-        <Tip label="Paramètres : horaires et absences, postes, équipe, besoins">
+        <Tip label="Paramètres : horaires et absences, postes, équipe, besoins, comment ça marche">
           <DropdownMenuTrigger asChild>
             <Button
               variant={actif ? 'secondary' : 'outline'}
@@ -110,6 +125,19 @@ export function MenuParametres({ actif }: { actif?: CheminParametre }) {
               )}
             </DropdownMenuItem>
           ))}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onSelect={() => void navigate({ to: AIDE_FONCTIONNEMENT.to })}
+            className={
+              actif === AIDE_FONCTIONNEMENT.to
+                ? 'bg-accent font-medium'
+                : undefined
+            }
+          >
+            <span aria-hidden className="w-3" />
+            <IconeAide />
+            {AIDE_FONCTIONNEMENT.libelle}
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </>

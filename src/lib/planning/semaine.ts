@@ -26,6 +26,13 @@ import {
 } from '#/lib/planning/eligibilite.ts'
 import { versionsEtoile } from '#/lib/planning/etoile.ts'
 import {
+  estJfr,
+  ferieDe,
+  feriesARattraper,
+  feriesEntre,
+} from '#/lib/planning/feries.ts'
+import type { JourFerie } from '#/lib/planning/feries.ts'
+import {
   creneau,
   duree,
   jourDe,
@@ -46,9 +53,11 @@ import type {
   EquiteFaite,
 } from '#/lib/planning/modele.ts'
 import {
+  FERIE_RATTRAPAGE_JOURS,
   JOURS_CONTRAT,
   alerteBesoin,
   presenceMaxPoste,
+  reductionJourFerie,
   versSolveur,
 } from '#/lib/planning/regles.ts'
 import type { Fiche } from '#/lib/planning/regles.ts'
@@ -236,6 +245,10 @@ export interface BilanOut {
    * proposition : la génération les efface (2026-10-31). Un repos déduit
    * est toujours une proposition, un repos fixe toujours validé. */
   repos_proposes: number[]
+  /** Jours fériés rattrapés (JFR) posés et encore en proposition
+   * (R-FERIE-RATTRAPE, 2026-11-02) : la génération les efface et les
+   * repropose, « Valider » les valide. Absent : données d'avant. */
+  jfr_proposes?: number[]
 }
 
 export interface SemaineOut {
@@ -291,6 +304,12 @@ export interface DonneesSemaine {
    * (`fetchSemainePourGeneration`), avec les absences sur la même étendue.
    * Absent : seule la semaine d'avant compte. */
   historique?: Affectation[]
+  /** Shifts des semaines d'avant, jusqu'à `FERIE_RATTRAPAGE_JOURS` avant le
+   * lundi (chacun porte son `lundi`) : un jour férié travaillé à rattraper
+   * (R-FERIE-RATTRAPE). Les absences doivent couvrir la même étendue. Absent :
+   * seules les semaines déjà lues (`avant`, `avantAvant`, `historique`)
+   * comptent. */
+  anterieures?: Affectation[]
 }
 
 export interface Contexte {
@@ -309,6 +328,10 @@ export interface Contexte {
   absences: Map<number, Map<string, number>>
   /** Repos posés encore en proposition : « salarié|date ». */
   reposProposes: Set<string>
+  /** Motifs « Jour férié rattrapé » (code JFR, `estJfr`). */
+  motifsJfr: Set<number>
+  /** JFR posés encore en proposition : « salarié|date ». */
+  jfrProposes: Set<string>
 }
 
 export function estEcole(m: Pick<Motif, 'nature' | 'code' | 'nom'>): boolean {
@@ -334,6 +357,12 @@ export function indexerAbsences(
 
 export function contexte(d: DonneesSemaine): Contexte {
   const lundi = lundiDe(d.lundi)
+  const motifsRepos = new Set(
+    d.referentiel.motifs.filter((m) => m.nature === 'repos').map((m) => m.id),
+  )
+  const motifsJfr = new Set(
+    d.referentiel.motifs.filter(estJfr).map((m) => m.id),
+  )
   const horaires = new Map(d.referentiel.horaires.map((h) => [h.id, h]))
   const besoins = [...d.referentiel.besoins]
     .map((b) => {
@@ -361,16 +390,120 @@ export function contexte(d: DonneesSemaine): Contexte {
       d.referentiel.motifs.filter((m) => !m.decompte).map((m) => m.id),
     ),
     ecole: new Set(d.referentiel.motifs.filter(estEcole).map((m) => m.id)),
-    motifsRepos: new Set(
-      d.referentiel.motifs.filter((m) => m.nature === 'repos').map((m) => m.id),
-    ),
-    absences: indexerAbsences(d.absences),
+    motifsRepos,
+    absences: avecFeriesStagiaires(d, lundi),
     reposProposes: new Set(
       d.absences
-        .filter((a) => a.epinglee === false)
+        .filter((a) => a.epinglee === false && motifsRepos.has(a.motif_id))
+        .map((a) => `${a.salarie_id}|${a.jour}`),
+    ),
+    motifsJfr,
+    jfrProposes: new Set(
+      d.absences
+        .filter((a) => a.epinglee === false && motifsJfr.has(a.motif_id))
         .map((a) => `${a.salarie_id}|${a.jour}`),
     ),
   }
+}
+
+// ------------------------------------------------- jours fériés rattrapés
+
+/** Tous les shifts connus de `d`, semaine `courantes` comprise, sans
+ * doublon (les semaines lues se recouvrent). */
+export function shiftsConnus(
+  d: DonneesSemaine,
+  courantes: readonly Affectation[],
+): Affectation[] {
+  const vus = new Map<number, Affectation>()
+  for (const a of [
+    ...(d.anterieures ?? []),
+    ...(d.historique ?? []),
+    ...(d.avantAvant ?? []),
+    ...d.avant,
+  ])
+    if (a.lundi !== d.lundi) vus.set(a.id, a)
+  for (const a of courantes) vus.set(a.id, a)
+  return [...vus.values()]
+}
+
+/**
+ * R-FERIE-RATTRAPE : jours fériés travaillés que chaque personne doit encore
+ * rattraper, sur les `FERIE_RATTRAPAGE_JOURS` jours avant le lundi et la
+ * semaine elle-même (`feriesARattraper`). Un shift du jour férié, proposé ou
+ * validé, ouvre le rattrapage ; chaque JFR posé en rattrape un, le plus
+ * ancien d'abord. Les jours fériés des `FERIE_RATTRAPAGE_JOURS` jours d'avant
+ * la fenêtre prennent leurs JFR en premier (`depuis`) : un JFR ne compte
+ * jamais pour deux jours fériés. Personne sans droit (date d'entrée vide, moins d'un an, extra,
+ * stagiaire) : rien.
+ */
+export function feriesEnAttente(
+  ctx: Pick<Contexte, 'lundi' | 'staff' | 'absences' | 'motifsJfr'>,
+  shifts: readonly Affectation[],
+): Map<number, JourFerie[]> {
+  const du = ajouterJours(ctx.lundi, -FERIE_RATTRAPAGE_JOURS)
+  const depuis = ajouterJours(du, -FERIE_RATTRAPAGE_JOURS)
+  const au = ajouterJours(ctx.lundi, 6)
+  const travailles = new Map<number, Set<string>>()
+  for (const a of shifts) {
+    const date = ajouterJours(a.lundi, a.jour)
+    if (date < depuis || date > au) continue
+    let t = travailles.get(a.salarie_id)
+    if (!t) {
+      t = new Set()
+      travailles.set(a.salarie_id, t)
+    }
+    t.add(date)
+  }
+  const r = new Map<number, JourFerie[]>()
+  for (const x of ctx.staff) {
+    const siens = travailles.get(x.id)
+    if (!siens) continue
+    const poses = [...(ctx.absences.get(x.id) ?? [])]
+      .filter(([, m]) => ctx.motifsJfr.has(m))
+      .map(([date]) => date)
+    const liste = feriesARattraper({
+      salarie: x,
+      du,
+      au,
+      depuis,
+      travailles: siens,
+      jfrPoses: poses,
+    })
+    if (liste.length) r.set(x.id, liste)
+  }
+  return r
+}
+
+/** Les absences, plus les jours fériés des STAGIAIRES (décision utilisateur
+ * du 2026-11-02 : « les stagiaires ont tous leurs jours fériés »). Un jour
+ * férié sous contrat, sans absence ni shift déjà posé ce jour-là, devient
+ * pour eux une absence au motif JF (Jour férié), décomptée comme un congé :
+ * jamais placés ce jour-là, une journée de contrat de moins. Rien n'est
+ * écrit en base : c'est relu à chaque calcul. Sans motif JF, rien. */
+export function avecFeriesStagiaires(
+  d: DonneesSemaine,
+  lundi: string,
+): Map<number, Map<string, number>> {
+  const r = indexerAbsences(d.absences)
+  const jf = d.referentiel.motifs.find((m) => m.code === 'JF')
+  if (!jf) return r
+  const feries = feriesEntre(ajouterJours(lundi, -28), ajouterJours(lundi, 20))
+  for (const x of d.referentiel.salaries) {
+    if (x.type_contrat !== 'stagiaire') continue
+    for (const f of feries) {
+      if (x.date_entree && f.date < x.date_entree) continue
+      if (x.date_sortie && f.date > x.date_sortie) continue
+      const posee = d.affectations.some(
+        (a) =>
+          a.salarie_id === x.id && ajouterJours(a.lundi, a.jour) === f.date,
+      )
+      const siennes = r.get(x.id) ?? new Map<string, number>()
+      if (posee || siennes.has(f.date)) continue
+      siennes.set(f.date, jf.id)
+      r.set(x.id, siennes)
+    }
+  }
+  return r
 }
 
 // ------------------------------------------------------ jours d'une fiche
@@ -521,6 +654,13 @@ export function fiche(
     etoileFixe: etoile,
     contratDebut: borneContrat(lundi, x.date_entree, 0),
     contratFin: borneContrat(lundi, x.date_sortie, 1),
+    // Mineurs : les jours fériés sont évités (permis en hôtellerie par
+    // dérogation, décision utilisateur du 2026-11-02).
+    feriesEvites: x.mineur
+      ? new Set(
+          [0, 1, 2, 3, 4, 5, 6].filter((j) => ferieDe(ajouterJours(lundi, j))),
+        )
+      : undefined,
   }
 }
 
@@ -1510,6 +1650,19 @@ export function analyser(d: DonneesSemaine): SemaineOut {
     ctx.staff.map((x) => [x.id, versSolveur(fiche(x, lundi, ctx))]),
   )
   salaries = avecSemainesVoisines(d, ctx, salaries)
+  // R-FERIE-RATTRAPE : les jours fériés travaillés encore à rattraper
+  // deviennent une alerte du vérificateur (JOUR-FERIE).
+  for (const [id, liste] of feriesEnAttente(
+    ctx,
+    shiftsConnus(d, ctx.affectations),
+  )) {
+    const sol = salaries.get(id)
+    if (sol)
+      salaries.set(id, {
+        ...sol,
+        feriesARattraper: liste.map((f) => f.date),
+      })
+  }
   const {
     lien,
     soutien: enSoutien,
@@ -1708,6 +1861,9 @@ export function analyser(d: DonneesSemaine): SemaineOut {
       ),
       repos_proposes: [0, 1, 2, 3, 4, 5, 6].filter((j) =>
         ctx.reposProposes.has(`${x.id}|${ajouterJours(lundi, j)}`),
+      ),
+      jfr_proposes: [0, 1, 2, 3, 4, 5, 6].filter((j) =>
+        ctx.jfrProposes.has(`${x.id}|${ajouterJours(lundi, j)}`),
       ),
     })
   }
@@ -1930,10 +2086,21 @@ export interface NouveauShift {
   code_demande?: number
 }
 
+/** Un jour férié rattrapé (JFR) à poser en proposition, au format de
+ * `planning_appliquer_generation` (clé `motif_id` : une absence, pas un
+ * shift). */
+export interface NouvelleAbsence {
+  salarie_id: number
+  jour: number
+  motif_id: number
+}
+
 export interface Generation {
   probleme: Probleme
   /** Ce qu'il faut faire du résultat du solveur. */
   traduire: (r: Resultat) => NouveauShift[]
+  /** Les JFR choisis par le solveur (R-FERIE-RATTRAPE), en proposition. */
+  absences: (r: Resultat) => NouvelleAbsence[]
   /** Premier jour qu'on peut encore créer (0..7). */
   depuis: number
 }
@@ -2038,6 +2205,49 @@ export function preparerGeneration(
     )
   }
   salaries = avecSemainesVoisines(d2, ctx, salaries)
+  // R-FERIE-RATTRAPE : un JFR à placer pour chaque personne qui a un jour
+  // férié travaillé à rattraper (fenêtre de 4 semaines), sur un jour à venir
+  // APRÈS le premier jour férié en attente, ni absent, ni d'école, ni hors
+  // contrat, ni fixé par la semaine type, ni jour de la journée étoile fixée
+  // (un JFR ce jour-là la rendrait intravaillable : `heuresDues` ne baisserait
+  // pas d'autant que `reductionJourFerie`, générateur et vérificateur ne
+  // seraient plus d'accord). Un shift du jour férié de cette
+  // semaine ne compte que s'il reste (validé, ou jour passé) : une
+  // proposition va être recalculée. Pas pour la pose des horaires fixes
+  // (`seulement`). Sans motif JFR dans les réglages : rien à écrire, rien
+  // de placé.
+  const motifJfr = Math.min(...ctx.motifsJfr)
+  if (Number.isFinite(motifJfr) && o.seulement == null) {
+    const attente = feriesEnAttente(ctx, shiftsConnus(d2, ctx.affectations))
+    for (const x of ctx.staff) {
+      const liste = attente.get(x.id)
+      const sol = salaries.get(x.id)
+      if (!liste || !sol || exclus.has(x.id)) continue
+      const apres = liste[0].date
+      const jours = new Set<number>()
+      for (let j = depuis; j < 7; j++) {
+        if (ajouterJours(lundi, j) <= apres) continue
+        if (
+          sol.indisponibilites.has(j) ||
+          sol.horsContrat.has(j) ||
+          sol.joursHorsSite.has(j) ||
+          sol.travailFixe.has(j) ||
+          sol.reposFixes.has(j) ||
+          sol.etoileFixe.has(j)
+        )
+          continue
+        jours.add(j)
+      }
+      if (!jours.size) continue
+      salaries.set(x.id, {
+        ...sol,
+        jfr: {
+          jours,
+          reduction: reductionJourFerie(fiche(x, lundi, ctx)),
+        },
+      })
+    }
+  }
   const groupes = new Map<number, Array<{ x: Salarie; minutes: number }>>()
   for (const x of ctx.staff) {
     const sol = salaries.get(x.id)
@@ -2220,7 +2430,13 @@ export function preparerGeneration(
     }
     return nouveaux
   }
-  return { probleme: p, traduire, depuis }
+  const absencesJfr = (r: Resultat): NouvelleAbsence[] =>
+    (r.jfr ?? []).map((a) => ({
+      salarie_id: Number(a.salarieId),
+      jour: a.jour,
+      motif_id: motifJfr,
+    }))
+  return { probleme: p, traduire, absences: absencesJfr, depuis }
 }
 
 /** Personnes à jours fixes à poser d'avance (prototype `poser_fixes`) :

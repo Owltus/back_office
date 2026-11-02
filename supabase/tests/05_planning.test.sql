@@ -95,6 +95,10 @@ update t_ids set m = (select id from public.planning_motifs where nom = 'Congé 
 insert into public.planning_motifs (code, nom, nature, decompte) values ('XR', 'Repos test', 'repos', false);
 alter table t_ids add column r bigint;
 update t_ids set r = (select id from public.planning_motifs where nom = 'Repos test');
+-- Jour férié rattrapé (2026-11-02) : un motif de code JFR, propre au test.
+insert into public.planning_motifs (code, nom, nature, decompte) values ('JFR', 'JFR test', 'absence', true);
+alter table t_ids add column j bigint;
+update t_ids set j = (select id from public.planning_motifs where nom = 'JFR test');
 insert into public.planning_salaries (prenom, nom, groupe_id, competences, semaine_type)
 select 'Test' || n, 'PLANNING', (select g from t_ids),
        jsonb_build_array(jsonb_build_object('poste_id', (select pa from t_ids), 'niveau', 'titulaire'),
@@ -122,7 +126,7 @@ insert into public.planning_semaines_verrouillees (lundi) select l from t_sem;
 delete from public.planning_semaines_verrouillees where lundi = (select p from t_sem);
 
 create function pg_temp.q(p text) returns text language sql as $$
-  select replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(p,
+  select replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(p,
     ':PA', (select pa from t_ids)::text),
     ':PB', (select pb from t_ids)::text),
     ':F', quote_literal((select f from t_sem))),
@@ -132,10 +136,11 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':S2', (select s2 from t_ids)::text),
     ':S3', (select s3 from t_ids)::text),
     ':M', (select m from t_ids)::text),
-    ':R', (select r from t_ids)::text);
+    ':R', (select r from t_ids)::text),
+    ':J', (select j from t_ids)::text);
 $$;
 
-select plan(73);
+select plan(79);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -428,6 +433,37 @@ select is(pg_temp.essai('ecriture', array[pg_temp.q(
   pg_temp.q('select public.planning_valider_avec_repos(:F, :S3, null, true, jsonb_build_array(jsonb_build_object(''salarie_id'', :S3, ''jour'', 5), jsonb_build_object(''salarie_id'', :S3, ''jour'', 6)))'),
   pg_temp.q('select public.planning_valider_avec_repos(:F, :S3, null, true, jsonb_build_array(jsonb_build_object(''salarie_id'', :S3, ''jour'', 4)))')]),
   '0', 'repos : jamais moins de 5 jours de congé dans une semaine de congé');
+
+-- -------------------------- jours fériés rattrapés (2026-11-02) ---
+-- Un JFR est posé par la génération en PROPOSITION, se valide comme un repos
+-- posé, et part avec les propositions.
+select is(pg_temp.essai('ecriture', array[pg_temp.q(
+  'insert into public.planning_absences (salarie_id, jour, motif_id, epinglee) values (:S3, :F::date + 3, :J, false)'),
+  pg_temp.q('select epinglee::text from public.planning_absences where salarie_id = :S3 and jour = :F::date + 3')]),
+  'false', 'JFR : un jour férié rattrapé peut rester en proposition');
+select is(pg_temp.essai('ecriture', array[pg_temp.q(
+  'select public.planning_appliquer_generation(:F, public.planning_etat_semaine(:F), 0, false, ''{}'', false, jsonb_build_array(jsonb_build_object(''salarie_id'', :S3, ''jour'', 2, ''motif_id'', :J)))'),
+  pg_temp.q('select (select string_agg(epinglee::text, '','') from public.planning_absences where salarie_id = :S3 and jour = :F::date + 2) || ''/'' || (select count(*) from public.planning_affectations where lundi = :F and salarie_id = :S3)')]),
+  'false/0', 'JFR : la génération l''écrit en proposition, sans shift');
+select is(pg_temp.essai('ecriture', array[pg_temp.q(
+  'select public.planning_appliquer_generation(:F, public.planning_etat_semaine(:F), 0, false, ''{}'', false, jsonb_build_array(jsonb_build_object(''salarie_id'', :S3, ''jour'', 2, ''motif_id'', :M), jsonb_build_object(''salarie_id'', :S1, ''jour'', 0, ''motif_id'', :J)))'),
+  pg_temp.q('select count(*) from public.planning_absences where salarie_id in (:S1, :S3) and jour between :F::date and :F::date + 6')]),
+  '0', 'JFR : la génération n''écrit ni un autre motif, ni un JFR sur un jour qui a un shift');
+select is(pg_temp.essai('ecriture', array[pg_temp.q(
+  'insert into public.planning_absences (salarie_id, jour, motif_id, epinglee) values (:S3, :F::date + 2, :J, false)'),
+  pg_temp.q('select public.planning_valider_avec_repos(:F, :S3, 2, true, null)'),
+  pg_temp.q('select epinglee::text from public.planning_absences where salarie_id = :S3 and jour = :F::date + 2')]),
+  'true', 'JFR : « Valider » valide un jour férié rattrapé proposé');
+select is(pg_temp.essai('ecriture', array[pg_temp.q(
+  'insert into public.planning_absences (salarie_id, jour, motif_id, epinglee) values (:S3, :F::date + 2, :J, false), (:S3, :F::date + 3, :J, true)'),
+  pg_temp.q('select public.planning_vider(:F, true)'),
+  pg_temp.q('select string_agg((jour - :F::date)::text, '','') from public.planning_absences where salarie_id = :S3 and jour between :F::date and :F::date + 6')]),
+  '3', 'JFR : effacer les propositions retire le JFR proposé, garde le validé');
+select is(pg_temp.essai('ecriture', array[pg_temp.q(
+  'insert into public.planning_absences (salarie_id, jour, motif_id, epinglee) values (:S3, :F::date + 2, :J, false)'),
+  pg_temp.q('select public.planning_appliquer_generation(:F, public.planning_etat_semaine(:F), 0, false, ''{}'', false, ''[]''::jsonb)'),
+  pg_temp.q('select count(*) from public.planning_absences where salarie_id = :S3 and jour between :F::date and :F::date + 6')]),
+  '0', 'JFR : une nouvelle génération efface le JFR proposé');
 
 select * from finish();
 rollback;

@@ -49,7 +49,13 @@ export interface OuvertureMenu {
    * par poste), et pourquoi s'il n'y en a pas ; l'horaire actuel qui n'est plus
    * permis est montré grisé. */
   codes: CodesUniquesCase
-  validation?: { active: boolean; onBasculer: () => void; repos?: boolean }
+  validation?: {
+    active: boolean
+    onBasculer: () => void
+    repos?: boolean
+    /** Jour férié rattrapé (2026-11-02). */
+    jfr?: boolean
+  }
   /** Rubrique « Journée étoile » du shift (`etoileDeLaCase`) : un clic pose
    * l'horaire choisi sur le poste du shift. */
   etoile?: EtoileCase
@@ -193,9 +199,11 @@ export function MenuCase({
             <span className="font-medium">
               {validation.active
                 ? 'Remettre en proposition'
-                : validation.repos
-                  ? 'Valider ce repos'
-                  : 'Valider ce shift'}
+                : validation.jfr
+                  ? 'Valider ce jour férié rattrapé'
+                  : validation.repos
+                    ? 'Valider ce repos'
+                    : 'Valider ce shift'}
             </span>
           </ContextMenuItem>
         </>

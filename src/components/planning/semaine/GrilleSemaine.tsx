@@ -18,6 +18,7 @@ import {
   NIVEAUX,
   deNom,
 } from '#/lib/planning/affichage.ts'
+import { ferieDe } from '#/lib/planning/feries.ts'
 import type { PresenceOut } from '#/lib/planning/presence.ts'
 import type { BilanOut } from '#/lib/planning/semaine.ts'
 import { JOURS } from '#/lib/planning/types.ts'
@@ -116,6 +117,8 @@ export function GrilleSemaine({
           </th>
           {dates.map((d, j) => {
             const estAujourdhui = d === aujourdhui
+            // Jour férié (2026-11-02) : discret, son nom au survol.
+            const ferie = ferieDe(d)
             return (
               <th
                 key={d}
@@ -124,8 +127,21 @@ export function GrilleSemaine({
               >
                 <div className="flex items-center justify-between gap-1.5">
                   <div className="min-w-0">
-                    <span className="block text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
-                      {JOURS[j].slice(0, 3)}
+                    <span className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
+                        {JOURS[j].slice(0, 3)}
+                      </span>
+                      {ferie && (
+                        <Tip label={`Jour férié : ${ferie}`}>
+                          <span
+                            tabIndex={0}
+                            className="rounded-sm bg-amber-500/15 px-1 text-[10px] leading-4 font-medium text-amber-700 dark:text-amber-300"
+                            aria-label={`Jour férié : ${ferie}`}
+                          >
+                            Férié
+                          </span>
+                        </Tip>
+                      )}
                     </span>
                     <span
                       className={cn(

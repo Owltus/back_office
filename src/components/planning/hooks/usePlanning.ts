@@ -111,6 +111,9 @@ export function donneesSemaine(
     avant: shifts.affectations.filter((a) => a.lundi === avant),
     apres: shifts.affectations.filter((a) => a.lundi === apres),
     avantAvant: shifts.affectations.filter((a) => a.lundi === avantAvant),
+    // Jours fériés à rattraper (R-FERIE-RATTRAPE) : toutes les semaines
+    // d'avant lues (`premierLundiLu`).
+    anterieures: shifts.affectations.filter((a) => a.lundi < lundi),
   }
 }
 
@@ -269,6 +272,7 @@ export function useGenerer() {
         exclus: [...(options.exclus ?? [])],
         sansEffacer: !!options.sansEffacer,
         nouvelles,
+        absences: g.absences(resultat),
       })
       await qc.invalidateQueries({ queryKey: planningKeys.all })
       const apres = await fetchSemaine(lundi)

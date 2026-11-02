@@ -19,6 +19,7 @@ import { messageErreur } from '#/lib/planning/erreurs.ts'
 import { planningKeys } from '#/lib/planning/keys.ts'
 import { analyser, aPoserFixes } from '#/lib/planning/semaine.ts'
 import type { DonneesSemaine, SemaineOut } from '#/lib/planning/semaine.ts'
+import { premierLundiLu } from '#/lib/planning/feries.ts'
 import { fetchShifts } from '#/lib/planning/service.ts'
 import { ajouterJours, lundiDe } from '#/lib/planning/temps.ts'
 import {
@@ -37,17 +38,18 @@ export function useMois(mois: string) {
   useRelireAuRetour()
   const shifts = useQuery({
     queryKey: planningKeys.mois(premier, lundis.length),
-    queryFn: () =>
-      fetchShifts(
-        [
-          ajouterJours(premier, -14),
-          ajouterJours(premier, -7),
-          ...lundis,
-          ajouterJours(dernier, 7),
-        ],
-        ajouterJours(premier, -7),
+    queryFn: () => {
+      // Semaines d'avant jusqu'à `premierLundiLu` : repos de 35 h et jours
+      // fériés à rattraper (R-FERIE-RATTRAPE), absences sur la même étendue.
+      const debut = premierLundiLu(premier)
+      const avant: string[] = []
+      for (let l = debut; l < premier; l = ajouterJours(l, 7)) avant.push(l)
+      return fetchShifts(
+        [...avant, ...lundis, ajouterJours(dernier, 7)],
+        debut,
         ajouterJours(dernier, 13),
-      ),
+      )
+    },
     // Même seuil que la semaine (usePlanning.useShiftsSemaine).
     staleTime: 30_000,
   })

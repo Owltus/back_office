@@ -341,6 +341,26 @@ export function violationsSalarie(
       )
     }
   }
+  // MINEUR-FERIE : permis en hôtellerie par dérogation, à éviter.
+  for (const c of liste)
+    if (s.feriesEvites.has(jourDe(c)))
+      ajoute(
+        'MINEUR-FERIE',
+        'mineur : travaille un jour férié (permis en hôtellerie, à éviter)',
+        [c],
+        'organisation',
+      )
+  // R-FERIE-RATTRAPE : un jour férié travaillé reste à rattraper tant
+  // qu'aucun JFR n'est posé pour lui (`feriesARattraper`, solde calculé par
+  // la semaine). Organisation, jamais bloquant.
+  for (const f of s.feriesARattraper) {
+    ajoute(
+      'JOUR-FERIE',
+      `jour férié du ${f.slice(8, 10)}/${f.slice(5, 7)} travaillé : à rattraper`,
+      [],
+      'organisation',
+    )
+  }
   return erreurs
 }
 

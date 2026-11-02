@@ -69,6 +69,8 @@ export interface Fiche {
   minutesHebdo: number
   forfaitJours?: boolean
   mineur?: boolean
+  /** Jours fériés de la semaine, pour un mineur (évités, MINEUR-FERIE). */
+  feriesEvites?: ReadonlySet<number>
   indisponibilites?: ReadonlySet<number>
   reposFixes?: ReadonlySet<number>
   travailFixe?: ReadonlySet<number>
@@ -191,6 +193,48 @@ export function heuresDues(f: Fiche): number {
   return Math.max(0, Math.min(f.minutesHebdo, dues))
 }
 
+/**
+ * R-FERIE-RATTRAPE (décisions utilisateur du 2026-11-02) : la première année
+ * du contrat, aucun jour férié ; ensuite, chaque jour férié TRAVAILLÉ est un
+ * jour récupéré, le « Jour férié rattrapé » (JFR, `feries.ts`). Ouvre droit le
+ * jour férié `ferie` si la date d'entrée est connue et passée d'un an au
+ * moins (un an pile compte), hors extra et stagiaire. Date d'entrée vide :
+ * moins d'un an, aucun droit (« si pas d'informations, pars du principe que
+ * ça fait moins d'un an »).
+ */
+export function droitAuRattrapage(
+  x: { type_contrat: TypeContrat; date_entree: string | null },
+  ferie: string,
+): boolean {
+  if (x.type_contrat === 'extra' || x.type_contrat === 'stagiaire') return false
+  if (!x.date_entree) return false
+  const annee = Number(x.date_entree.slice(0, 4)) + 1
+  // Comparaison de textes AAAA-MM-JJ : une entrée un 29 février ouvre droit
+  // le 1er mars suivant.
+  return ferie >= `${annee}${x.date_entree.slice(4, 10)}`
+}
+
+/** R-FERIE-RATTRAPE : le JFR est proposé dans les 4 semaines qui suivent le
+ * jour férié ; au-delà, plus de proposition automatique. */
+export const FERIE_RATTRAPAGE_JOURS = 28
+
+/** R-FERIE-RATTRAPE : un JFR vaut un jour d'absence décompté, comme un
+ * congé (`heuresDues` avec un jour de plus) : ce qu'il retire aux heures
+ * dues de la semaine (35 h : 4 × 7 h restent, 7 h de moins ; 39 h : 4 × 8 h
+ * restent, 7 h de moins ; 39 h avec la journée étoile fixée : 31 h restent,
+ * 8 h de moins). Le JFR n'est jamais placé sur le jour de l'étoile fixée
+ * (`preparerGeneration`) : la baisse vaut pour chacun des jours permis. */
+export function reductionJourFerie(f: Fiche): number {
+  return Math.max(
+    0,
+    heuresDues(f) -
+      heuresDues({
+        ...f,
+        joursAbsenceDecomptes: (f.joursAbsenceDecomptes ?? 0) + 1,
+      }),
+  )
+}
+
 export function versSolveur(f: Fiche): SalarieSolveur {
   const ecole = f.joursEcole ?? vide
   const etoile = journeeEtoile(f)
@@ -217,6 +261,7 @@ export function versSolveur(f: Fiche): SalarieSolveur {
     // R-ECOLE-HEURES : un jour d'école compte une journée de contrat.
     minutesEcoleJour: journeeContrat(f),
     reposConsecutifs: !!f.mineur,
+    feriesEvites: f.feriesEvites ?? vide,
     nuitInterdite: !!f.mineur, // R-NUIT-MINEUR
     reposFixes: f.reposFixes ?? vide,
     travailFixe: f.travailFixe ?? vide,

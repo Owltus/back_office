@@ -12,7 +12,8 @@
 import { refusDroits } from '#/lib/planning/erreurs.ts'
 import { SEMAINES_EQUITE } from '#/lib/planning/modele.ts'
 import { ORDRE_PERIODES } from '#/lib/planning/presence.ts'
-import type { NouveauShift } from '#/lib/planning/semaine.ts'
+import { premierLundiLu } from '#/lib/planning/feries.ts'
+import type { NouveauShift, NouvelleAbsence } from '#/lib/planning/semaine.ts'
 import { ajouterJours, lundiDe } from '#/lib/planning/temps.ts'
 import type {
   Absence,
@@ -187,19 +188,15 @@ export async function fetchShifts(
   }
 }
 
-/** La semaine `lundi`, ses deux voisines, celle d'avant-avant (repos de
- * 35 h de la semaine d'avant), et les absences de S-1 à S+1. */
+/** La semaine `lundi`, celle d'après, les semaines d'avant jusqu'à
+ * `premierLundiLu` (repos de 35 h, jours fériés à rattraper), et les absences
+ * sur la même étendue jusqu'à S+1. */
 export function fetchSemaine(lundi: string): Promise<DonneesShifts> {
-  return fetchShifts(
-    [
-      ajouterJours(lundi, -14),
-      ajouterJours(lundi, -7),
-      lundi,
-      ajouterJours(lundi, 7),
-    ],
-    ajouterJours(lundi, -7),
-    ajouterJours(lundi, 13),
-  )
+  const premier = premierLundiLu(lundi)
+  const lundis: string[] = []
+  for (let l = premier; l <= ajouterJours(lundi, 7); l = ajouterJours(l, 7))
+    lundis.push(l)
+  return fetchShifts(lundis, premier, ajouterJours(lundi, 13))
 }
 
 /** Pour une génération : comme `fetchSemaine`, plus les `SEMAINES_EQUITE`
@@ -208,7 +205,10 @@ export function fetchSemaine(lundi: string): Promise<DonneesShifts> {
 export function fetchSemainePourGeneration(
   lundi: string,
 ): Promise<DonneesShifts> {
-  const premier = ajouterJours(lundi, -7 * Math.max(2, SEMAINES_EQUITE))
+  // Au moins jusqu'à `premierLundiLu` : jours fériés à rattraper.
+  const equite = ajouterJours(lundi, -7 * Math.max(2, SEMAINES_EQUITE))
+  const ferie = premierLundiLu(lundi)
+  const premier = ferie < equite ? ferie : equite
   const lundis: string[] = []
   for (let l = premier; l <= ajouterJours(lundi, 7); l = ajouterJours(l, 7))
     lundis.push(l)
@@ -339,6 +339,9 @@ export async function appliquerGeneration(args: {
   exclus: number[]
   sansEffacer: boolean
   nouvelles: NouveauShift[]
+  /** Jours fériés rattrapés à poser en proposition (R-FERIE-RATTRAPE),
+   * envoyés avec les shifts : la RPC les reconnaît à leur `motif_id`. */
+  absences?: NouvelleAbsence[]
 }): Promise<number> {
   return verifier(
     await supabase.rpc('planning_appliquer_generation', {
@@ -348,7 +351,7 @@ export async function appliquerGeneration(args: {
       p_tout: args.tout,
       p_exclus: args.exclus,
       p_sans_effacer: args.sansEffacer,
-      p_nouvelles: args.nouvelles,
+      p_nouvelles: [...args.nouvelles, ...(args.absences ?? [])],
     }),
   ) as number
 }

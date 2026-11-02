@@ -27,6 +27,7 @@ export type Mention =
   | 'déjà placé'
   | 'à appeler'
   | 'à placer'
+  | 'à éviter'
 
 export type Issue =
   | { genre: 'lien'; lien: LienReglage; action: string }
@@ -57,6 +58,8 @@ export const REGLES_BLOCAGE = [
   'R-REPOS-HEBDO-HCR',
   'SIXIEME-JOUR',
   'JOURS-AFFILES',
+  'MINEUR-FERIE',
+  'JOUR-FERIE',
   'R-SEMAINE-MAX',
   'R-JOURNEE-ETOILE',
   'R-REPOS-HEBDO-35H',
@@ -163,6 +166,10 @@ export function raisonClaire(
       )
     case 'SIXIEME-JOUR':
       return r('Ce serait un 6e jour', mention('au-delà de son contrat'))
+    case 'MINEUR-FERIE':
+      return r('Mineur, et c’est un jour férié', mention('à éviter'))
+    case 'JOUR-FERIE':
+      return r('A un jour férié à rattraper', mention('à éviter'))
     case 'JOURS-AFFILES':
       return r(
         'Plus de 6 jours de travail d’affilée',
@@ -264,7 +271,8 @@ export const estPossible = (raisons: readonly RaisonClaire[]) =>
       r.issue.genre === 'mention' &&
       (r.issue.mention === 'au-delà de son contrat' ||
         r.issue.mention === 'à appeler' ||
-        r.issue.mention === 'à placer'),
+        r.issue.mention === 'à placer' ||
+        r.issue.mention === 'à éviter'),
   )
 
 // ------------------------------------------------- place que rien ne remplit
@@ -289,6 +297,8 @@ const PHRASES_COMMUNES: Record<(typeof REGLES_BLOCAGE)[number], string> = {
   'R-REPOS-HEBDO-HCR': 'Tout le monde a déjà trop de jours de travail.',
   'SIXIEME-JOUR': 'Ce serait un 6e jour pour tout le monde.',
   'JOURS-AFFILES': 'Tout le monde enchaînerait plus de 6 jours de travail.',
+  'MINEUR-FERIE': 'Seuls des mineurs sont libres, et c’est un jour férié.',
+  'JOUR-FERIE': 'Tout le monde a un jour férié à rattraper.',
   'R-SEMAINE-MAX': 'Tout le monde est au maximum de ses heures.',
   'R-JOURNEE-ETOILE': 'Tout le monde a déjà sa journée étoile.',
   'R-REPOS-HEBDO-35H': 'Personne ne garderait son repos de 35 h.',

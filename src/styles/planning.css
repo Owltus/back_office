@@ -213,7 +213,8 @@
 /* Repos en proposition (déduit, ou posé non validé) : pointillés, comme un
  * shift proposé (2026-10-31). Le repos validé reste en trait plein. */
 .planning-statut[data-proposition],
-.planning-mois-bande.planning-mois-repos.planning-mois-proposition {
+.planning-mois-bande.planning-mois-repos.planning-mois-proposition,
+.planning-mois-bande.planning-mois-proposition {
   border-style: dashed;
   border-color: color-mix(
     in srgb,

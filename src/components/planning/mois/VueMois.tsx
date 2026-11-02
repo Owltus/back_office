@@ -789,13 +789,16 @@ export function VueMois({
   const reposMenu = caseMenu?.type === 'repos' ? caseMenu : null
   // Repos qui se valide comme un shift (2026-10-31) : déduit (proposition,
   // écrit en base à la validation) ou posé ; jamais un repos fixe.
+  // Un jour férié rattrapé se valide de même (2026-11-02).
   const reposAValiderMenu =
     reposMenu && !reposMenu.fixe
-      ? { valide: false, deduit: true }
-      : absenceMenu &&
-          !absenceMenu.fixe &&
-          absenceMenu.motif?.nature === 'repos'
-        ? { valide: !absenceMenu.proposition, deduit: false }
+      ? { valide: false, deduit: true, jfr: false }
+      : absenceMenu && !absenceMenu.fixe && validationDeCase(absenceMenu)
+        ? {
+            valide: !absenceMenu.proposition,
+            deduit: false,
+            jfr: absenceMenu.motif?.nature !== 'repos',
+          }
         : null
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
@@ -928,6 +931,7 @@ export function VueMois({
                 ? {
                     active: reposAValiderMenu.valide,
                     repos: true,
+                    jfr: reposAValiderMenu.jfr,
                     onBasculer: () =>
                       void executer(
                         reperesMenu.lundi,

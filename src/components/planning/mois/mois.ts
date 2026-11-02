@@ -12,6 +12,7 @@
 import type { BilanOut, ShiftOut, SemaineOut } from '#/lib/planning/semaine.ts'
 import { ajouterJours, ecartJours, lundiDe } from '#/lib/planning/temps.ts'
 import { jourDeRepos } from '#/lib/planning/affichage.ts'
+import { estJfr } from '#/lib/planning/feries.ts'
 import { reposProposesParJour } from '#/components/planning/semaine/edition.ts'
 import type { Motif, Salarie } from '#/lib/planning/types.ts'
 
@@ -74,7 +75,8 @@ export type CaseMois =
       motif: Motif | undefined
       motifId: number | null
       fixe: boolean
-      /** Repos posé encore en proposition (2026-10-31). */
+      /** Repos posé, ou jour férié rattrapé, encore en proposition
+       * (2026-10-31, 2026-11-02). */
       proposition: boolean
     }
   | { type: 'repos'; fixe: boolean; proposition: boolean }
@@ -110,7 +112,10 @@ export function caseDe(
       motifId,
       fixe,
       proposition:
-        !fixe && !sem.verrouillee && bilan.repos_proposes.includes(jour),
+        !fixe &&
+        !sem.verrouillee &&
+        (bilan.repos_proposes.includes(jour) ||
+          (bilan.jfr_proposes ?? []).includes(jour)),
     }
   }
   if (!jourDeRepos(bilan, jour)) return null
@@ -129,7 +134,8 @@ export function validationDeCase(
   if (!c || c.fixe) return null
   if (c.type === 'shift') return { valide: c.shift.epinglee, deduit: false }
   if (c.type === 'repos') return { valide: false, deduit: true }
-  if (c.type === 'absence' && c.motif?.nature === 'repos')
+  // Il ne reste qu'une absence posée : un repos posé ou un JFR se valident.
+  if (c.motif?.nature === 'repos' || (c.motif && estJfr(c.motif)))
     return { valide: !c.proposition, deduit: false }
   return null
 }
@@ -141,7 +147,7 @@ export function cleBandeau(c: CaseMois | null): string | null {
   if (!c || c.type === 'shift') return null
   if (c.type === 'hors') return 'hors'
   if (c.type === 'absence' && c.motif?.nature !== 'repos')
-    return `motif-${c.motifId ?? 0}-${c.fixe ? 'fixe' : 'pose'}`
+    return `motif-${c.motifId ?? 0}-${c.fixe ? 'fixe' : 'pose'}${c.proposition ? '-proposition' : ''}`
   return c.proposition ? 'repos-proposition' : 'repos'
 }
 

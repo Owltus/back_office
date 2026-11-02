@@ -35,6 +35,7 @@ import { Route as PdjIndexRouteImport } from './routes/pdj/index'
 import { Route as PlanningIndexRouteImport } from './routes/planning/index'
 import { Route as PlanningBesoinsRouteImport } from './routes/planning/besoins'
 import { Route as PlanningEquipeRouteImport } from './routes/planning/equipe'
+import { Route as PlanningFonctionnementRouteImport } from './routes/planning/fonctionnement'
 import { Route as PlanningHorairesRouteImport } from './routes/planning/horaires'
 import { Route as PlanningPostesRouteImport } from './routes/planning/postes'
 import { Route as RaproIndexRouteImport } from './routes/rapro/index'
@@ -187,6 +188,11 @@ const PlanningEquipeRoute = PlanningEquipeRouteImport.update({
   path: '/equipe',
   getParentRoute: () => PlanningRoute,
 } as any)
+const PlanningFonctionnementRoute = PlanningFonctionnementRouteImport.update({
+  id: '/fonctionnement',
+  path: '/fonctionnement',
+  getParentRoute: () => PlanningRoute,
+} as any)
 const PlanningHorairesRoute = PlanningHorairesRouteImport.update({
   id: '/horaires',
   path: '/horaires',
@@ -323,6 +329,7 @@ export interface FileRoutesByFullPath {
   '/facturation/galaxie': typeof FacturationGalaxieRoute
   '/planning/besoins': typeof PlanningBesoinsRoute
   '/planning/equipe': typeof PlanningEquipeRoute
+  '/planning/fonctionnement': typeof PlanningFonctionnementRoute
   '/planning/horaires': typeof PlanningHorairesRoute
   '/planning/postes': typeof PlanningPostesRoute
   '/caisse/': typeof CaisseIndexRoute
@@ -363,6 +370,7 @@ export interface FileRoutesByTo {
   '/facturation/galaxie': typeof FacturationGalaxieRoute
   '/planning/besoins': typeof PlanningBesoinsRoute
   '/planning/equipe': typeof PlanningEquipeRoute
+  '/planning/fonctionnement': typeof PlanningFonctionnementRoute
   '/planning/horaires': typeof PlanningHorairesRoute
   '/planning/postes': typeof PlanningPostesRoute
   '/caisse': typeof CaisseIndexRoute
@@ -412,6 +420,7 @@ export interface FileRoutesById {
   '/facturation/galaxie': typeof FacturationGalaxieRoute
   '/planning/besoins': typeof PlanningBesoinsRoute
   '/planning/equipe': typeof PlanningEquipeRoute
+  '/planning/fonctionnement': typeof PlanningFonctionnementRoute
   '/planning/horaires': typeof PlanningHorairesRoute
   '/planning/postes': typeof PlanningPostesRoute
   '/caisse/': typeof CaisseIndexRoute
@@ -463,6 +472,7 @@ export interface FileRouteTypes {
     | '/facturation/galaxie'
     | '/planning/besoins'
     | '/planning/equipe'
+    | '/planning/fonctionnement'
     | '/planning/horaires'
     | '/planning/postes'
     | '/caisse/'
@@ -503,6 +513,7 @@ export interface FileRouteTypes {
     | '/facturation/galaxie'
     | '/planning/besoins'
     | '/planning/equipe'
+    | '/planning/fonctionnement'
     | '/planning/horaires'
     | '/planning/postes'
     | '/caisse'
@@ -551,6 +562,7 @@ export interface FileRouteTypes {
     | '/facturation/galaxie'
     | '/planning/besoins'
     | '/planning/equipe'
+    | '/planning/fonctionnement'
     | '/planning/horaires'
     | '/planning/postes'
     | '/caisse/'
@@ -783,6 +795,13 @@ declare module '@tanstack/react-router' {
       path: '/equipe'
       fullPath: '/planning/equipe'
       preLoaderRoute: typeof PlanningEquipeRouteImport
+      parentRoute: typeof PlanningRoute
+    }
+    '/planning/fonctionnement': {
+      id: '/planning/fonctionnement'
+      path: '/fonctionnement'
+      fullPath: '/planning/fonctionnement'
+      preLoaderRoute: typeof PlanningFonctionnementRouteImport
       parentRoute: typeof PlanningRoute
     }
     '/planning/horaires': {
@@ -1048,6 +1067,7 @@ const PdjRouteWithChildren = PdjRoute._addFileChildren(PdjRouteChildren)
 interface PlanningRouteChildren {
   PlanningBesoinsRoute: typeof PlanningBesoinsRoute
   PlanningEquipeRoute: typeof PlanningEquipeRoute
+  PlanningFonctionnementRoute: typeof PlanningFonctionnementRoute
   PlanningHorairesRoute: typeof PlanningHorairesRoute
   PlanningPostesRoute: typeof PlanningPostesRoute
   PlanningIndexRoute: typeof PlanningIndexRoute
@@ -1056,6 +1076,7 @@ interface PlanningRouteChildren {
 const PlanningRouteChildren: PlanningRouteChildren = {
   PlanningBesoinsRoute: PlanningBesoinsRoute,
   PlanningEquipeRoute: PlanningEquipeRoute,
+  PlanningFonctionnementRoute: PlanningFonctionnementRoute,
   PlanningHorairesRoute: PlanningHorairesRoute,
   PlanningPostesRoute: PlanningPostesRoute,
   PlanningIndexRoute: PlanningIndexRoute,

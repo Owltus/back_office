@@ -2437,6 +2437,9 @@ const PL_MOTIFS: ReadonlyArray<
   // Repos posé à une date : ne retire aucune heure due (2026-10-31).
   ['R', 'Repos', '#64748b', false, 'repos'],
   ['FO', 'Formation', '#84cc16', true, 'absence'],
+  // Jour férié rattrapé (2026-11-02) : un jour férié travaillé, récupéré
+  // après un an d'ancienneté ; vaut une journée de contrat.
+  ['JFR', 'Jour férié rattrapé', '#c084fc', true, 'absence'],
 ]
 /** (nom, catégorie réglementaire, couleur, codes horaires possibles) */
 const PL_POSTES: ReadonlyArray<

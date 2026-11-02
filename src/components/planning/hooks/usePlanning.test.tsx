@@ -40,6 +40,7 @@ vi.mock('#/lib/planning/semaine.ts', async (importOriginal) => ({
     probleme: {},
     depuis: 0,
     traduire: () => [],
+    absences: () => [],
   }),
 }))
 

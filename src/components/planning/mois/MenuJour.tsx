@@ -99,7 +99,13 @@ export function MenuJour({
   repos?: { fixe: boolean } | null
   ecrire: boolean
   onHoraire: (h: Horaire, posteId: number) => void
-  validation?: { active: boolean; onBasculer: () => void; repos?: boolean }
+  validation?: {
+    active: boolean
+    onBasculer: () => void
+    repos?: boolean
+    /** Jour férié rattrapé (2026-11-02). */
+    jfr?: boolean
+  }
   /** La case a un shift : la remettre à « Non attribué ». */
   onVider?: () => void
   absences?: AbsencesDuMenu
@@ -386,9 +392,11 @@ export function MenuJour({
               <span className="flex-1 font-medium">
                 {validation.active
                   ? 'Remettre en proposition'
-                  : validation.repos
-                    ? 'Valider ce repos'
-                    : 'Valider ce shift'}
+                  : validation.jfr
+                    ? 'Valider ce jour férié rattrapé'
+                    : validation.repos
+                      ? 'Valider ce repos'
+                      : 'Valider ce shift'}
               </span>
             </button>
           </>
