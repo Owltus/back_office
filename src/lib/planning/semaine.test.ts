@@ -589,6 +589,87 @@ describe('garde-fous (test_garde_fous.py)', () => {
     expect(bilanDe(sem, eleve.id).repos_deduits).toEqual([5, 6])
   })
 
+  // Demandes utilisateur du 2026-11-02 : pas de case vide qui ressemble à un
+  // trou, une fin de contrat comptée sur les jours de présence, et une
+  // Direction qui ne se remplace pas.
+  const libres = (p: PlanningMemoire) => {
+    const avecAbsence = new Set(p.absences.map((a) => a.salarie_id))
+    return p.referentiel.salaries.filter(
+      (x) =>
+        x.semaine_type.every((e) => e.mode === 'auto') &&
+        x.type_contrat === 'cdi' &&
+        !x.forfait_jours &&
+        Number(x.heures_hebdo) === 39 &&
+        !avecAbsence.has(x.id),
+    )
+  }
+
+  it('un congé dans la semaine : 4 shifts + le congé, les 2 autres jours en repos', () => {
+    const lundi = '2026-11-09'
+    const p = demo()
+    const [x] = libres(p)
+    p.absent(x.id, '2026-11-11', '2026-11-11', 'CP')
+    const sem = p.generer(lundi)
+    const jours = joursDe(sem, x.id)
+    expect(jours.size).toBe(4)
+    expect(jours.has(2)).toBe(false)
+    expect(bilanDe(sem, x.id).repos_deduits).toEqual(
+      range(7).filter((j) => j !== 2 && !jours.has(j)),
+    )
+    // Accepté puis refusé : sans le congé compté, 4 jours pris ne suffisent
+    // pas (l'ancienne règle laissait ces 2 jours en blanc).
+    expect(bilanDe(sem, x.id).repos_deduits).toHaveLength(2)
+  })
+
+  it('départ le jeudi : 4 jours de présence, 32 h dues (pas 16 h)', () => {
+    const lundi = '2026-11-09'
+    const p = demo()
+    const [x] = libres(p)
+    x.date_sortie = '2026-11-12'
+    const sem = p.generer(lundi)
+    expect(bilanDe(sem, x.id).minutes_contrat).toBe(32 * 60)
+    expect(joursDe(sem, x.id)).toEqual(new Set([0, 1, 2, 3]))
+    expect(bilanDe(sem, x.id).hors_contrat).toEqual([4, 5, 6])
+    // Départ le mardi : 2 jours, 16 h.
+    const q = demo()
+    const [y] = libres(q)
+    y.date_sortie = '2026-11-10'
+    expect(bilanDe(q.analyser(lundi), y.id).minutes_contrat).toBe(16 * 60)
+  })
+
+  it('Direction : la directrice absente, sa place n’est pas à pourvoir', () => {
+    const lundi = '2026-11-09'
+    const p = demo()
+    const directrice = p.referentiel.salaries.find((x) => x.forfait_jours)!
+    // Dans la démo, la Direction n'est qu'un renfort : une place, comme à l'hôtel.
+    const placeDirection = (q: PlanningMemoire) => {
+      const id = q.referentiel.postes.find((x) => x.nom === 'Direction')!.id
+      for (const b of q.referentiel.besoins)
+        if (b.poste_id === id) b.effectif = 1
+    }
+    placeDirection(p)
+    const avant = p.analyser(lundi).stats
+    p.absent(directrice.id, '2026-11-11', '2026-11-11', 'CP')
+    const apres = p.analyser(lundi).stats
+    expect(apres.places_jour[2]).toBe(avant.places_jour[2] - 1)
+    expect(apres.places_jour[1]).toBe(avant.places_jour[1])
+    // Refusé : un poste tenu aussi par un salarié à l'heure reste à pourvoir.
+    const q = demo()
+    const autre = libres(q)[0]
+    autre.competences = [
+      ...autre.competences,
+      {
+        poste_id: q.referentiel.postes.find((x) => x.nom === 'Direction')!.id,
+        niveau: 'occasionnel',
+      },
+    ]
+    const dir = q.referentiel.salaries.find((x) => x.forfait_jours)!
+    placeDirection(q)
+    const avantQ = q.analyser(lundi).stats
+    q.absent(dir.id, '2026-11-11', '2026-11-11', 'CP')
+    expect(q.analyser(lundi).stats.places_jour[2]).toBe(avantQ.places_jour[2])
+  })
+
   it('semaineRemplie : les horaires fixes seuls ne remplissent pas la semaine', () => {
     const p = demo()
     const [fixe, libre] = p.referentiel.salaries

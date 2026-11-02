@@ -1127,10 +1127,13 @@ export function construire(
       // en `joursPreferesSemaine` jours, absences et jours hors contrat
       // décomptés (l'école compte déjà comme un jour, `nbJours`).
       if (!s.contratIndicatif && s.minutesHebdoContrat >= RYTHME_CONTRAT_MIN) {
-        const absents = jours.filter(
-          (j) => s.indisponibilites.has(j) || s.horsContrat.has(j),
+        // Jours de présence (2026-11-02) : un départ le jeudi laisse 4 jours.
+        const enContrat = jours.filter((j) => !s.horsContrat.has(j))
+        const absents = enContrat.filter((j) =>
+          s.indisponibilites.has(j),
         ).length
-        const attendu = Math.min(s.joursPreferesSemaine, jours.length) - absents
+        const attendu =
+          Math.min(s.joursPreferesSemaine, enContrat.length) - absents
         if (attendu > nbJours.constante) {
           const ecart = m.entier(0, 7)
           m.ajoute(

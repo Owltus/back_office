@@ -46,6 +46,7 @@ import type {
   EquiteFaite,
 } from '#/lib/planning/modele.ts'
 import {
+  JOURS_CONTRAT,
   alerteBesoin,
   presenceMaxPoste,
   versSolveur,
@@ -392,6 +393,13 @@ export function joursHorsContrat(x: Salarie, lundi: string): Set<number> {
   return r
 }
 
+/** Journées de contrat perdues par `hors` jours hors contrat dans la
+ * semaine : 5 jours de contrat sur 7, donc les 2 premiers jours hors contrat
+ * ne coûtent rien (départ le jeudi, 3 jours hors contrat : 1). */
+export function joursContratManquants(hors: number): number {
+  return Math.max(0, hors - (7 - JOURS_CONTRAT))
+}
+
 /** Jours de la semaine où la personne n'est pas là, avec le motif. */
 export function joursAbsents(
   x: Salarie,
@@ -492,8 +500,11 @@ export function fiche(
     indisponibilites: exclu
       ? new Set([0, 1, 2, 3, 4, 5, 6])
       : new Set(absents.keys()),
-    // Hors contrat : comme une absence, les heures dues baissent au prorata.
-    joursAbsenceDecomptes: decomptes + hors.size,
+    // Hors contrat (décision utilisateur du 2026-11-02 : « ses jours de
+    // présence ») : seuls les jours de contrat qui manquent sont décomptés.
+    // Départ le jeudi : 4 jours présents, 1 journée en moins (39 h : 32 h) ;
+    // le week-end après le départ ne réduit rien.
+    joursAbsenceDecomptes: decomptes + joursContratManquants(hors.size),
     horsContrat: hors,
     joursEcole: ecole,
     reposFixes,
@@ -860,7 +871,8 @@ export function besoinsDuMoteur(ctx: Contexte): {
   alertes: Array<{ besoin_id: number; message: string }>
 } {
   const { valides, alertes } = besoinsValides(ctx)
-  const ici = (b: { poste_id: number }) => !posteDeLAccueil(ctx, b.poste_id)
+  const ici = (b: Besoin) =>
+    !posteDeLAccueil(ctx, b.poste_id) && !sansSonCadre(ctx, b)
   const parId = new Map(ctx.besoins.map((b) => [b.id, b]))
   return {
     valides: valides.filter(ici),
@@ -869,6 +881,30 @@ export function besoinsDuMoteur(ctx: Contexte): {
       return !b || ici(b)
     }),
   }
+}
+
+/** Poste tenu SEULEMENT par des cadres au forfait jours (la Direction) :
+ * décision utilisateur du 2026-11-02, « un poste qu'on ne peut pas remplacer ;
+ * si elle n'est pas là, elle n'est pas là ». Un jour où aucun d'eux n'est là
+ * (absence, hors contrat), la place n'existe pas : rien à pourvoir. */
+export function sansSonCadre(
+  ctx: Pick<Contexte, 'staff' | 'lundi' | 'absences'>,
+  b: Pick<Besoin, 'poste_id' | 'jour'>,
+): boolean {
+  const titulaires = ctx.staff.filter(
+    (x) =>
+      x.actif !== false &&
+      x.competences.some(
+        (c) => c.poste_id === b.poste_id && c.niveau !== 'soutien',
+      ),
+  )
+  if (!titulaires.length || !titulaires.every((x) => x.forfait_jours))
+    return false
+  return titulaires.every(
+    (x) =>
+      joursAbsents(x, ctx.lundi, ctx.absences).has(b.jour) ||
+      joursHorsContrat(x, ctx.lundi).has(b.jour),
+  )
 }
 
 /** Écarte les besoins trop longs pour leur catégorie et ceux dont le code
@@ -1265,8 +1301,13 @@ export function equitesAvant(
   return r
 }
 
-/** Jours libres qui sont du repos : heures dues couvertes par l'école ou les
- * absences, ou 5 jours déjà pris. Jamais pour un extra. Pour un apprenti ou
+/** Jours libres qui sont du repos : heures dues couvertes (par l'école, les
+ * absences ou les shifts), ou 5 jours déjà pris (moins les jours hors
+ * contrat au-delà de 2). Un jour pris = un shift, l'école, ou une absence
+ * DÉCOMPTÉE (congé, maladie, formation…) : une semaine de 4 shifts et un
+ * congé a ses 2 repos (demande utilisateur du 2026-11-02 : « même si
+ * quelqu'un a des congés, il faut malgré tout poser des repos et être
+ * logique »). Jamais pour un extra. Pour un apprenti ou
  * un stagiaire, seulement sur une semaine REMPLIE (`semaineRemplie`) : sa
  * ligne vide sauf l'école tant qu'on n'a ni généré ni posé à la main, puis
  * ses jours libres en repos comme pour les autres, week-end d'une semaine
@@ -1284,15 +1325,27 @@ export function reposDeduits(
   lundi: string,
   absences: Map<number, Map<string, number>>,
   remplie = true,
+  sansDecompte: ReadonlySet<number> = new Set(),
 ): number[] {
   if (x.type_contrat === 'extra') return []
   if (ALTERNANCE.has(x.type_contrat) && !remplie) return []
-  const pris = new Set([...siens.map(jourDe), ...sol.joursHorsSite])
+  const decomptees = [...joursAbsents(x, lundi, absences)]
+    .filter(([j]) => !sol.horsContrat.has(j))
+    .filter(([, m]) => m === null || !sansDecompte.has(m))
+    .map(([j]) => j)
+  const pris = new Set([
+    ...siens.map(jourDe),
+    ...sol.joursHorsSite,
+    ...decomptees,
+  ])
+  const faites = siens.reduce((t, c) => t + travail(c), 0)
   const couvert =
     !sol.contratIndicatif &&
     Number(x.heures_hebdo) > 0 &&
-    sol.minutesHebdoContrat === 0
-  if (!(couvert || pris.size >= sol.joursPreferesSemaine)) return []
+    (sol.minutesHebdoContrat === 0 ||
+      (siens.length > 0 && faites >= sol.minutesHebdoContrat))
+  const attendus = Math.min(sol.joursPreferesSemaine, 7 - sol.horsContrat.size)
+  if (!(couvert || pris.size >= attendus)) return []
   const occupes = new Set([
     ...pris,
     ...joursAbsents(x, lundi, absences).keys(),
@@ -1552,7 +1605,15 @@ export function analyser(d: DonneesSemaine): SemaineOut {
       ),
       repos_fixes: [...sol.reposFixes].sort((a, b) => a - b),
       hors_contrat: [...sol.horsContrat].sort((a, b) => a - b),
-      repos_deduits: reposDeduits(x, sol, siens, lundi, ctx.absences, remplie),
+      repos_deduits: reposDeduits(
+        x,
+        sol,
+        siens,
+        lundi,
+        ctx.absences,
+        remplie,
+        ctx.sansDecompte,
+      ),
       repos_proposes: [0, 1, 2, 3, 4, 5, 6].filter((j) =>
         ctx.reposProposes.has(`${x.id}|${ajouterJours(lundi, j)}`),
       ),

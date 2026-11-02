@@ -2261,6 +2261,17 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   du volet (versions, ou « Journée normale »), « Déjà une journée étoile le
   … » ; une version n'est jamais choisie d'office. Un horaire à 00:00 s'écrit
   24:00 sur son jour (`horaireDe`).
+- **Pas de case vide qui ressemble à un trou (2026-11-02, demandes
+  utilisateur après essai de novembre)** : (1) repos déduits (`reposDeduits`)
+  dès que les heures dues sont faites OU que 5 jours sont pris, un jour pris
+  étant un shift, l'école ou une absence DÉCOMPTÉE (4 shifts + 1 congé = 2
+  repos) ; (2) fin ou début de contrat en cours de semaine : seuls les jours
+  de contrat manquants sont décomptés (`joursContratManquants` : départ le
+  jeudi = 32 h sur 4 jours, le week-end d'après ne réduit rien), même règle
+  pour le rythme de 5 jours du générateur ; (3) un poste tenu SEULEMENT par
+  des cadres au forfait jours (la Direction) n'a pas de place à pourvoir le
+  jour où aucun d'eux n'est là (`sansSonCadre`) : « si elle n'est pas là,
+  elle n'est pas là ».
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), jours fériés (décision utilisateur relayée par le binôme), scénario
   « exclus » à l'écran (retiré du prototype aussi).
