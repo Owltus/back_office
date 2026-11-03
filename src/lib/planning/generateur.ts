@@ -264,10 +264,24 @@ export const POIDS_REPOS_SEPARES = 8_000
  * comme du travail : continuité avec la semaine d'à côté. Confort, sous les
  * repos accolés. */
 export const POIDS_JOUR_ISOLE = 4_000
+/** LA FATIGUE AVANT LES HEURES (décision utilisateur du 2026-11-03 : « un
+ * placement le plus humain possible ; vise l'efficacité et non la fatigue
+ * des employés »). Quatre règles de repos passent AVANT les heures dues :
+ * moins de 12 h entre deux services (règle 3), une reprise de jour moins de
+ * 2 jours après des nuits (règle 7), aucun week-end libre sur 4 semaines
+ * (règle 4) : leur poids dépasse les heures dues d'un shift de 12 h
+ * (`POIDS_SOUS_CONTRAT` × 720 = 288 000, figé par un test), on laisse
+ * plutôt quelques heures manquer, signalées ; les places nécessaires passent
+ * toujours devant (`coutPlaceVide` relit ces poids). La quatrième, plus de
+ * 6 jours d'affilée, est DURE pour le calcul (plus bas, PRD règle 2 :
+ * « au-delà, seulement à la main ») : à ce poids, elle doublait le temps
+ * d'une semaine réelle et l'amenait au plafond. */
+export const POIDS_FATIGUE = 290_000
 /** Par jour au-delà de 6 d'affilée, sur chaque fenêtre de 7 jours qui
- * traverse une semaine voisine (`JOURS_AFFILES_MAX`) : 9 jours d'affilée en
- * coûtent 3. Au-dessus du confort et du 6e jour, sous les contrats. Une
- * semaine seule est déjà bornée à 6 jours (R-SIX-JOURS-MAX). */
+ * traverse une semaine voisine (`JOURS_AFFILES_MAX`). DUR pour le calcul
+ * depuis le 2026-11-03 ; ce poids ne sert plus qu'au pire coût d'une place
+ * (`pireMoral`, `pireCoutRemplir`). Une semaine seule est déjà bornée à
+ * 6 jours (R-SIX-JOURS-MAX). */
 export const POIDS_JOUR_AFFILE = 12_000
 /** Par jour au-delà de 5 d'affilée, sur chaque fenêtre de 6 jours qui
  * traverse une semaine voisine (`JOURS_AFFILES_CONSEILLES`, demande
@@ -333,12 +347,14 @@ export const POIDS_JOUR_FIXE = 2_000
  * celui d'avant à quelques dixièmes près.
  */
 /** Règle 3 : par paire de services de deux jours qui se suivent séparés
- * de moins de `REPOS_CONFORT` (12 h ; les 11 h légales restent dures). */
-export const POIDS_REPOS_COURT = 6_000
+ * de moins de `REPOS_CONFORT` (12 h ; les 11 h légales restent dures).
+ * Fatigue (`POIDS_FATIGUE`, 2026-11-03). */
+export const POIDS_REPOS_COURT = POIDS_FATIGUE
 /** Règle 4 : la semaine ne donne pas de week-end complet libre (samedi ET
- * dimanche) à quelqu'un qui n'en a eu aucun les 3 semaines d'avant. Sous le
- * 6e jour : personne ne fait un jour de plus pour le week-end d'un autre. */
-export const POIDS_WEEKEND_LIBRE = 14_000
+ * dimanche) à quelqu'un qui n'en a eu aucun les 3 semaines d'avant.
+ * Fatigue (`POIDS_FATIGUE`, 2026-11-03) : au-dessus du 6e jour, un collègue
+ * peut faire un 6e jour (signalé) pour que chacun ait son week-end. */
+export const POIDS_WEEKEND_LIBRE = POIDS_FATIGUE
 /** Règle 6 : par changement de moment (matin, middle, soir, nuit) d'un jour
  * au suivant au-delà de `CHANGEMENTS_MOMENT_MAX` dans la semaine. */
 export const POIDS_MOMENT_EN_TROP = 5_000
@@ -349,8 +365,8 @@ export const POIDS_MOMENT_ARRIERE = 6_000
  * fenêtre (comme les jours d'affilée). */
 export const POIDS_NUIT_AFFILEE = 12_000
 /** Règle 7 : un service de jour moins de `REPOS_APRES_NUITS` jours après
- * une nuit. */
-export const POIDS_REPRISE_APRES_NUIT = 10_000
+ * une nuit. Fatigue (`POIDS_FATIGUE`, 2026-11-03). */
+export const POIDS_REPRISE_APRES_NUIT = POIDS_FATIGUE
 /** Règle 13 : un 6e jour la semaine du retour d'un congé, EN PLUS du 6e jour
  * ordinaire. */
 export const POIDS_RETOUR_SIXIEME = 15_000
@@ -1608,6 +1624,19 @@ export function construire(
               }
             }
             if (constante + termes.length <= plafond) continue
+            // Plus de 6 jours d'affilée : jamais par le calcul (fatigue,
+            // 2026-11-03) ; les jours posés à la main restent des faits.
+            if (plafond === JOURS_AFFILES_MAX) {
+              let poses = 0
+              for (
+                let d = Math.max(a, 0);
+                d <= Math.min(derniere, p.nbJours - 1);
+                d++
+              )
+                if (siens.some((c) => jourDe(c) === d && estImpose(c))) poses++
+              m.ajoute(termes, '<=', Math.max(plafond - constante, poses, 0))
+              continue
+            }
             const exces = m.entier(0, taille)
             m.ajoute(
               [[1, exces], ...termes.map(([c, v]) => [-c, v] as Terme)],

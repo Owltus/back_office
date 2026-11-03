@@ -781,7 +781,10 @@ describe('garde-fous (test_garde_fous.py)', () => {
         if (serie === 6) six++
       }
     }
-    expect(six).toBe(0)
+    // Depuis la fatigue avant les heures (2026-11-03), le week-end libre de
+    // chacun (règle 4) pèse plus que « viser 5 » : une série de 6 jours au
+    // plus sur les trois semaines. Plus de 6 : jamais (dur).
+    expect(six).toBeLessThanOrEqual(1)
   })
 
   it('semaineRemplie : les horaires fixes seuls ne remplissent pas la semaine', () => {

@@ -87,6 +87,24 @@ coûtait (heures en plus, 6e jour, dépannage), tout ce qu'un shift peut coûter
 en équité et en confort à la personne qu'il soulagerait (`partMoraleExtra`) ; il reste sous la
 place vide.
 
+**LA FATIGUE AVANT LES HEURES (décision utilisateur du 2026-11-03, soir : « un placement le plus
+humain possible ; vise l'efficacité et non la fatigue des employés »)** : quatre règles de repos
+passent désormais AVANT les heures dues, sous les places :
+
+- moins de 12 h entre deux services (règle 3), reprise de jour moins de 2 jours après des nuits
+  (règle 7), aucun week-end libre sur 4 semaines (règle 4) : `POIDS_FATIGUE` (290 000), plus que
+  les heures dues d'un shift de 12 h. Une personne garde plutôt quelques heures en moins, signalées.
+  Conséquence assumée : un collègue peut faire un 6e jour (signalé) pour qu'un autre ait son
+  week-end du mois ;
+- plus de 6 jours d'affilée (règle 2) : DUR pour le calcul (shifts posés à la main exceptés). Une
+  place que seule une personne à son 7e jour pourrait tenir reste vide, à poser à la main. Au poids,
+  cette règle doublait le temps d'une semaine et l'amenait au plafond ; dure, la semaine de démo
+  passe de 29 s à 8 s.
+
+L'ordre devient donc : loi > places > fatigue (ces quatre règles) > heures dues > autres règles
+morales > confort. Le paragraphe Q1 ci-dessus et le tableau 2.1 décrivent l'état d'avant pour ces
+quatre règles.
+
 Règle d'or : **quand l'hôtel ne peut pas faire autrement, le calcul peut enfreindre une règle
 morale, mais il le dit dans une alerte.** Il ne peut jamais enfreindre la loi.
 

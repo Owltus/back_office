@@ -2419,6 +2419,14 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   gardés. Une place que l'équipe ne peut pas tenir reste vide, raison
   EXTRA « à appeler et poser à la main » (`raisonsBlocage` et
   `raisonsBlocageAccueil`).
+- **LA FATIGUE AVANT LES HEURES (décision utilisateur du 2026-11-03 : « le
+  plus humain possible, l'efficacité et non la fatigue »)** : repos de moins
+  de 12 h, reprise de jour moins de 2 jours après des nuits et aucun
+  week-end libre sur 4 semaines au poids `POIDS_FATIGUE` (290 000, plus que
+  les heures d'un shift de 12 h, sous les places) ; plus de 6 jours
+  d'affilée DUR au calcul (posés exceptés ; au poids, il doublait le temps
+  d'une semaine). La nuit du vendredi au samedi rend le week-end travaillé
+  (comme Q15). Empreinte `generateur.test.ts` 69dca6e4.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

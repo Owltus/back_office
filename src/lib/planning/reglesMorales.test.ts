@@ -15,7 +15,7 @@ import {
   POIDS_REPOS_COURT,
   POIDS_REPRISE_APRES_NUIT,
   POIDS_RETOUR_WEEKEND,
-  POIDS_SIXIEME_JOUR,
+  POIDS_JOUR_AFFILE,
   POIDS_SOUS_CONTRAT,
   POIDS_WEEKEND_LIBRE,
 } from '#/lib/planning/generateur.ts'
@@ -100,20 +100,27 @@ const loi = (p: Probleme, r: Resultat) =>
 describe('les poids moraux : sous les places et les heures dues, au-dessus du dépannage', () => {
   it('Q1 : chaque règle seule coûte moins que les heures dues d’un shift de 4 h', () => {
     for (const w of [
-      POIDS_REPOS_COURT,
-      POIDS_WEEKEND_LIBRE,
       POIDS_MOMENT_EN_TROP,
       POIDS_MOMENT_ARRIERE,
       POIDS_NUIT_AFFILEE,
-      POIDS_REPRISE_APRES_NUIT,
       POIDS_RETOUR_WEEKEND,
       POIDS_ECOLE_ABORDS,
     ]) {
       expect(w).toBeLessThan(POIDS_SOUS_CONTRAT * 4 * H)
       expect(w).toBeGreaterThan(PART_FIXE_DEPANNAGE)
     }
-    // Personne ne fait un 6e jour pour le week-end d'un autre.
-    expect(POIDS_WEEKEND_LIBRE).toBeLessThan(POIDS_SIXIEME_JOUR)
+  })
+
+  it('la fatigue avant les heures : plus que les heures d’un shift de 12 h (2026-11-03)', () => {
+    for (const w of [
+      POIDS_REPOS_COURT,
+      POIDS_WEEKEND_LIBRE,
+      POIDS_REPRISE_APRES_NUIT,
+    ])
+      expect(w).toBeGreaterThan(POIDS_SOUS_CONTRAT * 12 * H)
+    // Plus de 6 jours d'affilée : dur pour le calcul, ce poids ne sert qu'au
+    // pire d'une place.
+    expect(POIDS_JOUR_AFFILE).toBeLessThan(POIDS_SOUS_CONTRAT * 4 * H)
   })
 
   it('une place vide coûte plus que toutes les règles morales ensemble', () => {
@@ -125,6 +132,67 @@ describe('les poids moraux : sous les places et les heures dues, au-dessus du d�
     expect(pireMoral(cr('n', 0, 23, 31, { moment: 'nuit' }))).toBeGreaterThan(
       pireMoral(cr('j', 0, 7, 15, { moment: 'matin' })),
     )
+  })
+})
+
+describe('la fatigue passe avant les heures dues (2026-11-03)', () => {
+  it('refusé : elle n’enchaîne pas un soir et un matin pour ses heures', () => {
+    // Elle a fini à 22 h la veille ; le seul shift du lundi commence à 9 h
+    // (11 h de repos : légal, mais sous les 12 h). Il lui manque ces heures :
+    // elle les perd plutôt que de se fatiguer, et c'est dit.
+    // Un collègue sans heures dues peut tenir la place.
+    const b = personne('b', 0)
+    for (const graine of graines) {
+      const p = probleme({
+        salaries: [personne('a', 8, { finServicePrecedent: -2 * H }), b],
+        creneaux: [cr('lun', 0, 9, 17)],
+        graine,
+      })
+      const r = resoudre(p)
+      expect(de(r, 'a')).toEqual([])
+      expect(de(r, 'b')).toEqual(['lun'])
+    }
+    // Accepté : avec 12 h de repos, elle le prend.
+    const p = probleme({
+      salaries: [personne('a', 8, { finServicePrecedent: -3 * H }), b],
+      creneaux: [cr('lun', 0, 9, 17)],
+    })
+    expect(de(resoudre(p), 'a')).toEqual(['lun'])
+    // La place passe toujours avant : seule possible, elle la prend.
+    const seule = probleme({
+      salaries: [personne('a', 8, { finServicePrecedent: -2 * H })],
+      creneaux: [cr('lun', 0, 9, 17)],
+    })
+    expect(de(resoudre(seule), 'a')).toEqual(['lun'])
+  })
+})
+
+describe('jamais plus de 6 jours d’affilée au calcul (2026-11-03)', () => {
+  it('refusé : 6 jours faits la semaine d’avant, pas de 7e, même pour une place', () => {
+    const a = personne('a', 8, { serieAvant: 6 })
+    // Un collègue la prend.
+    const r = resoudre(
+      probleme({
+        salaries: [a, personne('b', 8)],
+        creneaux: [cr('lun', 0, 9, 17)],
+      }),
+    )
+    expect(de(r, 'a')).toEqual([])
+    expect(de(r, 'b')).toEqual(['lun'])
+    // Seule possible : la place reste vide (à poser à la main).
+    const seule = resoudre(
+      probleme({ salaries: [a], creneaux: [cr('lun', 0, 9, 17)] }),
+    )
+    expect(de(seule, 'a')).toEqual([])
+    expect(seule.manques.length).toBe(1)
+    // Accepté : 5 jours faits, le 6e est permis.
+    const cinq = resoudre(
+      probleme({
+        salaries: [personne('a', 8, { serieAvant: 5 })],
+        creneaux: [cr('lun', 0, 9, 17)],
+      }),
+    )
+    expect(de(cinq, 'a')).toEqual(['lun'])
   })
 })
 

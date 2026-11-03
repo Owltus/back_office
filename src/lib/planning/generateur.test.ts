@@ -698,7 +698,12 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
     // 6e510457 (2026-11-03, règle 17, équipes de l'accueil) : seul le pire
     // coût d'une place change ici (arrivées et départs du soir étalés,
     // relève de chacun) ; ces semaines n'ont pas de candidat de l'accueil.
-    expect(empreinte(textes.join('\n=====\n'))).toBe('6e510457')
+    // 69dca6e4 (2026-11-03, la fatigue avant les heures, décision de
+    // l'utilisateur) : repos de moins de 12 h, reprise après des nuits et
+    // week-end libre au poids `POIDS_FATIGUE` ; plus de 6 jours d'affilée
+    // devient une contrainte dure ; la nuit du vendredi compte pour le
+    // week-end.
+    expect(empreinte(textes.join('\n=====\n'))).toBe('69dca6e4')
   })
 })
 

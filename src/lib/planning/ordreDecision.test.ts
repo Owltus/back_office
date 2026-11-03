@@ -1568,7 +1568,9 @@ describe('deux temps : résultats sans solution, heures dues, budget', () => {
    * veille à 22 h, repos de 11 h), le M6 (9 h) se peut ; un extra libre. */
   const semaineCdi = () => ({
     salaries: [
-      personne('a', 35, { finServicePrecedent: -2 * H }),
+      // Fini à 21 h : le M3 de 7 h est interdit (10 h de repos), le M6 de
+      // 9 h a ses 12 h (la fatigue passe avant les heures, 2026-11-03).
+      personne('a', 35, { finServicePrecedent: -3 * H }),
       personne('x', 0, { contratIndicatif: true }),
     ],
     creneaux: [0, 1, 2, 3, 4].flatMap((j) => [m3(j), m6(j)]),
