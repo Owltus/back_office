@@ -196,22 +196,32 @@ describe('règle 4 : le week-end libre des 3 semaines d’avant', () => {
 })
 
 describe('règle 4, partage d’abord : la semaine type cède pour le week-end (2026-11-03)', () => {
-  // Repos lundi, travail du mardi au samedi, repos dimanche.
+  // Travail du mardi au samedi, lundi et dimanche libres (pas des repos fixes).
   const type: Salarie['semaine_type'] = TOUS.map((j) =>
     j === 0 || j === 6
-      ? { mode: 'repos' as const }
+      ? { mode: 'auto' as const }
       : { mode: 'travail' as const },
   )
-  it('sans week-end libre depuis 3 semaines : ni repos fixes, ni samedi habituel', () => {
+  it('sans week-end libre depuis 3 semaines : plus de samedi habituel', () => {
     const s = lire(travaillees(), [], type)
     expect(s.weekendFixe).toBe(true)
     expect(s.weekendLibere).toBe(true)
-    expect([...s.reposFixes]).toEqual([])
     expect([...s.travailFixe].sort()).toEqual([1, 2, 3, 4])
   })
   it('refusé : un week-end libre récent, la semaine type reste', () => {
     const s = lire(travaillees({ 2: [5, 6] }), [], type)
     expect(s.weekendLibere).toBe(false)
+    expect([...s.travailFixe].sort()).toEqual([1, 2, 3, 4, 5])
+  })
+  it('refusé : des repos fixes passent avant le partage des week-ends', () => {
+    const avecRepos: Salarie['semaine_type'] = TOUS.map((j) =>
+      j === 0 || j === 6
+        ? { mode: 'repos' as const }
+        : { mode: 'travail' as const },
+    )
+    const s = lire(travaillees(), [], avecRepos)
+    expect(s.weekendLibere).toBe(false)
+    expect(s.weekendLibreAvant).toBeNull()
     expect([...s.reposFixes].sort()).toEqual([0, 6])
     expect([...s.travailFixe].sort()).toEqual([1, 2, 3, 4, 5])
   })

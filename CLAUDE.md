@@ -2341,9 +2341,13 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   compromis ») ; règle 3 à 12 h ; PARTAGE D'ABORD : une semaine type qui
   fixe le week-end ne l'exempte plus, la semaine où la personne n'a eu aucun
   week-end libre depuis 3 semaines elle cède (`weekendLibere` dans
-  `avecHistoire` : plus de repos fixes, samedi et dimanche plus habituels ;
+  `avecHistoire` : samedi et dimanche plus habituels ;
   pas posés d'office, `weekendsLiberes` dans `aPoserFixes` ; alerte
-  WEEKEND-LIBERE) ; Q12 pas de case, la semaine type suffit ; Q15 la nuit du
+  WEEKEND-LIBERE). ⚠ SAUF des REPOS FIXES (décision utilisateur du même
+  jour : « les repos fixes sont nécessairement prioritaires ») : une
+  personne qui a un repos dans sa semaine type sort de la règle 4
+  (`aDesReposFixes` : ni coût, ni alerte, ni libération), ses repos restent
+  affichés et respectés — les lever les effaçait de l'écran ; Q12 pas de case, la semaine type suffit ; Q15 la nuit du
   dimanche au lundi (posée le dimanche, 23:00 ou 24:00) rend le week-end
   travaillé ; Q16 équité sur TOUT l'accueil (titulaires et soutiens des
   postes `presence`, groupe `POSTE_ID_ACCUEIL`, `posteEquite(x, postes)`),

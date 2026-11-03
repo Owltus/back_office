@@ -1469,6 +1469,14 @@ export function estWeekendFixe(x: Pick<Salarie, 'semaine_type'>): boolean {
   return [5, 6].some((j) => x.semaine_type.at(j)?.mode === 'travail')
 }
 
+/** Des repos fixés dans la semaine type : ils passent avant le partage des
+ * week-ends (décision utilisateur du 2026-11-03 : « les repos fixes sont
+ * nécessairement prioritaires »). La règle 4 ne s'applique pas à cette
+ * personne : ni coût, ni alerte, ni week-end libéré. */
+export function aDesReposFixes(x: Pick<Salarie, 'semaine_type'>): boolean {
+  return x.semaine_type.some((e) => e?.mode === 'repos')
+}
+
 /** Règle 4 : un week-end complet libre les 3 semaines d'avant `lundi` ?
  * Un jour du week-end est libre sans shift, et sans absence ou avec une
  * absence qui laisse libre (`absenceLibre`) : un week-end malade, en
@@ -1523,7 +1531,8 @@ export function weekendsLiberes(d: DonneesSemaine): Set<number> {
   const motifs = new Map(d.referentiel.motifs.map((m) => [m.id, m]))
   const r = new Set<number>()
   for (const x of ctx.staff) {
-    if (x.type_contrat === 'extra' || !estWeekendFixe(x)) continue
+    if (x.type_contrat === 'extra' || !estWeekendFixe(x) || aDesReposFixes(x))
+      continue
     const hors = joursHorsContrat(x, lundi)
     if (hors.has(5) || hors.has(6)) continue
     const estNuit = (a: Affectation) => equiteDe(ctx, a).moment === 'nuit'
@@ -1585,19 +1594,21 @@ export function avecHistoire(
       return m !== undefined && ctx.ecole.has(m)
     }
     // Règle 4 (`weekendLibreAvantDe`).
-    const weekendLibreAvant = sol.placementManuel
-      ? null
-      : weekendLibreAvantDe(
-          x,
-          lundi,
-          ctx,
-          semaine,
-          motifs,
-          (a) => equiteDe(ctx, a).moment === 'nuit',
-        )
+    const weekendLibreAvant =
+      sol.placementManuel || aDesReposFixes(x)
+        ? null
+        : weekendLibreAvantDe(
+            x,
+            lundi,
+            ctx,
+            semaine,
+            motifs,
+            (a) => equiteDe(ctx, a).moment === 'nuit',
+          )
     const weekendFixe = estWeekendFixe(x)
     const weekendLibere =
       weekendFixe &&
+      !aDesReposFixes(x) &&
       weekendLibreAvant === false &&
       !sol.horsContrat.has(5) &&
       !sol.horsContrat.has(6)
@@ -1692,11 +1703,11 @@ export function avecHistoire(
       weekendLibreAvant,
       weekendFixe,
       weekendLibere,
-      // Partage d'abord (2026-11-03) : la semaine type s'efface pour le
-      // week-end libre. Les autres jours habituels gardent leur prime.
+      // Partage d'abord (2026-11-03) : les jours habituels du week-end
+      // s'effacent pour le week-end libre. Jamais des repos fixes : une
+      // personne qui en a n'est pas libérée (`aDesReposFixes`).
       ...(weekendLibere
         ? {
-            reposFixes: new Set<number>(),
             travailFixe: new Set(
               [...sol.travailFixe].filter((j) => j !== 5 && j !== 6),
             ),
