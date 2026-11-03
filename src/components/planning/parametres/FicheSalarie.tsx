@@ -506,7 +506,7 @@ function CorpsFiche({
       await fini()
       const gardes = new Set([...nouveau.gardes, ...ancien.gardes]).size
       notifier(
-        `${b.prenom.trim()} : nouveau contrat à partir du ${dateFr(e.date)}${gardes ? `.${messageJoursGardes(gardes)}` : ''}`,
+        `${b.prenom.trim()} : changement prévu à partir du ${dateFr(e.date)}. Sa nouvelle fiche est dans l'équipe, vous pouvez encore la régler${gardes ? `.${messageJoursGardes(gardes)}` : '.'}`,
         gardes ? 'attention' : 'info',
       )
       onFermer()

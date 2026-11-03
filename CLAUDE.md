@@ -2427,6 +2427,15 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   d'affilée DUR au calcul (posés exceptés ; au poids, il doublait le temps
   d'une semaine). La nuit du vendredi au samedi rend le week-end travaillé
   (comme Q15). Empreinte `generateur.test.ts` 69dca6e4.
+- **CHANGEMENT DE POSTE DATÉ (promotion, demande utilisateur du
+  2026-11-03)** : le bouton de la fiche « Changer de poste ou de contrat »
+  (ex « Faire évoluer le contrat ») garde le mécanisme `suite_de` (fiche
+  fermée la veille, nouvelle fiche à la date, congés répartis, historique
+  et équité suivis par `racine`) et règle en plus les POSTES
+  (`Evolution.competences`, même `SectionCompetences` que la fiche, filtrés
+  au groupe choisi) et le FORFAIT JOURS (`Evolution.forfait_jours`) à
+  partir de la date. Aucune migration. Un poste qui n'est plus tenu
+  (ex. plus d'adjoint) : ses besoins restent, à retirer ou fermer le poste.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

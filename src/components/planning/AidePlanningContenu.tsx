@@ -530,11 +530,14 @@ export function AidePlanningContenu({
             ]}
           />
         </Sous>
-        <Sous titre="Les points sous chaque jour">
+        <Sous titre="Les formes sous chaque jour">
           <p className="text-muted-foreground">
-            Ils comptent l’accueil du matin, du soir et de la nuit. Vert : au
+            Elles comptent l’accueil : un rond pour le matin, un rond pour le
+            soir, un triangle pour la nuit, posé entre deux jours. Vert : au
             complet. Rouge : il manque quelqu’un. Bleu : quelqu’un en plus.
-            Orange : personne de demandé.
+            Orange vide : personne de demandé. Le trait qui les relie dit si la
+            relève se fait : vert plein, assurée ; pointillé rouge, personne
+            pour la faire.
           </p>
         </Sous>
       </Section>
@@ -690,7 +693,7 @@ export function AidePlanningContenu({
             ],
             [
               'Extra',
-              'Pas d’heures dues. Il ne reçoit jamais de repos déduit. L’app peut le proposer à l’accueil quand personne d’autre ne peut. Ailleurs, il se pose à la main.',
+              'Pas d’heures dues. Il ne reçoit jamais de repos déduit. Le calcul ne le place jamais : il s’appelle d’abord, puis se pose à la main.',
             ],
             [
               'Apprenti',
@@ -737,6 +740,7 @@ export function AidePlanningContenu({
             items={[
               'Une date de fin est obligatoire pour un CDD, un apprenti ou un stagiaire.',
               'Un extra n’a pas de date de fin : il est actif ou non.',
+              'Promotion, changement de poste ou de contrat : bouton Changer de poste ou de contrat dans la fiche, avec la date. Jusqu’à la veille, rien ne change ; à partir de la date, ses nouveaux postes et son nouveau contrat s’appliquent, et le planning en tient compte jour par jour. Pensez aussi à la page Besoins si un poste n’est plus tenu.',
               'La semaine type dit, jour par jour : libre, travaille (avec un horaire fixé ou non), ou repos.',
               'Les horaires fixés de la semaine type se posent tout seuls à l’ouverture d’une semaine à venir.',
             ]}
@@ -849,6 +853,13 @@ export function AidePlanningContenu({
             : personne ne manque entre deux équipes, l’ouverture est tenue.
           </li>
           <li>
+            <span className="font-medium text-foreground">La fatigue</span> :
+            jamais plus de 6 jours d’affilée, 12 h entre deux services, 2 jours
+            après des nuits avant de reprendre de jour, un week-end libre sur 4
+            semaines. Elles passent avant les heures dues : mieux vaut quelques
+            heures en moins, signalées, qu’une personne épuisée.
+          </li>
+          <li>
             <span className="font-medium text-foreground">Les contrats</span> :
             d’abord les heures dues, puis éviter une personne en plus, un 6e
             jour, des heures au-delà du contrat.
@@ -862,10 +873,11 @@ export function AidePlanningContenu({
             <span className="font-medium text-foreground">
               Le bien-être de l’équipe
             </span>{' '}
-            : les règles de la partie Le bien-être de l’équipe. Elles passent
-            après les heures dues (ne pas donner ses heures à quelqu’un est
-            aussi injuste), avant le confort. Quand l’hôtel ne peut pas faire
-            autrement, l’une d’elles peut céder, et une alerte orange le dit.
+            : les autres règles de la partie Le bien-être de l’équipe. Elles
+            passent après les heures dues (ne pas donner ses heures à quelqu’un
+            est aussi injuste), avant le confort. Quand l’hôtel ne peut pas
+            faire autrement, l’une d’elles peut céder, et une alerte orange le
+            dit.
           </li>
           <li>
             <span className="font-medium text-foreground">
@@ -970,7 +982,7 @@ export function AidePlanningContenu({
 
       <Section
         id="bien-etre"
-        intro="Ce n’est pas parce que l’on peut que l’on doit. Au-delà de la loi, l’app cherche un planning vivable et juste, le même pour tous. Ces règles cèdent devant les places nécessaires et les heures dues, jamais l’inverse : quand l’une cède, une alerte orange le dit à la personne qui fait le planning."
+        intro="Ce n’est pas parce que l’on peut que l’on doit. Au-delà de la loi, l’app cherche un planning vivable et juste, le même pour tous. Ces règles cèdent devant les places nécessaires, jamais l’inverse. Celles de la fatigue (jours d’affilée, 12 h de repos, repos après des nuits, week-end libre) passent aussi avant les heures dues ; les autres cèdent devant elles. Quand l’une cède, une alerte orange le dit à la personne qui fait le planning."
       >
         <Sous titre="Le repos">
           <Liste

@@ -1,6 +1,7 @@
 /*
  * Section Identité et contrat de la fiche (prototype `FicheSalarie`), avec
- * le bloc Nouveau contrat (évolution du contrat).
+ * le bloc Changement à une date (promotion, changement de poste ou de
+ * contrat ; postes et forfait jours datés depuis le 2026-11-03).
  */
 
 import { useId, useState } from 'react'
@@ -25,12 +26,14 @@ import {
   Liste,
   Section,
 } from '#/components/planning/parametres/equipe/Champs.tsx'
+import { SectionCompetences } from '#/components/planning/parametres/equipe/SectionsFiche.tsx'
 import type { PropsSection } from '#/components/planning/parametres/equipe/SectionsFiche.tsx'
 import { useNotifier } from '#/components/planning/Messages.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { Label } from '#/components/ui/label.tsx'
+import { postesDuGroupe } from '#/lib/planning/affichage.ts'
 import { TYPES_CONTRAT } from '#/lib/planning/types.ts'
 import type { TypeContrat } from '#/lib/planning/types.ts'
 
@@ -251,14 +254,14 @@ export function SectionIdentite({
       </div>
       {b.id !== null && !disabled && !evolution && (
         <div>
-          <Tip label="Promotion (apprenti devenu hôtelier), passage en extra, nouveau contrat… L'historique reste sur le contrat actuel.">
+          <Tip label="Promotion, changement de poste, nouveau contrat, passage en extra… à une date précise. Jusqu'à la veille, rien ne change ; l'historique reste sur la fiche actuelle.">
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={() => setEvolution(evolutionParDefaut(b, aujourdhui))}
             >
-              <Repeat /> Faire évoluer le contrat
+              <Repeat /> Changer de poste ou de contrat
             </Button>
           </Tip>
         </div>
@@ -282,6 +285,7 @@ export function SectionIdentite({
 function BlocEvolution({
   evolution,
   setEvolution,
+  b,
   referentiel,
   enCours,
   onCreer,
@@ -294,13 +298,22 @@ function BlocEvolution({
   onCreer: () => void
 }) {
   const id = useId()
+  // La fiche telle qu'elle sera à partir de la date (postes, contrat).
+  const apres: Brouillon = {
+    ...b,
+    type_contrat: evolution.type_contrat,
+    groupe_id: evolution.groupe_id,
+    forfait_jours: !!evolution.forfait_jours,
+    competences: evolution.competences ?? b.competences,
+  }
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-primary/40 bg-primary/5 p-3">
-      <strong className="text-sm">Nouveau contrat</strong>
+      <strong className="text-sm">Changement à une date</strong>
       <p className="text-xs text-muted-foreground">
-        Le contrat actuel s'arrête la veille ; le nouveau reprend ses postes (le
-        soutien devient titulaire hors alternance), ses congés à venir et sa
-        semaine type. L'historique reste.
+        Jusqu'à la veille, rien ne change. À partir de la date, ses nouveaux
+        postes et son nouveau contrat s'appliquent, avec ses congés à venir et
+        sa semaine type (le soutien devient titulaire hors alternance).
+        L'historique reste.
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
@@ -338,14 +351,24 @@ function BlocEvolution({
               libelle: g.nom,
             })),
           ]}
-          onChange={(v) =>
+          onChange={(v) => {
+            const groupe_id = v === 'aucune' ? null : Number(v)
+            // Seuls les postes du nouveau groupe restent (comme à
+            // l'enregistrement, `planEvolution`), visibles tout de suite.
+            const permis = postesDuGroupe(
+              referentiel.postes,
+              referentiel.groupes.find((g) => g.id === groupe_id),
+            )
             setEvolution({
               ...evolution,
-              groupe_id: v === 'aucune' ? null : Number(v),
+              groupe_id,
+              competences: (evolution.competences ?? b.competences).filter(
+                (c) => permis.some((x) => x.id === c.poste_id),
+              ),
             })
-          }
+          }}
         />
-        {evolution.type_contrat !== 'extra' && (
+        {evolution.type_contrat !== 'extra' && !evolution.forfait_jours && (
           <div className="flex flex-col gap-1.5">
             <Label htmlFor={`${id}-heures`} className="text-xs">
               Heures par semaine
@@ -367,6 +390,24 @@ function BlocEvolution({
           </div>
         )}
       </div>
+      {(forfaitPossible(apres, referentiel.groupes) ||
+        evolution.forfait_jours) && (
+        <Interrupteur
+          coche={!!evolution.forfait_jours}
+          onChange={(v) => setEvolution({ ...evolution, forfait_jours: v })}
+        >
+          Cadre au forfait jours à partir de cette date
+        </Interrupteur>
+      )}
+      {/* Les postes à partir de la date : le même réglage que la fiche. */}
+      <SectionCompetences
+        b={apres}
+        maj={(f) =>
+          setEvolution({ ...evolution, competences: f(apres).competences })
+        }
+        referentiel={referentiel}
+        disabled={false}
+      />
       <div className="flex justify-end gap-2">
         <Button
           type="button"
@@ -377,7 +418,7 @@ function BlocEvolution({
           Annuler
         </Button>
         <Button type="button" size="sm" disabled={enCours} onClick={onCreer}>
-          {enCours ? 'Création…' : 'Créer le nouveau contrat'}
+          {enCours ? 'Enregistrement…' : 'Prévoir ce changement'}
         </Button>
       </div>
     </div>

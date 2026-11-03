@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   diffAbsences,
   joursDesPeriodes,
+  erreurEvolution,
   planEvolution,
   brouillonVierge,
 } from '#/components/planning/parametres/equipe/brouillon.ts'
@@ -313,6 +314,55 @@ describe('absences jour par jour', () => {
     const d = diffAbsences(avant, apres)
     expect(d.retirer).toEqual(['2026-11-02'])
     expect([...d.poser]).toEqual([[1, ['2026-11-04', '2026-11-05']]])
+  })
+
+  it('changement de poste daté (promotion, 2026-11-03) : nouveaux postes et forfait jours à partir de la date', () => {
+    const { referentiel } = hotelDemo('2026-11-02')
+    const b = {
+      ...brouillonVierge(3),
+      id: 12,
+      prenom: 'Lou',
+      type_contrat: 'cdi' as const,
+      heures_hebdo: 39,
+      competences: [{ poste_id: 2, niveau: 'titulaire' as const }],
+    }
+    const e = {
+      date: '2026-12-01',
+      type_contrat: 'cdi' as const,
+      groupe_id: 2,
+      heures_hebdo: 39,
+      competences: [
+        { poste_id: 3, niveau: 'titulaire' as const },
+        { poste_id: 2, niveau: 'occasionnel' as const },
+      ],
+      forfait_jours: true,
+    }
+    const plan = planEvolution(
+      b,
+      e,
+      referentiel.postes,
+      referentiel.groupes,
+      referentiel.motifs,
+    )
+    // Jusqu'à la veille, la fiche actuelle ne change pas.
+    expect(plan.ancien.date_sortie).toBe('2026-11-30')
+    expect(plan.ancien.competences).toEqual(b.competences)
+    expect(plan.ancien.forfait_jours).toBe(false)
+    // À partir de la date : les postes et le forfait choisis.
+    expect(plan.nouveau).toMatchObject({
+      suite_de: 12,
+      date_entree: '2026-12-01',
+      forfait_jours: true,
+      competences: e.competences,
+    })
+    // Refusé : aucun poste à partir de la date ; un forfait n'a pas d'heures.
+    expect(erreurEvolution(b, { ...e, competences: [] })).toMatch(
+      /au moins un poste/,
+    )
+    expect(erreurEvolution(b, { ...e, heures_hebdo: 0 })).toBeNull()
+    expect(
+      erreurEvolution(b, { ...e, heures_hebdo: 0, forfait_jours: false }),
+    ).toMatch(/heures/)
   })
 
   it('évolution de contrat : l ancien se ferme la veille, le nouveau reprend les congés à venir sans l école', () => {

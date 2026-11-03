@@ -515,6 +515,11 @@ export interface Evolution {
   type_contrat: TypeContrat
   groupe_id: number | null
   heures_hebdo: number
+  /** Les postes à partir de la date (changement de poste, promotion ;
+   * demande utilisateur du 2026-11-03). Absent : ceux du contrat actuel. */
+  competences?: Competence[]
+  /** Cadre au forfait jours à partir de la date. Absent : comme avant. */
+  forfait_jours?: boolean
 }
 
 export function evolutionParDefaut(
@@ -526,6 +531,8 @@ export function evolutionParDefaut(
     type_contrat: b.type_contrat === 'apprenti' ? 'cdi' : b.type_contrat,
     groupe_id: b.groupe_id,
     heures_hebdo: b.heures_hebdo || 35,
+    competences: b.competences,
+    forfait_jours: b.forfait_jours,
   }
 }
 
@@ -537,10 +544,13 @@ export function erreurEvolution(b: Brouillon, e: Evolution): string | null {
   }
   if (
     e.type_contrat !== 'extra' &&
+    !e.forfait_jours &&
     !(e.heures_hebdo > 0 && e.heures_hebdo <= 48)
   ) {
     return 'Indiquez les heures par semaine du nouveau contrat (plus de 0 h).'
   }
+  if (e.competences && e.competences.length === 0)
+    return 'Gardez au moins un poste à partir de cette date.'
   return null
 }
 
@@ -589,12 +599,13 @@ export function planEvolution(
     type_contrat: e.type_contrat,
     groupe_id: e.groupe_id,
     heures_hebdo: e.type_contrat === 'extra' ? 0 : e.heures_hebdo,
-    forfait_jours: e.type_contrat === 'extra' ? false : b.forfait_jours,
+    forfait_jours:
+      e.type_contrat === 'extra' ? false : (e.forfait_jours ?? b.forfait_jours),
     date_entree: e.date,
     date_sortie:
       b.date_sortie && b.date_sortie >= e.date ? b.date_sortie : null,
     actif: true,
-    competences: b.competences
+    competences: (e.competences ?? b.competences)
       .filter((c) => possibles.some((p) => p.id === c.poste_id))
       .map((c) =>
         !alternance && c.niveau === 'soutien'

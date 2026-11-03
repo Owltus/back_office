@@ -146,7 +146,9 @@ describe('FicheSalarie', () => {
     expect(
       screen.queryByRole('button', { name: /Ajouter une absence/ }),
     ).toBeNull()
-    expect(screen.queryByRole('button', { name: /Faire évoluer/ })).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: /Changer de poste/ }),
+    ).toBeNull()
   })
 
   it('en écriture (sans gestion) : la fiche reste en lecture seule', async () => {
@@ -675,13 +677,15 @@ describe('FicheSalarie', () => {
   /** Ouvre le bloc Nouveau contrat au 04/01/2027 et le valide. */
   async function evoluerAu4Janvier() {
     fireEvent.click(
-      await screen.findByRole('button', { name: /Faire évoluer le contrat/ }),
+      await screen.findByRole('button', {
+        name: /Changer de poste ou de contrat/,
+      }),
     )
     fireEvent.change(screen.getByLabelText('À partir du'), {
       target: { value: '2027-01-04' },
     })
     fireEvent.click(
-      screen.getByRole('button', { name: 'Créer le nouveau contrat' }),
+      screen.getByRole('button', { name: 'Prévoir ce changement' }),
     )
   }
 
