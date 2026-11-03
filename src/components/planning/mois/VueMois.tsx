@@ -228,7 +228,9 @@ export function VueMois({
     const shifts = qc.getQueryData<DonneesShifts>(
       planningKeys.mois(lundis[0], lundis.length),
     )
-    return ref && shifts ? analyser(donneesSemaine(lundi, ref, shifts)) : null
+    return ref && shifts
+      ? analyser(donneesSemaine(lundi, ref, shifts), aujourdhui)
+      : null
   }
 
   /** Une écriture sur une semaine ; signale les règles touchées sur la case. */

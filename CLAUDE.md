@@ -2369,7 +2369,12 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   sans personne… »), dans le message de fin de génération et la famille
   « Jours passés » du panneau, hors du total. Constaté sur la simulation de
   novembre : des fixes posés le lundi soir (lundi = aujourd'hui), puis une
-  génération le mardi, laissaient l'accueil du lundi vide.
+  génération le mardi, laissaient l'accueil du lundi vide. Pas de REPOS
+  déduit non plus sur un jour passé vide (`analyser(d, aujourdhui)` →
+  `reposDeduits(…, passes)`) : la case reste vide, « Valider » n'y écrit
+  rien ; repos fixes et repos posés restent montrés. Ce jour sort de la
+  semaine comme un jour hors contrat (6 jours à venir : 1 repos, rythme de
+  5 jours) et compte comme le bord de la semaine pour placer les repos.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

@@ -1912,7 +1912,17 @@ export function placerRepos(
  * l'écran y montre « Repos », « Valider » l'écrit à la place du congé
  * (migration 20261102110000). Jamais pour un extra ; pour un apprenti ou un
  * stagiaire, seulement sur une semaine remplie (décisions utilisateur du
- * 2026-10-27). Affichage et validation : le moteur garde ses règles. */
+ * 2026-10-27). Affichage et validation : le moteur garde ses règles.
+ *
+ * Jours passés (`passes` premiers jours de la semaine, décision utilisateur
+ * du 2026-11-03, « même règle pour tous ») : un jour passé SANS RIEN (ni
+ * shift, ni absence, ni repos fixe) ne reçoit jamais de repos déduit, la
+ * case reste vide (le message « Jours passés » le dit) et « Valider » n'y
+ * écrit rien. Il sort de la semaine comme un jour hors contrat : le rythme
+ * de 5 jours se tient sur les jours qui restent (6 jours à venir : 1 repos,
+ * 5 jours de travail, comme le calcul qui ne peut plus le remplir). Pour la
+ * place des repos, il compte comme le bord de la semaine (du travail) : un
+ * mardi travaillé n'est pas « isolé » parce que le lundi passé est vide. */
 const ALTERNANCE: ReadonlySet<Salarie['type_contrat']> = new Set([
   'apprenti',
   'stagiaire',
@@ -1927,6 +1937,7 @@ export function reposDeduits(
   remplie = true,
   sansDecompte: ReadonlySet<number> = new Set(),
   motifsRepos: ReadonlySet<number> = new Set(),
+  passes = 0,
 ): number[] {
   if (x.type_contrat === 'extra') return []
   if (ALTERNANCE.has(x.type_contrat) && !remplie) return []
@@ -1943,6 +1954,11 @@ export function reposDeduits(
     }
     return 'libre'
   })
+  // Jour passé vide : hors de la semaine (ni repos ni travail compté).
+  const passesVides = new Set(
+    [0, 1, 2, 3, 4, 5, 6].filter((j) => j < passes && etats[j] === 'libre'),
+  )
+  for (const j of passesVides) etats[j] = 'autre'
   const pris = etats.filter((e) => e === 'travail' || e === 'conge').length
   const faites = siens.reduce((t, c) => t + travail(c), 0)
   const couvert =
@@ -1950,11 +1966,16 @@ export function reposDeduits(
     Number(x.heures_hebdo) > 0 &&
     (sol.minutesHebdoContrat === 0 ||
       (siens.length > 0 && faites >= sol.minutesHebdoContrat))
-  const enContrat = 7 - sol.horsContrat.size
+  const enContrat = 7 - sol.horsContrat.size - passesVides.size
   const attendus = Math.min(sol.joursPreferesSemaine, enContrat)
   if (!(remplie || couvert || pris >= attendus)) return []
   const voulus = Math.min(2, Math.max(0, enContrat - JOURS_CONTRAT))
-  const choisis = new Set(placerRepos(etats, voulus))
+  const choisis = new Set(
+    placerRepos(
+      etats.map((e, j) => (passesVides.has(j) ? 'travail' : e)),
+      voulus,
+    ),
+  )
   if (couvert)
     etats.forEach((e, j) => {
       if (e === 'libre') choisis.add(j)
@@ -2020,9 +2041,15 @@ export function raisonCommune(
   )
 }
 
-export function analyser(d: DonneesSemaine): SemaineOut {
+/** `aujourdhui` : les jours d'avant, dans cette semaine, sont passés (repos
+ * jamais déduits sur un jour passé vide, `reposDeduits`). Sans lui, aucun
+ * jour n'est passé (tests, bouclier). */
+export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
   const ctx = contexte(d)
   const lundi = ctx.lundi
+  const passes = aujourdhui
+    ? Math.max(0, Math.min(7, ecartJours(lundi, aujourdhui)))
+    : 0
   const remplie = semaineRemplie(ctx.affectations, d.referentiel.salaries)
   const { valides: besoins, alertes: alertesBesoins } = besoinsDuMoteur(ctx)
   let salaries = new Map(
@@ -2253,6 +2280,7 @@ export function analyser(d: DonneesSemaine): SemaineOut {
         remplie,
         ctx.sansDecompte,
         ctx.motifsRepos,
+        passes,
       ),
       repos_proposes: [0, 1, 2, 3, 4, 5, 6].filter((j) =>
         ctx.reposProposes.has(`${x.id}|${ajouterJours(lundi, j)}`),

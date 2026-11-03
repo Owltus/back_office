@@ -138,6 +138,8 @@ export function donneesGeneration(
 /** La semaine analysée (vérificateur en direct). */
 export function useSemaine(lundi: string) {
   const ref = useReferentiel()
+  // Jours passés : aucun repos déduit sur un jour passé vide (2026-11-03).
+  const aujourdhui = useAujourdhui()
   const shifts = useShiftsSemaine(lundi)
   const donnees = useMemo(
     () =>
@@ -147,8 +149,8 @@ export function useSemaine(lundi: string) {
     [lundi, ref.data, shifts.data],
   )
   const semaine = useMemo<SemaineOut | null>(
-    () => (donnees ? analyser(donnees) : null),
-    [donnees],
+    () => (donnees ? analyser(donnees, aujourdhui) : null),
+    [donnees, aujourdhui],
   )
   return {
     referentiel: ref.data ?? null,
@@ -280,7 +282,10 @@ export function useGenerer() {
       return {
         poses,
         dureeMs: Math.round(performance.now() - debut),
-        semaine: analyser(donneesSemaine(lundi, referentiel, apres)),
+        semaine: analyser(
+          donneesSemaine(lundi, referentiel, apres),
+          aujourdhui,
+        ),
       }
     },
     [qc],

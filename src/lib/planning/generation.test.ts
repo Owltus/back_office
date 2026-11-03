@@ -202,6 +202,32 @@ describe('génération bout à bout (hôtel fictif)', () => {
       lundi.traduire(generer(lundi.probleme, highs)).some((n) => n.jour < 2),
     ).toBe(true)
   })
+
+  it('jour passé vide : aucun repos déduit, le rythme se tient sur les jours qui restent', () => {
+    // Génération du mercredi : lundi et mardi passés, sans rien (2026-11-03).
+    const d = donnees()
+    const g = preparerGeneration(d, { aujourdhui: '2026-11-04', graine: 1 })
+    const pose = {
+      ...d,
+      affectations: poser(LUNDI, g.traduire(generer(g.probleme, highs))),
+    }
+    const vu = analyser(pose, '2026-11-04')
+    const sans = analyser(pose)
+    // Accepté : jamais de repos déduit lundi ni mardi (rien n'y est posé).
+    for (const b of vu.bilan) {
+      expect(b.repos_deduits.filter((j) => j < 2)).toEqual([])
+    }
+    // Refusé (témoin) : sans la date du jour, les mêmes cases vides
+    // deviennent des repos ; c'est bien la date qui les retire.
+    expect(sans.bilan.some((b) => b.repos_deduits.some((j) => j < 2))).toBe(
+      true,
+    )
+    // Les repos fixes de la fiche restent montrés, passés compris.
+    for (const b of vu.bilan) {
+      const t = sans.bilan.find((x) => x.salarie_id === b.salarie_id)
+      expect(b.repos_fixes).toEqual(t?.repos_fixes)
+    }
+  })
 })
 
 // Relecture adverse du 2026-10-29 (étape 10) : le repos de 35 h de la

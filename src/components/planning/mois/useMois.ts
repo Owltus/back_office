@@ -12,6 +12,7 @@ import {
   donneesSemaine,
   signatureFixes,
   useGenerer,
+  useAujourdhui,
   useReferentiel,
 } from '#/components/planning/hooks/usePlanning.ts'
 import { useRelireAuRetour } from '#/components/planning/hooks/auRetour.ts'
@@ -34,6 +35,8 @@ export function useMois(mois: string) {
   const premier = lundis[0]
   const dernier = lundis[lundis.length - 1]
   const ref = useReferentiel()
+  // Jours passés : aucun repos déduit sur un jour passé vide (2026-11-03).
+  const aujourdhui = useAujourdhui()
   // Relu au retour sur l'onglet (au plus toutes les 2 s, voir auRetour.ts).
   useRelireAuRetour()
   const shifts = useQuery({
@@ -61,9 +64,9 @@ export function useMois(mois: string) {
   }, [lundis, ref.data, shifts.data])
   const semaines = useMemo(() => {
     const m = new Map<string, SemaineOut>()
-    for (const [l, d] of donnees) m.set(l, analyser(d))
+    for (const [l, d] of donnees) m.set(l, analyser(d, aujourdhui))
     return m
-  }, [donnees])
+  }, [donnees, aujourdhui])
   return {
     jours,
     lundis,
