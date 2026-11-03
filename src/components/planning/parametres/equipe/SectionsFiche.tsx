@@ -5,7 +5,7 @@
  */
 
 import { tientLaNuit } from '#/lib/planning/presence.ts'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Plus, Star, Trash2, X } from 'lucide-react'
 
 import {
@@ -17,7 +17,10 @@ import {
   reglerJour,
   reglerNiveau,
 } from '#/components/planning/parametres/equipe/brouillon.ts'
-import type { Brouillon } from '#/components/planning/parametres/equipe/brouillon.ts'
+import type {
+  Brouillon,
+  PeriodeBrouillon,
+} from '#/components/planning/parametres/equipe/brouillon.ts'
 import {
   Liste,
   Section,
@@ -455,6 +458,16 @@ export function SectionSemaineType({
 
 // ---------------------------------------------------------------- absences
 
+/** Combien de périodes passées on montre d'abord (les plus récentes). */
+export const PASSEES_VISIBLES = 10
+
+/** Les absences de la fiche (rework du 2026-11-03, demande utilisateur : « les
+ * choses exceptionnelles, pas ce qui revient de manière régulière ; avec les
+ * années, on va être noyé ») : jamais les repos (semaine type et planning),
+ * jamais l'école (bloc École) ; deux onglets, À venir (en cours compris, la
+ * plus proche d'abord) et Passées (la plus récente d'abord, les plus
+ * anciennes repliées). Les périodes masquées restent dans le brouillon :
+ * rien n'est perdu à l'enregistrement. */
 export function SectionAbsences({
   b,
   maj,
@@ -467,12 +480,32 @@ export function SectionAbsences({
   /** Motif géré ailleurs (l'école, par le bloc École) : ses périodes sont masquées. */
   masquerMotif: number | null
 }) {
-  const motifsAbsence = referentiel.motifs.filter((m) => !estEcole(m))
-  const visibles = [...b.absences]
-    .filter((p) => p.motif_id !== masquerMotif)
-    .sort((x, y) =>
-      x.debut < y.debut ? -1 : x.debut > y.debut ? 1 : x.cle - y.cle,
-    )
+  const [onglet, setOnglet] = useState<'avenir' | 'passees'>('avenir')
+  const [toutes, setToutes] = useState(false)
+  const repos = new Set(
+    referentiel.motifs.filter((m) => m.nature === 'repos').map((m) => m.id),
+  )
+  // Les motifs d'une absence exceptionnelle : ni l'école, ni un repos.
+  const motifsAbsence = referentiel.motifs.filter(
+    (m) => !estEcole(m) && m.nature !== 'repos',
+  )
+  const exceptionnelles = b.absences.filter(
+    (p) => p.motif_id !== masquerMotif && !repos.has(p.motif_id),
+  )
+  // Une période en cours de saisie (sans fin) reste à venir.
+  const passee = (p: PeriodeBrouillon) => !!p.fin && p.fin < aujourdhui
+  const avenir = exceptionnelles
+    .filter((p) => !passee(p))
+    .sort((x, y) => x.debut.localeCompare(y.debut) || x.cle - y.cle)
+  const passees = exceptionnelles
+    .filter(passee)
+    .sort((x, y) => y.debut.localeCompare(x.debut) || y.cle - x.cle)
+  const liste =
+    onglet === 'avenir'
+      ? avenir
+      : toutes
+        ? passees
+        : passees.slice(0, PASSEES_VISIBLES)
   const changer = (
     cle: number,
     f: (p: Brouillon['absences'][number]) => Brouillon['absences'][number],
@@ -485,13 +518,44 @@ export function SectionAbsences({
   return (
     <Section
       titre="Absences"
-      aide="Vacances, repos exceptionnels, sans solde, maladie : une période par ligne, week-end compris. Les motifs se créent dans Horaires et absences."
+      aide="Congés payés, maladie, formation, sans solde, repos exceptionnels : une période par ligne, week-end compris. Les repos de chaque semaine se règlent dans la semaine type et au planning, ils ne sont pas listés ici. Les motifs se créent dans Horaires et absences."
     >
-      {visibles.length === 0 && (
-        <p className="text-sm text-muted-foreground">Aucune absence.</p>
+      <div role="tablist" aria-label="Absences" className="flex gap-1 border-b">
+        {(
+          [
+            ['avenir', 'À venir', avenir.length],
+            ['passees', 'Passées', passees.length],
+          ] as const
+        ).map(([cle, libelle, n]) => (
+          <button
+            key={cle}
+            type="button"
+            role="tab"
+            aria-selected={onglet === cle}
+            onClick={() => setOnglet(cle)}
+            className={cn(
+              '-mb-px border-b-2 px-3 py-1.5 text-sm transition-colors',
+              onglet === cle
+                ? 'border-primary font-medium text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {libelle}{' '}
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {n}
+            </span>
+          </button>
+        ))}
+      </div>
+      {liste.length === 0 && (
+        <p className="text-sm text-muted-foreground">
+          {onglet === 'avenir'
+            ? 'Aucune absence à venir.'
+            : 'Aucune absence passée.'}
+        </p>
       )}
-      <ul className="flex flex-col gap-1.5">
-        {visibles.map((p) => (
+      <ul role="tabpanel" className="flex flex-col gap-1.5">
+        {liste.map((p) => (
           <li
             key={p.cle}
             className="flex flex-wrap items-center gap-1.5"
@@ -534,7 +598,11 @@ export function SectionAbsences({
                 changer(p.cle, (x) => ({ ...x, motif_id: Number(v) }))
               }
               options={referentiel.motifs
-                .filter((m) => !estEcole(m) || m.id === p.motif_id)
+                .filter(
+                  (m) =>
+                    (!estEcole(m) && m.nature !== 'repos') ||
+                    m.id === p.motif_id,
+                )
                 .map((m) => ({ valeur: String(m.id), libelle: m.nom }))}
             />
             {!disabled && (
@@ -558,6 +626,18 @@ export function SectionAbsences({
           </li>
         ))}
       </ul>
+      {onglet === 'passees' && !toutes && passees.length > PASSEES_VISIBLES && (
+        <div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setToutes(true)}
+          >
+            Afficher les plus anciennes ({passees.length - PASSEES_VISIBLES})
+          </Button>
+        </div>
+      )}
       {!disabled && (
         <div>
           <Button
@@ -565,7 +645,8 @@ export function SectionAbsences({
             variant="outline"
             size="sm"
             disabled={motifsAbsence.length === 0}
-            onClick={() =>
+            onClick={() => {
+              setOnglet('avenir')
               maj((x) => ({
                 ...x,
                 absences: [
@@ -578,7 +659,7 @@ export function SectionAbsences({
                   },
                 ],
               }))
-            }
+            }}
           >
             <Plus /> Ajouter une absence
           </Button>

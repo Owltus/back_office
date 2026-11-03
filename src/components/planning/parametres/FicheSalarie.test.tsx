@@ -328,6 +328,68 @@ describe('FicheSalarie', () => {
     })
   })
 
+  it('absences : sans les repos, À venir puis Passées, les anciennes repliées (2026-11-03)', async () => {
+    const repos = {
+      id: 99,
+      code: 'R',
+      nom: 'Repos',
+      couleur: '#999999',
+      decompte: false,
+      nature: 'repos' as const,
+    }
+    demo.referentiel.motifs.push(repos)
+    // 12 jours de maladie passés, séparés (12 périodes), un congé et une
+    // formation à venir, et des repos des deux côtés.
+    const passes = Array.from({ length: 12 }, (_, i) =>
+      jourAbsent(
+        `2025-0${1 + Math.floor(i / 4)}-${String(3 + 7 * (i % 4)).padStart(2, '0')}`,
+        3,
+        100 + i,
+      ),
+    )
+    etat.absences = [
+      ...passes,
+      ...joursEntre('2027-02-01', '2027-02-05').map((j, i) =>
+        jourAbsent(j, 1, 200 + i),
+      ),
+      jourAbsent('2027-01-10', 5, 300),
+      jourAbsent('2027-01-03', 99, 301),
+      jourAbsent('2025-05-05', 99, 302),
+    ]
+    try {
+      ouvrir(LUCAS)
+      const avenir = await screen.findByRole('tab', { name: /À venir/ })
+      expect(avenir.getAttribute('aria-selected')).toBe('true')
+      // À venir : la plus proche d'abord, aucun repos.
+      const debuts = () =>
+        screen
+          .getAllByTestId('periode-absence')
+          .map(
+            (li) => (within(li).getByLabelText('Du') as HTMLInputElement).value,
+          )
+      expect(debuts()).toEqual(['2027-01-10', '2027-02-01'])
+      // Passées : la plus récente d'abord, 10 au plus, le reste replié.
+      fireEvent.click(screen.getByRole('tab', { name: /Passées/ }))
+      expect(debuts()).toHaveLength(10)
+      expect(debuts()[0]).toBe('2025-03-24')
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: /Afficher les plus anciennes \(2\)/,
+        }),
+      )
+      expect(debuts()).toHaveLength(12)
+      expect(debuts().at(-1)).toBe('2025-01-03')
+      // Les repos masqués ne sont pas retirés à l'enregistrement.
+      fireEvent.change(screen.getByLabelText('Nom'), {
+        target: { value: 'Petit-Martin' },
+      })
+      await enregistrerEtAttendre()
+      expect(service.poserAbsences).not.toHaveBeenCalled()
+    } finally {
+      demo.referentiel.motifs.splice(demo.referentiel.motifs.indexOf(repos), 1)
+    }
+  })
+
   it("une période d'absence pose chacun de ses jours, week-end compris", async () => {
     ouvrir(LUCAS)
     fireEvent.click(
