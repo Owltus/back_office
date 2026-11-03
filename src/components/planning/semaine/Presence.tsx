@@ -82,27 +82,26 @@ export function PastillesPresence({ presence }: { presence: PresenceOut[] }) {
   )
 }
 
-/** Le trait entre deux formes : plein vert quand la transmission est
- * assurée, pointillé rouge quand personne n'est là pour la faire, gris pâle
- * quand une des deux équipes est absente (le fil continue, rien n'est à
- * transmettre). `court` : le trait fixe entre le matin et le soir, qui
- * garde les deux ronds centrés dans la journée. */
+/** Le trait entre deux formes, posé en PROPORTION de la case (`place`) :
+ * plein vert quand la transmission est assurée, pointillé rouge quand
+ * personne n'est là pour la faire, gris pâle quand une des deux équipes est
+ * absente (le fil continue, rien n'est à transmettre). Fin (1 px) et centré
+ * sur le milieu des formes (retour utilisateur du 2026-11-03 : « trop gros
+ * et mal alignés »). Il court d'un centre de forme à l'autre, sous elles. */
 function Lien({
   etat,
-  court = false,
+  place,
 }: {
   etat: EtatTransmission | undefined
-  court?: boolean
+  place: string
 }) {
   return (
     <span
       aria-hidden
       data-transmission={etat ?? 'aucune'}
       className={cn(
-        // Trait fin (1 px), centré sur le milieu des formes (retour
-        // utilisateur du 2026-11-03 : « trop gros et mal alignés »).
-        'h-0 -translate-y-[0.5px] self-center border-t',
-        court ? 'w-2.5 shrink-0' : 'min-w-1 flex-1',
+        'absolute top-1/2 h-0 -translate-y-1/2 border-t',
+        place,
         etat === 'ok' && 'border-emerald-500/70',
         etat === 'manque' && 'border-dashed border-red-500/90',
         !etat && 'border-foreground/10',
@@ -155,7 +154,12 @@ function Forme({
       viewBox="0 0 10 10"
       className={cn(
         'block shrink-0',
-        periode === 'nuit' ? 'size-3' : 'size-2.5',
+        // Taille bornée par la largeur de la case (`@container`) : une
+        // fenêtre étroite rétrécit les formes au lieu de les faire se
+        // chevaucher (retour utilisateur du 2026-11-03).
+        periode === 'nuit'
+          ? 'size-[min(0.75rem,26cqw)]'
+          : 'size-[min(0.625rem,20cqw)]',
         teinte(p),
         className,
       )}
@@ -175,9 +179,11 @@ const ligne = (periode: PeriodeMois, p: PresenceOut | undefined) =>
     : `${NOM[periode]} : ${RIEN}`
 
 /** Vue mois (demandes utilisateur du 2026-11-03) : sous le numéro du jour,
- * le matin et le soir en deux ronds CENTRÉS dans la journée, reliés par un
- * trait court ; la NUIT en triangle posé sur la FRONTIÈRE avec le lendemain
- * (elle commence un jour et finit le suivant). Un fil continu d'un jour à
+ * le matin et le soir en deux ronds ; la NUIT en triangle posé sur la
+ * FRONTIÈRE avec le lendemain (elle commence un jour et finit le suivant).
+ * Tout est placé en PROPORTION de la case, à intervalles égaux (nuit 0,
+ * matin 1/3, soir 2/3, nuit 1) : même dessin quelle que soit la largeur de
+ * la fenêtre. Un fil continu d'un jour à
  * l'autre : nuit d'avant, matin, soir, nuit, chaque tronçon coloré par sa
  * transmission. La nuit d'un jour est dessinée dans la case du LENDEMAIN
  * (`veille`), au bord gauche : peinte après sa voisine, elle passe
@@ -212,7 +218,7 @@ export function PointsPresence({
   const nuitAvant = veille?.find((x) => x.periode === 'nuit')
   if (transmissions && veille)
     lignes.unshift(`${ligne('nuit', nuitAvant)} (la veille)`)
-  const centre = 'absolute top-1/2 z-10 -translate-y-1/2'
+  const pose = 'absolute top-1/2 z-10 -translate-x-1/2 -translate-y-1/2'
   return (
     <Tip
       label={<span className="whitespace-pre-line">{lignes.join('\n')}</span>}
@@ -222,29 +228,37 @@ export function PointsPresence({
         aria-label={lignes.join(', ')}
         className={cn(
           'mt-1 flex h-3 items-center',
-          transmissions ? 'relative w-full' : 'justify-center gap-1',
+          transmissions ? 'relative w-full @container' : 'justify-center gap-1',
         )}
       >
         {transmissions ? (
           <>
-            <Lien etat={transmissions.nuitMatin} />
-            <Forme periode="matin" p={de('matin')} />
-            <Lien etat={transmissions.matinSoir} court />
-            <Forme periode="soir" p={de('soir')} />
-            <Lien etat={transmissions.soirNuit} />
+            <Lien etat={transmissions.nuitMatin} place="left-0 right-2/3" />
+            <Lien etat={transmissions.matinSoir} place="left-1/3 right-1/3" />
+            <Lien etat={transmissions.soirNuit} place="left-2/3 right-0" />
+            <Forme
+              periode="matin"
+              p={de('matin')}
+              className={cn(pose, 'left-1/3')}
+            />
+            <Forme
+              periode="soir"
+              p={de('soir')}
+              className={cn(pose, 'left-2/3')}
+            />
             {veille && (
               <Forme
                 periode="nuit"
                 p={nuitAvant}
                 data="nuit-veille"
-                className={cn(centre, 'left-0 -translate-x-1/2')}
+                className={cn(pose, 'left-0')}
               />
             )}
             {derniere && (
               <Forme
                 periode="nuit"
                 p={de('nuit')}
-                className={cn(centre, 'right-0 translate-x-1/2')}
+                className={cn(pose, 'left-full')}
               />
             )}
           </>

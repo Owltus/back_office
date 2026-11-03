@@ -156,7 +156,7 @@ describe('PointsPresence : les transmissions (2026-11-02)', () => {
   const classe = (c: HTMLElement, periode: string) =>
     c.querySelector(`[data-periode="${periode}"]`)!.getAttribute('class')!
 
-  it('un trait par transmission ; les deux ronds centrés, reliés par un trait court', () => {
+  it('un trait par transmission ; tout placé en tiers de la case', () => {
     const { container } = rendre(
       <PointsPresence
         presence={presence}
@@ -166,15 +166,19 @@ describe('PointsPresence : les transmissions (2026-11-02)', () => {
     )
     const l = liens(container)
     expect(l.map((x) => x.etat)).toEqual(['ok', 'manque', 'aucune'])
-    // Centrés : les deux traits du bord s'étirent à parts égales, celui du
-    // milieu est fixe.
-    expect(l[0].classe).toContain('flex-1')
-    expect(l[1].classe).not.toContain('flex-1')
-    expect(l[2].classe).toContain('flex-1')
-    // Dernière colonne : son triangle de nuit au bord droit, à cheval.
+    // Intervalles égaux, en proportion de la case : nuit 0, matin 1/3,
+    // soir 2/3, nuit 1, et chaque trait d'un centre à l'autre.
+    expect(l.map((x) => x.classe.match(/left-\S+ right-\S+/)?.[0])).toEqual([
+      'left-0 right-2/3',
+      'left-1/3 right-1/3',
+      'left-2/3 right-0',
+    ])
+    expect(classe(container, 'matin')).toContain('left-1/3')
+    expect(classe(container, 'soir')).toContain('left-2/3')
+    // Dernière colonne : son triangle de nuit sur le bord droit, à cheval.
     expect(periodes(container)).toEqual(['matin', 'soir', 'nuit'])
-    expect(classe(container, 'nuit')).toContain('right-0')
-    expect(classe(container, 'nuit')).toContain('translate-x-1/2')
+    expect(classe(container, 'nuit')).toContain('left-full')
+    expect(classe(container, 'nuit')).toContain('-translate-x-1/2')
     expect(container.querySelector('[data-periode="nuit"] path')).not.toBeNull()
     const nom = container
       .querySelector('[aria-label]')!
