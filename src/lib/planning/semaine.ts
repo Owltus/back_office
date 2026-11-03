@@ -1066,6 +1066,86 @@ export function besoinsDuMoteur(ctx: Contexte): {
   }
 }
 
+/** Les titulaires actifs d'un poste, s'ils sont TOUS des cadres au forfait
+ * jours (la Direction) ; vide sinon. */
+function cadresSeulsDe(
+  ctx: Pick<Contexte, 'staff'>,
+  posteId: number,
+): Salarie[] {
+  const titulaires = ctx.staff.filter(
+    (x) =>
+      x.actif !== false &&
+      x.competences.some(
+        (c) => c.poste_id === posteId && c.niveau !== 'soutien',
+      ),
+  )
+  return titulaires.length && titulaires.every((x) => x.forfait_jours)
+    ? titulaires
+    : []
+}
+
+/**
+ * R-FERIE-RATTRAPE pour un cadre au forfait jours seul sur son poste
+ * (décision utilisateur du 2026-11-03) : son JFR est choisi ici, avant le
+ * calcul, le premier jour permis de la semaine collé à un jour sans travail
+ * (repos fixe, absence, bord de la semaine), sinon le premier jour permis.
+ * Permis : à venir, après son premier jour férié en attente, sous contrat,
+ * sans absence, école, repos fixe, étoile fixée ni shift qui reste. Un par
+ * semaine. Rien sans motif JFR.
+ */
+export function jfrDesCadresSeuls(
+  d: DonneesSemaine,
+  ctx: Contexte,
+  depuis: number,
+  exclus: ReadonlySet<number> = new Set(),
+): NouvelleAbsence[] {
+  const motifJfr = Math.min(...ctx.motifsJfr)
+  if (!Number.isFinite(motifJfr)) return []
+  const cadres = ctx.staff.filter((x) => {
+    if (!x.forfait_jours || exclus.has(x.id)) return false
+    const postes = x.competences
+      .filter((c) => c.niveau === 'titulaire')
+      .map((c) => c.poste_id)
+    return (
+      postes.length > 0 &&
+      postes.every((p) => cadresSeulsDe(ctx, p).some((y) => y.id === x.id))
+    )
+  })
+  if (!cadres.length) return []
+  const attente = feriesEnAttente(ctx, shiftsConnus(d, ctx.affectations))
+  const r: NouvelleAbsence[] = []
+  for (const x of cadres) {
+    const liste = attente.get(x.id)
+    if (!liste) continue
+    const sol = versSolveur(fiche(x, ctx.lundi, ctx))
+    const pris = new Set(
+      ctx.affectations.filter((a) => a.salarie_id === x.id).map((a) => a.jour),
+    )
+    const libre = (j: number) =>
+      j < 0 ||
+      j > 6 ||
+      sol.reposFixes.has(j) ||
+      sol.indisponibilites.has(j) ||
+      sol.horsContrat.has(j)
+    const jours: number[] = []
+    for (let j = depuis; j < 7; j++) {
+      if (ajouterJours(ctx.lundi, j) <= liste[0].date) continue
+      if (
+        libre(j) ||
+        pris.has(j) ||
+        sol.joursHorsSite.has(j) ||
+        sol.etoileFixe.has(j)
+      )
+        continue
+      jours.push(j)
+    }
+    const jour = jours.find((j) => libre(j - 1) || libre(j + 1)) ?? jours[0]
+    if (jour !== undefined)
+      r.push({ salarie_id: x.id, jour, motif_id: motifJfr })
+  }
+  return r
+}
+
 /** Poste tenu SEULEMENT par des cadres au forfait jours (la Direction) :
  * décision utilisateur du 2026-11-02, « un poste qu'on ne peut pas remplacer ;
  * si elle n'est pas là, elle n'est pas là ». Un jour où aucun d'eux n'est là
@@ -1368,6 +1448,73 @@ export function avecSemainesVoisines(
   return r
 }
 
+/** Règle 4 : la semaine type fixe le samedi ou le dimanche Travaille. */
+export function estWeekendFixe(x: Pick<Salarie, 'semaine_type'>): boolean {
+  return [5, 6].some((j) => x.semaine_type.at(j)?.mode === 'travail')
+}
+
+/** Règle 4 : un week-end complet libre les 3 semaines d'avant `lundi` ?
+ * Un jour du week-end est libre sans shift, et sans absence ou avec une
+ * absence qui laisse libre (`absenceLibre`) : un week-end malade, en
+ * formation ou d'école ne compte pas. Une nuit écrite le dimanche (23:00 ou
+ * 24:00, celle du dimanche au lundi) compte pour le dimanche (Q15, décision
+ * utilisateur du 2026-11-03 : elle rend le week-end travaillé). Null : une
+ * semaine d'avant sans aucun shift (pas encore faite) ou un week-end hors
+ * contrat. `semaine(k)` rend les shifts connus de la semaine `lundi - 7k`. */
+export function weekendLibreAvantDe(
+  x: Salarie,
+  lundi: string,
+  ctx: Pick<Contexte, 'absences' | 'ecole'>,
+  semaine: (k: number) => readonly Affectation[],
+  motifs: ReadonlyMap<number, Motif>,
+): boolean | null {
+  for (let k = 1; k <= 3; k++) {
+    const l = ajouterJours(lundi, -7 * k)
+    const hors = joursHorsContrat(x, l)
+    if (!semaine(k).length || hors.has(5) || hors.has(6)) return null
+    const pris = new Set(
+      semaine(k)
+        .filter((a) => a.salarie_id === x.id)
+        .map((a) => a.jour),
+    )
+    const absents = joursAbsents(x, l, ctx.absences)
+    const libre = (j: number) => {
+      if (pris.has(j)) return false
+      const m = absents.get(j)
+      if (m === undefined || m === null) return true
+      const motif = motifs.get(m)
+      return motif ? absenceLibre(motif) : !ctx.ecole.has(m)
+    }
+    if (libre(5) && libre(6)) return true
+  }
+  return false
+}
+
+/** Partage d'abord (règle 4, décision utilisateur du 2026-11-03) : les
+ * personnes dont la semaine type fixe le week-end et qui n'en ont eu aucun
+ * de libre les 3 semaines d'avant. Cette semaine-là, leur samedi et leur
+ * dimanche ne sont pas posés d'office (`aPoserFixes`) : le calcul leur
+ * donne le week-end s'il le peut sans laisser de place vide. */
+export function weekendsLiberes(d: DonneesSemaine): Set<number> {
+  const lundi = lundiDe(d.lundi)
+  const ctx = contexte(d)
+  const connus = shiftsConnus(d, []).filter((a) => a.lundi < lundi)
+  const semaine = (k: number) => {
+    const l = ajouterJours(lundi, -7 * k)
+    return connus.filter((a) => a.lundi === l)
+  }
+  const motifs = new Map(d.referentiel.motifs.map((m) => [m.id, m]))
+  const r = new Set<number>()
+  for (const x of ctx.staff) {
+    if (x.type_contrat === 'extra' || !estWeekendFixe(x)) continue
+    const hors = joursHorsContrat(x, lundi)
+    if (hors.has(5) || hors.has(6)) continue
+    if (weekendLibreAvantDe(x, lundi, ctx, semaine, motifs) === false)
+      r.add(x.id)
+  }
+  return r
+}
+
 /**
  * Ce que les règles morales du PRD lisent des semaines d'avant et autour de
  * l'école (partie 4 de `plan/planning-bonnes-pratiques/PRD.md`), pour le
@@ -1419,31 +1566,16 @@ export function avecHistoire(
       const m = ctx.absences.get(id)?.get(date)
       return m !== undefined && ctx.ecole.has(m)
     }
-    // Règle 4. Un jour du week-end est libre sans shift, et sans absence
-    // ou avec une absence qui laisse libre (`absenceLibre`) : un week-end
-    // malade, en formation ou d'école ne compte pas.
-    let weekendLibreAvant: boolean | null = sol.placementManuel ? null : false
-    for (let k = 1; k <= 3 && weekendLibreAvant === false; k++) {
-      const l = ajouterJours(lundi, -7 * k)
-      const hors = joursHorsContrat(x, l)
-      if (!semaine(k).length || hors.has(5) || hors.has(6)) {
-        weekendLibreAvant = null
-        break
-      }
-      const pris = new Set(siens(k).map((a) => a.jour))
-      const absents = joursAbsents(x, l, ctx.absences)
-      const libre = (j: number) => {
-        if (pris.has(j)) return false
-        const m = absents.get(j)
-        if (m === undefined || m === null) return true
-        const motif = motifs.get(m)
-        return motif ? absenceLibre(motif) : !ctx.ecole.has(m)
-      }
-      if (libre(5) && libre(6)) weekendLibreAvant = true
-    }
-    const weekendFixe = [5, 6].some(
-      (j) => x.semaine_type.at(j)?.mode === 'travail',
-    )
+    // Règle 4 (`weekendLibreAvantDe`).
+    const weekendLibreAvant = sol.placementManuel
+      ? null
+      : weekendLibreAvantDe(x, lundi, ctx, semaine, motifs)
+    const weekendFixe = estWeekendFixe(x)
+    const weekendLibere =
+      weekendFixe &&
+      weekendLibreAvant === false &&
+      !sol.horsContrat.has(5) &&
+      !sol.horsContrat.has(6)
     // Règles 8 et 7 : la semaine d'avant.
     const lAvant = ajouterJours(lundi, -7)
     const avant = siens(1)
@@ -1530,6 +1662,17 @@ export function avecHistoire(
       ...sol,
       weekendLibreAvant,
       weekendFixe,
+      weekendLibere,
+      // Partage d'abord (2026-11-03) : la semaine type s'efface pour le
+      // week-end libre. Les autres jours habituels gardent leur prime.
+      ...(weekendLibere
+        ? {
+            reposFixes: new Set<number>(),
+            travailFixe: new Set(
+              [...sol.travailFixe].filter((j) => j !== 5 && j !== 6),
+            ),
+          }
+        : {}),
       reposAvant,
       weekendTravailleAvant,
       nuitsAvant,
@@ -1580,11 +1723,32 @@ export function debutApresReposHebdo(
   return seule ? null : fin + s.reposHebdoMin
 }
 
-/** Équité (D15) : le poste principal, celui où l'on compare une personne
- * aux autres (le premier tenu en titulaire). Null : hors équité (extra,
- * forfait jours, sans poste tenu en titulaire). */
-export function posteEquite(x: Salarie): number | null {
+/** Équité (D15) : le groupe où l'on compare une personne aux autres.
+ * TOUT L'ACCUEIL ensemble (décision utilisateur du 2026-11-03, Q16) :
+ * titulaire ou soutien (apprenti, stagiaire) d'un poste ouvert du matin et
+ * du soir (`presence` : Réception, Club) → `POSTE_ID_ACCUEIL`, chacun à sa
+ * part de contrat. Avant, chacun était comparé sur son premier poste de
+ * titulaire, et un apprenti (soutien) n'était comparé à personne. Sinon le
+ * premier poste tenu en titulaire (la Veille de nuit garde le sien : ses
+ * soirs et matins ne se comparent pas à ceux du jour). Null : hors équité
+ * (extra, forfait jours, sans poste tenu). */
+export function posteEquite(
+  x: Salarie,
+  postes?: ReadonlyMap<number, Pick<Poste, 'presence' | 'ferme'>>,
+): number | null {
   if (x.type_contrat === 'extra' || x.forfait_jours) return null
+  if (
+    postes &&
+    x.competences.some((c) => {
+      const p = postes.get(c.poste_id)
+      return (
+        (c.niveau === 'titulaire' || c.niveau === 'soutien') &&
+        !!p?.presence &&
+        !p.ferme
+      )
+    })
+  )
+    return POSTE_ID_ACCUEIL
   return x.competences.find((c) => c.niveau === 'titulaire')?.poste_id ?? null
 }
 
@@ -2015,6 +2179,21 @@ export function analyser(d: DonneesSemaine): SemaineOut {
       ...joursHorsContrat(x, lundi),
     ])
     const travailles = new Set(siens.map(jourDe))
+    // Partage d'abord (2026-11-03) : la semaine type a cédé pour le
+    // week-end libre, l'écran le dit (le samedi fixé est libre cette
+    // semaine-là).
+    if (
+      sol.weekendLibere &&
+      siens.length &&
+      !travailles.has(5) &&
+      !travailles.has(6)
+    )
+      alertes.push({
+        regle: 'WEEKEND-LIBERE',
+        nature: 'organisation',
+        message:
+          'week-end libre cette semaine à la place de sa semaine type (aucun depuis 4 semaines)',
+      })
     for (const j of [...sol.travailFixe].sort((a, b) => a - b)) {
       if (travailles.has(j) || absents.has(j)) continue
       alertes.push({
@@ -2383,8 +2562,31 @@ export function preparerGeneration(
             a.jour < premierJour ||
             a.jour > dernierJour,
         )
-  const d2: DonneesSemaine = { ...d, affectations: restants, absences }
-  const ctx = contexte(d2)
+  let d2: DonneesSemaine = { ...d, affectations: restants, absences }
+  let ctx = contexte(d2)
+  // Un cadre au forfait jours seul sur son poste (la Direction) reçoit son
+  // JFR AVANT le calcul, comme une absence : sa place disparaît ce jour-là
+  // (`sansSonCadre`). Laissé au solveur, il ne le prenait jamais : sa place
+  // vide coûtait plus que le rattrapage (décision utilisateur du
+  // 2026-11-03 : « lui donner son jour »).
+  const jfrCadres =
+    o.seulement == null ? jfrDesCadresSeuls(d2, ctx, depuis, exclus) : []
+  if (jfrCadres.length) {
+    d2 = {
+      ...d2,
+      absences: [
+        ...d2.absences,
+        ...jfrCadres.map((a, i) => ({
+          id: -1 - i,
+          salarie_id: a.salarie_id,
+          jour: ajouterJours(lundi, a.jour),
+          motif_id: a.motif_id,
+          epinglee: false,
+        })),
+      ],
+    }
+    ctx = contexte(d2)
+  }
   const { valides: besoins } = besoinsDuMoteur(ctx)
   let salaries = new Map(
     ctx.staff.map((x) => [
@@ -2425,7 +2627,7 @@ export function preparerGeneration(
   salaries = avecSemainesVoisines(d2, ctx, salaries)
   salaries = avecHistoire(d2, ctx, salaries)
   // R-FERIE-RATTRAPE : un JFR à placer pour chaque personne qui a un jour
-  // férié travaillé à rattraper (fenêtre de 4 semaines), sur un jour à venir
+  // férié travaillé à rattraper (il reste dû, `FERIE_RATTRAPAGE_JOURS`), sur un jour à venir
   // APRÈS le premier jour férié en attente, ni absent, ni d'école, ni hors
   // contrat, ni fixé par la semaine type, ni jour de la journée étoile fixée
   // (un JFR ce jour-là la rendrait intravaillable : `heuresDues` ne baisserait
@@ -2442,6 +2644,8 @@ export function preparerGeneration(
       const liste = attente.get(x.id)
       const sol = salaries.get(x.id)
       if (!liste || !sol || exclus.has(x.id)) continue
+      // Un JFR par semaine : celui du cadre est déjà posé.
+      if (jfrCadres.some((a) => a.salarie_id === x.id)) continue
       const apres = liste[0].date
       const jours = new Set<number>()
       for (let j = depuis; j < 7; j++) {
@@ -2475,7 +2679,7 @@ export function preparerGeneration(
   const groupes = new Map<number, Array<{ x: Salarie; minutes: number }>>()
   for (const x of ctx.staff) {
     const sol = salaries.get(x.id)
-    const groupe = posteEquite(x)
+    const groupe = posteEquite(x, ctx.postes)
     if (!sol || groupe === null) continue
     groupes.set(groupe, [
       ...(groupes.get(groupe) ?? []),
@@ -2601,11 +2805,13 @@ export function preparerGeneration(
     releveMinutes: accueilEnService(ctx)
       ? (d.referentiel.reglages?.releve_minutes ?? 0)
       : 0,
-    // 40 s au plus par semaine (2026-11-01) : à 10 s, HiGHS s'arrêtait
-    // avant l'optimum sur une semaine réelle (décembre : des contrats à
-    // 32 h et des places vides alors que des extras étaient libres) ; il
-    // atteint l'optimum en 10 à 20 s et rend la main dès qu'il l'a.
-    tempsMaxSecondes: o.tempsMaxSecondes ?? 40,
+    // 60 s au plus par semaine (décision utilisateur du 2026-11-03 ; 40 s
+    // depuis le 2026-11-01, 10 s avant) : à 10 s, HiGHS s'arrêtait avant
+    // l'optimum sur une semaine réelle (décembre : des contrats à 32 h et des
+    // places vides alors que des extras étaient libres) ; avec les règles
+    // morales, quelques vraies semaines touchaient les 40 s. Il rend la main
+    // dès qu'il a l'optimum.
+    tempsMaxSecondes: o.tempsMaxSecondes ?? 60,
   })
   const parId = new Map(besoins.map((b) => [`b${b.id}`, b]))
   const traduire = (r: Resultat): NouveauShift[] => {
@@ -2658,12 +2864,14 @@ export function preparerGeneration(
     }
     return nouveaux
   }
-  const absencesJfr = (r: Resultat): NouvelleAbsence[] =>
-    (r.jfr ?? []).map((a) => ({
+  const absencesJfr = (r: Resultat): NouvelleAbsence[] => [
+    ...jfrCadres,
+    ...(r.jfr ?? []).map((a) => ({
       salarie_id: Number(a.salarieId),
       jour: a.jour,
       motif_id: motifJfr,
-    }))
+    })),
+  ]
   return { probleme: p, traduire, absences: absencesJfr, depuis }
 }
 
@@ -2682,6 +2890,7 @@ export function aPoserFixes(
     return new Set()
   const deja = new Set(d.affectations.map((a) => a.salarie_id))
   const absences = indexerAbsences(d.absences)
+  const liberes = weekendsLiberes(d)
   return new Set(
     d.referentiel.salaries
       .filter(
@@ -2690,19 +2899,22 @@ export function aPoserFixes(
           aJoursFixes(x) &&
           joursHorsContrat(x, lundi).size < 7 &&
           (!deja.has(x.id) ||
-            joursFixesManquants(x, d, aujourdhui, absences).length > 0),
+            joursFixesManquants(x, d, aujourdhui, absences, liberes).length >
+              0),
       )
       .map((x) => x.id),
   )
 }
 
 /** Jours « Travaille » de la fiche encore à venir (aujourd'hui compris) qui
- * n'ont ni shift, ni absence, ni repos posé, et sont sous contrat. */
+ * n'ont ni shift, ni absence, ni repos posé, et sont sous contrat. Samedi
+ * et dimanche d'une semaine de week-end libéré (`weekendsLiberes`) : jamais. */
 export function joursFixesManquants(
   x: Salarie,
   d: DonneesSemaine,
   aujourdhui: string,
   absences: Map<number, Map<string, number>> = indexerAbsences(d.absences),
+  liberes: ReadonlySet<number> = weekendsLiberes(d),
 ): number[] {
   const lundi = lundiDe(d.lundi)
   const depuis = Math.max(0, ecartJours(lundi, aujourdhui))
@@ -2711,8 +2923,10 @@ export function joursFixesManquants(
   )
   const absents = joursAbsents(x, lundi, absences)
   const hors = joursHorsContrat(x, lundi)
+  const libere = liberes.has(x.id)
   return x.semaine_type.flatMap((e, j) =>
     e.mode === 'travail' &&
+    !(libere && j >= 5) &&
     j >= depuis &&
     !pris.has(j) &&
     !absents.has(j) &&

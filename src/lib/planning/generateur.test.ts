@@ -690,7 +690,12 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
     // semaine d'avant, donc ni la paire « dimanche d'avant libre » retirée
     // (règle 1) ni la règle 8 neutre pour le week-end n'y écrivent rien ; le
     // jour isolé et le pire coût d'une place n'ont pas changé.
-    expect(empreinte(textes.join('\n=====\n'))).toBe('9d7c36ec')
+    // 98d3081a (2026-11-03, décisions de l'utilisateur) : 12 h conseillées
+    // entre deux services au lieu de 13 (moins de paires écrites, règle 3),
+    // et l'extra qui coûte en plus tout le moral et le confort qu'il
+    // épargnerait (`partMoraleExtra`), donc un pire coût d'une place plus
+    // haut.
+    expect(empreinte(textes.join('\n=====\n'))).toBe('98d3081a')
   })
 })
 

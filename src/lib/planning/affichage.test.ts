@@ -101,6 +101,37 @@ describe('resumeEquite', () => {
     const semaines = [semaine(shift(1, 5), shift(2, 0), shift(3, 6))]
     expect(resumeEquite(semaines, salaries, postes)).toBe('')
   })
+
+  it('tout l’accueil ensemble, apprentis compris (Q16, 2026-11-03)', () => {
+    const accueil = [
+      { id: 1, nom: 'Réception', presence: true, ferme: false },
+      { id: 2, nom: 'Club', presence: true, ferme: false },
+      { id: 3, nom: 'Veille de nuit', presence: false, ferme: false },
+    ] as Poste[]
+    const salaries = [
+      sal(1, 1),
+      sal(2, 2),
+      // Apprenti : soutien de la Réception.
+      sal(3, 1, {
+        type_contrat: 'apprenti',
+        competences: [{ poste_id: 1, niveau: 'soutien' }],
+      }),
+      // La Veille garde son groupe.
+      sal(4, 3),
+      sal(5, 3),
+    ]
+    const semaines = [
+      semaine(shift(1, 5), shift(2, 6), shift(3, 0), shift(4, 6), shift(5, 0)),
+    ]
+    expect(resumeEquite(semaines, salaries, accueil)).toBe(
+      'Week-ends travaillés par personne : Accueil de 0 à 1, Veille de nuit de 0 à 1.',
+    )
+    // Refusé : sans poste ouvert du matin et du soir, chacun sur son poste
+    // de titulaire, et l'apprenti n'est comparé à personne.
+    expect(resumeEquite(semaines, salaries, postes)).toBe(
+      'Week-ends travaillés par personne : Veille de nuit de 0 à 1.',
+    )
+  })
 })
 
 describe('nomsCourts', () => {

@@ -123,7 +123,8 @@ describe('AidePlanningContenu (aide du bouton ?)', () => {
     const feries = document.getElementById('fonctionnement-feries')!
     expect(feries.textContent).toContain('11 jours fériés')
     expect(feries.textContent).toContain('JFR')
-    expect(feries.textContent).toContain('4 semaines')
+    expect(feries.textContent).toContain('il reste dû')
+    expect(feries.textContent).toContain('direction au forfait jours')
     expect(feries.textContent).toContain('Date d’entrée vide')
   })
 

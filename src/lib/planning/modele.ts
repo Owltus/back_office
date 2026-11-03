@@ -183,12 +183,16 @@ export interface SalarieSolveur {
   /** Règle 4 du PRD : un week-end complet libre (samedi et dimanche sans
    * travail ni école) sur les 3 semaines d'avant. false : aucun, la semaine
    * doit en donner un ; null : inconnu ou sans objet (semaines d'avant pas
-   * faites, pas toujours sous contrat, extra, samedi ou dimanche fixé
-   * Travaille dans la semaine type). */
+   * faites, pas toujours sous contrat, extra). */
   weekendLibreAvant: boolean | null
-  /** Règle 4 : la semaine type fixe le samedi ou le dimanche Travaille (le
-   * week-end libre ne se donne pas, le vérificateur le dit). */
+  /** Règle 4 : la semaine type fixe le samedi ou le dimanche Travaille. */
   weekendFixe: boolean
+  /** Règle 4, partage d'abord (décision utilisateur du 2026-11-03) : la
+   * semaine type fixe le week-end ET la personne n'a eu aucun week-end libre
+   * les 3 semaines d'avant. Cette semaine-là, sa semaine type s'efface pour
+   * le lui donner : plus de repos fixes (ses repos peuvent passer au
+   * week-end), samedi et dimanche ne sont plus des jours habituels. */
+  weekendLibere: boolean
   /** Règle 8 du PRD : jours de semaine (lundi 0 à vendredi 4) de repos la
    * semaine d'avant, à garder si possible. Le week-end tourne (règles 4 et
    * 10) : jamais dedans. */
@@ -282,6 +286,7 @@ export function salarieSolveur(
     feriesEvites: new Set(),
     weekendLibreAvant: null,
     weekendFixe: false,
+    weekendLibere: false,
     reposAvant: vide,
     weekendTravailleAvant: false,
     nuitsAvant: vide,

@@ -91,7 +91,7 @@ const MESSAGES: Record<(typeof REGLES_BLOCAGE)[number], string[]> = {
   'REPOS-SEPARES': ['ses jours de repos de la semaine ne se suivent pas'],
   'JOUR-ISOLE': ['un jour de travail seul entre deux jours sans travail'],
   'REPOS-COURT': [
-    'seulement 12 h 15 de repos entre deux services (13 h conseillées)',
+    'seulement 11 h 15 de repos entre deux services (12 h conseillées)',
   ],
   'WEEKEND-LIBRE': ['aucun week-end complet libre depuis 4 semaines'],
   MOMENTS: ['3 changements de moment dans la semaine (1 au plus conseillé)'],

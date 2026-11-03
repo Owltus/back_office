@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest'
 
 import { versSolveur } from '#/lib/planning/regles.ts'
-import { avecHistoire, contexte, fiche } from '#/lib/planning/semaine.ts'
+import {
+  analyser,
+  aPoserFixes,
+  avecHistoire,
+  contexte,
+  fiche,
+  joursFixesManquants,
+  weekendsLiberes,
+} from '#/lib/planning/semaine.ts'
 import type { DonneesSemaine } from '#/lib/planning/semaine.ts'
 import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
 import { ajouterJours, MINUTES_PAR_JOUR } from '#/lib/planning/temps.ts'
@@ -143,6 +151,91 @@ describe('règle 4 : le week-end libre des 3 semaines d’avant', () => {
   it('une semaine pas encore faite : inconnu', () => {
     const h = travaillees().filter((a) => a.lundi !== L(3))
     expect(lire(h).weekendLibreAvant).toBeNull()
+  })
+  it('la nuit du dimanche au lundi, écrite le dimanche, rend le week-end travaillé (Q15)', () => {
+    // Week-end de la semaine -2 libre, sauf une nuit 24:00-07:00 posée le
+    // dimanche (celle qui commence lundi à minuit).
+    const nuit = (lundi: string): Affectation => ({
+      id: ++n,
+      lundi,
+      salarie_id: ID,
+      poste_id: reception.id,
+      jour: 6,
+      horaire_id: null,
+      debut: '24:00',
+      fin: '07:00',
+      epinglee: true,
+      pause: 0,
+    })
+    const h = travaillees({ 2: [5, 6] })
+    expect(lire(h).weekendLibreAvant).toBe(true)
+    expect(lire([...h, nuit(L(2))]).weekendLibreAvant).toBe(false)
+  })
+})
+
+describe('règle 4, partage d’abord : la semaine type cède pour le week-end (2026-11-03)', () => {
+  // Repos lundi, travail du mardi au samedi, repos dimanche.
+  const type: Salarie['semaine_type'] = TOUS.map((j) =>
+    j === 0 || j === 6
+      ? { mode: 'repos' as const }
+      : { mode: 'travail' as const },
+  )
+  it('sans week-end libre depuis 3 semaines : ni repos fixes, ni samedi habituel', () => {
+    const s = lire(travaillees(), [], type)
+    expect(s.weekendFixe).toBe(true)
+    expect(s.weekendLibere).toBe(true)
+    expect([...s.reposFixes]).toEqual([])
+    expect([...s.travailFixe].sort()).toEqual([1, 2, 3, 4])
+  })
+  it('refusé : un week-end libre récent, la semaine type reste', () => {
+    const s = lire(travaillees({ 2: [5, 6] }), [], type)
+    expect(s.weekendLibere).toBe(false)
+    expect([...s.reposFixes].sort()).toEqual([0, 6])
+    expect([...s.travailFixe].sort()).toEqual([1, 2, 3, 4, 5])
+  })
+  it('refusé : sans week-end fixé, rien ne change', () => {
+    const s = lire(travaillees())
+    expect(s.weekendLibere).toBe(false)
+  })
+  it('la pose des fixes ne pose pas le samedi libéré', () => {
+    const d = (h: Affectation[]): DonneesSemaine => ({
+      lundi: LUNDI,
+      referentiel: {
+        ...demo.referentiel,
+        salaries: demo.referentiel.salaries.map((x) =>
+          x.id === ID ? { ...x, semaine_type: type } : x,
+        ),
+        verrous: [],
+      },
+      absences: demo.absences.filter((a) => a.salarie_id !== ID),
+      affectations: [],
+      avant: h.filter((a) => a.lundi === L(1)),
+      avantAvant: h.filter((a) => a.lundi === L(2)),
+      apres: [],
+      historique: h,
+    })
+    const sans = d(travaillees())
+    expect(weekendsLiberes(sans).has(ID)).toBe(true)
+    const x = sans.referentiel.salaries.find((s) => s.id === ID)!
+    expect(joursFixesManquants(x, sans, L(1))).toEqual([1, 2, 3, 4])
+    expect(aPoserFixes(sans, L(1)).has(ID)).toBe(true)
+    const avec = d(travaillees({ 2: [5, 6] }))
+    expect(weekendsLiberes(avec).has(ID)).toBe(false)
+    // Inconnu (une semaine d'avant pas faite) : pas libéré.
+    const inconnu = d(travaillees().filter((a) => a.lundi !== L(3)))
+    expect(weekendsLiberes(inconnu).has(ID)).toBe(false)
+    // L'écran le dit : week-end libre à la place de la semaine type, sans
+    // alerte de jour habituel pour le samedi.
+    const regles = (donnees: DonneesSemaine) =>
+      analyser({ ...donnees, affectations: shifts(LUNDI, [0, 1, 2, 3, 4]) })
+        .bilan.find((b) => b.salarie_id === ID)!
+        .alertes.map((a) => a.regle)
+    expect(regles(sans)).toContain('WEEKEND-LIBERE')
+    expect(regles(sans)).not.toContain('JOUR-HABITUEL')
+    // Refusé : un week-end libre récent, le samedi reste un jour habituel.
+    expect(regles(avec)).not.toContain('WEEKEND-LIBERE')
+    expect(regles(avec)).toContain('JOUR-HABITUEL')
+    expect(joursFixesManquants(x, avec, L(1))).toEqual([1, 2, 3, 4, 5])
   })
 })
 

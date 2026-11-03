@@ -270,3 +270,44 @@ describe('soirs et matins tôt : écart à sa part (générateur)', () => {
     }
   })
 })
+
+describe('tout l’accueil dans un même groupe (Q16, 2026-11-03)', () => {
+  const demo = hotelDemo(LUNDI)
+  const groupes = (presence: boolean) => {
+    const postes = demo.referentiel.postes.map((p) =>
+      p.nom === 'Réception' || p.nom === 'Club' ? { ...p, presence } : p,
+    )
+    const g = preparerGeneration(
+      {
+        lundi: LUNDI,
+        referentiel: { ...demo.referentiel, postes },
+        absences: demo.absences,
+        affectations: [],
+        avant: [],
+        apres: [],
+      },
+      { aujourdhui: LUNDI },
+    )
+    const parType = new Map<string, Set<string | null>>()
+    for (const x of demo.referentiel.salaries) {
+      const s = g.probleme.salaries.find((y) => y.id === String(x.id))
+      const t = x.forfait_jours ? 'forfait' : x.type_contrat
+      parType.set(
+        t,
+        new Set([...(parType.get(t) ?? []), s?.groupeEquite ?? null]),
+      )
+    }
+    return parType
+  }
+  it('accepté : apprentis et salariés de la Réception et du Club ensemble', () => {
+    const g = groupes(true)
+    expect([...g.get('apprenti')!]).toEqual(['0'])
+    expect(g.get('cdi')!.has('0')).toBe(true)
+    // Hors équité : extras et forfaits jours.
+    expect([...g.get('forfait')!]).toEqual([null])
+  })
+  it('refusé : sans poste ouvert du matin et du soir, chacun sur son poste', () => {
+    const g = groupes(false)
+    expect(g.get('cdi')!.has('0')).toBe(false)
+  })
+})

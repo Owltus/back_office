@@ -91,9 +91,10 @@ export function feriesEntre(du: string, au: string): JourFerie[] {
   return r
 }
 
-/** Premier lundi qu'une vue lit avant `lundi` : celui d'avant-avant (repos
- * de 35 h de la semaine d'avant) ou plus tôt, pour qu'un jour férié
- * travaillé des `FERIE_RATTRAPAGE_JOURS` jours d'avant soit vu, avec les JFR
+/** Premier lundi qu'une vue lit avant `lundi` (26 semaines) : celui
+ * d'avant-avant (repos de 35 h de la semaine d'avant) ou plus tôt, pour qu'un
+ * jour férié travaillé des `FERIE_RATTRAPAGE_JOURS` jours d'avant soit vu,
+ * avec les JFR
  * posés depuis (R-FERIE-RATTRAPE). Deux fenêtres en arrière : les jours
  * fériés plus anciens prennent d'abord leurs JFR (`feriesARattraper`), sans
  * quoi le JFR d'un jour férié sorti de la fenêtre serait compté pour le

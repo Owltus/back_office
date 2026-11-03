@@ -83,7 +83,7 @@ export const REGLES_BLOCAGE = [
 const PHRASES_MORALES: Record<string, string> = {
   'REPOS-SEPARES': 'Ses repos ne se suivraient plus',
   'JOUR-ISOLE': 'Ce serait un jour de travail seul entre deux repos',
-  'REPOS-COURT': 'Moins de 13 h de repos avec un autre shift',
+  'REPOS-COURT': 'Moins de 12 h de repos avec un autre shift',
   'WEEKEND-LIBRE': 'Pas de week-end libre depuis 4 semaines',
   MOMENTS: 'Sa semaine changerait trop d’horaires',
   NUITS: 'Trop près de ses nuits',
@@ -345,7 +345,7 @@ const PHRASES_COMMUNES: Record<(typeof REGLES_BLOCAGE)[number], string> = {
   // elles ne bloquent pas), la phrase ne sert qu'à l'exhaustivité.
   'REPOS-SEPARES': 'Les repos de chacun ne se suivraient plus.',
   'JOUR-ISOLE': 'Ce serait pour chacun un jour de travail seul.',
-  'REPOS-COURT': 'Tout le monde aurait moins de 13 h de repos.',
+  'REPOS-COURT': 'Tout le monde aurait moins de 12 h de repos.',
   'WEEKEND-LIBRE': 'Tout le monde attend son week-end libre.',
   MOMENTS: 'Tout le monde changerait trop d’horaires.',
   NUITS: 'Tout le monde sort de ses nuits.',

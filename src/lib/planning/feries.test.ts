@@ -91,10 +91,10 @@ describe('jours fériés de France', () => {
     expect(estJfr({ code: 'JF' })).toBe(false)
   })
 
-  it('les vues lisent huit semaines avant le lundi', () => {
-    // Quatre semaines de fenêtre, et quatre d'avant pour que les jours
-    // fériés plus anciens prennent d'abord leurs JFR.
-    expect(premierLundiLu('2026-11-16')).toBe('2026-09-21')
+  it('les vues lisent vingt-six semaines avant le lundi', () => {
+    // Treize semaines où le jour férié reste dû, et treize d'avant pour que
+    // les jours fériés plus anciens prennent d'abord leurs JFR.
+    expect(premierLundiLu('2026-11-16')).toBe('2026-05-18')
   })
 })
 
@@ -348,6 +348,83 @@ function poser(nouveaux: NouveauShift[]): Affectation[] {
   }))
 }
 
+describe('la direction au forfait jours reçoit son JFR (2026-11-03)', () => {
+  // La directrice de l'hôtel fictif (id 1, seule titulaire de la
+  // Direction), entrée en 2020, a travaillé le 11/11, comme l'id 2
+  // (Réception). Laissé au solveur, le JFR d'un cadre seul sur son poste
+  // n'était jamais pris (sa place vide coûtait plus).
+  function direction(forfait = true): DonneesSemaine {
+    const demo = hotelDemo(LUNDI)
+    const dir = demo.referentiel.postes.find((p) => p.nom === 'Direction')!
+    const salaries = demo.referentiel.salaries.map((x) =>
+      x.id === 1
+        ? { ...x, date_entree: '2020-01-01', forfait_jours: forfait }
+        : x.id === 2
+          ? { ...x, date_entree: '2020-01-01' }
+          : x,
+    )
+    const ferie = (salarie_id: number): Affectation => ({
+      id: 9100 + salarie_id,
+      lundi: AVANT,
+      salarie_id,
+      poste_id: dir.id,
+      jour: 2,
+      horaire_id: null,
+      debut: '09:00',
+      fin: '17:00',
+      epinglee: true,
+      pause: 0,
+    })
+    return {
+      lundi: LUNDI,
+      referentiel: {
+        ...demo.referentiel,
+        salaries,
+        motifs: [...demo.referentiel.motifs, JFR],
+      },
+      absences: demo.absences,
+      affectations: [],
+      avant: [ferie(1), ferie(2)],
+      apres: [],
+    }
+  }
+  const rien = {
+    statut: 'optimal' as const,
+    affectations: [],
+    manques: [],
+    ecartTotalMinutes: 0,
+  }
+  it('posé avant le calcul, collé à son repos ; sa place disparaît ce jour-là', () => {
+    const g = preparerGeneration(direction(), {
+      aujourdhui: AUJOURDHUI,
+      graine: 1,
+    })
+    // Posé d'avance pour la directrice seulement ; l'id 2 (Réception) passe
+    // par le solveur, comme avant.
+    const poses = g.absences(rien)
+    expect(poses).toEqual([{ salarie_id: 1, jour: 0, motif_id: JFR.id }])
+    // Lundi, collé au week-end de repos ; pas un second par le solveur.
+    expect(g.probleme.salaries.find((s) => s.id === '1')?.jfr).toBeNull()
+    expect(g.probleme.salaries.find((s) => s.id === '2')?.jfr).not.toBeNull()
+    // Aucune place de Direction le lundi : elle n'est pas là.
+    const dir = direction().referentiel.postes.find(
+      (p) => p.nom === 'Direction',
+    )!
+    expect(
+      g.probleme.creneaux.some(
+        (c) => c.poste === String(dir.id) && c.jourPlanning === 0,
+      ),
+    ).toBe(false)
+  })
+  it('refusé : sans forfait jours, le JFR reste au calcul', () => {
+    const g = preparerGeneration(direction(false), {
+      aujourdhui: AUJOURDHUI,
+      graine: 1,
+    })
+    expect(g.absences(rien).filter((a) => a.salarie_id <= 2)).toEqual([])
+  })
+})
+
 describe('la génération place le JFR', () => {
   it('avec droit : un JFR la semaine suivante, un jour sans shift, une journée de moins', () => {
     const d = donnees('2024-01-01')
@@ -496,15 +573,19 @@ describe('la génération place le JFR', () => {
     expect(sol.indisponibilites.has(2)).toBe(false)
   })
 
-  it('au-delà de quatre semaines, plus de proposition', () => {
+  it('au-delà de quatre semaines, toujours dû ; au-delà de treize, plus lu', () => {
+    // Décision utilisateur du 2026-11-03 (Q9, Q14) : il reste dû jusqu'à
+    // ce qu'il soit rendu, dans la limite de ce que les vues lisent.
     const d = donnees('2024-01-01')
-    const tard = preparerGeneration(
-      { ...d, lundi: '2026-12-14', avant: [], anterieures: d.avant },
-      { aujourdhui: '2026-12-12' },
-    )
-    expect(
-      tard.probleme.salaries.find((s) => s.id === String(ID))?.jfr,
-    ).toBeNull()
+    const jfr = (lundi: string, aujourdhui: string) =>
+      preparerGeneration(
+        { ...d, lundi, avant: [], anterieures: d.avant },
+        { aujourdhui },
+      ).probleme.salaries.find((s) => s.id === String(ID))?.jfr
+    // Accepté : cinq semaines après le 11/11, le JFR est encore proposé.
+    expect(jfr('2026-12-14', '2026-12-12')?.jours.size).toBeGreaterThan(0)
+    // Refusé : 96 jours après, hors de la fenêtre lue.
+    expect(jfr('2027-02-15', '2027-02-13')).toBeNull()
   })
 
   // 39 h, journée étoile fixée le mardi, un jour libre (mode auto). Un JFR ce

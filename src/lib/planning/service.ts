@@ -58,6 +58,24 @@ function auMoinsUne<T>(r: { data: T[] | null; error: unknown }): T[] {
 
 const num = (v: unknown) => Number(v)
 
+/** PostgREST rend au plus 1 000 lignes par requête (`max_rows`) et tronque
+ * SANS erreur : une lecture qui peut dépasser se fait par pages. */
+const PAGE_LECTURE = 1000
+
+async function toutLire<T>(
+  page: (
+    de: number,
+    a: number,
+  ) => PromiseLike<{ data: T[] | null; error: unknown }>,
+): Promise<T[]> {
+  const r: T[] = []
+  for (let de = 0; ; de += PAGE_LECTURE) {
+    const lot = verifier(await page(de, de + PAGE_LECTURE - 1)) ?? []
+    r.push(...lot)
+    if (lot.length < PAGE_LECTURE) return r
+  }
+}
+
 function normaliserSalarie(x: Salarie): Salarie {
   return {
     ...x,
@@ -169,22 +187,31 @@ export async function fetchShifts(
   du: string,
   au: string,
 ): Promise<DonneesShifts> {
+  // 26 semaines d'avant (jours fériés à rattraper) : plus de 1 000 shifts,
+  // lus par pages (`toutLire`).
   const [affectations, absences] = await Promise.all([
-    supabase
-      .from('planning_affectations')
-      .select(COL_AFFECTATION)
-      .in('lundi', lundis)
-      .order('id'),
-    supabase
-      .from('planning_absences')
-      .select(COL_ABSENCE)
-      .gte('jour', du)
-      .lte('jour', au)
-      .order('jour'),
+    toutLire((de, a) =>
+      supabase
+        .from('planning_affectations')
+        .select(COL_AFFECTATION)
+        .in('lundi', lundis)
+        .order('id')
+        .range(de, a),
+    ),
+    toutLire((de, a) =>
+      supabase
+        .from('planning_absences')
+        .select(COL_ABSENCE)
+        .gte('jour', du)
+        .lte('jour', au)
+        .order('jour')
+        .order('id')
+        .range(de, a),
+    ),
   ])
   return {
-    affectations: verifier(affectations),
-    absences: verifier(absences),
+    affectations: affectations as DonneesShifts['affectations'],
+    absences: absences as DonneesShifts['absences'],
   }
 }
 

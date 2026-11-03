@@ -17,6 +17,8 @@ import {
   coutSurplus,
   generer,
   PART_FIXE_DEPANNAGE,
+  partMoraleExtra,
+  pireMoral,
   POIDS_SIXIEME_JOUR,
   POIDS_SOUS_CONTRAT,
   POIDS_SUR_CONTRAT,
@@ -410,6 +412,54 @@ describe('titulaire < dépannage < extra < vide (D7)', () => {
     expect(coutManqueMinimum([c], coutSurplus([c]))).toBeGreaterThan(
       coutExtra(c) + coutSurplus([c]),
     )
+    // Décision utilisateur du 2026-11-03 : un extra coûte aussi plus que
+    // tout ce qu'il épargnerait à un salarié en règles morales, équité et
+    // confort. Il ne sert qu'à une place qui resterait vide.
+    expect(partMoraleExtra(c)).toBeGreaterThan(pireMoral(c))
+    expect(coutExtra(c)).toBeGreaterThan(
+      coutDepannage(c) +
+        POIDS_SUR_CONTRAT * duree(c) +
+        POIDS_SIXIEME_JOUR +
+        partMoraleExtra(c),
+    )
+  })
+
+  it('refusé : un extra n’est jamais pris pour libérer un week-end', () => {
+    // Deux salariés sans week-end libre depuis 4 semaines, 16 h chacun ; le
+    // samedi et le dimanche demandent une personne, la semaine est libre.
+    // Un extra le week-end les libérerait tous les deux : jamais.
+    const libres = [0, 1, 2, 3, 4].map((j) => chiffre(j, 'matin', 0, null))
+    for (let graine = 0; graine < 4; graine++) {
+      const p = probleme({
+        salaries: [
+          sal('a', { minutesHebdoContrat: 16 * H, weekendLibreAvant: false }),
+          sal('b', { minutesHebdoContrat: 16 * H, weekendLibreAvant: false }),
+          extra('ext'),
+        ],
+        creneaux: [0, 1, 2, 3, 4, 5, 6].map((j) => matin(`m${j}`, 'rec', j)),
+        consignes: [...libres, chiffre(5, 'matin', 1), chiffre(6, 'matin', 1)],
+        nbJours: 7,
+        graine,
+      })
+      const r = gen(p)
+      expect(r.affectations.some((a) => a.salarieId === 'ext')).toBe(false)
+      expect(ecarts(p, r).slice(-2)).toEqual([0, 0])
+    }
+    // Accepté : personne d'autre pour le samedi, l'extra vient.
+    const seul = probleme({
+      salaries: [
+        sal('a', {
+          minutesHebdoContrat: 8 * H,
+          weekendLibreAvant: false,
+          indisponibilites: new Set([5]),
+        }),
+        extra('ext'),
+      ],
+      creneaux: [5, 6].map((j) => matin(`m${j}`, 'rec', j)),
+      consignes: [chiffre(5, 'matin', 1), chiffre(6, 'matin', 1)],
+      nbJours: 7,
+    })
+    expect(qui(gen(seul))).toEqual(['a@m6', 'ext@m5'])
   })
 })
 

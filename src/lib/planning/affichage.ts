@@ -3,7 +3,7 @@
  */
 
 import { estJourneeEtoile } from '#/lib/planning/etoile.ts'
-import { posteEquite } from '#/lib/planning/semaine.ts'
+import { POSTE_ID_ACCUEIL, posteEquite } from '#/lib/planning/semaine.ts'
 import type { BilanOut, SemaineOut } from '#/lib/planning/semaine.ts'
 import {
   ajouterJours,
@@ -358,13 +358,15 @@ export function resumeEquite(
     for (const id of ceWeekend) weekends.set(id, (weekends.get(id) ?? 0) + 1)
   }
   const parPoste = new Map<number, number[]>()
+  const parId = new Map(postes.map((p) => [p.id, p]))
   for (const x of salaries) {
-    const p = posteEquite(x)
+    const p = posteEquite(x, parId)
     if (p === null || !presents.has(x.id)) continue
     parPoste.set(p, [...(parPoste.get(p) ?? []), weekends.get(x.id) ?? 0])
   }
   const morceaux: string[] = []
-  for (const poste of postes) {
+  // L'accueil entier (Q16) d'abord, puis les autres postes.
+  for (const poste of [{ id: POSTE_ID_ACCUEIL, nom: 'Accueil' }, ...postes]) {
     const n = parPoste.get(poste.id)
     if (!n || n.length < 2) continue
     const min = Math.min(...n)

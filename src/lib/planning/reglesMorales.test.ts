@@ -128,7 +128,7 @@ describe('les poids moraux : sous les places et les heures dues, au-dessus du d�
   })
 })
 
-describe('règle 3 : 13 h entre deux services', () => {
+describe('règle 3 : 12 h entre deux services', () => {
   // Lundi matin 7-15 et soir 14-22, mardi matin 9-17 (11 h après le soir :
   // légal) et soir 14-22. Deux personnes à 16 h : chacune lundi et mardi.
   const places = [
@@ -162,20 +162,45 @@ describe('règle 3 : 13 h entre deux services', () => {
     expect(de(r, 'a')).toEqual(['lsoir', 'mmatin'])
     expect(loi(p, r)).toEqual([])
     expect(alertes(p, r, 'REPOS-COURT').map((v) => v.message)).toEqual([
-      'seulement 11 h de repos entre deux services (13 h conseillées)',
+      'seulement 11 h de repos entre deux services (12 h conseillées)',
     ])
   })
-  it('vérificateur : 13 h pile, pas d’alerte ; depuis la semaine d’avant', () => {
+  it('vérificateur : 12 h pile, pas d’alerte ; 11 h 45, alerte ; depuis la semaine d’avant', () => {
     const s = personne('a', 8)
+    // 12 h 30 : sous les 13 h d'avant le 2026-11-03, au-dessus des 12 h.
     const p = probleme({
       salaries: [s],
-      creneaux: [cr('x', 0, 22, 30), cr('y', 1, 19, 23)],
+      creneaux: [cr('x', 0, 22, 30), cr('y', 1, 18.5, 23)],
     })
     expect(
       alertes(p, { ...rien, affectations: aff('a', 'x', 'y') }, 'REPOS-COURT'),
     ).toEqual([])
+    const pile = probleme({
+      salaries: [s],
+      creneaux: [cr('x', 0, 22, 30), cr('y', 1, 18, 23)],
+    })
+    expect(
+      alertes(
+        pile,
+        { ...rien, affectations: aff('a', 'x', 'y') },
+        'REPOS-COURT',
+      ),
+    ).toEqual([])
+    const juste = probleme({
+      salaries: [s],
+      creneaux: [cr('x', 0, 22, 30), cr('y', 1, 17.75, 23)],
+    })
+    expect(
+      alertes(
+        juste,
+        { ...rien, affectations: aff('a', 'x', 'y') },
+        'REPOS-COURT',
+      ).map((v) => v.message),
+    ).toEqual([
+      'seulement 11 h 45 de repos entre deux services (12 h conseillées)',
+    ])
     const avant = probleme({
-      salaries: [personne('a', 8, { finServicePrecedent: -5 * H })],
+      salaries: [personne('a', 8, { finServicePrecedent: -4.5 * H })],
       creneaux: [cr('m', 0, 7, 15)],
     })
     expect(
@@ -220,6 +245,42 @@ describe('règle 4 : un week-end libre sur 4 semaines', () => {
       expect(de(r, 'a')).toEqual(['jeu', 'mer'])
       expect(alertes(p, r, 'WEEKEND-LIBRE')).toEqual([])
     }
+  })
+  it('partage d’abord : un week-end fixé par la semaine type ne l’exempte plus', () => {
+    for (const graine of graines) {
+      const p = probleme({
+        salaries: [
+          // Samedi et dimanche restent ses jours habituels (prime) : seul
+          // le coût du week-end libre la fait passer en semaine.
+          personne('a', 16, {
+            weekendLibreAvant: false,
+            weekendFixe: true,
+            travailFixe: new Set([5, 6]),
+          }),
+          personne('b', 16, { weekendLibreAvant: true }),
+        ],
+        creneaux: places,
+        graine,
+      })
+      const r = resoudre(p)
+      expect(r.manques).toEqual([])
+      expect(de(r, 'a')).toEqual(['jeu', 'mer'])
+    }
+  })
+  it('refusé : week-end fixé et un week-end libre récent, il garde son samedi', () => {
+    const p = probleme({
+      salaries: [
+        personne('a', 16, {
+          weekendLibreAvant: true,
+          weekendFixe: true,
+          travailFixe: new Set([5, 6]),
+        }),
+        personne('b', 16, { weekendLibreAvant: true }),
+      ],
+      creneaux: places,
+    })
+    const r = resoudre(p)
+    expect(de(r, 'a')).toEqual(['dim', 'sam'])
   })
   it('seule possible : elle travaille, et l’alerte le dit', () => {
     const p = probleme({

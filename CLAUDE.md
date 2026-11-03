@@ -2316,10 +2316,10 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   > moins que 4 h d'heures dues, jamais une place vide pour elle. En place,
   > avec une alerte chacune (`alertesMorales`, `REGLES_MORALES`, « à
   > éviter » sur une place à pourvoir) : 1 paire de repos DANS la semaine
-  > (REPOS-SEPARES) ; 3 13 h entre deux services, 11 h restent dures
-  > (REPOS-COURT) ; 4 un week-end libre sur 4 semaines, maladie / formation /
-  > sans solde / école ne comptent pas comme libres, la semaine type passe
-  > avant (WEEKEND-LIBRE) ; 6 au plus un changement de moment, pas de matin
+  > (REPOS-SEPARES) ; 3 12 h entre deux services (13 h jusqu'au 2026-11-03),
+  > 11 h restent dures (REPOS-COURT) ; 4 un week-end libre sur 4 semaines,
+  > maladie / formation / sans solde / école ne comptent pas comme libres
+  > (WEEKEND-LIBRE) ; 6 au plus un changement de moment, pas de matin
   > dans les 2 jours après un soir (MOMENTS) ; 7 au plus 5 nuits puis 2 jours
   > (NUITS) ; 8 mêmes repos lundi-vendredi, neutre après un week-end travaillé
   > (MEMES-REPOS) ; 9 alerte JOUR-ISOLE (le moteur ne l'évite que contre une
@@ -2334,8 +2334,31 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   > dépôt) : repos < 13 h 17 → 0, semaines heurtées 26 → 9, aucune
   > infraction ni place vide de plus ; mais le week-end libre ne progresse
   > pas (manque de monde : Q12, Q17) et quelques vraies semaines atteignent
-  > le plafond de 40 s. Règle 11 (fêtes) reportée. Questions ouvertes Q12,
-  > Q14-Q17 dans le PRD.
+  > le plafond de 40 s. Règle 11 (fêtes) reportée.
+- **DÉCISIONS DE L'UTILISATEUR DU 2026-11-03 (questions du PRD fermées)** :
+  Q1 confirmée (« toujours respecter les besoins de la page Besoins ; au
+  mieux les bonnes pratiques ; s'il n'y a pas le choix, le meilleur
+  compromis ») ; règle 3 à 12 h ; PARTAGE D'ABORD : une semaine type qui
+  fixe le week-end ne l'exempte plus, la semaine où la personne n'a eu aucun
+  week-end libre depuis 3 semaines elle cède (`weekendLibere` dans
+  `avecHistoire` : plus de repos fixes, samedi et dimanche plus habituels ;
+  pas posés d'office, `weekendsLiberes` dans `aPoserFixes` ; alerte
+  WEEKEND-LIBERE) ; Q12 pas de case, la semaine type suffit ; Q15 la nuit du
+  dimanche au lundi (posée le dimanche, 23:00 ou 24:00) rend le week-end
+  travaillé ; Q16 équité sur TOUT l'accueil (titulaires et soutiens des
+  postes `presence`, groupe `POSTE_ID_ACCUEIL`, `posteEquite(x, postes)`),
+  la Veille garde son groupe ; Q17 JAMAIS d'extra pour un week-end ou la
+  répartition (`partMoraleExtra` ajouté à `coutExtra`, toujours sous la
+  place vide) ; Q9/Q14 le JFR reste dû avec son alerte jusqu'à ce qu'il
+  soit rendu (`FERIE_RATTRAPAGE_JOURS` = 91 jours, vues sur 26 semaines,
+  ⚠ `fetchShifts` lit PAR PAGES de 1 000 : PostgREST tronquait sans erreur) ;
+  la direction au forfait jours seule sur son poste reçoit son JFR avant le
+  calcul (`jfrDesCadresSeuls`), sa place disparaît ce jour-là ; veilleur
+  gardé tel quel ; 60 s de calcul par semaine (40 s avant). Empreinte
+  `generateur.test.ts` 98d3081a. Banc (9 scénarios hors dépôt, dont 3 et 4
+  départs simulés) : 0 infraction, 0 place vide, week-ends libres en
+  hausse, apprentis rééquilibrés ; en sous-effectif, 6e jours et 47 h
+  plutôt qu'un extra (à 3 départs) ; 4 semaines sur 81 au plafond de 60 s.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

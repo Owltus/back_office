@@ -807,14 +807,15 @@ export function AidePlanningContenu({
             'Les extras n’ont pas de jour rattrapé.',
             'Un stagiaire a tous ses jours fériés, dès le premier jour : il n’est jamais placé ce jour-là, la case montre Jour férié, et une journée de contrat de moins est due dans sa semaine. Il n’a donc jamais de JFR.',
             'Un mineur n’est pas placé un jour férié si on peut l’éviter. La loi le permet en hôtellerie, mais le calcul l’évite, et une alerte le signale s’il y travaille.',
-            'Le JFR est proposé dans les 4 semaines qui suivent le jour férié, au plus un par semaine.',
+            'Le JFR est proposé dès la semaine qui suit le jour férié, au plus un par semaine. Tant qu’il n’est pas rendu, il reste dû : une alerte le rappelle et l’app le propose à nouveau chaque semaine.',
+            'La direction au forfait jours reçoit aussi son JFR : ce jour-là, sa place disparaît, comme quand elle est absente.',
             'Il se valide comme un repos : pointillés tant qu’il est proposé, trait plein une fois validé. Comme un congé, une journée de contrat de moins est due dans sa semaine : 39 h passent à 32 h, 35 h à 28 h.',
           ]}
         />
         <Exemple>
           une réceptionniste entrée il y a trois ans travaille le 11 novembre.
-          L’app lui propose un JFR une des quatre semaines suivantes, un jour où
-          elle n’est pas indispensable. Vous le validez, ou vous le déplacez.
+          L’app lui propose un JFR dans les semaines suivantes, un jour où elle
+          n’est pas indispensable. Vous le validez, ou vous le déplacez.
         </Exemple>
         <p className="text-muted-foreground">
           Pensez à remplir la date d’entrée de chacun dans sa fiche Équipe :
@@ -906,7 +907,7 @@ export function AidePlanningContenu({
             Un premier calcul n’utilise que les horaires demandés et leurs
             versions étoile. S’il reste une place vide, un manque à l’accueil,
             un trou ou un dépannage évitable, un second calcul essaie aussi les
-            autres horaires. Chaque semaine a au plus 40 secondes de calcul. Un
+            autres horaires. Chaque semaine a au plus 60 secondes de calcul. Un
             nouveau clic sur Compléter le mois arrête le calcul.
           </p>
         </Sous>
@@ -976,7 +977,7 @@ export function AidePlanningContenu({
               'Deux repos qui se suivent dans la semaine. Un dimanche libre suivi d’un lundi libre ne remplace pas cette paire.',
               `${JOURS_AFFILES_MAX} jours de travail d’affilée au plus, ${JOURS_AFFILES_CONSEILLES} visés, semaines voisines comprises.`,
               `Au moins ${h(REPOS_CONFORT)} entre la fin d’un service et le début du suivant (la loi en demande ${h(REPOS_QUOTIDIEN)}).`,
-              `Un week-end complet libre, samedi et dimanche, au moins une fois sur ${SEMAINES_EQUITE} semaines. Un congé ou un repos compte comme libre ; une maladie, une formation, un sans solde ou l’école, non. Une nuit écrite le dimanche compte pour le dimanche.`,
+              `Un week-end complet libre, samedi et dimanche, au moins une fois sur ${SEMAINES_EQUITE} semaines. Un congé ou un repos compte comme libre ; une maladie, une formation, un sans solde ou l’école, non. La nuit du dimanche au lundi est écrite le dimanche : elle rend le week-end travaillé.`,
               'Un repos fixe, posé ou validé n’est jamais repris par le calcul.',
             ]}
           />
@@ -995,7 +996,9 @@ export function AidePlanningContenu({
         <Sous titre="La justice">
           <Liste
             items={[
-              `Partage des week-ends, des soirs et des matins tôt, sur les ${SEMAINES_EQUITE} dernières semaines, à la part de contrat de chacun. Une semaine d’absence ne met personne en retard. La semaine type passe avant : un samedi ou un dimanche fixé en Travaille dans la fiche n’entre pas dans ce partage.`,
+              `Partage des week-ends, des soirs et des matins tôt, sur les ${SEMAINES_EQUITE} dernières semaines, entre tout l’accueil (Réception et Club, apprentis compris), à la part de contrat de chacun. Une semaine d’absence ne met personne en retard.`,
+              'Le week-end libre passe avant la semaine type : un samedi ou un dimanche fixé en Travaille dans la fiche est libéré une fois sur 4 semaines, et les repos fixes de cette semaine-là peuvent bouger. Une alerte le dit.',
+              'Un extra ne sert jamais à libérer un week-end ni à mieux répartir : il coûte de l’argent. L’app ne le propose que pour une place qui resterait vide.',
               `Les heures au-delà du contrat vont d’abord à qui en a fait le moins sur les ${SEMAINES_EQUITE} dernières semaines. Au-delà du contrat ${SEMAINES_EN_PLUS_ALERTE} semaines sur 4 : une alerte.`,
               'Les jours fériés travaillés sont rattrapés dans les semaines qui suivent, même sur un jour habituel de la semaine type.',
             ]}

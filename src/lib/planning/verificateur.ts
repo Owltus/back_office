@@ -418,7 +418,7 @@ function alertesMorales(
   const travaille = (d: number) => parJour.has(d) || s.joursHorsSite.has(d)
   const nbSemaines = Math.ceil(nbJours / 7)
 
-  // Règle 3 : moins de 13 h entre deux services (sous 11 h : la loi, plus
+  // Règle 3 : moins de 12 h entre deux services (sous 11 h : la loi, plus
   // haut).
   const court = (ecart: number) =>
     ecart >= s.reposQuotidienMin && ecart < REPOS_CONFORT
@@ -572,9 +572,7 @@ function alertesMorales(
     )
       ajoute(
         'WEEKEND-LIBRE',
-        s.weekendFixe
-          ? 'aucun week-end complet libre depuis 4 semaines : sa semaine type fixe le samedi ou le dimanche'
-          : 'aucun week-end complet libre depuis 4 semaines',
+        'aucun week-end complet libre depuis 4 semaines',
         semaine.filter((c) => jourDe(c) >= 5),
       )
 

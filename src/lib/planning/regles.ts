@@ -45,11 +45,13 @@ export const JOURS_AFFILES_CONSEILLES = 5
  * Le générateur les évite (poids sous les places et les heures dues, Q1),
  * le vérificateur les signale (alertes d'organisation, jamais bloquantes).
  * Seuils décidés par l'assistant le 2026-11-02 (questions Q1, Q7, Q8
- * déléguées par l'utilisateur), modifiables ici seulement.
+ * déléguées par l'utilisateur), revus par l'utilisateur le 2026-11-03,
+ * modifiables ici seulement.
  */
 /** Règle 3 : repos conseillé entre la fin d'un service et le début du
- * suivant (la loi dit 11 h, `REPOS_QUOTIDIEN`, qui reste dure). */
-export const REPOS_CONFORT = 13 * H
+ * suivant (la loi dit 11 h, `REPOS_QUOTIDIEN`, qui reste dure). 12 h :
+ * décision utilisateur du 2026-11-03 (13 h avant). */
+export const REPOS_CONFORT = 12 * H
 /** Règle 6 : changements de moment (matin, middle, soir, nuit) au plus
  * dans une semaine, et de préférence vers plus tard (matin puis soir). */
 export const CHANGEMENTS_MOMENT_MAX = 1
@@ -256,9 +258,13 @@ export function droitAuRattrapage(
   return ferie >= `${annee}${x.date_entree.slice(4, 10)}`
 }
 
-/** R-FERIE-RATTRAPE : le JFR est proposé dans les 4 semaines qui suivent le
- * jour férié ; au-delà, plus de proposition automatique. */
-export const FERIE_RATTRAPAGE_JOURS = 28
+/** R-FERIE-RATTRAPE : un jour férié travaillé reste DÛ, avec son alerte
+ * (JOUR-FERIE), et le calcul propose son JFR chaque semaine, jusqu'à ce
+ * qu'il soit rendu (décision utilisateur du 2026-11-03, Q9 et Q14 : avant,
+ * il se perdait sans prévenir au bout de 4 semaines). Borne de lecture :
+ * 13 semaines (un trimestre) ; au-delà, les vues ne lisent plus ce jour
+ * férié. Les vues lisent deux fois cette étendue (`premierLundiLu`). */
+export const FERIE_RATTRAPAGE_JOURS = 91
 
 /** R-FERIE-RATTRAPE : un JFR vaut un jour d'absence décompté, comme un
  * congé (`heuresDues` avec un jour de plus) : ce qu'il retire aux heures

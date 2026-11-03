@@ -1,6 +1,7 @@
 # Planning du personnel : bonnes pratiques de mise en place
 
-PRD et charte de la page `/planning`. Version du 2026-11-02 (règles morales en place le soir même).
+PRD et charte de la page `/planning`. Version du 2026-11-02 (règles morales en place le soir même),
+revue le 2026-11-03 avec les décisions de l'utilisateur (questions Q1, Q7 à Q9, Q12, Q14 à Q17).
 
 Ce document est à la fois :
 
@@ -66,8 +67,19 @@ fait le planning et pour le calcul.
 4. **Les règles morales et professionnelles** (partie 4).
 5. **Le confort** : jours habituels, petites préférences, départage.
 
-Cet ordre est la réponse à la question Q1, **décidée par l'assistant le 2026-11-02** (décision
-déléguée par l'utilisateur, à revoir avec lui).
+Cet ordre est la réponse à la question Q1, décidée par l'assistant le 2026-11-02 et **confirmée
+par l'utilisateur le 2026-11-03** : « Tu dois toujours respecter les besoins de la page
+Paramètres > Besoins. Au mieux, tu respectes les bonnes pratiques, la justice et la justesse. S'il
+n'y a pas le choix, il faut faire au mieux, le meilleur compromis. » Les besoins (places et
+chiffres de l'accueil) passent donc avant toute règle morale ; une règle morale cède quand il n'y a
+pas le choix, sans jamais faire échouer le calcul, et une alerte le dit.
+
+**Les extras** (décision utilisateur du 2026-11-03) : un extra coûte de l'argent. Il ne sert jamais
+à libérer un week-end ni à mieux répartir la charge. Il ne vient que pour une place qui resterait
+vide autrement (vrai manque de personnel). Moteur : `coutExtra` compte, en plus de ce qu'il
+coûtait (heures en plus, 6e jour, dépannage), tout ce qu'un shift peut coûter en règles morales,
+en équité et en confort à la personne qu'il soulagerait (`partMoraleExtra`) ; il reste sous la
+place vide.
 
 Règle d'or : **quand l'hôtel ne peut pas faire autrement, le calcul peut enfreindre une règle
 morale, mais il le dit dans une alerte.** Il ne peut jamais enfreindre la loi.
@@ -100,7 +112,7 @@ Les règles morales, entre les heures dues et le confort (2026-11-02) :
 | Plus de 5 jours d'affilée                                      | `POIDS_JOUR_AFFILE_CONSEILLE` 10 000                                       |
 | Reprise de jour moins de 2 jours après une nuit (règle 7)      | `POIDS_REPRISE_APRES_NUIT` 10 000                                          |
 | Deux repos qui se suivent                                      | `POIDS_REPOS_SEPARES` 8 000                                                |
-| Moins de 13 h entre deux services (règle 3)                    | `POIDS_REPOS_COURT` 6 000 par paire (+ 6 000 au retour d'un congé)         |
+| Moins de 12 h entre deux services (règle 3)                    | `POIDS_REPOS_COURT` 6 000 par paire (+ 6 000 au retour d'un congé)         |
 | Retour en arrière à 2 jours au plus, soir puis matin (règle 6) | `POIDS_MOMENT_ARRIERE` 6 000 par paire de jours                            |
 | Abords d'un jour d'école (règle 14)                            | `POIDS_ECOLE_ABORDS` 6 000 par service                                     |
 | Plus d'un changement de moment d'un jour au suivant (règle 6)  | `POIDS_MOMENT_EN_TROP` 5 000 par changement en trop                        |
@@ -228,17 +240,18 @@ Pour chacun : **énoncé**, **pourquoi**, **comment** (règle mesurable), **exce
   `POIDS_SIXIEME_JOUR` (15 000), et `POIDS_JOUR_MANQUANT` (80 000) pour qu'un 39 h ne se fasse pas
   en 4 jours de 10 h.
 
-#### 3. Pas de soir suivi d'un matin : au moins 13 h entre deux services
+#### 3. Pas de soir suivi d'un matin : au moins 12 h entre deux services
 
 - **Pourquoi.** Finir à 23 h et reprendre à 7 h, c'est 8 h de repos réel, trajet et sommeil
   compris. La loi dit 11 h. Le corps en demande plus.
-- **Comment.** Viser au moins 13 h entre la fin d'un service et le début du suivant. Entre 11 h et
-  13 h : coût, et alerte. Constante à créer : `REPOS_CONFORT` = 13 h dans `regles.ts`. Moteur : un
-  coût par paire de créneaux de deux jours qui se suivent dont l'écart est sous 13 h (même forme
-  que la contrainte de 11 h, en souple). Vérificateur : alerte "seulement X h de repos entre deux
-  services (13 h conseillées)".
+- **Comment.** Viser au moins 12 h entre la fin d'un service et le début du suivant. Entre 11 h et
+  12 h : coût, et alerte. `REPOS_CONFORT` = 12 h dans `regles.ts`. Moteur : un coût par paire de
+  créneaux de deux jours qui se suivent dont l'écart est sous 12 h (même forme que la contrainte
+  de 11 h, en souple). Vérificateur : alerte "seulement X h de repos entre deux services (12 h
+  conseillées)".
 - **Exception.** Quand aucune autre personne ne peut tenir le matin.
-- **Statut.** EN PLACE le 2026-11-02 (Q8 décidée par l'assistant : 13 h). `REPOS_CONFORT`
+- **Statut.** EN PLACE le 2026-11-02 (Q8 décidée par l'assistant : 13 h ; **12 h par décision
+  de l'utilisateur du 2026-11-03**). `REPOS_CONFORT`
   (`regles.ts`), `POIDS_REPOS_COURT` (6 000 par paire, semaines voisines comprises), alerte
   REPOS-COURT. Le plancher légal de 11 h (`REPOS_QUOTIDIEN`) reste dur.
 
@@ -249,8 +262,9 @@ Pour chacun : **énoncé**, **pourquoi**, **comment** (règle mesurable), **exce
 - **Comment.** Sur toute fenêtre de 4 semaines (`SEMAINES_EQUITE`), au moins un samedi et le
   dimanche qui suit sans travail ni école. Moteur : si les 3 semaines d'avant n'en ont aucun, un
   coût si celle-ci n'en a pas. Vérificateur : alerte "aucun week-end libre depuis 4 semaines".
-- **Exception.** Une personne qui demande à travailler les week-ends (à noter dans sa fiche) ;
-  un contrat qui ne travaille que le week-end.
+- **Exception.** Aucune, pas même la semaine type (décision utilisateur du 2026-11-03, partage
+  d'abord). Qui veut travailler le week-end le dit par sa semaine type (Q12) : il en fait plus que
+  les autres, mais garde un week-end libre sur 4.
 - **Statut.** EN PLACE le 2026-11-02. `weekendLibreAvant` (`avecHistoire`, `semaine.ts`) : un
   samedi et un dimanche sans shift sur les 3 semaines d'avant (semaines pas encore faites : rien
   n'est dit). **Précisé le 2026-11-03** : un jour du week-end compte comme libre s'il n'a ni shift
@@ -259,18 +273,20 @@ Pour chacun : **énoncé**, **pourquoi**, **comment** (règle mesurable), **exce
   choisi (`CODES_CONGE_LIBRE` : CP, JF, JFR). Ne comptent PAS : maladie, formation, sans solde,
   absence autorisée rémunérée, congé pour décès, école. Un week-end malade n'est pas un week-end
   avec les siens : la personne reste protégée, et l'alerte revient. `POIDS_WEEKEND_LIBRE` (14 000, sous le
-  6e jour : personne ne fait un jour de plus pour le week-end d'un autre ; il n'appelle pas d'extra).
-  Alerte WEEKEND-LIBRE. Exception lue dans la fiche : samedi ou dimanche fixé Travaille dans la
-  semaine type (`weekendFixe`) ; le calcul n'y peut rien, l'alerte le dit en citant la fiche.
-  **Attention (relecture du 2026-11-03)** : la semaine type passe AVANT le partage des week-ends.
-  « Travaille » le samedi ou le dimanche dans une fiche n'est pas une demande de la personne, mais
-  le calcul le traite comme tel. Banc S1 : deux fiches du lundi au vendredi ont 9 week-ends libres
-  sur 9, trois fiches avec le samedi en Travaille en ont 1, le veilleur au dimanche fixé en a 0.
-  Un point « À vérifier » pour chaque fiche concernée a été essayé puis retiré : sans case
-  « demande à travailler le week-end » (Q12), il resterait affiché pour toujours et demanderait une
-  confirmation avant chaque calcul. À trancher avec Q12.
-  Décision de l'assistant : une nuit écrite le dimanche (qui commence lundi à 00:00) compte pour le
-  dimanche, comme à l'écran. À trancher avec l'utilisateur (Q15).
+  6e jour : personne ne fait un jour de plus pour le week-end d'un autre ; jamais d'extra pour
+  lui, voir partie 2). Alerte WEEKEND-LIBRE.
+  **Partage d'abord (décision utilisateur du 2026-11-03)** : la semaine type ne passe plus avant.
+  Quand une fiche fixe le samedi ou le dimanche en Travaille (`weekendFixe`) et que la personne n'a
+  eu aucun week-end libre les 3 semaines d'avant, la semaine type s'efface cette semaine-là
+  (`weekendLibere`, `avecHistoire`) : plus de repos fixes (ils peuvent passer au week-end), samedi
+  et dimanche ne sont plus des jours habituels, et ils ne sont pas posés d'office à l'ouverture de
+  la semaine (`weekendsLiberes`, `aPoserFixes`). À l'écran, son samedi habituel est vide (ou en
+  repos proposé) et le bilan le dit : "week-end libre cette semaine à la place de sa semaine type
+  (aucun depuis 4 semaines)" (WEEKEND-LIBERE). Si une place de la page Besoins ne peut pas être
+  tenue autrement, la place passe avant et WEEKEND-LIBRE le dit.
+  **Q15 (décision utilisateur du 2026-11-03)** : la nuit du dimanche au lundi, qu'elle commence à
+  23:00 ou à minuit (écrite 24:00), est posée le dimanche (`horaireDe`) : elle rend le week-end
+  travaillé, au calcul, au vérificateur et dans la lecture des semaines d'avant (testé).
 
 #### 5. Un repos posé ou validé est sacré
 
@@ -278,7 +294,10 @@ Pour chacun : **énoncé**, **pourquoi**, **comment** (règle mesurable), **exce
   trahir une promesse.
 - **Comment.** Un repos fixe de la semaine type, un repos posé à une date (motif R) ou un repos
   validé ne reçoit jamais de shift par le calcul.
-- **Exception.** Aucune pour le calcul. À la main : seulement avec l'accord de la personne.
+- **Exception.** Aucune pour le calcul, sauf UNE : la semaine où la semaine type cède pour le
+  week-end libre (règle 4, partage d'abord), ses repos fixes passent au samedi et au dimanche. Ce
+  n'est pas un repos repris : la personne a le même nombre de repos, ensemble, le week-end. À la
+  main : seulement avec l'accord de la personne.
 - **Statut.** EN PLACE pour le calcul. Repos fixes : `reposFixes`. Repos posés et validés :
   `planning_absences.epinglee`, motif de nature `repos`, RPC `planning_valider_avec_repos`. Le
   vérificateur signale un shift sur un repos fixe (REPOS-FIXE).
@@ -368,10 +387,13 @@ Pour chacun : **énoncé**, **pourquoi**, **comment** (règle mesurable), **exce
 - **Statut.** EN PLACE pour week-ends, soirs et matins tôt : `SEMAINES_EQUITE` (4), `POIDS_EQUITE`
   (100 par jour d'écart), `EQUITE_RATTRAPAGE_MAX`, `equiteDe` (`semaine.ts`). À FAIRE pour les
   nuits. Le poids actuel est du confort (P5) : il ne fait jamais faire une heure en plus.
-  Limite relevée par le banc du 2026-11-02 : on n'est comparé qu'aux personnes du même premier
-  poste de titulaire (`posteEquite`). Une personne seule sur son poste (Club, Supervision, veille)
-  et les apprentis (soutiens, sans poste de titulaire) ne sont comparés à personne. À trancher
-  (Q16).
+  **Tout l'accueil ensemble (décision utilisateur du 2026-11-03, Q16)** : `posteEquite` met dans
+  un même groupe (`POSTE_ID_ACCUEIL`) tous les titulaires ET les soutiens (apprentis, stagiaires)
+  d'un poste ouvert du matin et du soir (Réception, Club), chacun à sa part de contrat. Avant, on
+  n'était comparé qu'aux personnes du même premier poste de titulaire, et un apprenti n'était
+  comparé à personne. La Veille de nuit garde son groupe (ses soirs ne se comparent pas à ceux du
+  jour) ; extras et forfaits jours restent hors équité. Le résumé du mois dit « Accueil de 0 à
+  N ».
 
 #### 11. Les jours de fête aussi
 
@@ -405,7 +427,7 @@ Pour chacun : **énoncé**, **pourquoi**, **comment** (règle mesurable), **exce
 - **Pourquoi.** Reprendre après des vacances par six jours ou par un soir suivi d'un matin gâche
   le repos pris.
 - **Comment.** La semaine du retour après un congé d'au moins 5 jours (décision de l'assistant) :
-  pas de 6e jour, pas de repos de moins de 13 h, reprise plutôt pas un samedi ou un dimanche.
+  pas de 6e jour, pas de repos de moins de 12 h, reprise plutôt pas un samedi ou un dimanche.
   Moteur : pour cette personne et cette semaine, le coût du 6e jour et celui de la règle 3
   renforcés, et un coût si son premier jour de travail est un samedi ou un dimanche.
 - **Exception.** Une place vide, signalée.
@@ -458,8 +480,8 @@ Pour chacun : **énoncé**, **pourquoi**, **comment** (règle mesurable), **exce
 | --- | ----------------------------------- | --------------------------- | ------------------------------------------------------------------------------------- |
 | 1   | Deux repos qui se suivent           | en place                    | `POIDS_REPOS_SEPARES`, `placerRepos`, alerte REPOS-SEPARES                            |
 | 2   | 6 jours d'affilée au plus, viser 5  | en place                    | `JOURS_AFFILES_MAX`, `POIDS_JOUR_AFFILE`, `POIDS_SIXIEME_JOUR`, `POIDS_JOUR_MANQUANT` |
-| 3   | 13 h entre deux services            | en place                    | `REPOS_CONFORT`, `POIDS_REPOS_COURT`, alerte REPOS-COURT                              |
-| 4   | Un week-end libre par mois          | en place                    | `weekendLibreAvant`, `POIDS_WEEKEND_LIBRE`, alerte WEEKEND-LIBRE                      |
+| 3   | 12 h entre deux services            | en place                    | `REPOS_CONFORT`, `POIDS_REPOS_COURT`, alerte REPOS-COURT                              |
+| 4   | Un week-end libre par mois          | en place, partage d'abord   | `weekendLibreAvant`, `weekendLibere`, `POIDS_WEEKEND_LIBRE`, WEEKEND-LIBRE / -LIBERE  |
 | 5   | Repos posé ou validé sacré          | en place                    | `reposFixes`, `epinglee`, `planning_valider_avec_repos`                               |
 | 6   | Semaine stable                      | en place                    | `CHANGEMENTS_MOMENT_MAX`, `POIDS_MOMENT_EN_TROP`, `POIDS_MOMENT_ARRIERE`, MOMENTS     |
 | 7   | Nuits avec mesure                   | en place                    | `NUITS_AFFILEES_MAX`, `REPOS_APRES_NUITS`, `POIDS_NUIT_AFFILEE`, alerte NUITS         |
@@ -547,10 +569,20 @@ Pour la semaine calculée, qui commence le lundi L :
 (hors Tout recalculer, qui retire aussi les shifts validés à venir) ou jour passé. Un shift
 seulement proposé ce jour-là va être recalculé : le JFR vient alors la semaine suivante.
 
-Tant que le jour férié est dans la fenêtre et non rattrapé, une alerte "Jour férié du jj/mm
-travaillé : à rattraper" s'affiche dans le bilan de la personne. Elle est de nature organisation,
-jamais bloquante. Passé 4 semaines, il n'y a plus ni proposition ni alerte : le jour férié sort
-de la fenêtre (voir Q14).
+Tant que le jour férié n'est pas rattrapé, une alerte "Jour férié du jj/mm travaillé : à
+rattraper" s'affiche dans le bilan de la personne, et le calcul propose son JFR chaque semaine.
+Elle est de nature organisation, jamais bloquante. **Il reste dû jusqu'à ce qu'il soit rendu**
+(décision utilisateur du 2026-11-03, Q9 et Q14). Borne : la fenêtre `FERIE_RATTRAPAGE_JOURS` vaut
+désormais 91 jours (13 semaines) ; les vues lisent donc 26 semaines en arrière (`premierLundiLu`),
+par pages de 1 000 lignes (`toutLire`, `service.ts` : l'API tronquait sans erreur au-delà). Un jour
+férié qui ne trouve pas sa place en 13 semaines sort de la lecture : c'est la seule limite qui
+reste.
+
+**La direction au forfait jours** (décision utilisateur du 2026-11-03) : un cadre au forfait jours
+seul titulaire de son poste reçoit son JFR AVANT le calcul (`jfrDesCadresSeuls`), le premier jour
+permis collé à un jour sans travail ; ce jour-là il est absent, donc sa place n'existe pas
+(`sansSonCadre`). Laissé au solveur, il ne le prenait jamais : sa place vide coûtait plus que le
+rattrapage.
 
 ### 5.5 Ce que fait le calcul
 
@@ -607,8 +639,8 @@ de la fenêtre (voir Q14).
 7. **Deux jours fériés proches.** Travaillés le vendredi 1er mai et le vendredi 8 mai 2026 : deux
    JFR, un par semaine au plus. Le premier peut tomber la semaine du 4 mai, le second la semaine du
    11 mai.
-8. **Trop tard.** Un 14 juillet travaillé, JFR jamais pris au bout de 4 semaines : plus de
-   proposition et plus d'alerte (voir Q14).
+8. **En retard.** Un 14 juillet travaillé, JFR pas pris au bout de 4 semaines : il reste dû,
+   l'alerte reste, le calcul le propose chaque semaine (jusqu'à 13 semaines lues).
 9. **Un JFR pour deux jours fériés ?** Travaillés le 1er et le 11 novembre 2026, un seul JFR posé
    le 12 novembre. Il rattrape le 1er. Le 11 reste à rattraper, même vu depuis la semaine du
    30 novembre où le 1er est sorti de la fenêtre.
@@ -762,10 +794,9 @@ elles apparaissent comme "à éviter" pour la personne, jamais comme ce qui bloq
 
 À trancher par l'utilisateur. Rien n'est codé sur ces points tant qu'il ne l'a pas dit.
 
-- **Q1. Heures dues ou règles morales ?** DÉCIDÉE PAR L'ASSISTANT le 2026-11-02 (déléguée) : la
-  loi, les places nécessaires, les heures dues, puis les règles morales, puis le confort. Une règle
-  morale peut céder quand rien d'autre n'est possible, et une alerte d'organisation le dit. À
-  confirmer par l'utilisateur.
+- **Q1. Heures dues ou règles morales ?** FERMÉE, confirmée par l'utilisateur le 2026-11-03 : la
+  loi, les besoins de la page Besoins, les heures dues, puis les règles morales, puis le confort.
+  « S'il n'y a pas le choix, il faut faire au mieux, le meilleur compromis. » Voir partie 2.
 - **Q2. Jours fériés de la convention.** La convention HCR (avenant n° 6, selon le prototype)
   prévoit, après un an, 10 jours fériés en plus du 1er mai, dont 6 garantis compensés même s'ils
   tombent un jour de repos. Notre règle ne compense que le jour travaillé. Faut-il compenser aussi
@@ -778,34 +809,42 @@ elles apparaissent comme "à éviter" pour la personne, jamais comme ce qui bloq
 - **Q5 bis. Stagiaires.** Tous leurs jours fériés, provisoirement. Règle exacte à donner.
 - **Q6. Jours de fête de la règle 11.** Lesquels : 24 et 25 décembre, 31 décembre et 1er janvier ?
   D'autres ?
-- **Q7. École (règle 14).** DÉCIDÉE PAR L'ASSISTANT : après 21:00 la veille, avant 08:00 le
-  lendemain. À confirmer.
-- **Q8. Seuil de la règle 3.** DÉCIDÉE PAR L'ASSISTANT : 13 h. À confirmer.
-- **Q9. Fenêtre du JFR.** 4 semaines pour la proposition automatique : bon délai ? Et au-delà,
-  une limite où le droit se perd, ou jamais ?
+- **Q7. École (règle 14).** FERMÉE : après 21:00 la veille, avant 08:00 le lendemain, gardés par
+  l'utilisateur le 2026-11-03.
+- **Q8. Seuil de la règle 3.** FERMÉE le 2026-11-03 : 12 h (décision de l'utilisateur ; 13 h
+  avant).
+- **Q9. Fenêtre du JFR.** FERMÉE le 2026-11-03 : il reste dû, avec une alerte, jusqu'à ce qu'il
+  soit rendu ; proposé chaque semaine. Limite technique : 13 semaines lues (partie 5).
 - **Q10. Saisonniers.** La convention parle de 9 mois d'ancienneté pour les saisonniers. Y en
   a-t-il ?
 - **Q11. Temps partiel et JFR.** Un JFR vaut une journée de contrat, comme un congé. Confirmer pour
   un contrat de moins de 5 jours par semaine.
-- **Q12. Préférences personnelles.** Faut-il une case dans la fiche pour une personne qui veut
-  travailler les week-ends ou faire des heures en plus (exceptions des règles 4 et 12) ?
+- **Q12. Préférences personnelles.** FERMÉE le 2026-11-03 : pas de case. La semaine type suffit
+  pour dire qui veut travailler le week-end ; elle ne retire pas le week-end libre sur 4 (règle 4,
+  partage d'abord).
 - **Q13. Ordre des nouvelles règles.** SANS OBJET : toutes faites le 2026-11-02 sauf la règle 11
   (reportée), dans l'ordre des poids de la partie 2.1.
-- **Q14. Alerte du JFR au-delà de 4 semaines.** Aujourd'hui, passé 4 semaines, un jour férié non
-  rattrapé disparaît : plus de proposition et plus d'alerte. Faut-il lire plus loin en arrière
-  pour garder l'alerte (et jusqu'à quand) ? Le cas le plus fréquent, une semaine type entièrement
-  fixée (jours Travaille et Repos partout) qui n'avait jamais de jour où poser son JFR, est corrigé
-  le 2026-11-03 (le JFR prend un jour Travaille). Reste à trancher : un JFR qui ne trouve pas de
-  place en 4 semaines (places vides chaque semaine) se perd toujours sans alerte. Les vues lisent
-  déjà 8 semaines en arrière : garder l'alerte au-delà est possible, mais c'est la décision Q9
-  (limite du droit).
-- **Q15. Une nuit qui commence à minuit, le week-end ?** Un veilleur dont la nuit du dimanche
-  commence lundi à 00:00 a son samedi et son dimanche en journée. Aujourd'hui (décision de
-  l'assistant) la nuit compte pour le dimanche où elle est écrite : son week-end n'est pas libre.
-- **Q16. L'équité pour les personnes seules sur leur poste et les apprentis.** Faut-il comparer
-  ensemble tout l'accueil (Réception, Club, nuit), et y mettre les apprentis au prorata de leurs
-  heures ?
-- **Q17. Un extra pour un week-end libre ?** Le banc montre que le nombre de journées d'un week-end
-  laisse peu de place. Aujourd'hui un extra n'est appelé qu'avant une place vide, jamais pour la
-  règle 4 : l'alerte le dit. Faut-il appeler un extra pour donner un week-end à quelqu'un qui n'en a
-  pas eu depuis un mois ?
+- **Q14. Alerte du JFR au-delà de 4 semaines.** FERMÉE le 2026-11-03 avec Q9 : l'alerte reste
+  tant que le JFR n'est pas rendu (13 semaines lues). La direction au forfait jours le reçoit aussi
+  (partie 5).
+- **Q15. Une nuit qui commence à minuit, le week-end ?** FERMÉE le 2026-11-03 : la nuit du dimanche
+  au lundi rend le week-end travaillé (règle 4).
+- **Q16. L'équité pour les personnes seules sur leur poste et les apprentis.** FERMÉE le
+  2026-11-03 : tout l'accueil ensemble, apprentis compris, chacun selon son contrat (règle 10). La
+  Veille de nuit garde son groupe.
+- **Q17. Un extra pour un week-end libre ?** FERMÉE le 2026-11-03 : non. « Tu n'attribues pas des
+  week-ends à quelqu'un en ajoutant des extras pour la justice de répartition. On évite de prendre
+  des extras au possible parce que ça coûte de l'argent. Mais s'il n'y a pas le choix (vrai manque
+  de personnel), c'est autre chose. » Voir partie 2 (`partMoraleExtra`).
+- **Le veilleur** (relevé par le banc, décision utilisateur du 2026-11-03) : il fait toutes les
+  nuits de la semaine parce que sa semaine type le fixe. On garde ainsi ; la règle 7 (5 nuits puis
+  2 jours) reste tenue.
+- **Temps de calcul** (décision utilisateur du 2026-11-03) : 60 s au plus par semaine (40 s
+  avant).
+
+Banc du 2026-11-03 (9 scénarios réels hors dépôt, dont 2 en sous-effectif : 3 puis 4 départs
+de l'accueil simulés en mémoire) : 0 infraction, 0 place vide (2 de moins qu'avant sur le
+scénario du veilleur en congé), week-ends vraiment libres +3 à +6 par scénario, personnes sans
+week-end libre sur 4 semaines 9 → 6 à 8, soirs des deux apprentis rééquilibrés (27 et 9 → 13 et 12) ; en sous-effectif, places tenues, aucun extra à 3 départs, 14 shifts d'extra à 4 départs,
+mais des 6e jours et des semaines de 47 h pour 3 personnes ; 4 semaines sur 81 au plafond de
+60 s ; repos qui changent d'une semaine à l'autre en hausse (41 → 48 sur le scénario de base).

@@ -332,7 +332,7 @@ export const POIDS_JOUR_FIXE = 2_000
  * celui d'avant à quelques dixièmes près.
  */
 /** Règle 3 : par paire de services de deux jours qui se suivent séparés
- * de moins de `REPOS_CONFORT` (13 h ; les 11 h légales restent dures). */
+ * de moins de `REPOS_CONFORT` (12 h ; les 11 h légales restent dures). */
 export const POIDS_REPOS_COURT = 6_000
 /** Règle 4 : la semaine ne donne pas de week-end complet libre (samedi ET
  * dimanche) à quelqu'un qui n'en a eu aucun les 3 semaines d'avant. Sous le
@@ -353,7 +353,7 @@ export const POIDS_REPRISE_APRES_NUIT = 10_000
 /** Règle 13 : un 6e jour la semaine du retour d'un congé, EN PLUS du 6e jour
  * ordinaire. */
 export const POIDS_RETOUR_SIXIEME = 15_000
-/** Règle 13 : un repos de moins de 13 h la semaine du retour, en plus de
+/** Règle 13 : un repos de moins de 12 h la semaine du retour, en plus de
  * `POIDS_REPOS_COURT`. */
 export const POIDS_RETOUR_REPOS_COURT = 6_000
 /** Règle 13 : la reprise après le congé tombe un samedi ou un dimanche. */
@@ -526,10 +526,37 @@ export function coutConsigne(
  * candidat de l'accueil. Au-dessus d'un dépannage qui ferait ce même shift
  * en heures en plus ET en 6e jour (un extra est payé 1 par minute, contrat
  * indicatif : sans cette part, il passerait devant tout le monde) ; sous la
- * place vide, qui le compte dans son pire (`pireCoutRemplir`). */
+ * place vide, qui le compte dans son pire (`pireCoutRemplir`).
+ *
+ * Plus `PART_MORALE_EXTRA` (décision utilisateur du 2026-11-03 : « on ne
+ * prend pas d'extra pour la justice de répartition ; un extra coûte de
+ * l'argent, seulement s'il n'y a pas le choix ») : tout ce qu'un shift peut
+ * coûter en règles morales, en équité et en confort à la personne qu'il
+ * soulagerait. Un extra ne sert donc jamais à libérer un week-end ni à
+ * équilibrer, seulement à tenir une place qui resterait vide. */
 export function coutExtra(c: Creneau) {
   return (
-    POIDS_SUR_CONTRAT * duree(c) + POIDS_SIXIEME_JOUR + coutDepannage(c) + 1
+    POIDS_SUR_CONTRAT * duree(c) +
+    POIDS_SIXIEME_JOUR +
+    coutDepannage(c) +
+    partMoraleExtra(c) +
+    1
+  )
+}
+
+/** Ce qu'un shift peut coûter, au pire, en règles morales (`pireMoral`),
+ * en équité et en confort (repos accolés, jour isolé, jour habituel, jours
+ * d'affilée) à qui le ferait : la part de `coutExtra` qui interdit de
+ * prendre un extra pour le soulager. */
+export function partMoraleExtra(c: Creneau): number {
+  return (
+    pireMoral(c) +
+    EQUITE_MAX_PAR_SHIFT +
+    POIDS_REPOS_SEPARES +
+    POIDS_JOUR_ISOLE +
+    POIDS_JOUR_FIXE +
+    7 * POIDS_JOUR_AFFILE +
+    6 * POIDS_JOUR_AFFILE_CONSEILLE
   )
 }
 
@@ -1957,10 +1984,12 @@ function reglesMoralesSemaine(
       )
       m.cout(POIDS_MEMES_REPOS, y)
     } else for (const t of repris) m.cout(POIDS_MEMES_REPOS, t)
-    // Week-end : samedi (5) et dimanche (6) de la première semaine.
+    // Week-end : samedi (5) et dimanche (6) de la première semaine. Une
+    // semaine type qui fixe le week-end ne l'exempte plus (partage d'abord,
+    // décision utilisateur du 2026-11-03 ; `weekendLibere` lève ses repos et
+    // jours fixes cette semaine-là).
     if (
       s.weekendLibreAvant === false &&
-      !s.weekendFixe &&
       dans.has(5) &&
       dans.has(6) &&
       !s.joursHorsSite.has(5) &&
@@ -2115,7 +2144,7 @@ function reglesMoralesSuite(
     for (const a of liste) parFin.set(a.fin, [...(parFin.get(a.fin) ?? []), a])
     for (const [fin, as] of parFin) {
       // Sous 11 h, la paire est déjà interdite (règle dure) : seuls les
-      // services du lendemain entre 11 h et 13 h après comptent.
+      // services du lendemain entre 11 h et 12 h après comptent.
       const bs = suivants.filter((b) => b.debut - fin < REPOS_CONFORT)
       if (!bs.length || (as.every(estImpose) && bs.every(estImpose))) continue
       const y = m.continu(0, as.length + bs.length)
