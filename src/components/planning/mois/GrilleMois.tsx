@@ -371,16 +371,9 @@ export function GrilleMois({
               </th>
             </tr>
             <tr>
-              {jours.map((d, i) => {
+              {jours.map((d) => {
                 const { jour, lundi } = reperer(d)
                 const semaine = semaines.get(lundi)
-                // La nuit de la veille se pose ici, à cheval sur la frontière.
-                const avant = i > 0 ? reperer(jours[i - 1]) : null
-                const veille = avant
-                  ? semaines
-                      .get(avant.lundi)
-                      ?.presence.filter((p) => p.jour === avant.jour)
-                  : undefined
                 return (
                   <th
                     key={d}
@@ -403,8 +396,6 @@ export function GrilleMois({
                       transmissions={semaine?.transmissions?.find(
                         (t) => t.jour === jour,
                       )}
-                      veille={veille}
-                      derniere={i === jours.length - 1}
                     />
                   </th>
                 )

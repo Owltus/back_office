@@ -22,7 +22,9 @@ afterEach(cleanup)
 const points = (c: HTMLElement) =>
   [...c.querySelectorAll<HTMLElement>('[data-periode]')].map((e) => ({
     periode: e.dataset.periode,
-    classe: e.className,
+    classe: e.getAttribute('class') ?? '',
+    plein: e.firstElementChild?.getAttribute('fill') !== 'none',
+    forme: e.firstElementChild?.tagName,
   }))
 
 describe('PointsPresence', () => {
@@ -52,17 +54,13 @@ describe('PointsPresence', () => {
     const p = points(container)
     expect(p.map((x) => x.periode)).toEqual(['matin', 'soir', 'nuit'])
     expect(p[0].classe).toContain('text-red-500')
-    expect(p[0].classe).toContain('bg-current')
+    expect(p[0].plein).toBe(true)
     expect(p[1].classe).toContain('text-emerald-500')
-    // La nuit est une lune (2026-11-03) : orange et juste dessinée sans
-    // minimum.
+    // Rond le jour, triangle la nuit (2026-11-03).
+    expect(p.map((x) => x.forme)).toEqual(['circle', 'circle', 'path'])
+    // La nuit sans minimum : orange et juste dessinée.
     expect(p[2].classe).toContain('text-amber-500')
-    expect(container.querySelector('[data-periode="nuit"] svg')).not.toBeNull()
-    expect(
-      container
-        .querySelector('[data-periode="nuit"] svg')!
-        .getAttribute('class'),
-    ).not.toContain('fill-current')
+    expect(p[2].plein).toBe(false)
     expect(
       container.querySelector('[aria-label]')?.getAttribute('aria-label'),
     ).toContain("Nuit : personne de demandé, l'hôtel peut rester vide")
@@ -146,60 +144,25 @@ describe('PointsPresence : les transmissions (2026-11-02)', () => {
     maximum: 1,
     ecart: 0,
   }))
-  const liens = (c: HTMLElement) =>
-    [...c.querySelectorAll<HTMLElement>('[data-transmission]')].map(
-      (e) => e.dataset.transmission,
-    )
 
-  const periodes = (c: HTMLElement) =>
-    [...c.querySelectorAll<HTMLElement>('[data-periode]')].map(
-      (e) => e.dataset.periode,
-    )
-
-  it('un trait par transmission, dans l’ordre nuit, matin, soir, nuit', () => {
+  it('dans l’infobulle seulement, plus de fil entre les jours (2026-11-03)', () => {
     const { container } = rendre(
       <PointsPresence
         presence={presence}
         transmissions={{ nuitMatin: 'ok', matinSoir: 'manque', soirNuit: null }}
-        derniere
       />,
     )
-    expect(liens(container)).toEqual(['ok', 'manque', 'aucune'])
-    // Dernière colonne : sa nuit au bord droit, à cheval sur le bord.
-    expect(periodes(container)).toEqual(['matin', 'soir', 'nuit'])
-    const nuit = container.querySelector<HTMLElement>('[data-periode="nuit"]')!
-    expect(nuit.className).toContain('right-0')
-    expect(nuit.className).toContain('translate-x-1/2')
+    // Refusé : aucun trait dessiné, la nuit reste dans sa case.
+    expect(container.querySelector('[data-transmission]')).toBeNull()
+    expect(
+      [...container.querySelectorAll<HTMLElement>('[data-periode]')].map(
+        (e) => e.dataset.periode,
+      ),
+    ).toEqual(['matin', 'soir', 'nuit'])
     const nom = container
       .querySelector('[aria-label]')!
       .getAttribute('aria-label')!
     expect(nom).toContain('Transmission matin → soir : personne pour la faire')
     expect(nom).toContain('Transmission nuit → matin : assurée')
-  })
-
-  it('la nuit de la veille se pose au bord gauche, la sienne part au lendemain', () => {
-    const { container } = rendre(
-      <PointsPresence
-        presence={presence}
-        transmissions={{ nuitMatin: 'ok', matinSoir: 'ok', soirNuit: 'ok' }}
-        veille={[{ ...presence[2], compte: 0, ecart: -1 }]}
-      />,
-    )
-    // Refusé : la nuit du jour n'est pas dans sa case (le lendemain la pose).
-    expect(periodes(container)).toEqual(['matin', 'soir', 'nuit-veille'])
-    const veille = container.querySelector<HTMLElement>(
-      '[data-periode="nuit-veille"]',
-    )!
-    expect(veille.className).toContain('left-0')
-    expect(veille.className).toContain('-translate-x-1/2')
-    expect(veille.className).toContain('text-red-500')
-    expect(
-      container.querySelector('[aria-label]')!.getAttribute('aria-label'),
-    ).toContain('Nuit : 0 pour 1 (1 de moins) (la veille)')
-  })
-
-  it('sans transmissions lues : les points seuls, comme avant', () => {
-    const { container } = rendre(<PointsPresence presence={presence} />)
-    expect(liens(container)).toEqual([])
   })
 })
