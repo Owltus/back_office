@@ -293,6 +293,8 @@ Pour chacun : **énoncé**, **pourquoi**, **comment** (règle mesurable), **exce
   **Q15 (décision utilisateur du 2026-11-03)** : la nuit du dimanche au lundi, qu'elle commence à
   23:00 ou à minuit (écrite 24:00), est posée le dimanche (`horaireDe`) : elle rend le week-end
   travaillé, au calcul, au vérificateur et dans la lecture des semaines d'avant (testé).
+  **La nuit du vendredi au samedi aussi** (décision utilisateur du 2026-11-03, « le plus logique ») :
+  on finit le samedi matin et on dort le samedi. Même lecture aux trois endroits (testé).
 
 #### 5. Un repos posé ou validé est sacré
 

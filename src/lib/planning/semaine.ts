@@ -1474,7 +1474,9 @@ export function estWeekendFixe(x: Pick<Salarie, 'semaine_type'>): boolean {
  * absence qui laisse libre (`absenceLibre`) : un week-end malade, en
  * formation ou d'école ne compte pas. Une nuit écrite le dimanche (23:00 ou
  * 24:00, celle du dimanche au lundi) compte pour le dimanche (Q15, décision
- * utilisateur du 2026-11-03 : elle rend le week-end travaillé). Null : une
+ * utilisateur du 2026-11-03 : elle rend le week-end travaillé). Celle du
+ * VENDREDI au samedi aussi (2026-11-03, « le plus logique » : on finit le
+ * samedi matin et on dort le samedi) : `estNuit` la reconnaît. Null : une
  * semaine d'avant sans aucun shift (pas encore faite) ou un week-end hors
  * contrat. `semaine(k)` rend les shifts connus de la semaine `lundi - 7k`. */
 export function weekendLibreAvantDe(
@@ -1483,16 +1485,15 @@ export function weekendLibreAvantDe(
   ctx: Pick<Contexte, 'absences' | 'ecole'>,
   semaine: (k: number) => readonly Affectation[],
   motifs: ReadonlyMap<number, Motif>,
+  estNuit: (a: Affectation) => boolean,
 ): boolean | null {
   for (let k = 1; k <= 3; k++) {
     const l = ajouterJours(lundi, -7 * k)
     const hors = joursHorsContrat(x, l)
     if (!semaine(k).length || hors.has(5) || hors.has(6)) return null
-    const pris = new Set(
-      semaine(k)
-        .filter((a) => a.salarie_id === x.id)
-        .map((a) => a.jour),
-    )
+    const siens = semaine(k).filter((a) => a.salarie_id === x.id)
+    const pris = new Set(siens.map((a) => a.jour))
+    if (siens.some((a) => a.jour === 4 && estNuit(a))) continue
     const absents = joursAbsents(x, l, ctx.absences)
     const libre = (j: number) => {
       if (pris.has(j)) return false
@@ -1525,7 +1526,8 @@ export function weekendsLiberes(d: DonneesSemaine): Set<number> {
     if (x.type_contrat === 'extra' || !estWeekendFixe(x)) continue
     const hors = joursHorsContrat(x, lundi)
     if (hors.has(5) || hors.has(6)) continue
-    if (weekendLibreAvantDe(x, lundi, ctx, semaine, motifs) === false)
+    const estNuit = (a: Affectation) => equiteDe(ctx, a).moment === 'nuit'
+    if (weekendLibreAvantDe(x, lundi, ctx, semaine, motifs, estNuit) === false)
       r.add(x.id)
   }
   return r
@@ -1585,7 +1587,14 @@ export function avecHistoire(
     // Règle 4 (`weekendLibreAvantDe`).
     const weekendLibreAvant = sol.placementManuel
       ? null
-      : weekendLibreAvantDe(x, lundi, ctx, semaine, motifs)
+      : weekendLibreAvantDe(
+          x,
+          lundi,
+          ctx,
+          semaine,
+          motifs,
+          (a) => equiteDe(ctx, a).moment === 'nuit',
+        )
     const weekendFixe = estWeekendFixe(x)
     const weekendLibere =
       weekendFixe &&
@@ -1596,7 +1605,11 @@ export function avecHistoire(
     const lAvant = ajouterJours(lundi, -7)
     const avant = siens(1)
     const reposAvant = new Set<number>()
-    const weekendTravailleAvant = avant.some((a) => a.jour >= 5)
+    // La nuit du vendredi au samedi rend le week-end travaillé (2026-11-03).
+    const weekendTravailleAvant = avant.some(
+      (a) =>
+        a.jour >= 5 || (a.jour === 4 && equiteDe(ctx, a).moment === 'nuit'),
+    )
     if (avant.length) {
       const absents = joursAbsents(x, lAvant, ctx.absences)
       const hors = joursHorsContrat(x, lAvant)

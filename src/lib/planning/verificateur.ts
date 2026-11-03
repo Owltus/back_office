@@ -569,12 +569,18 @@ function alertesMorales(
       premiere &&
       complete &&
       s.weekendLibreAvant === false &&
-      (travaille(5) || travaille(6))
+      (travaille(5) ||
+        travaille(6) ||
+        // La nuit du vendredi au samedi rend le week-end travaillé
+        // (2026-11-03), comme celle du dimanche (Q15).
+        semaine.some((c) => jourDe(c) === 4 && c.moment === 'nuit'))
     )
       ajoute(
         'WEEKEND-LIBRE',
         'aucun week-end complet libre depuis 4 semaines',
-        semaine.filter((c) => jourDe(c) >= 5),
+        semaine.filter(
+          (c) => jourDe(c) >= 5 || (jourDe(c) === 4 && c.moment === 'nuit'),
+        ),
       )
 
     // Règle 6 : une semaine stable.

@@ -171,6 +171,28 @@ describe('règle 4 : le week-end libre des 3 semaines d’avant', () => {
     expect(lire(h).weekendLibreAvant).toBe(true)
     expect(lire([...h, nuit(L(2))]).weekendLibreAvant).toBe(false)
   })
+  it('la nuit du vendredi au samedi aussi : on finit le samedi matin (2026-11-03)', () => {
+    const h = travaillees({ 2: [4, 5, 6] })
+    const vendredi = (debut: string, fin: string): Affectation => ({
+      id: ++n,
+      lundi: L(2),
+      salarie_id: ID,
+      poste_id: reception.id,
+      jour: 4,
+      horaire_id: null,
+      debut,
+      fin,
+      epinglee: true,
+      pause: 0,
+    })
+    expect(lire([...h, vendredi('23:00', '07:00')]).weekendLibreAvant).toBe(
+      false,
+    )
+    // Refusé : un vendredi de jour laisse le week-end libre.
+    expect(lire([...h, vendredi('09:00', '17:00')]).weekendLibreAvant).toBe(
+      true,
+    )
+  })
 })
 
 describe('règle 4, partage d’abord : la semaine type cède pour le week-end (2026-11-03)', () => {

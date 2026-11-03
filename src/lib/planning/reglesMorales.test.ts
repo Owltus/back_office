@@ -282,6 +282,40 @@ describe('règle 4 : un week-end libre sur 4 semaines', () => {
     const r = resoudre(p)
     expect(de(r, 'a')).toEqual(['dim', 'sam'])
   })
+  it('la nuit du vendredi au samedi compte comme le week-end (2026-11-03)', () => {
+    const nuits = [cr('nmer', 2, 23, 31), cr('nven', 4, 23, 31)].map((c) => ({
+      ...c,
+      moment: 'nuit' as const,
+    }))
+    for (const graine of graines) {
+      const p = probleme({
+        salaries: [
+          personne('a', 8, {
+            weekendLibreAvant: false,
+            travailFixe: new Set([4]),
+          }),
+          personne('b', 8, { weekendLibreAvant: true }),
+        ],
+        creneaux: nuits,
+        graine,
+      })
+      const r = resoudre(p)
+      expect(r.manques).toEqual([])
+      // Évité : sans week-end depuis 3 semaines, elle prend la nuit du
+      // mercredi, malgré son vendredi habituel.
+      expect(de(r, 'a')).toEqual(['nmer'])
+      expect(alertes(p, r, 'WEEKEND-LIBRE')).toEqual([])
+    }
+    // Seule possible : l'alerte le dit.
+    const seule = probleme({
+      salaries: [personne('a', 8, { weekendLibreAvant: false })],
+      creneaux: [nuits[1]],
+    })
+    const r = resoudre(seule)
+    expect(de(r, 'a')).toEqual(['nven'])
+    expect(alertes(seule, r, 'WEEKEND-LIBRE').length).toBe(1)
+  })
+
   it('seule possible : elle travaille, et l’alerte le dit', () => {
     const p = probleme({
       salaries: [

@@ -1978,6 +1978,25 @@ function reglesMoralesSemaine(
   estImpose: (c: Creneau) => boolean,
 ): void {
   const dans = new Set(jours)
+  // La nuit du vendredi au samedi rend le week-end travaillé (2026-11-03,
+  // comme celle du dimanche, Q15) : on finit le samedi matin.
+  // Écrite seulement quand une règle du week-end la lit (même modèle sinon).
+  let nuitVendredi: Terme[] | null = null
+  const weekend = (): Terme[] => {
+    nuitVendredi ??= sommeDe(
+      m,
+      siens
+        .filter((c) => jourDe(c) === 4 && c.moment === 'nuit')
+        .map((c) => [1, xv(c)] as Terme),
+    )
+    return [
+      ...[5, 6]
+        .map((j) => travaille.get(j))
+        .filter((v): v is string => !!v)
+        .map((t) => [1, t] as Terme),
+      ...nuitVendredi,
+    ]
+  }
   if (k === 0) {
     // Règle 8, neutre pour le week-end (banc du 2026-11-03) : qui a
     // travaillé le week-end d'avant peut garder ses repos de la semaine OU
@@ -1998,17 +2017,7 @@ function reglesMoralesSemaine(
     ) {
       // wl <= 1 - t(samedi), wl <= 1 - t(dimanche) : week-end libre.
       const wl = m.continu(0, 1)
-      for (const t of [5, 6]
-        .map((j) => travaille.get(j))
-        .filter((v): v is string => !!v))
-        m.ajoute(
-          [
-            [1, wl],
-            [1, t],
-          ],
-          '<=',
-          1,
-        )
+      for (const t of weekend()) m.ajoute([[1, wl], t], '<=', 1)
       // y >= somme des repos repris - n x wl : tout coûte, sauf contre un
       // week-end libre.
       const y = m.continu(0, repris.length)
@@ -2030,21 +2039,12 @@ function reglesMoralesSemaine(
       !s.joursHorsSite.has(5) &&
       !s.joursHorsSite.has(6)
     ) {
-      const ts = [5, 6]
-        .map((j) => travaille.get(j))
-        .filter((v): v is string => !!v)
-      if (ts.length === 1) m.cout(POIDS_WEEKEND_LIBRE, ts[0])
-      else if (ts.length === 2) {
+      const ts = weekend()
+      if (ts.length === 1 && ts[0][0] === 1)
+        m.cout(POIDS_WEEKEND_LIBRE, ts[0][1])
+      else if (ts.length) {
         const we = m.continu(0, 1)
-        for (const t of ts)
-          m.ajoute(
-            [
-              [1, we],
-              [-1, t],
-            ],
-            '>=',
-            0,
-          )
+        for (const t of ts) m.ajoute([[1, we], ...negatifs([t])], '>=', 0)
         m.cout(POIDS_WEEKEND_LIBRE, we)
       }
     }
