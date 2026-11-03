@@ -38,6 +38,44 @@ export const JOURS_AFFILES_MAX = 6
  * encore beaucoup trop des 6 jours d'affilée ») : le 6e jour enchaîné d'une
  * semaine à l'autre coûte déjà (`POIDS_JOUR_AFFILE_CONSEILLE`). */
 export const JOURS_AFFILES_CONSEILLES = 5
+
+/*
+ * Règles morales du PRD (`plan/planning-bonnes-pratiques/PRD.md`, partie 4).
+ * Ce ne sont pas des règles de la convention : la loi n'est qu'un plancher.
+ * Le générateur les évite (poids sous les places et les heures dues, Q1),
+ * le vérificateur les signale (alertes d'organisation, jamais bloquantes).
+ * Seuils décidés par l'assistant le 2026-11-02 (questions Q1, Q7, Q8
+ * déléguées par l'utilisateur), modifiables ici seulement.
+ */
+/** Règle 3 : repos conseillé entre la fin d'un service et le début du
+ * suivant (la loi dit 11 h, `REPOS_QUOTIDIEN`, qui reste dure). */
+export const REPOS_CONFORT = 13 * H
+/** Règle 6 : changements de moment (matin, middle, soir, nuit) au plus
+ * dans une semaine, et de préférence vers plus tard (matin puis soir). */
+export const CHANGEMENTS_MOMENT_MAX = 1
+/** Règle 6 : un jour à un moment plus tôt qu'un des jours d'avant (soir puis
+ * matin) compte quand ce jour-là est à moins de ce nombre de jours ; au-delà,
+ * les jours de repos ont remis l'horloge à zéro. */
+export const MOMENT_ARRIERE_JOURS = 2
+/** Règle 7 : nuits d'affilée au plus. */
+export const NUITS_AFFILEES_MAX = 5
+/** Règle 7 : jours sans travail après une série de nuits, avant de
+ * reprendre de jour. */
+export const REPOS_APRES_NUITS = 2
+/** Règle 13 : un congé d'au moins ce nombre de jours d'absence décomptée
+ * d'affilée ouvre une semaine de retour en douceur. Les repos (fixes, posés)
+ * font le pont sans compter ; l'école coupe la suite (`avecHistoire`). */
+export const CONGE_LONG = 5
+/** Règle 14 : la veille d'un jour d'école, pas de service qui finit après
+ * cette heure (minutes depuis minuit). */
+export const ECOLE_VEILLE_FIN = 21 * H
+/** Règle 14 : le lendemain d'un jour d'école, pas de service qui commence
+ * avant cette heure. */
+export const ECOLE_LENDEMAIN_DEBUT = 8 * H
+/** Règle 12 : au-delà du contrat ce nombre de semaines sur 4 (celle-ci
+ * comprise) : alerte. */
+export const SEMAINES_EN_PLUS_ALERTE = 3
+
 export const REPOS_DEUX_SEMAINES = 3
 export const TEMPS_PLEIN = 35 * H
 /** R-JOURNEE-ETOILE (organisation de l'hôtel) : au-delà de 35 h, une seule

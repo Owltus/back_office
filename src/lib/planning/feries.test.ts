@@ -419,6 +419,67 @@ describe('la génération place le JFR', () => {
     expect(g.probleme.salaries.find((s) => s.id === String(ID))?.jfr).toBeNull()
   })
 
+  // Relecture du 2026-11-03 : une semaine type entièrement fixée (Travaille
+  // du lundi au vendredi, Repos le week-end) n'avait jamais de jour où poser
+  // le JFR, et le droit se perdait au bout de quatre semaines.
+  function semaineFixee(d: DonneesSemaine): DonneesSemaine {
+    return {
+      ...d,
+      referentiel: {
+        ...d.referentiel,
+        salaries: d.referentiel.salaries.map((x) =>
+          x.id === ID
+            ? {
+                ...x,
+                semaine_type: [0, 1, 2, 3, 4, 5, 6].map((j) =>
+                  j < 5
+                    ? { mode: 'travail' as const }
+                    : { mode: 'repos' as const },
+                ),
+              }
+            : x,
+        ),
+      },
+    }
+  }
+  it('accepté : semaine type fixée, le JFR prend un jour « Travaille »', () => {
+    const d = semaineFixee(donnees('2024-01-01'))
+    const g = preparerGeneration(d, { aujourdhui: AUJOURDHUI, graine: 1 })
+    const sol = g.probleme.salaries.find((s) => s.id === String(ID))!
+    expect([...sol.jfr!.jours].sort()).toEqual([0, 1, 2, 3, 4])
+    const r = generer(g.probleme, highs)
+    const absences = g.absences(r)
+    expect(absences).toHaveLength(1)
+    expect(absences[0].jour).toBeLessThan(5)
+    const shifts = g.traduire(r).filter((n) => n.salarie_id === ID)
+    expect(shifts.map((n) => n.jour)).not.toContain(absences[0].jour)
+    // Le jour habituel pris par le JFR n'est pas reproché.
+    const semaine = analyser({
+      ...d,
+      absences: [
+        ...d.absences,
+        {
+          id: 5003,
+          salarie_id: ID,
+          jour: ajouterJours(LUNDI, absences[0].jour),
+          motif_id: JFR.id,
+          epinglee: false,
+        },
+      ],
+      affectations: poser(g.traduire(r)),
+    })
+    const b = semaine.bilan.find((x) => x.salarie_id === ID)!
+    expect(b.alertes.map((a) => a.regle)).not.toContain('JOUR-HABITUEL')
+    expect(b.alertes.map((a) => a.regle)).not.toContain('JOUR-FERIE')
+  })
+  it('refusé : jamais sur un repos fixe de la semaine type', () => {
+    const d = semaineFixee(donnees('2024-01-01'))
+    const g = preparerGeneration(d, { aujourdhui: AUJOURDHUI, graine: 1 })
+    const sol = g.probleme.salaries.find((s) => s.id === String(ID))!
+    expect(sol.jfr!.jours.has(5)).toBe(false)
+    expect(sol.jfr!.jours.has(6)).toBe(false)
+  })
+
   it('un JFR proposé est effacé et reproposé par la génération', () => {
     const d = donnees('2024-01-01', [
       {

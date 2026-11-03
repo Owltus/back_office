@@ -5,7 +5,7 @@
  */
 
 import { MINUTES_PAR_JOUR, NUIT_DEBUT, NUIT_FIN } from '#/lib/planning/temps.ts'
-import type { PeriodePresence } from '#/lib/planning/types.ts'
+import type { Periode, PeriodePresence } from '#/lib/planning/types.ts'
 
 /** Un poste à tenir sur une plage horaire, avec le nombre de personnes. */
 export interface Creneau {
@@ -55,6 +55,11 @@ export interface Creneau {
   /** Équité (D15) : un matin tôt (début à l'heure la plus tôt des matins
    * du poste). */
   matinTot: boolean
+  /** Moment de l'horaire (matin, middle, soir, nuit ; sans horaire : l'heure
+   * de début), pour la semaine stable et les nuits (règles 6 et 7 du PRD,
+   * `plan/planning-bonnes-pratiques/PRD.md`). Null : horaire sans moment,
+   * aucune de ces deux règles. */
+  moment: Periode | null
 }
 
 export function creneau(
@@ -76,6 +81,7 @@ export function creneau(
     etoile: false,
     soir: false,
     matinTot: false,
+    moment: null,
     ...c,
   }
 }
@@ -174,6 +180,36 @@ export interface SalarieSolveur {
   /** Mineur : jours fériés de la semaine, évités par le générateur
    * (`POIDS_MINEUR_FERIE`) et signalés par le vérificateur (MINEUR-FERIE). */
   feriesEvites: ReadonlySet<number>
+  /** Règle 4 du PRD : un week-end complet libre (samedi et dimanche sans
+   * travail ni école) sur les 3 semaines d'avant. false : aucun, la semaine
+   * doit en donner un ; null : inconnu ou sans objet (semaines d'avant pas
+   * faites, pas toujours sous contrat, extra, samedi ou dimanche fixé
+   * Travaille dans la semaine type). */
+  weekendLibreAvant: boolean | null
+  /** Règle 4 : la semaine type fixe le samedi ou le dimanche Travaille (le
+   * week-end libre ne se donne pas, le vérificateur le dit). */
+  weekendFixe: boolean
+  /** Règle 8 du PRD : jours de semaine (lundi 0 à vendredi 4) de repos la
+   * semaine d'avant, à garder si possible. Le week-end tourne (règles 4 et
+   * 10) : jamais dedans. */
+  reposAvant: ReadonlySet<number>
+  /** Règle 8 : la personne a travaillé le samedi ou le dimanche de la
+   * semaine d'avant. Passer alors ses repos au week-end ne coûte rien : c'est
+   * la rotation des week-ends (règle 10), pas un repos perdu. */
+  weekendTravailleAvant: boolean
+  /** Règle 7 du PRD : jours de la semaine d'avant (-7 à -1) où la personne
+   * a fait une nuit. */
+  nuitsAvant: ReadonlySet<number>
+  /** Règle 13 du PRD : premier jour de la semaine (0 à 6) où la personne
+   * peut reprendre après un congé d'au moins `CONGE_LONG` jours ; null : pas
+   * de retour cette semaine. */
+  retourConge: number | null
+  /** Règle 14 du PRD : jour → fin au plus tard (minutes réelles) la veille
+   * d'un jour d'école. */
+  finAvantEcole: ReadonlyMap<number, number>
+  /** Règle 14 du PRD : jour → début au plus tôt (minutes réelles) le
+   * lendemain d'un jour d'école. */
+  debutApresEcole: ReadonlyMap<number, number>
 }
 
 /** Équité (D15) : semaines d'avant comptées, à poids égal (mois glissant,
@@ -184,6 +220,11 @@ export interface EquiteFaite {
   weekends: number
   soirs: number
   matinsTot: number
+  /** Règle 12 du PRD : minutes au-delà du contrat sur les semaines d'avant
+   * (absent : 0). */
+  minutesEnPlus?: number
+  /** Règle 12 du PRD : semaines d'avant au-delà du contrat (absent : 0). */
+  semainesEnPlus?: number
 }
 
 export const EQUITE_VIDE: EquiteFaite = { weekends: 0, soirs: 0, matinsTot: 0 }
@@ -239,6 +280,14 @@ export function salarieSolveur(
     jfr: null,
     feriesARattraper: [],
     feriesEvites: new Set(),
+    weekendLibreAvant: null,
+    weekendFixe: false,
+    reposAvant: vide,
+    weekendTravailleAvant: false,
+    nuitsAvant: vide,
+    retourConge: null,
+    finAvantEcole: new Map(),
+    debutApresEcole: new Map(),
     ...s,
   }
 }

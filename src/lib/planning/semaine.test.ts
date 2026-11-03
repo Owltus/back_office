@@ -58,6 +58,7 @@ import type {
 import {
   presenceParCycle,
   trous,
+  REGLES_MORALES,
   violations,
 } from '#/lib/planning/verificateur.ts'
 import type { Violation } from '#/lib/planning/verificateur.ts'
@@ -455,7 +456,9 @@ describe('garde-fous (test_garde_fous.py)', () => {
     const troisieme = p.generer(LUNDI)
     expect(bon(troisieme)).toBe(true)
     expect(epinglees(troisieme)).toEqual(avant)
-  })
+    // Trois calculs de l'hôtel réel : ~4 s seul depuis les règles morales du
+    // PRD (2026-11-02), plus quand toute la suite tourne en parallèle.
+  }, 20_000)
 
   it('deux graines donnent deux plannings', () => {
     const p = reel('2026-10-27')
@@ -1887,7 +1890,13 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
     const sem2 = analyser(donnees([besoin(100, M3)], [t21], [ALPHA]))
     const place2 = sem2.a_pourvoir.find((x) => x.besoin_id === 100)!
     expect(place2.raisons[0].regles).toContain('R-REPOS-QUOTIDIEN')
-    expect(place2.remplacants[0].raisons[0].regles).toEqual([])
+    // Seules des règles morales (repos de 12 h, soir puis matin) : à éviter,
+    // jamais bloquantes.
+    expect(
+      place2.remplacants[0].raisons[0].regles.filter(
+        (r) => !REGLES_MORALES.has(r),
+      ),
+    ).toEqual([])
     expect(place2.raison_commune).toBeNull()
   })
 

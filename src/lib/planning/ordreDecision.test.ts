@@ -49,6 +49,7 @@ import {
   raisonsBlocage,
   trous as trousVerifies,
   violations,
+  REGLES_MORALES,
   violationsSalarie,
 } from '#/lib/planning/verificateur.ts'
 
@@ -609,11 +610,22 @@ describe('propriété : jamais d’infraction, une place vide a toujours une rai
           const p = probleme({ salaries, creneaux, graine })
           const r = gen(p)
           expect(r.statut).toBe('optimal')
-          expect(violations(p, r.affectations)).toEqual([])
+          // Les règles morales du PRD peuvent céder (une alerte) : jamais la loi.
+          expect(
+            violations(p, r.affectations).filter(
+              (v) => !REGLES_MORALES.has(v.regle),
+            ),
+          ).toEqual([])
           for (const [vide] of manquants(p, r.affectations)) {
             for (const [, liste] of raisonsBlocage(p, r.affectations, vide)) {
-              // Une raison légale ou d'éligibilité, jamais le seul confort.
-              expect(liste.some((v) => v.regle !== 'SIXIEME-JOUR')).toBe(true)
+              // Une raison légale ou d'éligibilité, jamais le seul confort ni
+              // une règle morale : une place passe avant elles (Q1 du PRD).
+              expect(
+                liste.some(
+                  (v) =>
+                    v.regle !== 'SIXIEME-JOUR' && !REGLES_MORALES.has(v.regle),
+                ),
+              ).toBe(true)
             }
           }
         },
@@ -1343,7 +1355,10 @@ describe('cycles : un remplaçant d’une autre durée, jamais pour des heures',
       const r = gen(p)
       expect(codes(r)).toEqual(['b1', 'b2', 'b3', 'b4', 'r0-M6'])
       expect(r.manques).toEqual([])
-      expect(violations(p, r.affectations)).toEqual([])
+      // 11 h pile depuis la veille : permis, sous les 13 h conseillées.
+      expect(violations(p, r.affectations).map((v) => v.regle)).toEqual([
+        'REPOS-COURT',
+      ])
     }
   })
 

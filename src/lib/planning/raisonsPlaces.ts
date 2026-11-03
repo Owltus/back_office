@@ -64,8 +64,34 @@ export const REGLES_BLOCAGE = [
   'R-JOURNEE-ETOILE',
   'R-REPOS-HEBDO-35H',
   'R-REPOS-HEBDO-MINEUR',
+  // Règles morales du PRD (alertes d'organisation, à éviter).
+  'REPOS-SEPARES',
+  'JOUR-ISOLE',
+  'REPOS-COURT',
+  'WEEKEND-LIBRE',
+  'MOMENTS',
+  'NUITS',
+  'MEMES-REPOS',
+  'HEURES-PLUS',
+  'RETOUR-CONGE',
+  'ECOLE-ABORDS',
   'EXTRA',
 ] as const
+
+/** Règles morales du PRD : elles ne bloquent pas une place, elles la
+ * rendent « à éviter » pour cette personne. */
+const PHRASES_MORALES: Record<string, string> = {
+  'REPOS-SEPARES': 'Ses repos ne se suivraient plus',
+  'JOUR-ISOLE': 'Ce serait un jour de travail seul entre deux repos',
+  'REPOS-COURT': 'Moins de 13 h de repos avec un autre shift',
+  'WEEKEND-LIBRE': 'Pas de week-end libre depuis 4 semaines',
+  MOMENTS: 'Sa semaine changerait trop d’horaires',
+  NUITS: 'Trop près de ses nuits',
+  'MEMES-REPOS': 'Ce serait un de ses jours de repos habituels',
+  'HEURES-PLUS': 'A déjà fait beaucoup d’heures en plus',
+  'RETOUR-CONGE': 'Rentre de congé cette semaine',
+  'ECOLE-ABORDS': 'Trop près d’un jour d’école',
+}
 
 /** Sans aucune règle enfreinte : la personne peut prendre la place. On ne
  * dit rien de ses heures (rien ne les a comptées ici) : une place nécessaire
@@ -213,6 +239,17 @@ export function raisonClaire(
       )
     case 'EXTRA':
       return r('Extra libre', mention('à appeler'))
+    case 'REPOS-SEPARES':
+    case 'JOUR-ISOLE':
+    case 'REPOS-COURT':
+    case 'WEEKEND-LIBRE':
+    case 'MOMENTS':
+    case 'NUITS':
+    case 'MEMES-REPOS':
+    case 'HEURES-PLUS':
+    case 'RETOUR-CONGE':
+    case 'ECOLE-ABORDS':
+      return r(PHRASES_MORALES[regle], mention('à éviter'))
     default:
       return r(
         message.charAt(0).toUpperCase() + message.slice(1),
@@ -304,6 +341,18 @@ const PHRASES_COMMUNES: Record<(typeof REGLES_BLOCAGE)[number], string> = {
   'R-REPOS-HEBDO-35H': 'Personne ne garderait son repos de 35 h.',
   'R-REPOS-HEBDO-MINEUR':
     'Tout le monde est mineur : deux jours de repos de suite.',
+  // Règles morales : jamais « Je ne peux pas » (`phraseCommune` rend null,
+  // elles ne bloquent pas), la phrase ne sert qu'à l'exhaustivité.
+  'REPOS-SEPARES': 'Les repos de chacun ne se suivraient plus.',
+  'JOUR-ISOLE': 'Ce serait pour chacun un jour de travail seul.',
+  'REPOS-COURT': 'Tout le monde aurait moins de 13 h de repos.',
+  'WEEKEND-LIBRE': 'Tout le monde attend son week-end libre.',
+  MOMENTS: 'Tout le monde changerait trop d’horaires.',
+  NUITS: 'Tout le monde sort de ses nuits.',
+  'MEMES-REPOS': 'C’est un jour de repos habituel pour tout le monde.',
+  'HEURES-PLUS': 'Tout le monde a déjà beaucoup d’heures en plus.',
+  'RETOUR-CONGE': 'Tout le monde rentre de congé.',
+  'ECOLE-ABORDS': 'Tout le monde est trop près d’un jour d’école.',
   EXTRA: 'Seuls des extras sont libres.',
 }
 

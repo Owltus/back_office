@@ -5,7 +5,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '#/components/ui/tooltip.tsx'
 import type * as ModPlanning from '#/components/planning/hooks/usePlanning.ts'
 import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
-import { REPOS_QUOTIDIEN, SEMAINE_MAX } from '#/lib/planning/regles.ts'
+import {
+  ECOLE_VEILLE_FIN,
+  NUITS_AFFILEES_MAX,
+  REPOS_CONFORT,
+  REPOS_QUOTIDIEN,
+  SEMAINE_MAX,
+} from '#/lib/planning/regles.ts'
 import { heuresLisibles } from '#/lib/planning/temps.ts'
 
 /*
@@ -119,6 +125,28 @@ describe('AidePlanningContenu (aide du bouton ?)', () => {
     expect(feries.textContent).toContain('JFR')
     expect(feries.textContent).toContain('4 semaines')
     expect(feries.textContent).toContain('Date d’entrée vide')
+  })
+
+  it('décrit le bien-être de l’équipe et sa place dans le calcul', () => {
+    rendre()
+    const bien = document.getElementById('fonctionnement-bien-etre')!
+    const t = bien.textContent
+    expect(t).toContain('Ce n’est pas parce que l’on peut que l’on doit')
+    expect(t).toContain(`Au moins ${heuresLisibles(REPOS_CONFORT)}`)
+    expect(t).toContain('week-end complet libre')
+    expect(t).toContain(`Pas plus de ${NUITS_AFFILEES_MAX} nuits`)
+    expect(t).toContain(`${heuresLisibles(ECOLE_VEILLE_FIN)} la veille`)
+    expect(t).toContain('retour en douceur')
+    expect(t).toContain('Pas encore appliqué')
+    // L'ordre du calcul (Q1 du PRD) : les heures dues, puis le bien-être,
+    // puis le confort.
+    const ordre = document.getElementById('fonctionnement-generation')!
+    const items = [...ordre.querySelectorAll('ol > li')].map(
+      (li) => li.textContent,
+    )
+    const rang = (mot: string) => items.findIndex((x) => x.startsWith(mot))
+    expect(rang('Les contrats')).toBeLessThan(rang('Le bien-être'))
+    expect(rang('Le bien-être')).toBeLessThan(rang('Le confort'))
   })
 
   it('respecte les règles d’écriture de l’app', () => {

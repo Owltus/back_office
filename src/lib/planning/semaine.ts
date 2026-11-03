@@ -53,6 +53,9 @@ import type {
   EquiteFaite,
 } from '#/lib/planning/modele.ts'
 import {
+  CONGE_LONG,
+  ECOLE_LENDEMAIN_DEBUT,
+  ECOLE_VEILLE_FIN,
   FERIE_RATTRAPAGE_JOURS,
   JOURS_CONTRAT,
   alerteBesoin,
@@ -67,6 +70,7 @@ import {
   chiffreAccueil,
   estPosteAccueil,
   momentsAccueil,
+  periodeLibre,
   periodeShift,
 } from '#/lib/planning/presence.ts'
 import type { PresenceOut } from '#/lib/planning/presence.ts'
@@ -96,12 +100,14 @@ import type {
   Consigne,
   Horaire,
   Motif,
+  Periode,
   PeriodePresence,
   Poste,
   Referentiel,
   Salarie,
 } from '#/lib/planning/types.ts'
 import {
+  REGLES_MORALES,
   ouverturesManquees,
   raisonsBlocage,
   raisonsBlocageAccueil,
@@ -342,6 +348,31 @@ export function estEcole(m: Pick<Motif, 'nature' | 'code' | 'nom'>): boolean {
   if (m.nature === 'ecole') return true
   const nom = m.nom.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
   return m.code === 'EC' || nom.startsWith('ecole')
+}
+
+/** Codes des absences choisies qui laissent un jour vraiment libre :
+ * congé payé, jour férié chômé, jour férié rattrapé. */
+export const CODES_CONGE_LIBRE: ReadonlySet<string> = new Set([
+  'CP',
+  'JF',
+  'JFR',
+])
+
+/** Règle 4 du PRD : une absence qui compte comme un jour libre pour le
+ * week-end. Oui : un repos (motif de nature repos), une absence sans
+ * décompte (repos exceptionnel, récupération, repos forfait), un congé
+ * choisi (`CODES_CONGE_LIBRE`). Non : maladie, formation, sans solde,
+ * absence autorisée, congé pour décès, école (relecture du 2026-11-03 :
+ * un week-end malade n'est pas un week-end avec les siens). */
+export function absenceLibre(
+  m: Pick<Motif, 'code' | 'nature' | 'decompte'>,
+): boolean {
+  if (m.nature === 'ecole') return false
+  return (
+    m.nature === 'repos' ||
+    !m.decompte ||
+    CODES_CONGE_LIBRE.has(m.code.trim().toUpperCase())
+  )
 }
 
 export function indexerAbsences(
@@ -739,7 +770,7 @@ function debutsMatinTot(ctx: Contexte): Map<number, number> {
 export function equiteDe(
   ctx: Contexte,
   x: { poste_id: number; horaire_id: number | null; debut: string },
-): { soir: boolean; matinTot: boolean } {
+): { soir: boolean; matinTot: boolean; moment: Periode | null } {
   const h = x.horaire_id !== null ? ctx.horaires.get(x.horaire_id) : undefined
   const periode = periodeShift(h, x.debut)
   const tot = debutsMatinTot(ctx).get(x.poste_id)
@@ -747,6 +778,9 @@ export function equiteDe(
     soir: periode === 'soir',
     matinTot:
       periode === 'matin' && tot !== undefined && minutes(x.debut) <= tot,
+    // Semaine stable et nuits (règles 6 et 7 du PRD) : le moment de
+    // l'horaire, sinon l'heure de début ; un horaire sans moment : aucun.
+    moment: h ? h.periode : periodeLibre(x.debut),
   }
 }
 
@@ -1334,6 +1368,180 @@ export function avecSemainesVoisines(
   return r
 }
 
+/**
+ * Ce que les règles morales du PRD lisent des semaines d'avant et autour de
+ * l'école (partie 4 de `plan/planning-bonnes-pratiques/PRD.md`), pour le
+ * générateur comme pour le vérificateur :
+ *   - règle 4 : un week-end complet libre (samedi et dimanche sans shift, et
+ *     sans absence ou avec une absence qui laisse libre, `absenceLibre` :
+ *     repos, congé payé, jour férié ; jamais maladie, formation, sans solde
+ *     ni école) sur les 3 semaines d'avant. Inconnu
+ *     (null) si l'une n'a aucun shift de personne (pas encore faite) ou si la
+ *     personne n'était pas sous contrat tout ce week-end-là ; jamais pour un
+ *     extra. Une nuit écrite le dimanche compte pour le dimanche, comme à
+ *     l'écran. Samedi ou dimanche fixé Travaille dans la semaine type :
+ *     `weekendFixe` (le vérificateur le dit, le calcul n'y peut rien) ;
+ *   - règle 8 : les jours de semaine de repos la semaine d'avant (ni shift,
+ *     ni absence, ni école, sous contrat), si elle a travaillé ;
+ *   - règle 7 : les nuits de la semaine d'avant ;
+ *   - règle 13 : le premier jour où elle peut reprendre après un congé d'au
+ *     moins `CONGE_LONG` jours d'absence décomptée (hors école), repos
+ *     fixes et repos posés faisant le pont SANS compter, s'il tombe cette
+ *     semaine (pas de shift depuis la fin du congé) ;
+ *   - règle 14 : la veille et le lendemain de chaque jour d'école (semaines
+ *     voisines comprises), les heures à ne pas dépasser ;
+ *   - règle 12 : minutes au-delà du contrat et semaines au-delà, sur les
+ *     `SEMAINES_EQUITE` semaines d'avant connues (contrat non indicatif).
+ */
+export function avecHistoire(
+  d: DonneesSemaine,
+  ctx: Contexte,
+  salaries: Map<number, SalarieSolveur>,
+): Map<number, SalarieSolveur> {
+  const lundi = ctx.lundi
+  const connus = shiftsConnus(d, []).filter((a) => a.lundi < lundi)
+  const parSemaine = new Map<string, Affectation[]>()
+  for (const a of connus)
+    parSemaine.set(a.lundi, [...(parSemaine.get(a.lundi) ?? []), a])
+  const semaine = (k: number) =>
+    parSemaine.get(ajouterJours(lundi, -7 * k)) ?? []
+  const parId = new Map(ctx.staff.map((x) => [x.id, x]))
+  const motifs = new Map(d.referentiel.motifs.map((m) => [m.id, m]))
+  const r = new Map<number, SalarieSolveur>()
+  for (const [id, sol] of salaries) {
+    const x = parId.get(id)
+    if (!x) {
+      r.set(id, sol)
+      continue
+    }
+    const siens = (k: number) => semaine(k).filter((a) => a.salarie_id === id)
+    const ecoleLe = (date: string) => {
+      const m = ctx.absences.get(id)?.get(date)
+      return m !== undefined && ctx.ecole.has(m)
+    }
+    // Règle 4. Un jour du week-end est libre sans shift, et sans absence
+    // ou avec une absence qui laisse libre (`absenceLibre`) : un week-end
+    // malade, en formation ou d'école ne compte pas.
+    let weekendLibreAvant: boolean | null = sol.placementManuel ? null : false
+    for (let k = 1; k <= 3 && weekendLibreAvant === false; k++) {
+      const l = ajouterJours(lundi, -7 * k)
+      const hors = joursHorsContrat(x, l)
+      if (!semaine(k).length || hors.has(5) || hors.has(6)) {
+        weekendLibreAvant = null
+        break
+      }
+      const pris = new Set(siens(k).map((a) => a.jour))
+      const absents = joursAbsents(x, l, ctx.absences)
+      const libre = (j: number) => {
+        if (pris.has(j)) return false
+        const m = absents.get(j)
+        if (m === undefined || m === null) return true
+        const motif = motifs.get(m)
+        return motif ? absenceLibre(motif) : !ctx.ecole.has(m)
+      }
+      if (libre(5) && libre(6)) weekendLibreAvant = true
+    }
+    const weekendFixe = [5, 6].some(
+      (j) => x.semaine_type.at(j)?.mode === 'travail',
+    )
+    // Règles 8 et 7 : la semaine d'avant.
+    const lAvant = ajouterJours(lundi, -7)
+    const avant = siens(1)
+    const reposAvant = new Set<number>()
+    const weekendTravailleAvant = avant.some((a) => a.jour >= 5)
+    if (avant.length) {
+      const absents = joursAbsents(x, lAvant, ctx.absences)
+      const hors = joursHorsContrat(x, lAvant)
+      const pris = new Set(avant.map((a) => a.jour))
+      for (let j = 0; j < 5; j++)
+        if (!pris.has(j) && !absents.has(j) && !hors.has(j)) reposAvant.add(j)
+    }
+    const nuitsAvant = new Set(
+      avant
+        .filter((a) => equiteDe(ctx, a).moment === 'nuit')
+        .map((a) => a.jour - 7),
+    )
+    // Règle 13 : jours de -14 à 6, absents (hors école) ou repos fixes.
+    const etat = new Map<number, 'conge' | 'pont' | 'non'>()
+    for (const k of [2, 1, 0]) {
+      const l = ajouterJours(lundi, -7 * k)
+      const absents = joursAbsents(x, l, ctx.absences)
+      for (let j = 0; j < 7; j++) {
+        const m = absents.get(j)
+        const jour = j - 7 * k
+        if (m !== undefined && m !== null && ctx.ecole.has(m))
+          etat.set(jour, 'non')
+        else if (m !== undefined && m !== null && !ctx.sansDecompte.has(m))
+          etat.set(jour, ctx.motifsRepos.has(m) ? 'pont' : 'conge')
+        else if (m !== undefined || x.semaine_type.at(j)?.mode === 'repos')
+          etat.set(jour, 'pont')
+        else etat.set(jour, 'non')
+      }
+    }
+    let retourConge: number | null = null
+    for (let e = 5; e >= -7; e--) {
+      if (etat.get(e) !== 'conge' || etat.get(e + 1) === 'conge') continue
+      // Seuls les jours d'absence comptent ; un repos fait le pont sans
+      // compter (3 jours de congé collés à 2 repos : pas un congé long).
+      let longueur = 0
+      for (let j = e; etat.get(j) === 'conge' || etat.get(j) === 'pont'; j--)
+        if (etat.get(j) === 'conge') longueur++
+      if (longueur < CONGE_LONG) continue
+      if (e >= -1) retourConge = e + 1
+      else if (!avant.some((a) => a.jour - 7 > e)) retourConge = 0
+      break
+    }
+    // Règle 14 : jours d'école de la veille (-1) au lundi d'après (7).
+    const finAvantEcole = new Map<number, number>()
+    const debutApresEcole = new Map<number, number>()
+    for (let e = -1; e <= 7; e++) {
+      if (!ecoleLe(ajouterJours(lundi, e)) && !sol.joursHorsSite.has(e))
+        continue
+      if (e - 1 >= 0 && e - 1 <= 6)
+        finAvantEcole.set(
+          e - 1,
+          bornes(lundi, e - 1, hhmm(ECOLE_VEILLE_FIN), '23:59')[0],
+        )
+      if (e + 1 >= 0 && e + 1 <= 6)
+        debutApresEcole.set(
+          e + 1,
+          bornes(lundi, e + 1, hhmm(ECOLE_LENDEMAIN_DEBUT), '23:59')[0],
+        )
+    }
+    // Règle 12 : heures au-delà du contrat des semaines d'avant connues.
+    let minutesEnPlus = 0
+    let semainesEnPlus = 0
+    if (!sol.contratIndicatif) {
+      for (let k = 1; k <= SEMAINES_EQUITE; k++) {
+        if (!semaine(k).length) continue
+        const l = ajouterJours(lundi, -7 * k)
+        const dues = versSolveur(fiche(x, l, ctx)).minutesHebdoContrat
+        const faites = siens(k).reduce(
+          (t, a) => t + travail(creneauAffectation(ctx, a)),
+          0,
+        )
+        if (faites > dues) {
+          minutesEnPlus += faites - dues
+          semainesEnPlus++
+        }
+      }
+    }
+    r.set(id, {
+      ...sol,
+      weekendLibreAvant,
+      weekendFixe,
+      reposAvant,
+      weekendTravailleAvant,
+      nuitsAvant,
+      retourConge,
+      finAvantEcole,
+      debutApresEcole,
+      equiteAvant: { ...sol.equiteAvant, minutesEnPlus, semainesEnPlus },
+    })
+  }
+  return r
+}
+
 /** Jours de `jours` travaillés d'affilée, lus dans l'ordre donné. */
 function serie(jours: ReadonlySet<number> | undefined, ordre: number[]) {
   let n = 0
@@ -1627,7 +1835,10 @@ export function raisonCommune(
   const listes: string[][] = []
   for (const raisons of parCode) {
     for (const vs of raisons.values()) {
-      const regles = vs.map((v) => v.regle)
+      // Une règle morale du PRD ne bloque pas : la personne pourrait venir.
+      const regles = vs
+        .map((v) => v.regle)
+        .filter((r) => !REGLES_MORALES.has(r))
       if (regles.length === 1 && regles[0] === 'EXTRA') continue
       if (!regles.length) return null
       listes.push(regles)
@@ -1654,6 +1865,7 @@ export function analyser(d: DonneesSemaine): SemaineOut {
     ctx.staff.map((x) => [x.id, versSolveur(fiche(x, lundi, ctx))]),
   )
   salaries = avecSemainesVoisines(d, ctx, salaries)
+  salaries = avecHistoire(d, ctx, salaries)
   // R-FERIE-RATTRAPE : les jours fériés travaillés encore à rattraper
   // deviennent une alerte du vérificateur (JOUR-FERIE).
   for (const [id, liste] of feriesEnAttente(
@@ -2211,6 +2423,7 @@ export function preparerGeneration(
     )
   }
   salaries = avecSemainesVoisines(d2, ctx, salaries)
+  salaries = avecHistoire(d2, ctx, salaries)
   // R-FERIE-RATTRAPE : un JFR à placer pour chaque personne qui a un jour
   // férié travaillé à rattraper (fenêtre de 4 semaines), sur un jour à venir
   // APRÈS le premier jour férié en attente, ni absent, ni d'école, ni hors
@@ -2233,11 +2446,16 @@ export function preparerGeneration(
       const jours = new Set<number>()
       for (let j = depuis; j < 7; j++) {
         if (ajouterJours(lundi, j) <= apres) continue
+        // Un jour « Travaille » de la semaine type est permis (relecture du
+        // 2026-11-03) : un JFR rend justement un jour qu'on aurait
+        // travaillé. Sans cela, une semaine type entièrement fixée n'avait
+        // jamais de jour où le poser, et le droit se perdait en silence. Le
+        // jour habituel garde sa prime (`POIDS_JOUR_FIXE`) : un jour libre
+        // de la fiche passe d'abord.
         if (
           sol.indisponibilites.has(j) ||
           sol.horsContrat.has(j) ||
           sol.joursHorsSite.has(j) ||
-          sol.travailFixe.has(j) ||
           sol.reposFixes.has(j) ||
           sol.etoileFixe.has(j)
         )
@@ -2270,7 +2488,11 @@ export function preparerGeneration(
       salaries.set(x.id, {
         ...salaries.get(x.id)!,
         groupeEquite: String(groupe),
-        equiteAvant: faits.get(x.id)!,
+        // Les heures en plus (règle 12, `avecHistoire`) restent.
+        equiteAvant: {
+          ...salaries.get(x.id)!.equiteAvant,
+          ...faits.get(x.id)!,
+        },
       })
   }
   const corr = correspondances(ctx, besoins, salaries)

@@ -2310,6 +2310,32 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   `plan/planning-bonnes-pratiques/PRD.md` (16 règles morales et
   professionnelles, statut en place / à faire, questions ouvertes Q1-Q14) :
   À TENIR À JOUR à chaque règle ajoutée.
+- **RÈGLES MORALES DU PRD (2026-11-03, demande utilisateur : « aligne-toi
+  sur le PRD… tu ne dois pas être inhumain »)** : ordre de décision (Q1) loi
+  > places > heures dues > règles morales > confort ; chaque règle coûte
+  > moins que 4 h d'heures dues, jamais une place vide pour elle. En place,
+  > avec une alerte chacune (`alertesMorales`, `REGLES_MORALES`, « à
+  > éviter » sur une place à pourvoir) : 1 paire de repos DANS la semaine
+  > (REPOS-SEPARES) ; 3 13 h entre deux services, 11 h restent dures
+  > (REPOS-COURT) ; 4 un week-end libre sur 4 semaines, maladie / formation /
+  > sans solde / école ne comptent pas comme libres, la semaine type passe
+  > avant (WEEKEND-LIBRE) ; 6 au plus un changement de moment, pas de matin
+  > dans les 2 jours après un soir (MOMENTS) ; 7 au plus 5 nuits puis 2 jours
+  > (NUITS) ; 8 mêmes repos lundi-vendredi, neutre après un week-end travaillé
+  > (MEMES-REPOS) ; 9 alerte JOUR-ISOLE (le moteur ne l'évite que contre une
+  > absence ou un repos fixe : le coût partout faisait exploser la durée) ;
+  > 12 heures en plus à qui en a fait le moins (HEURES-PLUS) ; 13 retour d'un
+  > congé de 5 jours DÉCOMPTÉS (repos font le pont sans compter) adouci
+  > (RETOUR-CONGE) ; 14 pas de fin après 21 h la veille d'école ni de début
+  > avant 8 h le lendemain (ECOLE-ABORDS). JFR posable sur un jour
+  > « Travaille » de la semaine type. Lecture des semaines d'avant :
+  > `avecHistoire` (semaine.ts), testée par `historique.test.ts` ; règles :
+  > `reglesMorales.test.ts`. Mesuré sur un banc de 7 scénarios réels (hors
+  > dépôt) : repos < 13 h 17 → 0, semaines heurtées 26 → 9, aucune
+  > infraction ni place vide de plus ; mais le week-end libre ne progresse
+  > pas (manque de monde : Q12, Q17) et quelques vraies semaines atteignent
+  > le plafond de 40 s. Règle 11 (fêtes) reportée. Questions ouvertes Q12,
+  > Q14-Q17 dans le PRD.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

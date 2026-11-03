@@ -33,9 +33,19 @@ import type {
   Probleme,
   SalarieSolveur,
 } from '#/lib/planning/modele.ts'
-import { JOURS_AFFILES_MAX } from '#/lib/planning/regles.ts'
+import {
+  CHANGEMENTS_MOMENT_MAX,
+  ECOLE_LENDEMAIN_DEBUT,
+  ECOLE_VEILLE_FIN,
+  JOURS_AFFILES_MAX,
+  MOMENT_ARRIERE_JOURS,
+  NUITS_AFFILEES_MAX,
+  REPOS_APRES_NUITS,
+  REPOS_CONFORT,
+  SEMAINES_EN_PLUS_ALERTE,
+} from '#/lib/planning/regles.ts'
 import { heuresLisibles as h } from '#/lib/planning/temps.ts'
-import type { PeriodePresence } from '#/lib/planning/types.ts'
+import type { Periode, PeriodePresence } from '#/lib/planning/types.ts'
 
 export type Nature = 'loi' | 'organisation'
 
@@ -361,7 +371,305 @@ export function violationsSalarie(
       'organisation',
     )
   }
+  alertesMorales(s, liste, parJour, nbJours, (regle, message, creneaux) =>
+    ajoute(regle, message, creneaux, 'organisation'),
+  )
   return erreurs
+}
+
+/** Les alertes des règles morales du PRD (`alertesMorales`) : toujours
+ * d'organisation, jamais une infraction. */
+export const REGLES_MORALES: ReadonlySet<string> = new Set([
+  'REPOS-SEPARES',
+  'JOUR-ISOLE',
+  'REPOS-COURT',
+  'WEEKEND-LIBRE',
+  'MOMENTS',
+  'NUITS',
+  'MEMES-REPOS',
+  'HEURES-PLUS',
+  'RETOUR-CONGE',
+  'ECOLE-ABORDS',
+])
+
+const NOM_MOMENT = {
+  matin: 'matin',
+  middle: 'middle',
+  soir: 'soir',
+  nuit: 'nuit',
+} as const
+const RANG = { matin: 0, middle: 1, soir: 2, nuit: 3 } as const
+
+/**
+ * Règles morales du PRD (`plan/planning-bonnes-pratiques/PRD.md`, partie 4)
+ * : des alertes d'ORGANISATION, jamais bloquantes. Le calcul les évite
+ * (`generateur.ts`, règles morales) ; quand il ne peut pas faire autrement,
+ * ou quand un shift est posé à la main, l'alerte le dit. Recompté ici sans
+ * rien du générateur. `liste` est triée par début.
+ */
+function alertesMorales(
+  s: SalarieSolveur,
+  liste: Creneau[],
+  parJour: Map<number, Creneau[]>,
+  nbJours: number,
+  ajoute: (regle: string, message: string, creneaux: Creneau[]) => void,
+): void {
+  if (!liste.length) return
+  const travaille = (d: number) => parJour.has(d) || s.joursHorsSite.has(d)
+  const nbSemaines = Math.ceil(nbJours / 7)
+
+  // Règle 3 : moins de 13 h entre deux services (sous 11 h : la loi, plus
+  // haut).
+  const court = (ecart: number) =>
+    ecart >= s.reposQuotidienMin && ecart < REPOS_CONFORT
+  const conseil = `${h(REPOS_CONFORT)} conseillées`
+  const courts: Creneau[] = []
+  if (s.finServicePrecedent !== null) {
+    const ecart = liste[0].debut - s.finServicePrecedent
+    if (court(ecart)) {
+      courts.push(liste[0])
+      ajoute(
+        'REPOS-COURT',
+        `seulement ${h(ecart)} de repos depuis son dernier service de la semaine précédente (${conseil})`,
+        [liste[0]],
+      )
+    }
+  }
+  for (let i = 0; i + 1 < liste.length; i++) {
+    const ecart = liste[i + 1].debut - liste[i].fin
+    if (court(ecart)) {
+      courts.push(liste[i + 1])
+      ajoute(
+        'REPOS-COURT',
+        `seulement ${h(ecart)} de repos entre deux services (${conseil})`,
+        [liste[i], liste[i + 1]],
+      )
+    }
+  }
+  if (s.debutServiceSuivant !== null) {
+    const dernier = liste[liste.length - 1]
+    const ecart = s.debutServiceSuivant - dernier.fin
+    if (court(ecart))
+      ajoute(
+        'REPOS-COURT',
+        `seulement ${h(ecart)} de repos avant son premier service de la semaine suivante (${conseil})`,
+        [dernier],
+      )
+  }
+
+  // Règle 14 : les abords d'un jour d'école.
+  for (const c of liste) {
+    const j = jourDe(c)
+    const fin = s.finAvantEcole.get(j)
+    if (fin !== undefined && c.fin > fin)
+      ajoute(
+        'ECOLE-ABORDS',
+        `finit après ${h(ECOLE_VEILLE_FIN)} la veille d'un jour d'école`,
+        [c],
+      )
+    const debut = s.debutApresEcole.get(j)
+    if (debut !== undefined && c.debut < debut)
+      ajoute(
+        'ECOLE-ABORDS',
+        `commence avant ${h(ECOLE_LENDEMAIN_DEBUT)} le lendemain d'un jour d'école`,
+        [c],
+      )
+  }
+
+  // Règle 7 : les nuits, semaine d'avant comprise.
+  const nuit = (d: number) =>
+    d < 0
+      ? s.nuitsAvant.has(d)
+      : (parJour.get(d) ?? []).some((c) => c.moment === 'nuit')
+  {
+    let d = -7
+    while (d < nbJours) {
+      if (!nuit(d)) {
+        d++
+        continue
+      }
+      let f = d
+      while (f + 1 < nbJours && nuit(f + 1)) f++
+      const ici = liste.filter((c) => jourDe(c) >= d && jourDe(c) <= f)
+      if (f - d + 1 > NUITS_AFFILEES_MAX && ici.length)
+        ajoute(
+          'NUITS',
+          `${f - d + 1} nuits d'affilée (au plus ${NUITS_AFFILEES_MAX} conseillées)`,
+          ici,
+        )
+      d = f + 1
+    }
+  }
+  for (const c of liste) {
+    const k = jourDe(c)
+    if (c.moment === 'nuit') continue
+    let apres = false
+    for (let d = k - REPOS_APRES_NUITS; d < k; d++) if (nuit(d)) apres = true
+    if (apres)
+      ajoute(
+        'NUITS',
+        `reprend de jour moins de ${REPOS_APRES_NUITS} jours après une nuit (${REPOS_APRES_NUITS} jours de repos conseillés)`,
+        [c],
+      )
+  }
+
+  // Règle 9 : un jour de travail seul entre deux jours sans travail, de la
+  // même personne, semaines voisines comprises (relecture du 2026-11-03 :
+  // le calcul ne l'évite que contre un jour où le travail est impossible,
+  // l'alerte le dit partout). L'école, un jour hors contrat et une semaine
+  // voisine inconnue comptent comme du travail. Une semaine de moins de 3
+  // jours (petit contrat, extra) a forcément des jours seuls : rien n'est dit.
+  if (!s.placementManuel && !s.contratIndicatif) {
+    const parSemaine = (d: number) =>
+      intervalle(7 * Math.floor(d / 7), 7 * Math.floor(d / 7) + 7).filter(
+        (j) => j < nbJours && travaille(j),
+      ).length
+    const libre = (d: number): boolean => {
+      if (d < 0) return s.joursSemainePrecedente !== null && d < -s.serieAvant
+      if (d >= nbJours)
+        return s.joursSemaineSuivante !== null && d >= nbJours + s.serieApres
+      return !travaille(d) && !s.horsContrat.has(d)
+    }
+    for (const [d, duJour] of [...parJour].sort(([a], [b]) => a - b))
+      if (parSemaine(d) >= 3 && libre(d - 1) && libre(d + 1))
+        ajoute(
+          'JOUR-ISOLE',
+          'un jour de travail seul entre deux jours sans travail',
+          duJour,
+        )
+  }
+
+  for (let k = 0; k < nbSemaines; k++) {
+    const jours = intervalle(7 * k, Math.min(7 * k + 7, nbJours))
+    const semaine = liste.filter((c) => jours.includes(jourDe(c)))
+    if (!semaine.length) continue
+    const premiere = k === 0
+    const complete = jours.length === 7
+
+    // Règle 1 : deux repos qui se suivent DANS la semaine. Un dimanche
+    // libre de la semaine d'avant ne fait pas la paire avec le lundi
+    // (relecture du 2026-11-03 : lundi et jeudi de repos passaient pour
+    // collés). Une semaine d'un seul repos n'a pas de paire à faire.
+    if (!s.placementManuel && !s.reposConsecutifs && complete) {
+      const libres = jours.filter((j) => !travaille(j))
+      const colles = jours
+        .slice(0, -1)
+        .some((j) => !travaille(j) && !travaille(j + 1))
+      if (libres.length >= 2 && !colles)
+        ajoute(
+          'REPOS-SEPARES',
+          'ses jours de repos de la semaine ne se suivent pas',
+          semaine,
+        )
+    }
+
+    // Règle 4 : un week-end complet libre sur 4 semaines.
+    if (
+      premiere &&
+      complete &&
+      s.weekendLibreAvant === false &&
+      (travaille(5) || travaille(6))
+    )
+      ajoute(
+        'WEEKEND-LIBRE',
+        s.weekendFixe
+          ? 'aucun week-end complet libre depuis 4 semaines : sa semaine type fixe le samedi ou le dimanche'
+          : 'aucun week-end complet libre depuis 4 semaines',
+        semaine.filter((c) => jourDe(c) >= 5),
+      )
+
+    // Règle 6 : une semaine stable.
+    const avecMoment = semaine.filter((c) => c.moment !== null)
+    let changements = 0
+    let arriere: [Creneau, Creneau] | null = null
+    for (let i = 1; i < avecMoment.length; i++) {
+      const a = avecMoment[i - 1]
+      const b = avecMoment[i]
+      // D'un jour au suivant (après un repos, l'horloge repart).
+      if (jourDe(b) - jourDe(a) === 1 && a.moment !== b.moment) changements++
+    }
+    for (let i = 1; i < avecMoment.length && !arriere; i++)
+      for (let j = 0; j < i; j++) {
+        const a = avecMoment[j]
+        const b = avecMoment[i]
+        if (
+          jourDe(b) - jourDe(a) <= MOMENT_ARRIERE_JOURS &&
+          RANG[a.moment as Periode] > RANG[b.moment as Periode]
+        ) {
+          arriere = [a, b]
+          break
+        }
+      }
+    if (changements > CHANGEMENTS_MOMENT_MAX)
+      ajoute(
+        'MOMENTS',
+        `${changements} changements de moment dans la semaine (${CHANGEMENTS_MOMENT_MAX} au plus conseillé)`,
+        avecMoment,
+      )
+    if (arriere)
+      ajoute(
+        'MOMENTS',
+        `revient du ${NOM_MOMENT[arriere[0].moment as Periode]} au ${NOM_MOMENT[arriere[1].moment as Periode]} ${jourDe(arriere[1]) - jourDe(arriere[0]) === 1 ? 'le lendemain' : `${jourDe(arriere[1]) - jourDe(arriere[0])} jours après`} (plutôt du matin vers le soir)`,
+        arriere,
+      )
+
+    // Règle 8 : les mêmes repos que la semaine d'avant. Après un week-end
+    // travaillé, des repos passés au samedi et dimanche ne se reprochent
+    // pas : c'est la rotation des week-ends (règle 10).
+    if (
+      premiere &&
+      s.reposAvant.size &&
+      !(
+        s.weekendTravailleAvant &&
+        complete &&
+        !travaille(jours[5]) &&
+        !travaille(jours[6])
+      )
+    ) {
+      const repris = [...s.reposAvant].filter((j) => parJour.has(j))
+      if (repris.length === s.reposAvant.size)
+        ajoute(
+          'MEMES-REPOS',
+          'ne garde aucun de ses jours de repos de la semaine précédente',
+          semaine.filter((c) => repris.includes(jourDe(c))),
+        )
+    }
+
+    // Règle 12 : les heures en plus partagées.
+    if (premiere && !s.contratIndicatif) {
+      // Les heures dues ont déjà l'école en moins (`heuresDues`).
+      const total = semaine.reduce((t, c) => t + travail(c), 0)
+      const avant = s.equiteAvant.semainesEnPlus ?? 0
+      if (total > s.minutesHebdoContrat && avant + 1 >= SEMAINES_EN_PLUS_ALERTE)
+        ajoute(
+          'HEURES-PLUS',
+          `au-delà de son contrat ${avant + 1} semaines sur 4 : les heures en plus se partagent`,
+          semaine,
+        )
+    }
+
+    // Règle 13 : un retour de congé en douceur.
+    if (premiere && s.retourConge !== null) {
+      const r = s.retourConge
+      const nb = jours.filter(travaille).length
+      if (nb > s.joursPreferesSemaine)
+        ajoute(
+          'RETOUR-CONGE',
+          `${nb} jours travaillés la semaine du retour de congé`,
+          semaine,
+        )
+      const courtIci = courts.filter((c) => jourDe(c) >= r)
+      if (courtIci.length)
+        ajoute(
+          'RETOUR-CONGE',
+          `repos de moins de ${h(REPOS_CONFORT)} la semaine du retour de congé`,
+          courtIci,
+        )
+      const reprise = semaine.find((c) => jourDe(c) >= r)
+      if (reprise && jourDe(reprise) >= 5)
+        ajoute('RETOUR-CONGE', 'reprend un week-end après son congé', [reprise])
+    }
+  }
 }
 
 /** R-REPOS-HEBDO-35H : un jour libre autour duquel le repos (fin du dernier

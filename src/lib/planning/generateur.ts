@@ -44,8 +44,13 @@ import {
   travail,
 } from '#/lib/planning/modele.ts'
 import {
+  CHANGEMENTS_MOMENT_MAX,
   JOURS_AFFILES_CONSEILLES,
+  MOMENT_ARRIERE_JOURS,
   JOURS_AFFILES_MAX,
+  NUITS_AFFILEES_MAX,
+  REPOS_APRES_NUITS,
+  REPOS_CONFORT,
 } from '#/lib/planning/regles.ts'
 import type {
   AffectationSolveur,
@@ -309,6 +314,62 @@ export const POIDS_OUVERTURE_QUART = 40_000
 export const POIDS_RELEVE = 16_000
 /** Travailler un jour habituel (semaine type « travail »). */
 export const POIDS_JOUR_FIXE = 2_000
+
+/*
+ * RÈGLES MORALES (PRD `plan/planning-bonnes-pratiques/PRD.md`, partie 4 ;
+ * décisions prises par l'assistant le 2026-11-02, déléguées par
+ * l'utilisateur, question Q1). Ordre : la loi (dur) > les places nécessaires
+ * (P1, `coutPlaceVide` les relit toutes : une place n'est jamais laissée
+ * vide pour une règle morale) > les heures dues du contrat (400 par minute :
+ * 96 000 pour un shift de 4 h, plus que n'importe laquelle de ces règles
+ * seule ; ne pas donner ses heures à quelqu'un est aussi injuste) > ces
+ * règles > le confort. Chacune est AU-DESSUS de la part fixe du dépannage
+ * (`PART_FIXE_DEPANNAGE`) : un collègue en dépannage vaut mieux qu'une
+ * entorse. Quand rien d'autre n'est possible, l'entorse a lieu et le
+ * vérificateur la dit (alerte d'organisation). Les variables ne sont créées
+ * que là où la règle peut jouer (voisins d'un jour d'école, personnes qui
+ * font des nuits, semaines à plusieurs moments…) : le temps de calcul reste
+ * celui d'avant à quelques dixièmes près.
+ */
+/** Règle 3 : par paire de services de deux jours qui se suivent séparés
+ * de moins de `REPOS_CONFORT` (13 h ; les 11 h légales restent dures). */
+export const POIDS_REPOS_COURT = 6_000
+/** Règle 4 : la semaine ne donne pas de week-end complet libre (samedi ET
+ * dimanche) à quelqu'un qui n'en a eu aucun les 3 semaines d'avant. Sous le
+ * 6e jour : personne ne fait un jour de plus pour le week-end d'un autre. */
+export const POIDS_WEEKEND_LIBRE = 14_000
+/** Règle 6 : par changement de moment (matin, middle, soir, nuit) d'un jour
+ * au suivant au-delà de `CHANGEMENTS_MOMENT_MAX` dans la semaine. */
+export const POIDS_MOMENT_EN_TROP = 5_000
+/** Règle 6 : un jour à un moment plus tôt (soir puis matin, nuit puis jour)
+ * qu'un des `MOMENT_ARRIERE_JOURS` jours d'avant, par paire de jours. */
+export const POIDS_MOMENT_ARRIERE = 6_000
+/** Règle 7 : par nuit au-delà de `NUITS_AFFILEES_MAX` d'affilée, sur chaque
+ * fenêtre (comme les jours d'affilée). */
+export const POIDS_NUIT_AFFILEE = 12_000
+/** Règle 7 : un service de jour moins de `REPOS_APRES_NUITS` jours après
+ * une nuit. */
+export const POIDS_REPRISE_APRES_NUIT = 10_000
+/** Règle 13 : un 6e jour la semaine du retour d'un congé, EN PLUS du 6e jour
+ * ordinaire. */
+export const POIDS_RETOUR_SIXIEME = 15_000
+/** Règle 13 : un repos de moins de 13 h la semaine du retour, en plus de
+ * `POIDS_REPOS_COURT`. */
+export const POIDS_RETOUR_REPOS_COURT = 6_000
+/** Règle 13 : la reprise après le congé tombe un samedi ou un dimanche. */
+export const POIDS_RETOUR_WEEKEND = 5_000
+/** Règle 14 : un service qui finit après 21:00 la veille d'un jour d'école,
+ * ou qui commence avant 08:00 le lendemain. */
+export const POIDS_ECOLE_ABORDS = 6_000
+/** Règle 12 : par minute au-delà du contrat et par heure d'avance sur le
+ * moins chargé du groupe (heures en plus des 4 semaines d'avant, ramenées à
+ * la part de chacun), au plus `EQUITE_HEURES_PLUS_MAX` heures comptées. */
+export const POIDS_EQUITE_HEURES_PLUS = 5
+export const EQUITE_HEURES_PLUS_MAX = 6
+/** Règle 8 (confort, « petite préférence ») : travailler un jour de semaine
+ * qui était un repos la semaine d'avant. Comptée dans la part fixe du
+ * dépannage, comme tout le confort. */
+export const POIDS_MEMES_REPOS = 500
 // P4 — titulaire avant dépannage, horaire imposé avant remplaçant.
 export const POIDS_DEPANNAGE_MINUTE = 10
 /** Un shift tenu avec un AUTRE code du même cycle que celui du besoin
@@ -398,7 +459,39 @@ export const EQUITE_MAX_PAR_SHIFT =
  * priorité au niveau du dépannage, sous le 6e jour ; les y laisser rendait
  * le dépannage plus cher qu'un 6e jour de titulaire. */
 export const PART_FIXE_DEPANNAGE =
-  POIDS_JOUR_FIXE + EQUITE_MAX_PAR_SHIFT + POIDS_DEJA_PROPOSE + BRUIT_MAX + 1
+  POIDS_JOUR_FIXE +
+  POIDS_MEMES_REPOS +
+  EQUITE_MAX_PAR_SHIFT +
+  POIDS_DEJA_PROPOSE +
+  BRUIT_MAX +
+  1
+
+/** P1 : ce que les règles morales peuvent coûter, au pire, quand on ajoute
+ * un shift `c` à une personne (règles 3, 4, 6, 7, 8, 13 et 14 du PRD) : deux
+ * repos courts (la veille et le lendemain, retour de congé compris), le
+ * week-end libre perdu, deux changements de moment (la veille et le
+ * lendemain), un retour en arrière avec
+ * chacun des deux jours d'avant et des deux jours d'après, le 6e
+ * jour et la reprise un week-end au retour, les deux abords de l'école, un
+ * jour de repos de la semaine d'avant ; une nuit entre dans au plus 6
+ * fenêtres de 6 nuits et précède au plus deux reprises de jour, un service
+ * de jour suit au plus une nuit. Les heures en plus (règle 12) se comptent
+ * à la minute, avec les autres (`pireCoutRemplir`). */
+export function pireMoral(c: Creneau): number {
+  return (
+    2 * (POIDS_REPOS_COURT + POIDS_RETOUR_REPOS_COURT) +
+    POIDS_WEEKEND_LIBRE +
+    2 * POIDS_MOMENT_EN_TROP +
+    2 * MOMENT_ARRIERE_JOURS * POIDS_MOMENT_ARRIERE +
+    (c.moment === 'nuit'
+      ? 6 * POIDS_NUIT_AFFILEE + 2 * POIDS_REPRISE_APRES_NUIT
+      : POIDS_REPRISE_APRES_NUIT) +
+    POIDS_RETOUR_SIXIEME +
+    POIDS_RETOUR_WEEKEND +
+    2 * POIDS_ECOLE_ABORDS +
+    POIDS_MEMES_REPOS
+  )
+}
 
 /** P4 : ce que coûte un shift `c` tenu en dépannage. */
 export function coutDepannage(c: Creneau) {
@@ -487,7 +580,9 @@ export function pireCoutRemplir(
     ? Math.max(duree(c), duree(besoin))
     : duree(c)
   return (
-    POIDS_SUR_CONTRAT * enPlus +
+    (POIDS_SUR_CONTRAT + POIDS_EQUITE_HEURES_PLUS * EQUITE_HEURES_PLUS_MAX) *
+      enPlus +
+    pireMoral(c) +
     POIDS_DEPANNAGE_MINUTE * duree(c) +
     PART_FIXE_DEPANNAGE +
     coutRemplacant(c) +
@@ -1050,11 +1145,13 @@ export function construire(
   const figes = new Map<string, number>()
   const travailleDe = new Map<string, Map<number, string>>()
   const jfrs: Array<{ salarieId: string; jour: number; v: string }> = []
+  const coefsPlus = coefsHeuresPlus(p)
 
   for (const s of p.salaries) {
     const siens = p.creneaux.filter((c) => x.has(cle(s.id, c.id)))
     const fixes = siens.filter((c) => imposees.has(cle(s.id, c.id)))
     const xv = (c: Creneau) => x.get(cle(s.id, c.id)) as string
+    const estImpose = (c: Creneau) => imposees.has(cle(s.id, c.id))
 
     const parJour = new Map<number, Creneau[]>()
     for (const c of siens) {
@@ -1255,6 +1352,8 @@ export function construire(
           nbJours.constante - s.joursPreferesSemaine,
         )
         m.cout(POIDS_SIXIEME_JOUR, six)
+        // Règle 13 : la semaine du retour d'un congé, un 6e jour coûte double.
+        if (k === 0 && s.retourConge !== null) m.cout(POIDS_RETOUR_SIXIEME, six)
       }
       // Rythme de 5 jours (2026-11-01) : un contrat de 35 h ou plus se fait
       // en `joursPreferesSemaine` jours, absences et jours hors contrat
@@ -1372,6 +1471,10 @@ export function construire(
 
       if (!s.reposConsecutifs) {
         const accoles: string[] = []
+        // Règle 1 : la paire se cherche DANS la semaine. Un dimanche libre de
+        // la semaine d'avant puis le lundi libre ne la remplacent pas
+        // (relecture du 2026-11-03) : sinon lundi et jeudi passaient pour
+        // collés, et le jeudi restait un repos seul au milieu du travail.
         for (const j of jours.slice(0, -1)) {
           if (ecole.has(j) || ecole.has(j + 1)) continue
           const libre = m.bool()
@@ -1474,8 +1577,13 @@ export function construire(
           if (tv) voisins.push(tv)
         }
         // Seulement contre un jour sans travail possible (congé, absence,
-        // repos fixe) : ailleurs, les repos accolés suffisent, et la règle
-        // partout doublait le temps de calcul (mesuré : 2,2 s -> 5 s).
+        // repos fixe). Contre deux repos choisis par le calcul, la paire de
+        // repos perdue coûte déjà (règle 1), et l'alerte JOUR-ISOLE le dit.
+        // Mesuré le 2026-11-03 : la règle partout portait une vraie semaine
+        // de 1,9 s à 4,1 s, et la seule extension aux contrats de moins de
+        // 35 h laissait une semaine réelle du banc au plafond de 40 s (11 s
+        // sans) ; une variable continue au lieu de booléenne, essayée,
+        // faisait de même.
         if (continu || voisins.length === 2) continue
         const isole = m.bool()
         m.ajoute(
@@ -1485,6 +1593,10 @@ export function construire(
         )
         m.cout(POIDS_JOUR_ISOLE, isole)
       }
+
+      reglesMoralesSemaine(m, s, k, jours, siens, travaille, xv, estImpose)
+      if (k === 0)
+        reglesMoralesSuite(m, p, s, siens, parJour, travaille, xv, estImpose)
 
       for (const j of s.travailFixe) {
         const t = travaille.get(j)
@@ -1553,6 +1665,8 @@ export function construire(
       } else {
         m.cout(POIDS_SOUS_CONTRAT, moins)
         m.cout(POIDS_SUR_CONTRAT, plus)
+        // Règle 12 : les heures en plus vont d'abord à qui en a fait le moins.
+        if (k === 0) m.cout(coefsPlus.get(s.id) ?? 0, plus)
         sousContrat.push([s.id, moins, plus])
       }
     }
@@ -1759,6 +1873,376 @@ function weekendsEquitables(
     m.ajoute([[1, e], ...n[i].termes, [-part, total]], '>=', -n[i].constante)
     m.cout(POIDS_EQUITE, e)
   })
+}
+
+/** Une somme de termes réutilisée plusieurs fois : une variable continue
+ * égale à la somme (même substitution que les AGRÉGATS DE L'ACCUEIL). */
+function sommeDe(m: Modele, termes: Terme[]): Terme[] {
+  if (termes.length <= 1) return termes
+  const v = m.continu(0, termes.length)
+  m.ajoute([...termes, [-1, v]], '=', 0)
+  return [[1, v]]
+}
+
+const negatifs = (t: Terme[]): Terme[] => t.map(([c, v]) => [-c, v] as Terme)
+
+/** Rang d'un moment dans la journée : une semaine stable va vers plus tard
+ * (règle 6 du PRD : du matin vers le soir se supporte mieux que l'inverse). */
+const RANG_MOMENT = { matin: 0, middle: 1, soir: 2, nuit: 3 } as const
+
+/**
+ * Règles morales d'une semaine `k` d'une personne (PRD, partie 4) :
+ *   - 8 (confort) : un jour de semaine de repos la semaine d'avant devient
+ *     travaillé : `POIDS_MEMES_REPOS`, sauf si la personne, après un
+ *     week-end travaillé, a cette fois le samedi et le dimanche libres ;
+ *   - 4 : aucun week-end libre les 3 semaines d'avant (`weekendLibreAvant`
+ *     faux) et la semaine n'en donne pas : `POIDS_WEEKEND_LIBRE` ;
+ *   - 13 : la reprise après un congé (`retourConge`) tombe un samedi ou un
+ *     dimanche : `POIDS_RETOUR_WEEKEND` ;
+ *   - 6 : plus d'un changement de moment d'un jour au suivant dans la
+ *     semaine (`POIDS_MOMENT_EN_TROP` par changement en trop) ; un jour à un moment plus tôt qu'un des deux jours
+ *     d'avant (soir puis matin) : `POIDS_MOMENT_ARRIERE` par paire.
+ * Les règles qui lisent la semaine d'avant ne jouent que sur la première
+ * semaine du calcul.
+ */
+function reglesMoralesSemaine(
+  m: Modele,
+  s: SalarieSolveur,
+  k: number,
+  jours: number[],
+  siens: Creneau[],
+  travaille: Map<number, string>,
+  xv: (c: Creneau) => string,
+  estImpose: (c: Creneau) => boolean,
+): void {
+  const dans = new Set(jours)
+  if (k === 0) {
+    // Règle 8, neutre pour le week-end (banc du 2026-11-03) : qui a
+    // travaillé le week-end d'avant peut garder ses repos de la semaine OU
+    // les passer au samedi et dimanche sans coût. Sans cela, un repos en
+    // semaine devenait « collant » et la personne ne quittait plus le
+    // travail du week-end (rotation des week-ends, règle 10).
+    const repris = [...s.reposAvant]
+      .filter((j) => dans.has(j))
+      .map((j) => travaille.get(j))
+      .filter((v): v is string => !!v)
+    if (
+      repris.length &&
+      s.weekendTravailleAvant &&
+      dans.has(5) &&
+      dans.has(6) &&
+      !s.joursHorsSite.has(5) &&
+      !s.joursHorsSite.has(6)
+    ) {
+      // wl <= 1 - t(samedi), wl <= 1 - t(dimanche) : week-end libre.
+      const wl = m.continu(0, 1)
+      for (const t of [5, 6]
+        .map((j) => travaille.get(j))
+        .filter((v): v is string => !!v))
+        m.ajoute(
+          [
+            [1, wl],
+            [1, t],
+          ],
+          '<=',
+          1,
+        )
+      // y >= somme des repos repris - n x wl : tout coûte, sauf contre un
+      // week-end libre.
+      const y = m.continu(0, repris.length)
+      m.ajoute(
+        [[1, y], ...repris.map((t) => [-1, t] as Terme), [repris.length, wl]],
+        '>=',
+        0,
+      )
+      m.cout(POIDS_MEMES_REPOS, y)
+    } else for (const t of repris) m.cout(POIDS_MEMES_REPOS, t)
+    // Week-end : samedi (5) et dimanche (6) de la première semaine.
+    if (
+      s.weekendLibreAvant === false &&
+      !s.weekendFixe &&
+      dans.has(5) &&
+      dans.has(6) &&
+      !s.joursHorsSite.has(5) &&
+      !s.joursHorsSite.has(6)
+    ) {
+      const ts = [5, 6]
+        .map((j) => travaille.get(j))
+        .filter((v): v is string => !!v)
+      if (ts.length === 1) m.cout(POIDS_WEEKEND_LIBRE, ts[0])
+      else if (ts.length === 2) {
+        const we = m.continu(0, 1)
+        for (const t of ts)
+          m.ajoute(
+            [
+              [1, we],
+              [-1, t],
+            ],
+            '>=',
+            0,
+          )
+        m.cout(POIDS_WEEKEND_LIBRE, we)
+      }
+    }
+    if (s.retourConge !== null) {
+      const r = s.retourConge
+      const avant: Terme[] = []
+      for (let j = r; j <= 4; j++) {
+        const t = travaille.get(j)
+        if (t && dans.has(j)) avant.push([1, t])
+      }
+      const fin = [5, 6]
+        .filter((j) => j >= r && dans.has(j))
+        .map((j) => travaille.get(j))
+        .filter((v): v is string => !!v)
+      if (fin.length) {
+        const w = m.continu(0, 1)
+        // w >= t(week-end) - Σ t(jours de semaine du retour)
+        for (const t of fin) m.ajoute([[1, w], [-1, t], ...avant], '>=', 0)
+        m.cout(POIDS_RETOUR_WEEKEND, w)
+      }
+    }
+  }
+
+  // Règle 6 : les moments de la semaine, jour par jour.
+  const parRang = new Map<number, Map<number, Terme[]>>()
+  for (const c of siens) {
+    const j = jourDe(c)
+    if (c.moment === null || !dans.has(j)) continue
+    const r = RANG_MOMENT[c.moment]
+    const duJour = parRang.get(j) ?? new Map<number, Terme[]>()
+    parRang.set(j, duJour)
+    duJour.set(r, [...(duJour.get(r) ?? []), [1, xv(c)]])
+  }
+  const rangs = [
+    ...new Set([...parRang.values()].flatMap((d) => [...d.keys()])),
+  ].sort((a, b) => a - b)
+  if (rangs.length < 2) return
+  // Une semaine faite de shifts posés ne se discute pas.
+  if (siens.filter((c) => dans.has(jourDe(c))).every(estImpose)) return
+  for (const duJour of parRang.values())
+    for (const [r, t] of duJour) duJour.set(r, sommeDe(m, t))
+  const de = (j: number, garde: (r: number) => boolean): Terme[] =>
+    [...(parRang.get(j) ?? [])].flatMap(([r, t]) => (garde(r) ? t : []))
+  // Changements de moment d'un jour au suivant (deux jours travaillés qui
+  // se suivent) : change >= Σ x(j, rang r) + Σ x(j + 1, autre rang) - 1,
+  // pour chaque r ; au-delà de `CHANGEMENTS_MOMENT_MAX` dans la semaine, un
+  // coût par changement. Compter les moments distincts de la semaine (un
+  // maximum par moment), essayé d'abord, laissait une vraie semaine au
+  // plafond de 40 s.
+  const changes: string[] = []
+  for (const j of jours) {
+    if (!jours.includes(j + 1)) continue
+    const contraintes: Terme[][] = []
+    for (const r of rangs) {
+      const ici = de(j, (q) => q === r)
+      const autre = de(j + 1, (q) => q !== r)
+      if (ici.length && autre.length) contraintes.push([...ici, ...autre])
+    }
+    if (!contraintes.length) continue
+    const change = m.continu(0, 1)
+    for (const t of contraintes)
+      m.ajoute([[1, change], ...negatifs(t)], '>=', -1)
+    changes.push(change)
+  }
+  if (changes.length > CHANGEMENTS_MOMENT_MAX) {
+    const exces = m.continu(0, changes.length)
+    m.ajoute(
+      [[1, exces], ...changes.map((c) => [-1, c] as Terme)],
+      '>=',
+      -CHANGEMENTS_MOMENT_MAX,
+    )
+    m.cout(POIDS_MOMENT_EN_TROP, exces)
+  }
+  // Retour en arrière : le jour k à un moment plus tôt que le jour j, au
+  // plus `MOMENT_ARRIERE_JOURS` jours avant (au-delà, plusieurs jours de
+  // repos remettent l'horloge à zéro). Une variable par paire de jours :
+  // arriere >= Σ x(j, rang >= r) + Σ x(k, rang < r) - 1, pour chaque r. Une
+  // chaîne sur toute la semaine, essayée d'abord, multipliait le temps de
+  // calcul d'une vraie semaine par cinq (7 s -> 40 s, le plafond).
+  for (const j of jours) {
+    for (
+      let k = j + 1;
+      k <= j + MOMENT_ARRIERE_JOURS && jours.includes(k);
+      k++
+    ) {
+      const contraintes: Terme[][] = []
+      for (const r of rangs.slice(1)) {
+        const tard = de(j, (q) => q >= r)
+        const tot = de(k, (q) => q < r)
+        if (tard.length && tot.length) contraintes.push([...tard, ...tot])
+      }
+      if (!contraintes.length) continue
+      const arriere = m.continu(0, 1)
+      for (const t of contraintes)
+        m.ajoute([[1, arriere], ...negatifs(t)], '>=', -1)
+      m.cout(POIDS_MOMENT_ARRIERE, arriere)
+    }
+  }
+}
+
+/**
+ * Règles morales qui suivent les jours d'une personne d'un bout à l'autre du
+ * calcul, semaines voisines comprises (PRD, partie 4) :
+ *   - 3 : deux services de deux jours qui se suivent séparés de moins de
+ *     `REPOS_CONFORT` : `POIDS_REPOS_COURT` (plus `POIDS_RETOUR_REPOS_COURT`
+ *     la semaine du retour d'un congé). Une variable par heure de fin d'un
+ *     jour (les services du lendemain trop tôt en dépendent) ; un shift par
+ *     jour, donc y >= Σ x(fin) + Σ x(lendemain trop tôt) - 1 ;
+ *   - 7 : plus de `NUITS_AFFILEES_MAX` nuits d'affilée (`POIDS_NUIT_AFFILEE`
+ *     par nuit en trop et par fenêtre) ; un service de jour moins de
+ *     `REPOS_APRES_NUITS` jours après une nuit (`POIDS_REPRISE_APRES_NUIT`) ;
+ *   - 14 : la veille d'un jour d'école, un service qui finit après
+ *     `ECOLE_VEILLE_FIN` ; le lendemain, un service qui commence avant
+ *     `ECOLE_LENDEMAIN_DEBUT` (`POIDS_ECOLE_ABORDS`).
+ */
+function reglesMoralesSuite(
+  m: Modele,
+  p: Probleme,
+  s: SalarieSolveur,
+  siens: Creneau[],
+  parJour: Map<number, Creneau[]>,
+  travaille: Map<number, string>,
+  xv: (c: Creneau) => string,
+  estImpose: (c: Creneau) => boolean,
+): void {
+  const poidsCourt =
+    POIDS_REPOS_COURT + (s.retourConge !== null ? POIDS_RETOUR_REPOS_COURT : 0)
+  for (const [j, liste] of parJour) {
+    const suivants = parJour.get(j + 1)
+    if (!suivants) continue
+    const parFin = new Map<number, Creneau[]>()
+    for (const a of liste) parFin.set(a.fin, [...(parFin.get(a.fin) ?? []), a])
+    for (const [fin, as] of parFin) {
+      // Sous 11 h, la paire est déjà interdite (règle dure) : seuls les
+      // services du lendemain entre 11 h et 13 h après comptent.
+      const bs = suivants.filter((b) => b.debut - fin < REPOS_CONFORT)
+      if (!bs.length || (as.every(estImpose) && bs.every(estImpose))) continue
+      const y = m.continu(0, as.length + bs.length)
+      m.ajoute(
+        [
+          ...as.map((a) => [1, xv(a)] as Terme),
+          ...bs.map((b) => [1, xv(b)] as Terme),
+          [-1, y],
+        ],
+        '<=',
+        1,
+      )
+      m.cout(poidsCourt, y)
+    }
+  }
+  for (const c of siens) {
+    if (estImpose(c)) continue
+    const court =
+      (s.finServicePrecedent !== null &&
+        c.debut - s.finServicePrecedent < REPOS_CONFORT) ||
+      (s.debutServiceSuivant !== null &&
+        s.debutServiceSuivant - c.fin < REPOS_CONFORT)
+    if (court) m.cout(poidsCourt, xv(c))
+    const j = jourDe(c)
+    const finMax = s.finAvantEcole.get(j)
+    if (finMax !== undefined && c.fin > finMax)
+      m.cout(POIDS_ECOLE_ABORDS, xv(c))
+    const debutMin = s.debutApresEcole.get(j)
+    if (debutMin !== undefined && c.debut < debutMin)
+      m.cout(POIDS_ECOLE_ABORDS, xv(c))
+  }
+
+  // Règle 7 : les nuits.
+  const nuits = new Map<number, Terme[]>()
+  for (const c of siens) {
+    if (c.moment !== 'nuit') continue
+    const j = jourDe(c)
+    nuits.set(j, [...(nuits.get(j) ?? []), [1, xv(c)]])
+  }
+  if (!nuits.size && !s.nuitsAvant.size) return
+  for (const [j, t] of nuits) nuits.set(j, sommeDe(m, t))
+  const taille = NUITS_AFFILEES_MAX + 1
+  for (let a = 1 - taille; a + taille <= p.nbJours; a++) {
+    const termes: Terme[] = []
+    let constante = 0
+    for (let d = a; d < a + taille; d++) {
+      if (d < 0) constante += s.nuitsAvant.has(d) ? 1 : 0
+      else termes.push(...(nuits.get(d) ?? []))
+    }
+    if (!termes.length) continue
+    const possibles = constante + new Set(termes.map(([, v]) => v)).size
+    if (possibles <= NUITS_AFFILEES_MAX) continue
+    const exces = m.continu(0, taille)
+    m.ajoute(
+      [[1, exces], ...negatifs(termes)],
+      '>=',
+      constante - NUITS_AFFILEES_MAX,
+    )
+    m.cout(POIDS_NUIT_AFFILEE, exces)
+  }
+  for (let k = 0; k < p.nbJours; k++) {
+    const t = travaille.get(k)
+    if (!t) continue
+    // Service de jour ce jour-là : t(k) - nuits(k).
+    const jour: Terme[] = [[1, t], ...negatifs(nuits.get(k) ?? [])]
+    // Les nuits des jours d'avant : une constante (semaine d'avant) ou les
+    // termes du jour.
+    const avant: Array<Terme[] | null> = []
+    for (let d = k - REPOS_APRES_NUITS; d < k; d++) {
+      if (d < 0) {
+        if (s.nuitsAvant.has(d)) avant.push(null)
+      } else {
+        const n = nuits.get(d)
+        if (n) avant.push(n)
+      }
+    }
+    if (!avant.length) continue
+    const reprise = m.continu(0, 1)
+    for (const n of avant) {
+      if (n === null) m.ajoute([[1, reprise], ...negatifs(jour)], '>=', 0)
+      else m.ajoute([[1, reprise], ...negatifs(n), ...negatifs(jour)], '>=', -1)
+    }
+    m.cout(POIDS_REPRISE_APRES_NUIT, reprise)
+  }
+}
+
+/** Règle 12 du PRD : coût par minute au-delà du contrat de chacun, selon
+ * ses heures en plus des 4 semaines d'avant (`equiteAvant.minutesEnPlus`)
+ * comparées au moins chargé de son groupe d'équité, chacun ramené à sa part
+ * (ses heures de contrat sur celles du groupe), comme les soirs. Rien pour
+ * un contrat indicatif ni pour un groupe d'une personne. */
+export function coefsHeuresPlus(p: Probleme): Map<string, number> {
+  const r = new Map<string, number>()
+  const groupes = new Map<string, SalarieSolveur[]>()
+  for (const s of p.salaries) {
+    if (s.groupeEquite === null || s.contratIndicatif) continue
+    groupes.set(s.groupeEquite, [...(groupes.get(s.groupeEquite) ?? []), s])
+  }
+  for (const membres of groupes.values()) {
+    if (membres.length < 2) continue
+    const heures = membres.reduce(
+      (t, s) => t + Math.max(0, s.minutesHebdoContrat),
+      0,
+    )
+    const fait = membres.reduce(
+      (t, s) => t + (s.equiteAvant.minutesEnPlus ?? 0),
+      0,
+    )
+    if (fait <= 0) continue
+    const avance = (s: SalarieSolveur) =>
+      ((s.equiteAvant.minutesEnPlus ?? 0) -
+        (heures > 0
+          ? (Math.max(0, s.minutesHebdoContrat) / heures) * fait
+          : 0)) /
+      60
+    const moins = Math.min(...membres.map(avance))
+    for (const s of membres) {
+      const coef =
+        Math.round(
+          POIDS_EQUITE_HEURES_PLUS *
+            Math.min(EQUITE_HEURES_PLUS_MAX, avance(s) - moins) *
+            1000,
+        ) / 1000
+      if (coef > 0) r.set(s.id, coef)
+    }
+  }
+  return r
 }
 
 function reposHebdo(

@@ -21,6 +21,7 @@ import { MINUTES_PAR_JOUR } from '#/lib/planning/temps.ts'
 import {
   manquants,
   raisonsBlocage,
+  REGLES_MORALES,
   trous as trousVerifies,
   violations,
 } from '#/lib/planning/verificateur.ts'
@@ -105,6 +106,13 @@ function semaineReception(): Creneau[] {
   ])
 }
 
+/** La loi et l'organisation, sans les règles morales du PRD : celles-ci
+ * se départagent entre personnes (un jour seul pour l'un, une paire de
+ * repos perdue pour l'autre) et ont leurs propres tests
+ * (`reglesMorales.test.ts`). */
+const horsMorales = (p: Probleme, a: AffectationSolveur[]) =>
+  violations(p, a).filter((v) => !REGLES_MORALES.has(v.regle))
+
 const pris = (r: Resultat) => new Set(r.affectations.map((a) => a.creneauId))
 const reglesDe = (p: Probleme, a: AffectationSolveur[]) =>
   new Set(violations(p, a).map((v) => v.regle))
@@ -118,7 +126,7 @@ describe('générateur', () => {
     const r = gen(p)
     expect(['optimal', 'realisable']).toContain(r.statut)
     expect(complet(r)).toBe(true)
-    expect(violations(p, r.affectations)).toEqual([])
+    expect(horsMorales(p, r.affectations)).toEqual([])
   })
 
   it('trop peu de monde laisse des trous mais reste légal', () => {
@@ -196,7 +204,7 @@ describe('générateur', () => {
     for (const a of r.affectations) compte[a.salarieId] += 1
     expect(compte).toEqual({ plein: 5, partiel: 3 })
     expect(r.ecartTotalMinutes).toBe(0)
-    expect(violations(p, r.affectations)).toEqual([])
+    expect(horsMorales(p, r.affectations)).toEqual([])
   })
 
   it('un mineur ne travaille pas la nuit et a deux jours de repos consécutifs', () => {
@@ -233,7 +241,7 @@ describe('générateur', () => {
     const a = gen(p)
     const b = gen({ ...p, graine: 7 })
     expect(complet(a) && complet(b)).toBe(true)
-    expect(violations(p, b.affectations)).toEqual([])
+    expect(horsMorales(p, b.affectations)).toEqual([])
   })
 
   it('39 heures : quatre jours de 8 h et un jour court, pause déduite', () => {
@@ -673,7 +681,16 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
     // 05fa1c2a : jour isolé contre un congé, plus de 6 jours d'affilée, et
     // mineur un jour férié, plus de 5 jours d'affilée, dans le pire coût
     // d'une place (2026-11-02).
-    expect(empreinte(textes.join('\n=====\n'))).toBe('05fa1c2a')
+    // 9d7c36ec (2026-11-02, règles morales du PRD) : une variable par heure
+    // de fin suivie d'un service à moins de 13 h le lendemain (règle 3), et
+    // le pire coût d'une place qui compte les règles morales (`pireMoral`,
+    // heures en plus partagées) ; la part fixe du dépannage compte les mêmes
+    // repos d'une semaine à l'autre (règle 8, confort).
+    // Inchangée par la relecture du 2026-11-03 : ces semaines n'ont pas de
+    // semaine d'avant, donc ni la paire « dimanche d'avant libre » retirée
+    // (règle 1) ni la règle 8 neutre pour le week-end n'y écrivent rien ; le
+    // jour isolé et le pire coût d'une place n'ont pas changé.
+    expect(empreinte(textes.join('\n=====\n'))).toBe('9d7c36ec')
   })
 })
 

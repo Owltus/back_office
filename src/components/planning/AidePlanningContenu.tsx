@@ -26,20 +26,29 @@ import { NEUTRE } from '#/components/planning/semaine/edition.ts'
 import type { ContenuStatut } from '#/components/planning/semaine/edition.ts'
 import { SEMAINES_EQUITE } from '#/lib/planning/modele.ts'
 import {
+  CHANGEMENTS_MOMENT_MAX,
+  CONGE_LONG,
+  ECOLE_LENDEMAIN_DEBUT,
+  ECOLE_VEILLE_FIN,
   FORFAIT_JOUR_MAX,
   JOUR_MAX_CATEGORIE,
   JOURNEE_ETOILE_MIN,
   JOURNEE_PLEINE,
+  JOURS_AFFILES_CONSEILLES,
   JOURS_AFFILES_MAX,
   JOURS_TRAVAILLES_MAX,
   JOURS_TRAVAILLES_PREFERES,
   MINEUR_JOUR_MAX,
   MINEUR_REPOS_QUOTIDIEN,
   MINEUR_SEMAINE_MAX,
+  NUITS_AFFILEES_MAX,
+  REPOS_APRES_NUITS,
+  REPOS_CONFORT,
   REPOS_DEUX_SEMAINES,
   REPOS_HEBDO_MIN,
   REPOS_QUOTIDIEN,
   SEMAINE_MAX,
+  SEMAINES_EN_PLUS_ALERTE,
   STAGE_JOUR_MAX,
   TEMPS_PLEIN,
 } from '#/lib/planning/regles.ts'
@@ -848,15 +857,26 @@ export function AidePlanningContenu({
           </li>
           <li>
             <span className="font-medium text-foreground">
+              Le bien-être de l’équipe
+            </span>{' '}
+            : les règles de la partie Le bien-être de l’équipe. Elles passent
+            après les heures dues (ne pas donner ses heures à quelqu’un est
+            aussi injuste), avant le confort. Quand l’hôtel ne peut pas faire
+            autrement, l’une d’elles peut céder, et une alerte orange le dit.
+          </li>
+          <li>
+            <span className="font-medium text-foreground">
               Le titulaire avant le dépannage
             </span>{' '}
             : un titulaire à l’horaire demandé, puis un titulaire sur un autre
-            horaire du même moment, puis un dépannage, puis un extra.
+            horaire du même moment, puis un dépannage, puis un extra. Un
+            collègue en dépannage vaut mieux qu’une règle du bien-être
+            enfreinte.
           </li>
           <li>
             <span className="font-medium text-foreground">Le confort</span> :
-            repos qui se suivent, pas de jour isolé, jours habituels, partage
-            équitable.
+            jours habituels, mêmes jours de repos que la semaine d’avant,
+            partage équitable.
           </li>
         </ol>
         <Sous titre="Ce qui n’est jamais touché">
@@ -947,20 +967,59 @@ export function AidePlanningContenu({
 
       <Section
         id="bien-etre"
-        intro="Au-delà de la loi, l’app cherche un planning vivable. Ces règles cèdent devant les places et les contrats, jamais l’inverse."
+        intro="Ce n’est pas parce que l’on peut que l’on doit. Au-delà de la loi, l’app cherche un planning vivable et juste, le même pour tous. Ces règles cèdent devant les places nécessaires et les heures dues, jamais l’inverse : quand l’une cède, une alerte orange le dit à la personne qui fait le planning."
       >
-        <Liste
-          items={[
-            'Deux repos par semaine, même en congé.',
-            'Des repos qui se suivent plutôt qu’éparpillés.',
-            `${JOURS_AFFILES_MAX} jours de travail d’affilée au plus, semaines voisines comprises. Au-delà, une alerte orange.`,
-            'Jamais un jour de travail isolé entre deux jours off (par exemple entre des congés et des repos).',
-            'Un contrat de 35 h ou plus se fait en 5 jours, jamais 39 h en 4 jours de 10 h.',
-            `Partage des week-ends, des soirs et des matins tôt, sur les ${SEMAINES_EQUITE} dernières semaines, à la part de contrat de chacun. Une semaine d’absence ne met personne en retard.`,
-            'Les jours habituels de la semaine type sont préférés.',
-            'Les jours fériés travaillés sont rattrapés dans les semaines qui suivent.',
-          ]}
-        />
+        <Sous titre="Le repos">
+          <Liste
+            items={[
+              'Deux repos par semaine, même en congé.',
+              'Deux repos qui se suivent dans la semaine. Un dimanche libre suivi d’un lundi libre ne remplace pas cette paire.',
+              `${JOURS_AFFILES_MAX} jours de travail d’affilée au plus, ${JOURS_AFFILES_CONSEILLES} visés, semaines voisines comprises.`,
+              `Au moins ${h(REPOS_CONFORT)} entre la fin d’un service et le début du suivant (la loi en demande ${h(REPOS_QUOTIDIEN)}).`,
+              `Un week-end complet libre, samedi et dimanche, au moins une fois sur ${SEMAINES_EQUITE} semaines. Un congé ou un repos compte comme libre ; une maladie, une formation, un sans solde ou l’école, non. Une nuit écrite le dimanche compte pour le dimanche.`,
+              'Un repos fixe, posé ou validé n’est jamais repris par le calcul.',
+            ]}
+          />
+        </Sous>
+        <Sous titre="Le rythme">
+          <Liste
+            items={[
+              `Une semaine stable : au plus ${CHANGEMENTS_MOMENT_MAX} changement de moment (matin, middle, soir, nuit) d’un jour au suivant, et plutôt du matin vers le soir que l’inverse.`,
+              `Pas plus de ${NUITS_AFFILEES_MAX} nuits d’affilée, puis ${REPOS_APRES_NUITS} jours sans travail avant de reprendre de jour.`,
+              'Les mêmes jours de repos que la semaine d’avant, quand c’est possible. Après un week-end travaillé, passer ses repos au samedi et au dimanche est toujours permis : les week-ends tournent.',
+              'Pas de jour de travail seul entre deux jours sans travail. Le calcul l’évite contre un congé ou un repos fixe ; une alerte le signale partout.',
+              'Un contrat de 35 h ou plus se fait en 5 jours, jamais 39 h en 4 jours de 10 h.',
+            ]}
+          />
+        </Sous>
+        <Sous titre="La justice">
+          <Liste
+            items={[
+              `Partage des week-ends, des soirs et des matins tôt, sur les ${SEMAINES_EQUITE} dernières semaines, à la part de contrat de chacun. Une semaine d’absence ne met personne en retard. La semaine type passe avant : un samedi ou un dimanche fixé en Travaille dans la fiche n’entre pas dans ce partage.`,
+              `Les heures au-delà du contrat vont d’abord à qui en a fait le moins sur les ${SEMAINES_EQUITE} dernières semaines. Au-delà du contrat ${SEMAINES_EN_PLUS_ALERTE} semaines sur 4 : une alerte.`,
+              'Les jours fériés travaillés sont rattrapés dans les semaines qui suivent, même sur un jour habituel de la semaine type.',
+            ]}
+          />
+        </Sous>
+        <Sous titre="La vie personnelle">
+          <Liste
+            items={[
+              `Après un congé d’au moins ${CONGE_LONG} jours, une semaine de retour en douceur : pas de 6e jour, pas de repos court, et plutôt pas de reprise un samedi ou un dimanche.`,
+              `École des apprentis et stagiaires : pas de service qui finit après ${h(ECOLE_VEILLE_FIN)} la veille, ni qui commence avant ${h(ECOLE_LENDEMAIN_DEBUT)} le lendemain.`,
+              'Les jours habituels de la semaine type sont préférés.',
+            ]}
+          />
+        </Sous>
+        <Exemple>
+          une réceptionniste n’a pas eu de week-end libre depuis trois semaines.
+          Le calcul lui laisse samedi et dimanche, et place un collègue qui en a
+          eu un. Si personne d’autre ne peut venir, elle travaille, et l’alerte
+          le dit dans son bilan.
+        </Exemple>
+        <p className="text-muted-foreground">
+          Pas encore appliqué : le partage des fêtes d’une année sur l’autre
+          (Noël, jour de l’An), faute d’un an d’historique.
+        </p>
       </Section>
 
       <Section

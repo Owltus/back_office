@@ -88,6 +88,22 @@ const MESSAGES: Record<(typeof REGLES_BLOCAGE)[number], string[]> = {
     'reprend trop tôt : la semaine précédente perdrait son repos de 35 h consécutives',
   ],
   'R-REPOS-HEBDO-MINEUR': ['mineur : pas deux jours de repos consécutifs'],
+  'REPOS-SEPARES': ['ses jours de repos de la semaine ne se suivent pas'],
+  'JOUR-ISOLE': ['un jour de travail seul entre deux jours sans travail'],
+  'REPOS-COURT': [
+    'seulement 12 h 15 de repos entre deux services (13 h conseillées)',
+  ],
+  'WEEKEND-LIBRE': ['aucun week-end complet libre depuis 4 semaines'],
+  MOMENTS: ['3 changements de moment dans la semaine (1 au plus conseillé)'],
+  NUITS: ["6 nuits d'affilée (au plus 5 conseillées)"],
+  'MEMES-REPOS': [
+    'ne garde aucun de ses jours de repos de la semaine précédente',
+  ],
+  'HEURES-PLUS': [
+    'au-delà de son contrat 3 semaines sur 4 : les heures en plus se partagent',
+  ],
+  'RETOUR-CONGE': ['reprend un week-end après son congé'],
+  'ECOLE-ABORDS': ["finit après 21 h la veille d'un jour d'école"],
   EXTRA: ['extra disponible : à appeler et poser à la main'],
 }
 
@@ -556,6 +572,17 @@ describe('place que rien ne remplit : la raison commune en clair', () => {
     'JOUR-FERIE',
     'R-JOURNEE-ETOILE',
     'EXTRA',
+    // Règles morales du PRD : à éviter, jamais bloquantes.
+    'REPOS-SEPARES',
+    'JOUR-ISOLE',
+    'REPOS-COURT',
+    'WEEKEND-LIBRE',
+    'MOMENTS',
+    'NUITS',
+    'MEMES-REPOS',
+    'HEURES-PLUS',
+    'RETOUR-CONGE',
+    'ECOLE-ABORDS',
   ]
 
   it('exhaustif : une phrase courte pour chaque règle qui bloque', () => {

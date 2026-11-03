@@ -115,7 +115,11 @@ const range = (a: number, b?: number) => {
 describe('R-REPOS-QUOTIDIEN et chevauchement', () => {
   it('repos quotidien : 11 h pile accepté, 10 h 59 refusé', () => {
     const a = cr('a', 0, 9 * H, 17 * H)
-    expect(regles(sal(), [a, cr('b', 1, 4 * H, 12 * H)])).toEqual([])
+    // 11 h : permis par la loi, sous les 13 h conseillées (règle 3 du PRD,
+    // alerte d'organisation seulement).
+    expect(regles(sal(), [a, cr('b', 1, 4 * H, 12 * H)])).toEqual([
+      'REPOS-COURT',
+    ])
     expect(
       messages(sal(), [a, cr('b', 1, 4 * H - 1, 12 * H)], 'R-REPOS-QUOTIDIEN'),
     ).toEqual(['seulement 10 h 59 de repos entre deux services (minimum 11 h)'])
@@ -133,7 +137,10 @@ describe('R-REPOS-QUOTIDIEN et chevauchement', () => {
 
   it('repos depuis la semaine précédente', () => {
     const lundi = cr('a', 0, 6 * H, 14 * H)
-    expect(regles(sal('a', { finServicePrecedent: -5 * H }), [lundi])).toEqual(
+    expect(regles(sal('a', { finServicePrecedent: -5 * H }), [lundi])).toEqual([
+      'REPOS-COURT',
+    ])
+    expect(regles(sal('a', { finServicePrecedent: -7 * H }), [lundi])).toEqual(
       [],
     )
     expect(
@@ -161,6 +168,9 @@ describe('R-REPOS-QUOTIDIEN et chevauchement', () => {
     const suivant = 7 * J + 7 * H
     expect(
       regles(sal('a', { debutServiceSuivant: suivant }), [dimanche]),
+    ).toEqual(['REPOS-COURT'])
+    expect(
+      regles(sal('a', { debutServiceSuivant: suivant + 2 * H }), [dimanche]),
     ).toEqual([])
     expect(
       messages(
@@ -325,7 +335,43 @@ describe('jours travaillés, semaines', () => {
     expect(regles(s, range(5).map(jourDe9a17))).toEqual([])
     expect(regles(s, [0, 1, 3, 5].map(jourDe9a17))).toEqual([
       'R-REPOS-HEBDO-MINEUR',
+      // Jeudi et samedi, seuls entre deux repos (règle 9 du PRD).
+      'JOUR-ISOLE',
+      'JOUR-ISOLE',
     ])
+  })
+})
+
+describe('règle 9 : jamais un jour de travail isolé (alerte)', () => {
+  const isoles = (s: SalarieSolveur, c: Creneau[]) =>
+    regles(s, c).filter((r) => r === 'JOUR-ISOLE').length
+  it('un jour seul entre deux repos : une alerte ; collé : rien', () => {
+    // Mardi seul entre le lundi et le mercredi libres.
+    expect(isoles(sal(), [1, 3, 4, 5].map(jourDe9a17))).toBe(1)
+    expect(isoles(sal(), [1, 2, 3, 4].map(jourDe9a17))).toBe(0)
+  })
+  it('l’école, le hors contrat et la semaine voisine inconnue comptent comme du travail', () => {
+    // Mercredi entre un mardi et un jeudi libres ; mardi à l'école ou hors
+    // contrat : le mercredi n'est plus seul.
+    const mercredi = [2, 4, 5, 6].map(jourDe9a17)
+    expect(isoles(sal(), mercredi)).toBe(1)
+    expect(isoles(sal('a', { joursHorsSite: new Set([1]) }), mercredi)).toBe(0)
+    expect(isoles(sal('a', { horsContrat: new Set([1]) }), mercredi)).toBe(0)
+    // Lundi travaillé, mardi libre : le dimanche d'avant décide.
+    const lundi = [0, 2, 3, 4].map(jourDe9a17)
+    expect(isoles(sal(), lundi)).toBe(0)
+    expect(
+      isoles(sal('a', { joursSemainePrecedente: 5, serieAvant: 0 }), lundi),
+    ).toBe(1)
+    expect(
+      isoles(sal('a', { joursSemainePrecedente: 5, serieAvant: 2 }), lundi),
+    ).toBe(0)
+  })
+  it('petite semaine ou extra : rien', () => {
+    expect(isoles(sal(), [1, 3].map(jourDe9a17))).toBe(0)
+    expect(
+      isoles(sal('a', { contratIndicatif: true }), [0, 2, 4].map(jourDe9a17)),
+    ).toBe(0)
   })
 })
 
