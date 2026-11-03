@@ -496,6 +496,31 @@ describe('le surplus : en dernier recours pour des heures dues (D8)', () => {
     expect(ecarts(p, r)).toEqual([1])
   })
 
+  it('refusé : la nuit, jamais un deuxième veilleur, même pour ses heures (2026-11-03)', () => {
+    const veilleur = (id: string) =>
+      sal(id, { minutesHebdoContrat: 8 * H, postes: new Set(['veille']) })
+    const nuit = (id: string) => cand(id, 'veille', 0, 23, 31, ['nuit'])
+    const p = probleme({
+      salaries: [veilleur('a'), veilleur('b')],
+      creneaux: [nuit('n')],
+      consignes: [chiffre(0, 'nuit', 1)],
+      nbJours: 1,
+    })
+    const r = gen(p)
+    expect(r.affectations.length).toBe(1)
+    expect(ecarts(p, r)).toEqual([0])
+    // Accepté : deux veilleurs posés à la main (formation) sont gardés, et
+    // le calcul n'en ajoute pas un troisième.
+    const pose = probleme({
+      salaries: [veilleur('a'), veilleur('b'), veilleur('c')],
+      creneaux: [nuit('n'), nuit('a1'), nuit('a2')],
+      consignes: [chiffre(0, 'nuit', 1)],
+      imposees: new Set(['b|a1', 'c|a2']),
+      nbJours: 1,
+    })
+    expect(qui(gen(pose))).toEqual(['b@a1', 'c@a2'])
+  })
+
   it('accepté : même un shift court, dans un moment où d’autres sont longs (plafond)', () => {
     // Le surplus du matin suit le plus long candidat (10 h) mais reste
     // PLAFONNÉ sous les heures dues du plus court (2 h) : la personne à qui

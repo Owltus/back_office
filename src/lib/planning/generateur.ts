@@ -1156,7 +1156,19 @@ export function construire(
       m.cout(coutsMinimum[i], vm)
       minimums.push({ v: vm, consigne: i })
     }
-    if (possibles > n) {
+    // La NUIT n'a jamais personne en plus (décision utilisateur du
+    // 2026-11-03 : « toujours un seul night ») : plafond DUR au chiffre. Un
+    // deuxième veilleur (formation) se pose à la main : les shifts posés
+    // relèvent le plafond, jamais le calcul. Le jour reste souple (D8).
+    if (k.periode === 'nuit') {
+      const poses = comptent[i].reduce(
+        (t, c) =>
+          t + p.salaries.filter((s) => imposees.has(cle(s.id, c.id))).length,
+        0,
+      )
+      if (possibles > Math.max(n, poses))
+        m.ajoute(termes, '<=', Math.max(n, poses))
+    } else if (possibles > n) {
       const vp = m.continu(0, possibles)
       m.ajoute([...termes, [-1, vp]], '<=', n)
       m.cout(coutsSurplus[i], vp)

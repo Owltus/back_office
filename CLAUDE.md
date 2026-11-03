@@ -2406,6 +2406,12 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   soirs étalés 13-15 → 0, personnes du soir sans relève 7-11 → 0, sans
   infraction, place vide ni heures dues perdues ; un peu plus de semaines
   à 2 changements de moment dans deux scénarios.
+- **UN SEUL VEILLEUR (décision utilisateur du 2026-11-03 : « toujours un
+  seul night ; un deuxième en cas de formation, fait à la main »)** : la
+  nuit n'a jamais de surplus au calcul, plafond DUR au chiffre de la nuit
+  (`generateur.ts`, boucle des consignes), relevé seulement par les shifts
+  posés à la main. Avant, le surplus souple (D8) ajoutait un deuxième
+  veilleur pour lui donner ses heures dues. Le jour garde D8.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 
