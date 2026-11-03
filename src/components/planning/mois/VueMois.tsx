@@ -87,6 +87,8 @@ import {
 import type { EtatSemaine } from '#/components/planning/mois/mois.ts'
 import {
   nombreInfractions,
+  joursPassesVides,
+  noteJoursPasses,
   pointsAttention,
   porteeMois,
 } from '#/components/planning/attention.ts'
@@ -352,6 +354,12 @@ export function VueMois({
           .map((l) => faites.get(l) ?? avant.get(l))
           .filter((s): s is SemaineOut => !!s),
       )
+      const passes = noteJoursPasses(
+        joursPassesVides(
+          [...faites.values()],
+          (d) => d.startsWith(mois) && d < aujourdhui,
+        ),
+      )
       // Équité (D15) : combien de week-ends chacun, sur les semaines faites.
       const equite = referentiel
         ? resumeEquite(
@@ -364,10 +372,11 @@ export function VueMois({
       // qu'on le ferme.
       notifier(
         messageGeneration(trous, 'Mois', proposes) +
+          (passes ? ` ${passes}` : '') +
           (equite ? ` ${equite} ${PARTAGE_4_SEMAINES}` : '') +
           noteNonTouchees,
         trous ? 'attention' : 'info',
-        trous || equite ? GARDER : undefined,
+        trous || equite || passes ? GARDER : undefined,
       )
     })
   }

@@ -188,8 +188,19 @@ describe('génération bout à bout (hôtel fictif)', () => {
     const d = donnees()
     const g = preparerGeneration(d, { aujourdhui: '2026-11-04' }) // mercredi
     expect(g.depuis).toBe(2)
-    const nouveaux = g.traduire(generer(g.probleme, highs))
+    const r = generer(g.probleme, highs)
+    const nouveaux = g.traduire(r)
+    // Tous les postes (besoins, accueil, fixes), et les JFR proposés :
+    // décision utilisateur du 2026-11-03, « même règle pour tous ».
+    expect(nouveaux.length).toBeGreaterThan(0)
     expect(nouveaux.every((n) => n.jour >= 2)).toBe(true)
+    expect(g.absences(r).every((a) => a.jour >= 2)).toBe(true)
+    // Le même calcul le lundi remplit le lundi (le test peut échouer).
+    const lundi = preparerGeneration(d, { aujourdhui: '2026-11-02' })
+    expect(lundi.depuis).toBe(0)
+    expect(
+      lundi.traduire(generer(lundi.probleme, highs)).some((n) => n.jour < 2),
+    ).toBe(true)
   })
 })
 

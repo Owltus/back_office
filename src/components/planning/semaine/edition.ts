@@ -316,5 +316,14 @@ export function compteurs(semaine: SemaineOut) {
 }
 
 /** Places à pourvoir après une génération. */
-export const trous = (s: SemaineOut) =>
-  s.a_pourvoir.reduce((n, t) => n + t.manquant, 0)
+/** Places à pourvoir de la semaine, à partir d'`aujourdhui` s'il est donné :
+ * un jour passé n'est jamais rempli par le calcul (décision utilisateur du
+ * 2026-11-03), ses places vides sont dites à part (`noteJoursPasses`). */
+export const trous = (s: SemaineOut, aujourdhui?: string) =>
+  s.a_pourvoir.reduce(
+    (n, t) =>
+      !aujourdhui || ajouterJours(s.lundi, t.jour) >= aujourdhui
+        ? n + t.manquant
+        : n,
+    0,
+  )

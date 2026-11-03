@@ -25,6 +25,7 @@ import {
   nommerJours,
   phraseCycle,
   phraseTrou,
+  noteJoursPasses,
   pointsAttention,
   regrouperPlaces,
   resumePoints,
@@ -269,6 +270,15 @@ export function PanneauAlertes({
 
           <Famille titre="À regarder" nombre={autres ? compte(p.aRegarder) : 0}>
             <Personnes liste={p.aRegarder} />
+          </Famille>
+
+          <Famille
+            titre="Jours passés"
+            nombre={autres ? p.joursPasses.length : 0}
+          >
+            <li className={cn(LIGNE, 'text-muted-foreground')}>
+              {noteJoursPasses(p.joursPasses)}
+            </li>
           </Famille>
         </div>
       </SheetContent>

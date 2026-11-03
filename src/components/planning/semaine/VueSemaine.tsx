@@ -75,6 +75,8 @@ import type {
 import { MenuCase } from '#/components/planning/semaine/MenuCase.tsx'
 import type { OuvertureMenu } from '#/components/planning/semaine/MenuCase.tsx'
 import {
+  joursPassesVides,
+  noteJoursPasses,
   pointsAttention,
   porteeSemaine,
 } from '#/components/planning/attention.ts'
@@ -420,13 +422,17 @@ export function VueSemaine({
       await pendant(async () => {
         try {
           const r = await generer(lundi, { ...options, signal: ctrl.signal })
-          const n = trous(r.semaine)
+          const n = trous(r.semaine, aujourdhui)
+          const passes = noteJoursPasses(
+            joursPassesVides([r.semaine], (d) => d < aujourdhui),
+          )
           // Des places restées vides : le message reste jusqu'à ce qu'on le
           // ferme (il dit quoi faire ensuite).
           notifier(
-            messageGeneration(n, 'Planning', r.poses),
+            messageGeneration(n, 'Planning', r.poses) +
+              (passes ? ` ${passes}` : ''),
             n ? 'attention' : 'info',
-            n ? GARDER : undefined,
+            n || passes ? GARDER : undefined,
           )
         } catch (err) {
           if (err instanceof CalculArrete)

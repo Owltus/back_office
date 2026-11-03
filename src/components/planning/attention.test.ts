@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 import {
   heureParlee,
   joursDesPlaces,
+  joursPassesVides,
+  noteJoursPasses,
   nombreInfractions,
   nommerJours,
   phraseCycle,
@@ -657,5 +659,74 @@ describe('places de l’accueil (2026-11-01)', () => {
     const [s] = p.aPourvoir.flatMap((j) => j.shifts)
     expect(s.personnes.find((x) => x.id === 2)?.posteId).toBe(7)
     expect(s.personnes.find((x) => x.id === 1)?.posteId).toBe(0)
+  })
+})
+
+describe('jours passés : jamais remplis, dits à part (décision du 2026-11-03)', () => {
+  // Semaine du lundi 2 novembre, vue le mardi 3 : lundi 2 places vides,
+  // mardi 1 place vide.
+  const place = (jour: number, manquant: number, besoin_id: number) => ({
+    besoin_id,
+    poste_id: 9,
+    jour,
+    type_shift_id: null,
+    debut: '07:00',
+    fin: '15:45',
+    duree: 480,
+    manquant,
+    remplacants: [],
+    raison_commune: null,
+    raisons: [],
+  })
+  const S = semaine('2026-11-02', {
+    a_pourvoir: [place(0, 2, 1), place(0, 0, 2), place(1, 1, 3)],
+  } as Partial<SemaineOut>)
+
+  it('accepté : le lundi passé est dit, hors du total des places', () => {
+    const p = pointsAttention(
+      [S],
+      SALARIES,
+      POSTES,
+      porteeSemaine('2026-11-03'),
+    )
+    expect(p.joursPasses).toEqual([{ date: '2026-11-02', places: 2 }])
+    expect(p.aPourvoir.flatMap((j) => j.shifts).map((t) => t.date)).toEqual([
+      '2026-11-03',
+    ])
+    expect(p.total).toBe(1)
+    expect(noteJoursPasses(p.joursPasses)).toBe(
+      'Lundi 2 : jour passé, 2 places sans personne. Le calcul ne remplit pas un jour qui a déjà eu lieu.',
+    )
+  })
+
+  it('refusé : rien à dire le lundi même, ni sur une place tenue, ni hors du mois', () => {
+    expect(
+      pointsAttention([S], SALARIES, POSTES, porteeSemaine('2026-11-02'))
+        .joursPasses,
+    ).toEqual([])
+    expect(
+      pointsAttention(
+        [S],
+        SALARIES,
+        POSTES,
+        porteeMois('2026-12', '2026-12-10'),
+      ).joursPasses,
+    ).toEqual([])
+    // Bouclier HCR (sans aujourd'hui) : pas de jours passés.
+    expect(
+      pointsAttention([S], SALARIES, POSTES, porteeMois('2026-11')).joursPasses,
+    ).toEqual([])
+    expect(noteJoursPasses([])).toBe('')
+  })
+
+  it('plusieurs jours : une phrase, places additionnées', () => {
+    const j = joursPassesVides([S], (d) => d < '2026-11-04')
+    expect(j).toEqual([
+      { date: '2026-11-02', places: 2 },
+      { date: '2026-11-03', places: 1 },
+    ])
+    expect(noteJoursPasses(j)).toBe(
+      'Lundi 2 et mardi 3 : jours passés, 3 places sans personne. Le calcul ne remplit pas un jour qui a déjà eu lieu.',
+    )
   })
 })

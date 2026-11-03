@@ -2359,6 +2359,17 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   départs simulés) : 0 infraction, 0 place vide, week-ends libres en
   hausse, apprentis rééquilibrés ; en sous-effectif, 6e jours et 47 h
   plutôt qu'un extra (à 3 départs) ; 4 semaines sur 81 au plafond de 60 s.
+- **JOUR PASSÉ (décision utilisateur du 2026-11-03, « même règle pour
+  tous »)** : le calcul ne remplit JAMAIS un jour passé de la semaine en
+  cours, pour aucun poste (indisponibilités `depuis` dans
+  `preparerGeneration`, candidats de l'accueil, fixes, JFR) ; ce qui y est
+  posé reste un fait. Ses places vides ne comptent plus comme places à
+  pourvoir (`trous(s, aujourdhui)`) : elles sont dites à part
+  (`joursPassesVides`, `noteJoursPasses` : « Lundi 2 : jour passé, 6 places
+  sans personne… »), dans le message de fin de génération et la famille
+  « Jours passés » du panneau, hors du total. Constaté sur la simulation de
+  novembre : des fixes posés le lundi soir (lundi = aujourd'hui), puis une
+  génération le mardi, laissaient l'accueil du lundi vide.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

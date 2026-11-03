@@ -125,6 +125,14 @@ export interface PointPersonne {
   messages: Array<{ semaine: string | null; texte: string }>
 }
 
+/** Un jour passé de la période où des places sont restées sans personne
+ * (décision utilisateur du 2026-11-03 : un jour passé n'est jamais rempli,
+ * pour aucun poste). Dit, jamais compté comme une place à pourvoir. */
+export interface JourPasse {
+  date: string
+  places: number
+}
+
 export interface PointsAttention {
   total: number
   infractions: PointPersonne[]
@@ -132,6 +140,8 @@ export interface PointsAttention {
   presence: EcartPresence[]
   trous: TrouAttention[]
   aRegarder: PointPersonne[]
+  /** Hors du `total` : le calcul n'y peut plus rien. */
+  joursPasses: JourPasse[]
 }
 
 /** Ce qu'un écran montre : les JOURS retenus (places, présence) et les
@@ -141,12 +151,16 @@ export interface PointsAttention {
 export interface Portee {
   jour: (date: string) => boolean
   semaine: (lundi: string) => boolean
+  /** Jours passés de la période, laissés hors de `jour` : leurs places
+   * vides sont dites à part (`joursPasses`). */
+  passe?: (date: string) => boolean
 }
 
 /** Vue semaine : à partir d'aujourd'hui (un jour passé ne se génère plus). */
 export const porteeSemaine = (aujourdhui: string): Portee => ({
   jour: (d) => d >= aujourdhui,
   semaine: (l) => ajouterJours(l, 6) >= aujourdhui,
+  passe: (d) => d < aujourdhui,
 })
 
 /** Vue mois : les jours du mois ; les semaines du mois, une semaine
@@ -158,7 +172,41 @@ export const porteeMois = (mois: string, aujourdhui?: string): Portee => ({
   semaine: (l) =>
     ajouterJours(l, 3).startsWith(mois) &&
     (!aujourdhui || ajouterJours(l, 6) >= aujourdhui),
+  passe: aujourdhui ? (d) => d.startsWith(mois) && d < aujourdhui : undefined,
 })
+
+/** Jours passés (`passe`) des semaines où des places sont restées sans
+ * personne, avec leur nombre. Une semaine passée en entier compte aussi :
+ * c'est la période de l'écran qui borne. */
+export function joursPassesVides(
+  semaines: readonly SemaineOut[],
+  passe: (date: string) => boolean,
+): JourPasse[] {
+  const parDate = new Map<string, number>()
+  for (const s of semaines)
+    for (const t of s.a_pourvoir) {
+      const date = ajouterJours(s.lundi, t.jour)
+      if (t.manquant > 0 && passe(date))
+        parDate.set(date, (parDate.get(date) ?? 0) + t.manquant)
+    }
+  return [...parDate]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, places]) => ({ date, places }))
+}
+
+/** « Lundi 2 : jour passé, 6 places sans personne. Le calcul ne remplit pas
+ * un jour qui a déjà eu lieu. » Vide sans jour passé. */
+export function noteJoursPasses(jours: readonly JourPasse[]): string {
+  if (!jours.length) return ''
+  const noms = jours.map(
+    (j) => `${JOURS_LONGS[rangJour(j.date)]} ${enDate(j.date).getUTCDate()}`,
+  )
+  const places = jours.reduce((n, j) => n + j.places, 0)
+  const tete = enListe(noms)
+  return `${tete.charAt(0).toUpperCase()}${tete.slice(1)} : ${
+    jours.length > 1 ? 'jours passés' : 'jour passé'
+  }, ${places} place${places > 1 ? 's' : ''} sans personne. Le calcul ne remplit pas un jour qui a déjà eu lieu.`
+}
 
 const TOUT: Portee = { jour: () => true, semaine: () => true }
 
@@ -365,6 +413,7 @@ export function pointsAttention(
     presence,
     trous,
     aRegarder,
+    joursPasses: portee.passe ? joursPassesVides(semaines, portee.passe) : [],
   }
 }
 

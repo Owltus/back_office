@@ -27,6 +27,7 @@ const {
   reposDe,
   statutDuJour,
   titreHeures,
+  trous,
 } = await import('#/components/planning/semaine/edition.ts')
 
 const bilan = (b: Partial<BilanOut> = {}): BilanOut => ({
@@ -449,5 +450,22 @@ describe('poserHoraire : horaire de minuit', () => {
       fin: '07:00',
       pause: 0,
     })
+  })
+})
+
+describe('trous : places à pourvoir à partir d’aujourd’hui (2026-11-03)', () => {
+  const s = {
+    lundi: '2026-11-02',
+    a_pourvoir: [
+      { jour: 0, manquant: 2 },
+      { jour: 1, manquant: 1 },
+    ],
+  } as unknown as SemaineOut
+  it('accepté : un jour passé ne compte pas comme une place à pourvoir', () => {
+    expect(trous(s, '2026-11-03')).toBe(1)
+  })
+  it('refusé : sans aujourd’hui ou le lundi même, tout compte', () => {
+    expect(trous(s)).toBe(3)
+    expect(trous(s, '2026-11-02')).toBe(3)
   })
 })
