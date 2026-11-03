@@ -23,7 +23,7 @@ const points = (c: HTMLElement) =>
   [...c.querySelectorAll<HTMLElement>('[data-periode]')].map((e) => ({
     periode: e.dataset.periode,
     classe: e.getAttribute('class') ?? '',
-    plein: e.firstElementChild?.getAttribute('fill') !== 'none',
+    plein: e.firstElementChild?.getAttribute('fill') === 'currentColor',
     forme: e.firstElementChild?.tagName,
   }))
 
@@ -144,25 +144,66 @@ describe('PointsPresence : les transmissions (2026-11-02)', () => {
     maximum: 1,
     ecart: 0,
   }))
+  const liens = (c: HTMLElement) =>
+    [...c.querySelectorAll<HTMLElement>('[data-transmission]')].map((e) => ({
+      etat: e.dataset.transmission,
+      classe: e.className,
+    }))
+  const periodes = (c: HTMLElement) =>
+    [...c.querySelectorAll<HTMLElement>('[data-periode]')].map(
+      (e) => e.dataset.periode,
+    )
+  const classe = (c: HTMLElement, periode: string) =>
+    c.querySelector(`[data-periode="${periode}"]`)!.getAttribute('class')!
 
-  it('dans l’infobulle seulement, plus de fil entre les jours (2026-11-03)', () => {
+  it('un trait par transmission ; les deux ronds centrés, reliés par un trait court', () => {
     const { container } = rendre(
       <PointsPresence
         presence={presence}
         transmissions={{ nuitMatin: 'ok', matinSoir: 'manque', soirNuit: null }}
+        derniere
       />,
     )
-    // Refusé : aucun trait dessiné, la nuit reste dans sa case.
-    expect(container.querySelector('[data-transmission]')).toBeNull()
-    expect(
-      [...container.querySelectorAll<HTMLElement>('[data-periode]')].map(
-        (e) => e.dataset.periode,
-      ),
-    ).toEqual(['matin', 'soir', 'nuit'])
+    const l = liens(container)
+    expect(l.map((x) => x.etat)).toEqual(['ok', 'manque', 'aucune'])
+    // Centrés : les deux traits du bord s'étirent à parts égales, celui du
+    // milieu est fixe.
+    expect(l[0].classe).toContain('flex-1')
+    expect(l[1].classe).not.toContain('flex-1')
+    expect(l[2].classe).toContain('flex-1')
+    // Dernière colonne : son triangle de nuit au bord droit, à cheval.
+    expect(periodes(container)).toEqual(['matin', 'soir', 'nuit'])
+    expect(classe(container, 'nuit')).toContain('right-0')
+    expect(classe(container, 'nuit')).toContain('translate-x-1/2')
+    expect(container.querySelector('[data-periode="nuit"] path')).not.toBeNull()
     const nom = container
       .querySelector('[aria-label]')!
       .getAttribute('aria-label')!
     expect(nom).toContain('Transmission matin → soir : personne pour la faire')
     expect(nom).toContain('Transmission nuit → matin : assurée')
+  })
+
+  it('le triangle de la veille se pose sur la frontière, la nuit du jour part au lendemain', () => {
+    const { container } = rendre(
+      <PointsPresence
+        presence={presence}
+        transmissions={{ nuitMatin: 'ok', matinSoir: 'ok', soirNuit: 'ok' }}
+        veille={[{ ...presence[2], compte: 0, ecart: -1 }]}
+      />,
+    )
+    // Refusé : la nuit du jour n'est pas dans sa case (le lendemain la pose).
+    expect(periodes(container)).toEqual(['matin', 'soir', 'nuit-veille'])
+    const veille = classe(container, 'nuit-veille')
+    expect(veille).toContain('left-0')
+    expect(veille).toContain('-translate-x-1/2')
+    expect(veille).toContain('text-red-500')
+    expect(
+      container.querySelector('[aria-label]')!.getAttribute('aria-label'),
+    ).toContain('Nuit : 0 pour 1 (1 de moins) (la veille)')
+  })
+
+  it('sans transmissions lues : les formes seules, centrées', () => {
+    const { container } = rendre(<PointsPresence presence={presence} />)
+    expect(liens(container)).toEqual([])
   })
 })
