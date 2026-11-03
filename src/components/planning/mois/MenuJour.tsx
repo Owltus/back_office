@@ -16,6 +16,7 @@ import {
   BadgeCheck,
   CalendarRange,
   Check,
+  Clock,
   Coffee,
   Eraser,
   Star,
@@ -34,12 +35,15 @@ import {
   heuresEtDuree,
   motifsDuJour,
   nomLigneCode,
+  ouvertureSpecifique,
   rubriquesDeLaCase,
   texteChangementPoste,
   texteEtoileDeja,
 } from '#/components/planning/codesCase.ts'
 import type { CodeUnique, SourceCase } from '#/components/planning/codesCase.ts'
 import { PastilleHoraire } from '#/components/planning/PastilleHoraire.tsx'
+import type { OuvertureSpecifique } from '#/components/planning/HoraireSpecifique.tsx'
+import { heureAffichee } from '#/lib/planning/temps.ts'
 import type {
   Horaire,
   Motif,
@@ -85,6 +89,7 @@ export function MenuJour({
   absences,
   onSemaine,
   onFermer,
+  onSpecifique,
 }: {
   ouverture: OuvertureMenu
   titre: string
@@ -111,6 +116,9 @@ export function MenuJour({
   absences?: AbsencesDuMenu
   onSemaine: () => void
   onFermer: () => void
+  /** Horaire spécifique (2026-11-03) : ouvre la fenêtre pour le remplir ou
+   * le modifier. Absent : pas de ligne. */
+  onSpecifique?: (o: OuvertureSpecifique) => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState({ left: ouverture.x, top: ouverture.y })
@@ -436,6 +444,55 @@ export function MenuJour({
             {g.horaires.map((h) => boutonCode(parId.get(h.id)!))}
           </div>
         ))}
+        {ecrire &&
+          onSpecifique &&
+          (() => {
+            const ouv = ouvertureSpecifique({
+              referentiel,
+              personne,
+              jour,
+              source,
+              shift,
+              titre,
+              // Place à pourvoir : la fenêtre part sur son poste.
+              placePosteId: placePoste,
+            })
+            const interdit = ouv.ferme
+            const actuel =
+              shift && shift.type_shift_id === null
+                ? `${heureAffichee(shift.debut)}–${heureAffichee(shift.fin)}`
+                : null
+            return (
+              <>
+                <div className="-mx-1 my-1 h-px bg-border" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={!!interdit}
+                  aria-label={`Horaire spécifique${actuel ? `, actuel, ${actuel}` : ''}`}
+                  className={`${ITEM} disabled:pointer-events-none disabled:opacity-50`}
+                  onClick={choisir(() => onSpecifique(ouv))}
+                >
+                  <Clock className="size-4 text-muted-foreground" />
+                  <span className="grid flex-1">
+                    <span className="font-medium">Horaire spécifique…</span>
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      {interdit ??
+                        (actuel ? `${actuel} · modifier` : 'heures libres')}
+                    </span>
+                  </span>
+                  {actuel ? (
+                    <Check
+                      className="size-3.5 text-primary"
+                      aria-label="Horaire actuel"
+                    />
+                  ) : (
+                    <span className="size-3.5" />
+                  )}
+                </button>
+              </>
+            )
+          })()}
         {motifs && groupeMotifs('Absences', motifs.autres)}
         {u && (u.actuel || u.texte) && (
           <div className="-mx-1 my-1 h-px bg-border" />

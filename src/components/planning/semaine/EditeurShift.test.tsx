@@ -192,13 +192,17 @@ describe('EditeurShift', () => {
       .find((x) => x.id === 3)!
       .competences.map((c) => c.poste_id)
     // Horaires : une seule liste, chaque horaire une fois, sans choisir de poste.
-    expect(screen.queryByRole('heading', { name: 'Poste' })).toBeNull()
+    expect(screen.queryByRole('group', { name: 'Poste' })).toBeNull()
     expect(
       screen.getAllByRole('button', { name: /^07:00–15:45/ }),
     ).toHaveLength(1)
-    // Horaire spécifique : le choix du poste revient, mêmes postes.
+    // Horaire spécifique : le choix du poste revient, mêmes postes, DANS
+    // l'encart, avec les heures (2026-11-03 : « au même endroit »).
     fireEvent.click(screen.getByRole('button', { name: /Horaire spécifique/ }))
-    expect(screen.getByRole('heading', { name: 'Poste' })).toBeTruthy()
+    const encart = screen.getByRole('group', { name: 'Horaire spécifique' })
+    expect(within(encart).getByRole('group', { name: 'Poste' })).toBeTruthy()
+    expect(within(encart).getByLabelText('Début')).toBeTruthy()
+    expect(within(encart).getByLabelText('Fin')).toBeTruthy()
     expect(screen.queryByText('non tenu')).toBeNull()
     for (const p of referentiel.postes) {
       const bouton = screen.queryByRole('button', {

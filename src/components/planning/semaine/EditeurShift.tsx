@@ -16,7 +16,6 @@ import type { CSSProperties, ReactNode } from 'react'
 import { BadgeCheck, Star, Trash2, Undo2 } from 'lucide-react'
 
 import { Button } from '#/components/ui/button.tsx'
-import { Input } from '#/components/ui/input.tsx'
 import { Label } from '#/components/ui/label.tsx'
 import {
   Select,
@@ -40,21 +39,15 @@ import {
   grouperHoraires,
   heures,
   libelleHoraire,
-  NIVEAUX,
   texteSur,
 } from '#/lib/planning/affichage.ts'
 import { codesDuPoste, posteDeReference } from '#/lib/planning/eligibilite.ts'
 import { horairesNormaux } from '#/lib/planning/etoile.ts'
-import type { CodesPermis, RaisonCodes } from '#/lib/planning/eligibilite.ts'
+import type { CodesPermis } from '#/lib/planning/eligibilite.ts'
 import { estEcole } from '#/lib/planning/semaine.ts'
 import type { ShiftOut } from '#/lib/planning/semaine.ts'
 import type { ShiftSaisi } from '#/lib/planning/service.ts'
-import {
-  ajouterJours,
-  horaireDe,
-  minutes,
-  presence,
-} from '#/lib/planning/temps.ts'
+import { ajouterJours, horaireDe } from '#/lib/planning/temps.ts'
 import { JOURS } from '#/lib/planning/types.ts'
 import type { Horaire, Referentiel } from '#/lib/planning/types.ts'
 import { cn } from '#/lib/utils.ts'
@@ -63,6 +56,7 @@ import { NEUTRE, travailCode } from '#/components/planning/semaine/edition.ts'
 import {
   changementDePoste,
   codesDeLaCase,
+  jourFerme,
   codesUniques,
   etoileDeLaCase,
   ligneDe,
@@ -71,6 +65,11 @@ import {
   texteEtoileDeja,
 } from '#/components/planning/codesCase.ts'
 import { PastilleHoraire } from '#/components/planning/PastilleHoraire.tsx'
+import {
+  ChampsHoraireSpecifique,
+  ChoixPosteSpecifique,
+  erreurSpecifique,
+} from '#/components/planning/HoraireSpecifique.tsx'
 import type {
   RubriquesCase,
   SourceCase,
@@ -89,8 +88,6 @@ export type Edition =
     }
   | { mode: 'modification'; shift: ShiftOut }
 
-const PAUSES = [0, 15, 20, 30, 45, 60, 90]
-
 const EN_LETTRES = new Intl.DateTimeFormat('fr-FR', {
   weekday: 'long',
   day: 'numeric',
@@ -102,19 +99,8 @@ const EN_LETTRES = new Intl.DateTimeFormat('fr-FR', {
 export const dateEnLettres = (iso: string) =>
   EN_LETTRES.format(new Date(`${iso}T12:00:00Z`))
 
-/** Raisons qui ferment le jour : l'horaire spécifique n'y est pas permis
- * non plus (école, repos ou absence fixés, hors contrat, code fixé par la
- * semaine type ailleurs). « Aucun commun » et la coupure de repos laissent
- * l'horaire spécifique possible, jamais choisi d'office. */
-const JOUR_FERME: ReadonlySet<RaisonCodes> = new Set<RaisonCodes>([
-  'ecole',
-  'absence-fixe',
-  'repos-fixe',
-  'hors-contrat',
-  'code-fixe-hors-poste',
-])
-export const jourFerme = (p: Pick<CodesPermis<unknown>, 'raison'>) =>
-  p.raison !== null && JOUR_FERME.has(p.raison)
+/** Règle partagée avec le clic droit (`codesCase.ts`). */
+export { jourFerme }
 
 /** Délai après lequel « Confirmer la suppression » se désarme. */
 export const DESARMEMENT_MS = 4000
@@ -392,16 +378,9 @@ export function EditeurShift({
   const indisponible =
     !!choisi && !disponibleLe(choisi, dateDuJour(b.jour)) && !inchange
 
-  // Horaire spécifique : début et fin différents, pause plus courte que la présence.
-  const presenceLibre = presence(b.debut, b.fin)
-  const erreurLibre =
-    motif === null && libre
-      ? minutes(b.debut) % 1440 === minutes(b.fin) % 1440
-        ? 'Le début et la fin sont identiques : choisissez une autre heure de fin.'
-        : b.pause >= presenceLibre
-          ? 'La pause doit être plus courte que le shift.'
-          : null
-      : null
+  // Horaire spécifique : début et fin différents, pause plus courte que la
+  // présence (`erreurSpecifique`, la même règle que la fenêtre du clic droit).
+  const erreurLibre = motif === null && libre ? erreurSpecifique(b) : null
   // Même règle que le clic droit et que le moteur (`codesPermis`) : les
   // codes par casquette, et pour l'horaire spécifique celle du poste choisi.
   // Chaque code une seule fois, son poste déduit (`posteDeduit` : celui de
@@ -521,11 +500,10 @@ export function EditeurShift({
 
   // Horaire spécifique : seulement les postes qu'elle tient (et celui du shift, s'il n'en est
   // pas) : un hôtelier ne voit plus Supervision ni Direction.
+  // Un poste fermé n'est plus proposé (U3), sauf celui du shift existant.
   const tenus = postes.filter(
     (p) =>
-      niveau(p.id) !== undefined ||
-      p.id === b.poste_id ||
-      p.id === existant?.poste_id,
+      (niveau(p.id) !== undefined && !p.ferme) || p.id === existant?.poste_id,
   )
   const postesTries = tenus.length ? tenus : postes
   const titre = existant
@@ -770,6 +748,26 @@ export function EditeurShift({
                   setMotif(null)
                 }}
               />
+              {/* L'encart de l'horaire spécifique, sous son choix : heures,
+                  pause et poste au même endroit (2026-11-03). */}
+              {!vider && motif === null && libre && (
+                <div
+                  role="group"
+                  aria-label="Horaire spécifique"
+                  className="col-span-2 space-y-3 rounded-lg border border-primary/40 bg-primary/5 p-3"
+                >
+                  <ChampsHoraireSpecifique
+                    valeur={b}
+                    onChange={(c) => maj(c)}
+                  />
+                  <ChoixPosteSpecifique
+                    postes={postesTries}
+                    posteId={b.poste_id}
+                    niveau={(id) => niveau(id)}
+                    onChange={(poste_id) => changerQui({ poste_id })}
+                  />
+                </div>
+              )}
             </div>
 
             {[
@@ -809,117 +807,7 @@ export function EditeurShift({
                   </div>
                 </div>
               ))}
-
-            {motif === null && libre && (
-              <div className="space-y-3 pt-2">
-                <div className="flex flex-wrap items-end gap-3">
-                  <div className="grid gap-1">
-                    <Label htmlFor="planning-debut">Début</Label>
-                    {/* Un champ heure ne sait pas afficher « 24:00 » : il montre
-                        00:00 et l'interrupteur dessous dit de quel minuit il s'agit. */}
-                    <Input
-                      id="planning-debut"
-                      type="time"
-                      className="w-28"
-                      value={b.debut === '24:00' ? '00:00' : b.debut}
-                      onChange={(e) =>
-                        e.target.value && maj({ debut: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="grid gap-1">
-                    <Label htmlFor="planning-fin">Fin</Label>
-                    <Input
-                      id="planning-fin"
-                      type="time"
-                      className="w-28"
-                      value={b.fin}
-                      onChange={(e) =>
-                        e.target.value && maj({ fin: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="grid gap-1">
-                    <Label htmlFor="planning-pause">Pause</Label>
-                    <Select
-                      value={String(b.pause)}
-                      onValueChange={(v) => maj({ pause: Number(v) })}
-                    >
-                      <SelectTrigger id="planning-pause" className="w-28">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {[...new Set([...PAUSES, b.pause])]
-                          .sort((x, y) => x - y)
-                          .map((p) => (
-                            <SelectItem key={p} value={String(p)}>
-                              {p === 0 ? 'Aucune' : `${p} min`}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <span className="pb-2 text-sm text-muted-foreground">
-                    {heures(Math.max(presenceLibre - b.pause, 0))} de travail
-                  </span>
-                </div>
-                {(b.debut === '00:00' || b.debut === '24:00') && (
-                  <Interrupteur
-                    id="planning-minuit"
-                    coche={b.debut === '24:00'}
-                    onChange={(soir) =>
-                      maj({ debut: soir ? '24:00' : '00:00' })
-                    }
-                    aide="Activé : le shift commence à minuit à la fin de ce jour, comme une nuit qui démarre le soir même. Désactivé : il commence à minuit au tout début de ce jour."
-                  >
-                    Commence à 00:00 en fin de journée (nuit vers le lendemain)
-                  </Interrupteur>
-                )}
-                {erreurLibre && (
-                  <p className="text-sm text-destructive">{erreurLibre}</p>
-                )}
-              </div>
-            )}
           </section>
-
-          {motif === null && libre && (
-            <section className="space-y-2">
-              <h3 className="text-sm font-semibold">Poste</h3>
-              <div className="flex flex-wrap gap-1.5">
-                {postesTries.map((p) => {
-                  const n = niveau(p.id)
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      aria-pressed={b.poste_id === p.id}
-                      className={cn(
-                        'inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm transition-colors hover:bg-muted',
-                        b.poste_id === p.id && 'border-primary bg-primary/10',
-                      )}
-                      onClick={() => changerQui({ poste_id: p.id })}
-                    >
-                      <span
-                        className="size-2.5 rounded-full"
-                        style={{ background: p.couleur }}
-                      />
-                      {p.nom}
-                      <small
-                        className={cn(
-                          'text-xs',
-                          n
-                            ? 'text-muted-foreground'
-                            : 'text-muted-foreground/50',
-                        )}
-                      >
-                        {n ? NIVEAUX[n].libelle : 'non tenu'}
-                      </small>
-                    </button>
-                  )
-                })}
-              </div>
-            </section>
-          )}
 
           <section className="space-y-2">
             <h3 className="text-sm font-semibold">Qui et quand</h3>

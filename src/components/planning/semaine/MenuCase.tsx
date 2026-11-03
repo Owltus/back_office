@@ -10,7 +10,15 @@
  * du `ContextMenu` de shadcn.
  */
 
-import { BadgeCheck, Check, Coffee, Eraser, Star, Undo2 } from 'lucide-react'
+import {
+  BadgeCheck,
+  Check,
+  Clock,
+  Coffee,
+  Eraser,
+  Star,
+  Undo2,
+} from 'lucide-react'
 
 import {
   ContextMenuContent,
@@ -69,6 +77,14 @@ export interface OuvertureMenu {
     actuel: number | null
     onPoser: (motifId: number) => void
   }
+  /** Horaire spécifique (2026-11-03) : ouvre la fenêtre pour le remplir ou
+   * le modifier. `actuel` : ses heures si la case en a déjà un ;
+   * `interdit` : pourquoi pas ce jour-là. */
+  specifique?: {
+    actuel: string | null
+    interdit: string | null
+    onOuvrir: () => void
+  }
 }
 
 export function MenuCase({
@@ -79,8 +95,16 @@ export function MenuCase({
   onHoraire: (h: Horaire, posteId: number) => void
 }) {
   if (!ouverture) return null
-  const { codes, actuel, actuelPoste, validation, etoile, vider, absences } =
-    ouverture
+  const {
+    codes,
+    actuel,
+    actuelPoste,
+    validation,
+    etoile,
+    vider,
+    absences,
+    specifique,
+  } = ouverture
   const groupeMotifs = (libelle: string, liste: Motif[]) =>
     absences &&
     liste.length > 0 && (
@@ -273,6 +297,37 @@ export function MenuCase({
           })}
         </ContextMenuGroup>
       ))}
+      {specifique && (
+        <>
+          <ContextMenuSeparator />
+          <ContextMenuItem
+            disabled={!!specifique.interdit}
+            aria-label={`Horaire spécifique${specifique.actuel ? `, actuel, ${specifique.actuel}` : ''}`}
+            // La fenêtre s'ouvre une fois le menu fermé (sinon le focus et
+            // les clics restent bloqués par le menu qui se ferme).
+            onSelect={() => setTimeout(specifique.onOuvrir, 0)}
+          >
+            <Clock className="text-muted-foreground" />
+            <span className="grid flex-1">
+              <span className="text-sm font-medium">Horaire spécifique…</span>
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {specifique.interdit ??
+                  (specifique.actuel
+                    ? `${specifique.actuel} · modifier`
+                    : 'heures libres')}
+              </span>
+            </span>
+            {specifique.actuel ? (
+              <Check
+                className="size-3.5 text-primary"
+                aria-label="Horaire actuel"
+              />
+            ) : (
+              <span className="size-3.5" />
+            )}
+          </ContextMenuItem>
+        </>
+      )}
       {(horsPermis || codes.texte) && liste.length > 0 && (
         <ContextMenuSeparator />
       )}

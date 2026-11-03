@@ -70,6 +70,8 @@ import {
 } from '#/components/planning/mois/GrilleMois.tsx'
 import type { Depot } from '#/components/planning/mois/GrilleMois.tsx'
 import { MenuJour } from '#/components/planning/mois/MenuJour.tsx'
+import { DialogHoraireSpecifique } from '#/components/planning/HoraireSpecifique.tsx'
+import type { OuvertureSpecifique } from '#/components/planning/HoraireSpecifique.tsx'
 import type { OuvertureMenu } from '#/components/planning/mois/MenuJour.tsx'
 import {
   caseDe,
@@ -98,6 +100,7 @@ import {
   reposAValider,
   reposDe,
   poserHoraire as poserHoraireCase,
+  poserSpecifique as poserSpecifiqueCase,
 } from '#/components/planning/semaine/edition.ts'
 import { EditeurShift } from '#/components/planning/semaine/EditeurShift.tsx'
 import type { Edition } from '#/components/planning/semaine/EditeurShift.tsx'
@@ -537,6 +540,37 @@ export function VueMois({
     epinglee: true,
   })
 
+  // La fenêtre « Horaire spécifique » du clic droit (2026-11-03).
+  const [specifique, setSpecifique] = useState<{
+    salarieId: number
+    date: string
+    ouverture: OuvertureSpecifique
+  } | null>(null)
+  const poserLeSpecifique = (v: {
+    debut: string
+    fin: string
+    pause: number
+    poste_id: number
+  }) => {
+    if (!specifique) return
+    const { salarieId, date } = specifique
+    const { lundi, jour } = reperer(date)
+    const c = caseDe(semaines, referentiel?.motifs ?? [], salarieId, date)
+    void executer(
+      lundi,
+      poserSpecifiqueCase(
+        lundi,
+        { salarie_id: salarieId, jour },
+        c?.type === 'shift' ? c.shift : undefined,
+        c?.type === 'absence' ? { fixe: c.fixe, motif_id: c.motifId } : null,
+        v,
+        v.poste_id,
+      ),
+      "L'horaire spécifique n'a pas été posé",
+      { salarieId, jour },
+    )
+  }
+
   const poserHoraire = (
     salarieId: number,
     date: string,
@@ -915,6 +949,11 @@ export function VueMois({
         </GardeDemarrage>
       )}
 
+      <DialogHoraireSpecifique
+        ouverture={specifique?.ouverture ?? null}
+        onValider={poserLeSpecifique}
+        onFermer={() => setSpecifique(null)}
+      />
       {menu && personneMenu && referentiel && reperesMenu && (
         <MenuJour
           ouverture={menu}
@@ -928,6 +967,13 @@ export function VueMois({
           ecrire={droits.ecrire}
           onHoraire={(h, posteId) =>
             poserHoraire(menu.salarieId, menu.date, h, posteId)
+          }
+          onSpecifique={(ouverture) =>
+            setSpecifique({
+              salarieId: menu.salarieId,
+              date: menu.date,
+              ouverture,
+            })
           }
           validation={
             shiftMenu

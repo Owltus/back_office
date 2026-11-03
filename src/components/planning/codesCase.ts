@@ -27,11 +27,13 @@ import {
 import type {
   CodesPermis,
   EntreeCodesPermis,
+  RaisonCodes,
   RubriqueEtoile,
   Voisin,
 } from '#/lib/planning/eligibilite.ts'
+import type { OuvertureSpecifique } from '#/components/planning/HoraireSpecifique.tsx'
 import { estEcole } from '#/lib/planning/semaine.ts'
-import type { SemaineOut } from '#/lib/planning/semaine.ts'
+import type { SemaineOut, ShiftOut } from '#/lib/planning/semaine.ts'
 import { JOURS } from '#/lib/planning/types.ts'
 import type {
   Horaire,
@@ -141,6 +143,92 @@ function entreeDeLaCase({
 
 export function codesDeLaCase(e: EntreeCase): CodesPermis<Horaire> {
   return codesPermis(entreeDeLaCase(e))
+}
+
+/** Raisons qui ferment le jour : l'horaire spécifique n'y est pas permis
+ * non plus (école, repos ou absence fixés, hors contrat, code fixé par la
+ * semaine type ailleurs). « Aucun commun » et la coupure de repos laissent
+ * l'horaire spécifique possible, jamais choisi d'office. */
+const JOUR_FERME: ReadonlySet<RaisonCodes> = new Set<RaisonCodes>([
+  'ecole',
+  'absence-fixe',
+  'repos-fixe',
+  'hors-contrat',
+  'code-fixe-hors-poste',
+])
+export const jourFerme = (p: Pick<CodesPermis<unknown>, 'raison'>) =>
+  p.raison !== null && JOUR_FERME.has(p.raison)
+
+/** La fenêtre « Horaire spécifique » d'une case (clic droit, 2026-11-03) :
+ * le shift spécifique de la case à modifier, sinon un point de départ (les
+ * heures du shift, ou 09:00-17:00) ; les postes OUVERTS qu'elle tient (et
+ * celui du shift), ou tous les postes ouverts si elle n'en tient aucun ; et
+ * la même règle que le volet pour un jour fermé (`jourFerme`), sauf
+ * l'horaire spécifique déjà posé là. Un poste hors de la liste (fermé,
+ * inconnu) n'est jamais permis. Le poste de départ est le premier permis
+ * parmi : celui du shift, celui de la place à pourvoir (`placePosteId`),
+ * ses postes de titulaire, ses autres postes (relecture adverse du
+ * 2026-11-03 : il pouvait partir sur un poste fermé et caché). */
+export function ouvertureSpecifique(
+  e: Omit<EntreeCase, 'posteId' | 'sauf'> & {
+    shift?: Pick<
+      ShiftOut,
+      'id' | 'poste_id' | 'type_shift_id' | 'debut' | 'fin' | 'pause'
+    >
+    titre: string
+    placePosteId?: number
+  },
+): OuvertureSpecifique {
+  const { referentiel, personne, shift } = e
+  const niveaux = new Map(
+    personne.competences.map((c) => [c.poste_id, c.niveau]),
+  )
+  const tenus = referentiel.postes.filter(
+    (p) => (niveaux.has(p.id) && !p.ferme) || p.id === shift?.poste_id,
+  )
+  const postes = tenus.length
+    ? tenus
+    : referentiel.postes.filter((p) => !p.ferme)
+  const interdit = (id: number): string | null => {
+    if (shift && shift.type_shift_id === null && shift.poste_id === id)
+      return null
+    if (!postes.some((p) => p.id === id)) return 'Choisissez un poste.'
+    const p = codesDeLaCase({ ...e, posteId: id, sauf: shift?.id })
+    return jourFerme(p) || p.raison === 'poste-ferme'
+      ? (p.texte ?? "Pas d'horaire spécifique ce jour-là.")
+      : null
+  }
+  const candidats = [
+    shift?.poste_id,
+    e.placePosteId,
+    ...personne.competences
+      .filter((c) => c.niveau === 'titulaire')
+      .map((c) => c.poste_id),
+    ...postes.map((p) => p.id),
+  ].filter(
+    (id): id is number => id !== undefined && postes.some((p) => p.id === id),
+  )
+  const posteId =
+    candidats.find((id) => interdit(id) === null) ?? candidats[0] ?? 0
+  return {
+    titre: e.titre,
+    modification: !!shift && shift.type_shift_id === null,
+    initial: shift
+      ? {
+          debut: shift.debut,
+          fin: shift.fin,
+          pause: shift.pause,
+          poste_id: posteId,
+        }
+      : { debut: '09:00', fin: '17:00', pause: 0, poste_id: posteId },
+    postes,
+    niveau: (id) => niveaux.get(id),
+    interdit,
+    // La ligne du menu se ferme seulement si AUCUN poste ne le permet.
+    ferme: postes.every((p) => interdit(p.id) !== null)
+      ? (interdit(posteId) ?? "Pas d'horaire spécifique ce jour-là.")
+      : null,
+  }
 }
 
 /** Rubrique « Journée étoile » d'une case : celle du moteur

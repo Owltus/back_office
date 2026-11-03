@@ -52,7 +52,7 @@ import {
 import { messageErreur } from '#/lib/planning/erreurs.ts'
 import type { SemaineOut, ShiftOut } from '#/lib/planning/semaine.ts'
 import * as service from '#/lib/planning/service.ts'
-import { ajouterJours, lundiDe } from '#/lib/planning/temps.ts'
+import { ajouterJours, heureAffichee, lundiDe } from '#/lib/planning/temps.ts'
 import { JOURS } from '#/lib/planning/types.ts'
 import type { Horaire, Referentiel, Salarie } from '#/lib/planning/types.ts'
 import {
@@ -86,12 +86,16 @@ import {
   codesUniques,
   etoileDeLaCase,
   motifsDuJour,
+  ouvertureSpecifique,
   rubriquesDeLaCase,
 } from '#/components/planning/codesCase.ts'
+import { DialogHoraireSpecifique } from '#/components/planning/HoraireSpecifique.tsx'
+import type { OuvertureSpecifique } from '#/components/planning/HoraireSpecifique.tsx'
 import {
   absenceDe,
   indiceDe,
   poserHoraire,
+  poserSpecifique,
   reposAValider,
   reposDe,
   reposProposesParJour,
@@ -221,6 +225,11 @@ export function VueSemaine({
   const [alertesOuvertes, setAlertesOuvertes] = useState(false)
   const [infractionsOuvertes, setInfractionsOuvertes] = useState(false)
   const [menu, setMenu] = useState<OuvertureMenu | null>(null)
+  // La fenêtre « Horaire spécifique » du clic droit (2026-11-03).
+  const [specifique, setSpecifique] = useState<{
+    o: CaseJour
+    ouverture: OuvertureSpecifique
+  } | null>(null)
   // Un seul tiroir à la fois : l'éditeur d'un shift ferme les panneaux
   // d'alertes (« Placer quelqu'un » les laissait derrière lui).
   useEffect(() => {
@@ -714,6 +723,14 @@ export function VueSemaine({
     const motifActuel = shift
       ? null
       : (absenceDe(bilanDe(sid), j)?.motif_id ?? null)
+    const ouvSpecifique = ouvertureSpecifique({
+      referentiel,
+      personne: p,
+      jour: j,
+      source,
+      shift,
+      titre: `${nomComplet(p)} · ${JOURS[j].toLowerCase()} ${Number(ajouterJours(lundi, j).slice(8))}`,
+    })
     setMenu({
       ...o,
       nom: nomComplet(p),
@@ -792,6 +809,14 @@ export function VueSemaine({
                   ),
               )
           : undefined,
+      specifique: {
+        actuel:
+          shift && shift.type_shift_id === null
+            ? `${heureAffichee(shift.debut)}–${heureAffichee(shift.fin)}`
+            : null,
+        interdit: ouvSpecifique.ferme,
+        onOuvrir: () => setSpecifique({ o, ouverture: ouvSpecifique }),
+      },
       absences: absenceFixe
         ? undefined
         : {
@@ -813,6 +838,26 @@ export function VueSemaine({
               ),
           },
     })
+  }
+
+  const poserLeSpecifique = (v: {
+    debut: string
+    fin: string
+    pause: number
+    poste_id: number
+  }) => {
+    if (!specifique || !affichee) return
+    const { o } = specifique
+    const shift = shiftDe(affichee, o)
+    const absence = absenceDe(bilanDe(o.salarie_id), o.jour)
+    siOuverte(
+      () =>
+        void executer(
+          poserSpecifique(lundi, o, shift, absence, v, v.poste_id),
+          'Horaire spécifique non posé',
+          o,
+        ),
+    )
   }
 
   const choisirHoraire = (h: Horaire, posteId: number) => {
@@ -952,6 +997,11 @@ export function VueSemaine({
                 </div>
               </ContextMenuTrigger>
               <MenuCase ouverture={menu} onHoraire={choisirHoraire} />
+              <DialogHoraireSpecifique
+                ouverture={specifique?.ouverture ?? null}
+                onValider={poserLeSpecifique}
+                onFermer={() => setSpecifique(null)}
+              />
             </ContextMenu>
             <DragOverlay dropAnimation={null}>
               {enVol?.type === 'statut' && (

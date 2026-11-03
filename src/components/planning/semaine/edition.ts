@@ -248,7 +248,49 @@ export function poserHoraire(
   h: Horaire,
   posteId: number,
 ): () => Promise<void> {
-  const valeurs = { horaire_id: h.id, ...horaireDe(h), pause: h.pause }
+  return poserValeurs(
+    lundi,
+    o,
+    shift,
+    absence,
+    { horaire_id: h.id, ...horaireDe(h), pause: h.pause },
+    posteId,
+  )
+}
+
+/** L'horaire spécifique du clic droit (2026-11-03) : des heures libres,
+ * sans horaire de la liste, par le même chemin que `poserHoraire`. */
+export function poserSpecifique(
+  lundi: string,
+  o: CaseJour,
+  shift: ShiftOut | undefined,
+  absence: { fixe: boolean; motif_id?: number | null } | null,
+  v: { debut: string; fin: string; pause: number },
+  posteId: number,
+): () => Promise<void> {
+  return poserValeurs(
+    lundi,
+    o,
+    shift,
+    absence,
+    { horaire_id: null, debut: v.debut, fin: v.fin, pause: v.pause },
+    posteId,
+  )
+}
+
+function poserValeurs(
+  lundi: string,
+  o: CaseJour,
+  shift: ShiftOut | undefined,
+  absence: { fixe: boolean; motif_id?: number | null } | null,
+  valeurs: {
+    horaire_id: number | null
+    debut: string
+    fin: string
+    pause: number
+  },
+  posteId: number,
+): () => Promise<void> {
   // Un code choisi dans une autre rubrique (casquette) change aussi le poste.
   if (shift)
     return () =>
