@@ -312,7 +312,8 @@ function CorpsFiche({
     staleTime: 0,
   })
   const [confirmerAbandon, setConfirmerAbandon] = useState(false)
-  const [confirmerSuppression, setConfirmerSuppression] = useState(false)
+  // Le contrat à supprimer (celui ouvert, ou un autre de la liste), ou null.
+  const [aSupprimer, setASupprimer] = useState<number | null>(null)
   // Un enregistrement à la fois : un double clic ne crée pas deux fiches.
   const [enCours, setEnCours] = useState(false)
   const verrou = useRef(false)
@@ -366,6 +367,16 @@ function CorpsFiche({
     c.type_contrat === 'extra' && !c.date_sortie
       ? `Ces dates recouvrent son contrat d'extra ${periodeContrat(c)}, qui n'a pas de fin : désactivez-le dans sa fiche (« Inactif »), puis recommencez.`
       : `Ces dates recouvrent son contrat ${periodeContrat(c)} : une personne n'a qu'un contrat à la fois. Changez d'abord les dates de l'un des deux.`
+
+  /** « CDD du 01/07/2026 au 31/08/2026 » : le contrat visé par la suppression. */
+  const cibleSuppression = () => {
+    const c = autresContrats().find((x) => x.id === aSupprimer)
+    if (!c) return ''
+    const type =
+      TYPES_CONTRAT.find((x) => x.code === c.type_contrat)?.libelle ??
+      c.type_contrat
+    return `${type} ${periodeContrat(c)}`
+  }
 
   const enregistrer = () =>
     uneFois(async () => {
@@ -427,10 +438,9 @@ function CorpsFiche({
       onFermer()
     })
 
-  const supprimer = () =>
+  const supprimer = (id: number) =>
     uneFois(async () => {
       if (!gerer || b.id === null) return
-      const id = b.id
       const prenom = initial.prenom || 'Cette personne'
       const r = await ecrire(
         () => supprimerSalarie(id),
@@ -438,6 +448,11 @@ function CorpsFiche({
       )
       if (!r.ok) {
         notifier(r.message, 'attention')
+        return
+      }
+      // Un AUTRE contrat que celui ouvert : la fiche reste où elle est.
+      if (id !== b.id) {
+        notifier('Contrat supprimé')
         return
       }
       // Un autre contrat de la personne reste : on l'ouvre.
@@ -676,6 +691,7 @@ function CorpsFiche({
             gerer={gerer}
             occupe={enCours}
             onAjouter={ajouterContrat}
+            onSupprimer={(s) => setASupprimer(s.id)}
             onOuvrir={
               onOuvrirContrat &&
               ((s) =>
@@ -735,9 +751,12 @@ function CorpsFiche({
             size="sm"
             className="mr-auto text-destructive hover:text-destructive"
             disabled={enCours}
-            onClick={() => setConfirmerSuppression(true)}
+            onClick={() => setASupprimer(b.id)}
           >
-            <Trash2 /> Supprimer
+            <Trash2 />{' '}
+            {autresContrats().length > 1
+              ? 'Supprimer ce contrat'
+              : 'Supprimer la fiche'}
           </Button>
         )}
         {gerer && erreur && b.prenom.trim() !== '' && (
@@ -780,16 +799,16 @@ function CorpsFiche({
         onConfirm={onFermer}
       />
       <ConfirmDialog
-        open={confirmerSuppression}
-        onOpenChange={setConfirmerSuppression}
+        open={aSupprimer !== null}
+        onOpenChange={(o) => !o && setASupprimer(null)}
         title={
           autresContrats().length > 1
-            ? 'Supprimer ce contrat ?'
+            ? `Supprimer le contrat ${cibleSuppression()} ?`
             : `Retirer ${nomBrouillon(initial) || 'cette personne'} de l'équipe ?`
         }
         description={
           autresContrats().length > 1
-            ? 'Ce contrat, ses shifts et ses absences sont supprimés. Ses autres contrats restent, toujours reliés.'
+            ? 'Ce contrat seul, ses shifts et ses absences sont supprimés. La personne et ses autres contrats restent, toujours reliés.'
             : "Sa fiche, ses shifts et ses absences sont supprimés. Pour quelqu'un qui part, indiquez plutôt sa fin de contrat : son historique reste."
         }
         confirmLabel={
@@ -798,7 +817,7 @@ function CorpsFiche({
             : 'Supprimer la fiche'
         }
         destructive
-        onConfirm={() => void supprimer()}
+        onConfirm={() => aSupprimer !== null && void supprimer(aSupprimer)}
       />
     </>
   )
@@ -834,6 +853,7 @@ function ParcoursContrats({
   gerer,
   occupe,
   onAjouter,
+  onSupprimer,
   onOuvrir,
 }: {
   id: number
@@ -843,6 +863,8 @@ function ParcoursContrats({
   /** Une écriture en cours : les boutons attendent, la liste reste. */
   occupe: boolean
   onAjouter: (v: NouveauContrat) => Promise<boolean>
+  /** Supprimer CE contrat (confirmé ensuite), jamais la personne entière. */
+  onSupprimer: (s: Salarie) => void
   onOuvrir?: (s: Salarie) => void
 }) {
   const [ajout, setAjout] = useState<NouveauContrat | null>(null)
@@ -892,25 +914,45 @@ function ParcoursContrats({
             </>
           )
           return (
-            <li key={s.id} className="border-b last:border-b-0">
-              {ici || !onOuvrir ? (
-                <div
-                  aria-current={ici || undefined}
-                  className={cn(
-                    'flex items-center gap-2 px-3 py-2 text-sm',
-                    ici && 'bg-primary/5',
-                  )}
-                >
-                  {contenu}
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => onOuvrir(s)}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-accent/40"
-                >
-                  {contenu}
-                </button>
+            <li
+              key={s.id}
+              className="flex items-center border-b last:border-b-0"
+            >
+              <div className="min-w-0 flex-1">
+                {ici || !onOuvrir ? (
+                  <div
+                    aria-current={ici || undefined}
+                    className={cn(
+                      'flex items-center gap-2 px-3 py-2 text-sm',
+                      ici && 'bg-primary/5',
+                    )}
+                  >
+                    {contenu}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onOuvrir(s)}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-accent/40"
+                  >
+                    {contenu}
+                  </button>
+                )}
+              </div>
+              {gerer && p.contrats.length > 1 && (
+                <Tip label="Supprimer ce contrat seulement">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="mr-1 text-muted-foreground hover:text-destructive"
+                    aria-label={`Supprimer le contrat ${libelle(s)} ${periode(s)}`}
+                    disabled={occupe}
+                    onClick={() => onSupprimer(s)}
+                  >
+                    <Trash2 />
+                  </Button>
+                </Tip>
               )}
             </li>
           )

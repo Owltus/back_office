@@ -455,6 +455,54 @@ describe('FicheSalarie', () => {
     }
   })
 
+  it('deux contrats : chaque ligne a sa suppression, et le bouton du bas dit « ce contrat »', async () => {
+    const lucas = demo.referentiel.salaries.find((s) => s.id === LUCAS)!
+    const avant = { entree: lucas.date_entree, sortie: lucas.date_sortie }
+    lucas.date_entree = '2026-01-05'
+    lucas.date_sortie = '2026-06-30'
+    const suite = {
+      ...structuredClone(lucas),
+      id: 777,
+      type_contrat: 'cdd' as const,
+      date_entree: '2026-10-01',
+      date_sortie: '2026-12-31',
+      suite_de: LUCAS,
+    }
+    demo.referentiel.salaries.push(suite)
+    try {
+      ouvrir(LUCAS)
+      expect(
+        await screen.findByRole('button', { name: /Supprimer ce contrat/ }),
+      ).toBeTruthy()
+      // Refusé : « Supprimer la fiche » n'apparaît pas, il ne supprime
+      // jamais la personne entière.
+      expect(
+        screen.queryByRole('button', { name: /Supprimer la fiche/ }),
+      ).toBeNull()
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: /Supprimer le contrat CDD du 01\/10\/2026/,
+        }),
+      )
+      expect(
+        await screen.findByText(/Supprimer le contrat CDD du 01\/10\/2026/),
+      ).toBeTruthy()
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Supprimer le contrat' }),
+      )
+      await waitFor(() =>
+        expect(service.supprimerSalarie).toHaveBeenCalledWith(777),
+      )
+    } finally {
+      demo.referentiel.salaries.splice(
+        demo.referentiel.salaries.indexOf(suite),
+        1,
+      )
+      lucas.date_entree = avant.entree
+      lucas.date_sortie = avant.sortie
+    }
+  })
+
   it('supprimer demande confirmation puis appelle le service', async () => {
     ouvrir(LUCAS)
     fireEvent.click(await screen.findByRole('button', { name: /Supprimer/ }))
