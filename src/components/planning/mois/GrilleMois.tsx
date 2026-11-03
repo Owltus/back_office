@@ -593,6 +593,8 @@ function LigneMois({
           : dateLongue(couverts[0])
       const precision = (d: string) => {
         const x = lire(s.id, d)
+        if (x && (x.type === 'repos' || x.type === 'absence') && x.raison)
+          return ` obligé : ${x.raison}`
         if (x?.type === 'absence')
           return x.fixe ? ' (semaine type, dans la fiche)' : ''
         if (x?.type === 'hors') return ' (arrivée ou fin de contrat)'

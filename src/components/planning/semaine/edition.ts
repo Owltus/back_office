@@ -39,7 +39,17 @@ export interface ContenuStatut {
   /** Jour férié rattrapé (motif JFR, 2026-11-02) : se valide comme un repos
    * posé ; en proposition quand la génération l'a placé. */
   jfr?: boolean
+  /** Repos obligé (2026-11-04) : pourquoi ce jour ne peut pas être travaillé. */
+  raison?: string
   genre: 'repos' | 'ecole' | 'absence' | 'hors'
+}
+
+/** Raison du repos obligé d'un jour, s'il en est un. */
+export function raisonOblige(
+  bilan: BilanOut,
+  jour: number,
+): string | undefined {
+  return (bilan.repos_obliges ?? []).find((o) => o.jour === jour)?.raison
 }
 
 export type Indice = 'ok' | 'depannage' | 'deconseille' | null
@@ -117,6 +127,7 @@ export function statutDuJour(
         fixe: bilan.absences_semaine_type.includes(jour),
         repos: false,
         reposPose: true,
+        raison: raisonOblige(bilan, jour),
         proposition:
           !verrouillee &&
           !bilan.absences_semaine_type.includes(jour) &&
@@ -142,7 +153,21 @@ export function statutDuJour(
       genre: m && estEcole(m) ? 'ecole' : 'absence',
     }
   }
-  // Repos seulement s'il est sûr (fiche, semaine complète) : sinon « non attribué ».
+  // Repos obligé (2026-11-04) : un jour qu'aucun service ne peut tenir.
+  // Montré « Repos » avec sa raison, en proposition. Rien sur une semaine
+  // verrouillée : le planning y est réalisé.
+  const raison = raisonOblige(bilan, jour)
+  if (raison && !verrouillee && !jourDeRepos(bilan, jour))
+    return {
+      nom: 'Repos',
+      couleur: NEUTRE,
+      fixe: false,
+      repos: true,
+      proposition: true,
+      raison,
+      genre: 'repos',
+    }
+  // Repos seulement s'il est officiel (semaine type) : sinon « non attribué ».
   if (!jourDeRepos(bilan, jour)) return null
   const fixe = bilan.repos_fixes.includes(jour)
   return {
@@ -172,6 +197,19 @@ export function validationRepos(
   return null
 }
 
+/** Jours de repos à écrire par « Valider » : un repos déduit sur un congé
+ * en trop, ou un repos obligé sur un jour vide (2026-11-04). */
+function joursAValider(b: BilanOut): number[] {
+  return [
+    ...new Set([
+      ...b.repos_deduits.filter((j) => j in b.absences),
+      ...(b.repos_obliges ?? [])
+        .map((o) => o.jour)
+        .filter((j) => !(j in b.absences) && !b.repos_fixes.includes(j)),
+    ]),
+  ].sort((x, y) => x - y)
+}
+
 /** Repos déduits à écrire validés par « Valider » : toute la semaine, ou un
  * jour, ou une personne. Seulement ceux qui tombent sur un jour de congé en
  * trop (le repos y remplace le congé) : sur un jour vide, plus rien n'est
@@ -185,8 +223,7 @@ export function reposAValider(
   return semaine.bilan.flatMap((b) =>
     salarieId !== null && b.salarie_id !== salarieId
       ? []
-      : b.repos_deduits
-          .filter((j) => j in b.absences)
+      : joursAValider(b)
           .filter((j) => jour === null || j === jour)
           .map((j) => ({ salarie_id: b.salarie_id, jour: j })),
   )
@@ -200,8 +237,8 @@ export function reposProposesParJour(semaine: SemaineOut): number[] {
   if (semaine.verrouillee) return n
   for (const b of semaine.bilan)
     for (const j of [
-      // Déduit : seulement sur un congé en trop (un jour vide n'en a plus).
-      ...b.repos_deduits.filter((x) => x in b.absences),
+      // Déduit : seulement sur un congé en trop ; obligé : un jour vide.
+      ...joursAValider(b),
       ...b.repos_proposes,
       ...(b.jfr_proposes ?? []),
     ])

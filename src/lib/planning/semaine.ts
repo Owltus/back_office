@@ -64,6 +64,7 @@ import {
   versSolveur,
 } from '#/lib/planning/regles.ts'
 import type { Fiche } from '#/lib/planning/regles.ts'
+import { JOURS_AFFILES_MAX } from '#/lib/planning/regles.ts'
 import {
   accueilActif,
   bilanPresence,
@@ -258,6 +259,17 @@ export interface BilanOut {
    * (R-FERIE-RATTRAPE, 2026-11-02) : la génération les efface et les
    * repropose, « Valider » les valide. Absent : données d'avant. */
   jfr_proposes?: number[]
+  /** Repos OBLIGÉS (2026-11-04, décision utilisateur) : un jour à venir sans
+   * shift où travailler enfreindrait une règle stricte (plus de 6 jours
+   * d'affilée, semaines voisines comprises, ou moins que le repos quotidien
+   * entre deux services). Montré « Repos » avec sa raison, en proposition ;
+   * la génération l'écrit comme ses autres repos. Absent : données d'avant. */
+  repos_obliges?: ReposOblige[]
+}
+
+export interface ReposOblige {
+  jour: number
+  raison: string
 }
 
 export interface EquipeOut {
@@ -2023,6 +2035,92 @@ export function reposDeduits(
   return [...choisis].sort((a, b) => a - b)
 }
 
+/** Durée de présence la plus courte des horaires (pause comprise) : le
+ * plus petit service qu'on pourrait poser un jour donné. */
+function presenceLaPlusCourte(horaires: readonly Horaire[]): number | null {
+  let min: number | null = null
+  for (const h of horaires) {
+    const debut = minutesDe(h.debut)
+    let fin = minutesDe(h.fin)
+    if (fin <= debut) fin += MINUTES_PAR_JOUR
+    const d = fin - debut
+    if (d > 0 && (min === null || d < min)) min = d
+  }
+  return min
+}
+
+function minutesDe(hhmm: string): number {
+  const [h, m] = hhmm.split(':').map(Number)
+  return h * 60 + m
+}
+
+/** Repos obligés d'une personne (`BilanOut.repos_obliges`) : chaque jour à
+ * venir sans shift (vide, ou déjà un repos posé) où un service enfreindrait
+ * une règle STRICTE. Deux raisons, dans cet ordre :
+ *   - plus de `JOURS_AFFILES_MAX` jours de travail d'affilée, en comptant
+ *     les jours travaillés autour (école comprise) et ceux des semaines
+ *     voisines (`serieAvant`, `serieApres`) ;
+ *   - aucun horaire ne tient entre le service d'avant et celui d'après avec
+ *     le repos quotidien de chaque côté (`reposQuotidienMin`).
+ * Jamais pour un extra ni une personne placée à la main, ni un jour passé,
+ * hors contrat, de repos fixe ou d'absence (autre qu'un repos). */
+export function reposObliges(
+  x: Salarie,
+  sol: SalarieSolveur,
+  siens: readonly Creneau[],
+  lundi: string,
+  absences: Map<number, Map<string, number>>,
+  ecole: ReadonlySet<number>,
+  motifsRepos: ReadonlySet<number>,
+  passes: number,
+  plusCourt: number | null,
+): ReposOblige[] {
+  if (x.type_contrat === 'extra' || sol.placementManuel) return []
+  const absents = joursAbsents(x, lundi, absences)
+  const travaille = new Set(siens.map(jourDe))
+  for (const [j, m] of absents) if (m !== null && ecole.has(m)) travaille.add(j)
+  const r: ReposOblige[] = []
+  for (let j = passes; j < 7; j++) {
+    if (travaille.has(j) || sol.horsContrat.has(j) || sol.reposFixes.has(j))
+      continue
+    if (absents.has(j)) {
+      const m = absents.get(j)
+      if (m === null || m === undefined || !motifsRepos.has(m)) continue
+    }
+    let gauche = 0
+    while (j - gauche - 1 >= 0 && travaille.has(j - gauche - 1)) gauche++
+    if (j - gauche === 0) gauche += sol.serieAvant
+    let droite = 0
+    while (j + droite + 1 <= 6 && travaille.has(j + droite + 1)) droite++
+    if (j + droite === 6) droite += sol.serieApres
+    const affiles = gauche + 1 + droite
+    if (affiles > JOURS_AFFILES_MAX) {
+      r.push({
+        jour: j,
+        raison: `sinon ${affiles} jours de travail d'affilée (${JOURS_AFFILES_MAX} au plus)`,
+      })
+      continue
+    }
+    if (plusCourt === null) continue
+    const avant = siens.filter((c) => jourDe(c) < j).map((c) => c.fin)
+    const apres = siens.filter((c) => jourDe(c) > j).map((c) => c.debut)
+    const fin = avant.length ? Math.max(...avant) : sol.finServicePrecedent
+    const debut = apres.length ? Math.min(...apres) : sol.debutServiceSuivant
+    const repos = sol.reposQuotidienMin
+    const tot = Math.max(
+      j * MINUTES_PAR_JOUR,
+      fin === null ? -Infinity : fin + repos,
+    )
+    const tard = debut === null ? Infinity : debut - repos
+    if (tot >= (j + 1) * MINUTES_PAR_JOUR || tard - tot < plusCourt)
+      r.push({
+        jour: j,
+        raison: `sinon moins de ${heuresLisibles(repos)} de repos entre deux services`,
+      })
+  }
+  return r
+}
+
 /** La semaine a été remplie (génération ou à la main) : au moins un shift qui
  * n'est pas un horaire fixe de la semaine type. Les fixes se posent tout seuls
  * à l'ouverture d'une semaine : après une purge, il ne reste qu'eux. */
@@ -2235,6 +2333,7 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
   }
 
   const bilan: BilanOut[] = []
+  const plusCourt = presenceLaPlusCourte(d.referentiel.horaires)
   for (const x of ctx.staff) {
     const sol = salaries.get(x.id) as SalarieSolveur
     const siens = ctx.affectations
@@ -2327,6 +2426,17 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
       ),
       jfr_proposes: [0, 1, 2, 3, 4, 5, 6].filter((j) =>
         ctx.jfrProposes.has(`${x.id}|${ajouterJours(lundi, j)}`),
+      ),
+      repos_obliges: reposObliges(
+        x,
+        sol,
+        siens,
+        lundi,
+        ctx.absences,
+        ctx.ecole,
+        ctx.motifsRepos,
+        passes,
+        plusCourt,
       ),
     })
   }
@@ -3043,7 +3153,14 @@ export function reposAProposer(
     semaine.affectations.map((a) => `${a.salarie_id}|${a.jour}`),
   )
   return semaine.bilan.flatMap((b) =>
-    b.repos_deduits
+    [
+      ...new Set([
+        ...b.repos_deduits,
+        // Repos obligés (2026-11-04) : posés comme les autres.
+        ...(b.repos_obliges ?? []).map((o) => o.jour),
+      ]),
+    ]
+      .sort((x, y) => x - y)
       .filter(
         (j) =>
           j >= depuis &&

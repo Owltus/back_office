@@ -194,6 +194,42 @@ describe('repos validés comme les shifts (2026-10-31)', () => {
     nature: 'repos',
   }
   const motifs = [...MOTIFS, repos]
+  it('repos obligé (2026-11-04) : Repos avec sa raison, en proposition, à valider', () => {
+    const oblige = [{ jour: 3, raison: 'sinon 8 jours de travail' }]
+    const b = bilan({ repos_obliges: oblige })
+    expect(statutDuJour(b, 3, motifs)).toMatchObject({
+      nom: 'Repos',
+      proposition: true,
+      raison: 'sinon 8 jours de travail',
+    })
+    expect(validationRepos(b, 3, motifs)).toEqual({
+      valide: false,
+      deduit: true,
+    })
+    const semaine = {
+      affectations: [],
+      bilan: [b],
+      verrouillee: false,
+    } as unknown as SemaineOut
+    expect(reposAValider(semaine)).toEqual([
+      { salarie_id: b.salarie_id, jour: 3 },
+    ])
+    expect(reposProposesParJour(semaine)[3]).toBe(1)
+    // Semaine verrouillée : rien de proposé.
+    expect(statutDuJour(b, 3, motifs, true)).toBeNull()
+    expect(reposAValider({ ...semaine, verrouillee: true })).toEqual([])
+    // Déjà posé : le repos garde sa raison, rien à réécrire.
+    const pose = bilan({
+      repos_obliges: oblige,
+      absences: { 3: repos.id },
+      repos_proposes: [3],
+    })
+    expect(statutDuJour(pose, 3, motifs)).toMatchObject({
+      reposPose: true,
+      raison: 'sinon 8 jours de travail',
+    })
+    expect(reposAValider({ ...semaine, bilan: [pose] })).toEqual([])
+  })
   it('repos fixe : toujours validé, rien à basculer', () => {
     expect(validationRepos(bilan({ repos_fixes: [3] }), 3, motifs)).toBeNull()
     expect(statutDuJour(bilan({ repos_fixes: [3] }), 3, motifs)).toMatchObject({

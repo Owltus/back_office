@@ -13,7 +13,10 @@ import type { BilanOut, ShiftOut, SemaineOut } from '#/lib/planning/semaine.ts'
 import { ajouterJours, ecartJours, lundiDe } from '#/lib/planning/temps.ts'
 import { jourDeRepos } from '#/lib/planning/affichage.ts'
 import { estJfr } from '#/lib/planning/feries.ts'
-import { reposProposesParJour } from '#/components/planning/semaine/edition.ts'
+import {
+  raisonOblige,
+  reposProposesParJour,
+} from '#/components/planning/semaine/edition.ts'
 import type { Motif, Salarie } from '#/lib/planning/types.ts'
 
 /** « 2026-11 » → les dates du 1er au dernier jour. */
@@ -78,8 +81,16 @@ export type CaseMois =
       /** Repos posé, ou jour férié rattrapé, encore en proposition
        * (2026-10-31, 2026-11-02). */
       proposition: boolean
+      /** Repos posé qui est aussi un repos obligé : sa raison. */
+      raison?: string
     }
-  | { type: 'repos'; fixe: boolean; proposition: boolean }
+  | {
+      type: 'repos'
+      fixe: boolean
+      proposition: boolean
+      /** Repos obligé (2026-11-04) : pourquoi ce jour ne peut pas être travaillé. */
+      raison?: string
+    }
 
 /** Ce qu'il y a dans la case d'une personne un jour donné (null : rien). */
 export function caseDe(
@@ -106,11 +117,15 @@ export function caseDe(
   if (jour in bilan.absences) {
     const motifId = bilan.absences[jour]
     const fixe = bilan.absences_semaine_type.includes(jour)
+    const motif = motifs.find((m) => m.id === motifId)
+    const raison =
+      motif?.nature === 'repos' ? raisonOblige(bilan, jour) : undefined
     return {
       type: 'absence',
-      motif: motifs.find((m) => m.id === motifId),
+      motif,
       motifId,
       fixe,
+      ...(raison ? { raison } : {}),
       proposition:
         !fixe &&
         !sem.verrouillee &&
@@ -118,6 +133,11 @@ export function caseDe(
           (bilan.jfr_proposes ?? []).includes(jour)),
     }
   }
+  // Repos obligé (2026-11-04) : montré « Repos » avec sa raison, en
+  // proposition ; rien sur une semaine verrouillée.
+  const raison = raisonOblige(bilan, jour)
+  if (raison && !sem.verrouillee && !jourDeRepos(bilan, jour))
+    return { type: 'repos', fixe: false, proposition: true, raison }
   if (!jourDeRepos(bilan, jour)) return null
   const fixe = bilan.repos_fixes.includes(jour)
   // Déduit d'une semaine remplie : une proposition, comme un shift proposé.

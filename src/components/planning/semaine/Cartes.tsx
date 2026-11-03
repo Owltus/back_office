@@ -225,6 +225,8 @@ export function texteStatut(s: ContenuStatut, actif: boolean): string {
     return 'Repos de la semaine type : à changer dans la fiche'
   if (s.fixe)
     return `${s.nom} : jour fixe de la semaine type, à changer dans la fiche`
+  if (s.raison)
+    return `Repos obligé : ${s.raison}${actif ? '. Cliquer pour changer' : ''}`
   return actif
     ? `${s.nom} : glisser pour déplacer, cliquer pour changer`
     : s.nom
