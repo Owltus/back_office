@@ -361,3 +361,95 @@
   .planning-carte {
   opacity: 0.15;
 }
+
+/* ------------------------------------------------------ Fenêtre du calcul
+ * (components/planning/FenetreCalcul.tsx). Une semaine de 7 jours × matin,
+ * soir, nuit : les points s'allument de jour en jour et se relient, puis
+ * s'éteignent, en vague. `--k` = rang du point (jour × 3 + moment). */
+
+.planning-calcul-point {
+  fill: var(--color-muted);
+  stroke: var(--color-border);
+  stroke-width: 1;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: planning-calcul-point 3.6s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  animation-delay: calc(var(--k) * 70ms);
+}
+
+.planning-calcul-lien {
+  stroke: var(--color-primary);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 14;
+  stroke-dashoffset: 14;
+  opacity: 0.7;
+  animation: planning-calcul-lien 3.6s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  animation-delay: calc(var(--k) * 70ms + 40ms);
+}
+
+.planning-calcul-jour {
+  fill: var(--color-muted-foreground);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+@keyframes planning-calcul-point {
+  0%,
+  100% {
+    fill: var(--color-muted);
+    stroke: var(--color-border);
+    transform: scale(0.75);
+  }
+  10%,
+  62% {
+    fill: var(--color-primary);
+    stroke: var(--color-primary);
+    transform: scale(1);
+  }
+}
+
+@keyframes planning-calcul-lien {
+  0% {
+    stroke-dashoffset: 14;
+  }
+  12%,
+  60% {
+    stroke-dashoffset: 0;
+  }
+  78%,
+  100% {
+    stroke-dashoffset: -14;
+  }
+}
+
+/* Arrêt demandé : tout se fige, en gris. */
+.planning-calcul-semaine-arret .planning-calcul-point,
+.planning-calcul-semaine-arret .planning-calcul-lien {
+  animation-play-state: paused;
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+
+/* Temps écoulé de la semaine : avance d'un pas régulier. */
+.planning-calcul-temps {
+  transition: width 250ms linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .planning-calcul-point,
+  .planning-calcul-lien {
+    animation: none;
+  }
+  .planning-calcul-point {
+    fill: var(--color-primary);
+    stroke: var(--color-primary);
+  }
+  .planning-calcul-lien {
+    stroke-dashoffset: 0;
+  }
+  .planning-calcul-temps {
+    transition: none;
+  }
+}

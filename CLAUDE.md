@@ -2375,6 +2375,14 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   rien ; repos fixes et repos posés restent montrés. Ce jour sort de la
   semaine comme un jour hors contrat (6 jours à venir : 1 repos, rythme de
   5 jours) et compte comme le bord de la semaine pour placer les repos.
+- **Fenêtre du calcul (2026-11-03, demande utilisateur : « une barre de
+  progression, un modal statique au milieu avec un bouton pour stop »)** :
+  `FenetreCalcul.tsx`, montée par le mois (Compléter le mois) et la semaine
+  (Compléter, Tout recalculer) ; ni Échap ni clic dehors ne la ferment ;
+  barre = semaines faites, temps écoulé de la semaine face aux 60 s (le
+  solveur ne donne aucun pourcentage : n'en inventer aucun) ; « Arrêter le
+  calcul » appelle l'arrêt existant. L'horloge passe par une référence (une
+  fonction neuve à chaque rendu figeait le compteur à 0:00).
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

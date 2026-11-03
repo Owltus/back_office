@@ -102,6 +102,7 @@ import {
 import { EditeurShift } from '#/components/planning/semaine/EditeurShift.tsx'
 import type { Edition } from '#/components/planning/semaine/EditeurShift.tsx'
 import { ajouterJours } from '#/lib/planning/temps.ts'
+import { FenetreCalcul } from '#/components/planning/FenetreCalcul.tsx'
 import {
   useMois,
   usePoserFixesMois,
@@ -158,6 +159,7 @@ export function VueMois({
     libelle: string
     i: number
     n: number
+    lundi: string
   } | null>(null)
   const [menu, setMenu] = useState<OuvertureMenu | null>(null)
   // « Compléter le mois » en cours : un second clic l'arrête (2026-11-02).
@@ -279,7 +281,7 @@ export function VueMois({
     try {
       for (let i = 0; i < visees.length; i++) {
         const l = visees[i]
-        setProgression({ libelle, i: i + 1, n: visees.length })
+        setProgression({ libelle, i: i + 1, n: visees.length, lundi: l })
         try {
           await action(l)
         } catch (err) {
@@ -772,15 +774,18 @@ export function VueMois({
       ).total
     : 0
 
-  const enCours = progression ? (
-    <span
-      className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-xs text-primary"
-      role="status"
-    >
-      <Loader2 className="size-3.5 animate-spin" />
-      {progression.libelle} · Semaine {progression.i} / {progression.n}
-    </span>
-  ) : null
+  // Calcul : la fenêtre centrée le montre (FenetreCalcul) ; la pastille ne
+  // sert plus qu'aux actions sans calcul (valider, effacer le mois).
+  const enCours =
+    progression && !enCompletion ? (
+      <span
+        className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-xs text-primary"
+        role="status"
+      >
+        <Loader2 className="size-3.5 animate-spin" />
+        {progression.libelle} · Semaine {progression.i} / {progression.n}
+      </span>
+    ) : null
 
   // ------------------------------------------------------------ rendu
 
@@ -1220,6 +1225,19 @@ export function VueMois({
         }
         confirmLabel={moisVerrouille ? 'Déverrouiller' : 'Verrouiller'}
         onConfirm={basculerMois}
+      />
+      <FenetreCalcul
+        calcul={
+          enCompletion && progression
+            ? {
+                titre: progression.libelle,
+                i: progression.i,
+                n: progression.n,
+                lundi: progression.lundi,
+              }
+            : null
+        }
+        onArreter={arreterCompletion}
       />
     </div>
   )

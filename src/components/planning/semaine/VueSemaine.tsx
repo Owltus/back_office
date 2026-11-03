@@ -39,6 +39,7 @@ import {
   useSemaine,
 } from '#/components/planning/hooks/usePlanning.ts'
 import { CalculArrete, arreterCalcul } from '#/lib/planning/solveur.ts'
+import { FenetreCalcul } from '#/components/planning/FenetreCalcul.tsx'
 import { GARDER, useNotifier } from '#/components/planning/Messages.tsx'
 import { FicheSalarie } from '#/components/planning/parametres/FicheSalarie.tsx'
 import {
@@ -228,7 +229,9 @@ export function VueSemaine({
     setInfractionsOuvertes(false)
   }, [edition])
   const [confirmation, setConfirmation] = useState<Confirmation>(null)
-  const [enGeneration, setEnGeneration] = useState(false)
+  // Ce qui se calcule (« Compléter la semaine », « Tout recalculer »), ou
+  // null : la fenêtre du calcul le montre.
+  const [enGeneration, setEnGeneration] = useState<string | null>(null)
   // Un second clic sur Compléter arrête le calcul (2026-11-02).
   const arret = useRef<AbortController | null>(null)
   const [aVerifier, setAVerifier] = useState<(CaseJour & { n: number }) | null>(
@@ -417,7 +420,7 @@ export function VueSemaine({
     if (estOccupe() || !pret || verrou || passee) return
     const ctrl = new AbortController()
     arret.current = ctrl
-    setEnGeneration(true)
+    setEnGeneration(options.tout ? 'Tout recalculer' : 'Compléter la semaine')
     try {
       await pendant(async () => {
         try {
@@ -442,8 +445,13 @@ export function VueSemaine({
       })
     } finally {
       arret.current = null
-      setEnGeneration(false)
+      setEnGeneration(null)
     }
+  }
+
+  const arreterGeneration = () => {
+    arret.current?.abort()
+    arreterCalcul()
   }
 
   const basculerVerrou = async () => {
@@ -837,7 +845,7 @@ export function VueSemaine({
         ecrire={droits.ecrire}
         gerer={droits.gerer}
         occupe={occupe}
-        enGeneration={enGeneration}
+        enGeneration={enGeneration !== null}
         passee={passee}
         enCours={enCours}
         blocage={pretGen.blocage?.texte}
@@ -852,10 +860,8 @@ export function VueSemaine({
           onVerrou: () => setConfirmation('verrou'),
           onAlertes: () => setAlertesOuvertes(true),
           onCompleter: () => {
-            if (arret.current) {
-              arret.current.abort()
-              arreterCalcul()
-            } else confirmGen.demander(() => void lancerGeneration({}))
+            if (arret.current) arreterGeneration()
+            else confirmGen.demander(() => void lancerGeneration({}))
           },
           onFullAuto: () => setConfirmation('fullauto'),
           onValiderSemaine: (epinglee) =>
@@ -1111,6 +1117,12 @@ export function VueSemaine({
         }
         confirmLabel={verrou ? 'Déverrouiller' : 'Verrouiller'}
         onConfirm={() => void basculerVerrou()}
+      />
+      <FenetreCalcul
+        calcul={
+          enGeneration ? { titre: enGeneration, i: 1, n: 1, lundi } : null
+        }
+        onArreter={arreterGeneration}
       />
     </div>
   )
