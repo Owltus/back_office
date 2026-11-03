@@ -741,6 +741,7 @@ export function AidePlanningContenu({
               'Une date de fin est obligatoire pour un CDD, un apprenti ou un stagiaire.',
               'Un extra n’a pas de date de fin : il est actif ou non.',
               'Promotion, changement de poste ou de contrat : bouton Changer de poste ou de contrat dans la fiche, avec la date. Jusqu’à la veille, rien ne change ; à partir de la date, ses nouveaux postes et son nouveau contrat s’appliquent, et le planning en tient compte jour par jour. Pensez aussi à la page Besoins si un poste n’est plus tenu.',
+              'Une personne qui a eu plusieurs contrats (CDD puis CDI, départ puis retour, promotion) n’a qu’une ligne dans la page Équipe, sur son contrat du moment. Sa fiche liste tous ses contrats, du plus ancien au plus récent.',
               'La semaine type dit, jour par jour : libre, travaille (avec un horaire fixé ou non), ou repos.',
               'Les horaires fixés de la semaine type se posent tout seuls à l’ouverture d’une semaine à venir.',
             ]}

@@ -1,7 +1,9 @@
 /*
  * Écran Équipe du Planning (prototype `EquipePage.tsx`) : le staff rangé par
  * catégorie, en TABLEAU (demande utilisateur du 2026-10-28), une ligne par
- * personne qui ouvre la fiche ; gestion des catégories en tiroir.
+ * PERSONNE (2026-11-03 : ses contrats liés ne sont plus des doublons, la
+ * ligne montre celui du moment, `parcours.ts`) qui ouvre la fiche ; gestion
+ * des catégories en tiroir.
  * Lisible par tous ; ajouter et modifier : gestion seule.
  */
 
@@ -45,6 +47,8 @@ import {
   texteSur,
   deNom,
 } from '#/lib/planning/affichage.ts'
+import { dansLEquipe, parcours } from '#/lib/planning/parcours.ts'
+import type { Parcours } from '#/lib/planning/parcours.ts'
 import { TYPES_CONTRAT } from '#/lib/planning/types.ts'
 import type { Poste, Salarie } from '#/lib/planning/types.ts'
 import { cn } from '#/lib/utils.ts'
@@ -103,10 +107,18 @@ export function EquipePage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
     </Button>
   )
 
-  // Les membres partis ou désactivés vont dans une section repliée en bas :
-  // la page montre d'abord l'équipe actuelle.
-  const actifs = salaries.filter((s) => estActuel(s, aujourdhui))
-  const anciens = salaries.filter((s) => !estActuel(s, aujourdhui))
+  // Une ligne par personne, sur son contrat du moment ; les personnes
+  // parties vont dans une section repliée en bas : la page montre d'abord
+  // l'équipe actuelle.
+  const tous = parcours(salaries, aujourdhui)
+  const deLaLigne = new Map(tous.map((p) => [p.courant.id, p]))
+  const parcoursDe = (s: Salarie) => deLaLigne.get(s.id)
+  const actifs = tous
+    .filter((p) => dansLEquipe(p, aujourdhui))
+    .map((p) => p.courant)
+  const anciens = tous
+    .filter((p) => !dansLEquipe(p, aujourdhui))
+    .map((p) => p.courant)
 
   return (
     <PageAvecEnTete
@@ -191,6 +203,7 @@ export function EquipePage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
                 membres={g.membres}
                 postes={ref.data.postes}
                 aujourdhui={aujourdhui}
+                parcoursDe={parcoursDe}
                 onOuvrir={(s) => setFiche({ id: s.id, groupeId: s.groupe_id })}
               />
             </section>
@@ -210,6 +223,7 @@ export function EquipePage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
                   membres={anciens}
                   postes={ref.data.postes}
                   aujourdhui={aujourdhui}
+                  parcoursDe={parcoursDe}
                   onOuvrir={(s) =>
                     setFiche({ id: s.id, groupeId: s.groupe_id })
                   }
@@ -226,6 +240,7 @@ export function EquipePage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
         partie={fiche?.partie}
         ouvert={fiche !== null}
         onFermer={() => setFiche(null)}
+        onOuvrirContrat={(s) => setFiche({ id: s.id, groupeId: s.groupe_id })}
       />
       {ref.data && (
         <GestionCategories
@@ -239,10 +254,6 @@ export function EquipePage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
     </PageAvecEnTete>
   )
 }
-
-/** Dans l'équipe aujourd'hui : actif et sans fin de contrat passée. */
-const estActuel = (s: Salarie, aujourdhui: string) =>
-  s.actif && (!s.date_sortie || s.date_sortie >= aujourdhui)
 
 function Puce({
   children,
@@ -277,11 +288,13 @@ function TableauMembres({
   membres,
   postes,
   aujourdhui,
+  parcoursDe,
   onOuvrir,
 }: {
   membres: Salarie[]
   postes: Poste[]
   aujourdhui: string
+  parcoursDe: (s: Salarie) => Parcours | undefined
   onOuvrir: (s: Salarie) => void
 }) {
   return (
@@ -305,6 +318,7 @@ function TableauMembres({
             <LigneMembre
               key={s.id}
               s={s}
+              parcours={parcoursDe(s)}
               postes={postes}
               aujourdhui={aujourdhui}
               onOuvrir={() => onOuvrir(s)}
@@ -316,13 +330,32 @@ function TableauMembres({
   )
 }
 
+/** Ce que change le contrat suivant : poste, type de contrat, ou rien de
+ * plus qu'un nouveau contrat. */
+export function texteSuivant(
+  courant: Salarie,
+  suivant: Salarie,
+  postes: Poste[],
+): string {
+  const quand = dateFr(suivant.date_entree as string)
+  if (
+    postePrincipal(courant, postes)?.id !== postePrincipal(suivant, postes)?.id
+  )
+    return `Nouveau poste le ${quand}`
+  if (courant.type_contrat !== suivant.type_contrat)
+    return `${CONTRATS.get(suivant.type_contrat) ?? suivant.type_contrat} le ${quand}`
+  return `Nouveau contrat le ${quand}`
+}
+
 function LigneMembre({
   s,
+  parcours: p,
   postes,
   aujourdhui,
   onOuvrir,
 }: {
   s: Salarie
+  parcours?: Parcours
   postes: Poste[]
   aujourdhui: string
   onOuvrir: () => void
@@ -413,10 +446,22 @@ function LigneMembre({
           {s.date_entree && s.date_entree > aujourdhui && (
             <Puce ton="arrivee">Arrive le {dateFr(s.date_entree)}</Puce>
           )}
-          {s.date_sortie && (
-            <Puce ton={sorti ? 'depart' : 'fin'}>
-              {sorti ? 'Parti(e) le' : 'Fin le'} {dateFr(s.date_sortie)}
-            </Puce>
+          {/* Un contrat qui en suit un autre : le changement, pas une fin. */}
+          {p?.suivant ? (
+            <Puce ton="arrivee">{texteSuivant(s, p.suivant, postes)}</Puce>
+          ) : (
+            s.date_sortie && (
+              <Puce ton={sorti ? 'depart' : 'fin'}>
+                {sorti ? 'Parti(e) le' : 'Fin le'} {dateFr(s.date_sortie)}
+              </Puce>
+            )
+          )}
+          {p && p.contrats.length > 1 && (
+            <Tip label="Contrats successifs de la même personne : la fiche les liste.">
+              <span>
+                <Puce>{p.contrats.length} contrats</Puce>
+              </span>
+            </Tip>
           )}
         </div>
       </td>

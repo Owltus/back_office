@@ -101,7 +101,15 @@ import {
   poserAbsences,
   supprimerSalarie,
 } from '#/lib/planning/service.ts'
-import type { Absence, Affectation, Referentiel } from '#/lib/planning/types.ts'
+import { TYPES_CONTRAT } from '#/lib/planning/types.ts'
+import type {
+  Absence,
+  Affectation,
+  Referentiel,
+  Salarie,
+} from '#/lib/planning/types.ts'
+import { couvre, parcours } from '#/lib/planning/parcours.ts'
+import { cn } from '#/lib/utils.ts'
 
 /** Pose puis retire les jours qui changent (une transaction par appel). */
 async function appliquerAbsences(
@@ -119,10 +127,14 @@ export function FicheSalarie({
   onFermer,
   groupeId,
   partie,
+  onOuvrirContrat,
 }: {
   salarieId: number | null
   ouvert: boolean
   onFermer: () => void
+  /** Ouvre un autre contrat de la même personne (parcours, 2026-11-03).
+   * Absent : la liste des contrats est montrée sans lien. */
+  onOuvrirContrat?: (s: Salarie) => void
   /** Groupe proposé à la création (ajout depuis une catégorie). */
   groupeId?: number | null
   /** Partie où ouvrir la fiche (`PartieFiche` d'un lien), sinon le haut. */
@@ -174,6 +186,7 @@ export function FicheSalarie({
             onFermer={onFermer}
             demandeFermeture={demandeFermeture}
             partie={partie}
+            onOuvrirContrat={onOuvrirContrat}
           />
         ) : (
           <EtatFiche
@@ -262,12 +275,14 @@ function CorpsFiche({
   onFermer,
   demandeFermeture,
   partie,
+  onOuvrirContrat,
 }: {
   initial: Brouillon
   referentiel: Referentiel
   onFermer: () => void
   demandeFermeture: RefObject<() => void>
   partie?: string
+  onOuvrirContrat?: (s: Salarie) => void
 }) {
   const droits = useDroitsPlanning()
   const gerer = droits.gerer
@@ -545,6 +560,23 @@ function CorpsFiche({
         ref={zone}
         className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-4 [scrollbar-gutter:stable]"
       >
+        {b.id !== null && (
+          <ParcoursContrats
+            id={b.id}
+            referentiel={referentiel}
+            aujourdhui={aujourdhui}
+            onOuvrir={
+              onOuvrirContrat &&
+              ((s) =>
+                modifie
+                  ? notifier(
+                      'Enregistrez ou annulez vos modifications avant d’ouvrir un autre contrat.',
+                      'attention',
+                    )
+                  : onOuvrirContrat(s))
+            }
+          />
+        )}
         <SectionIdentite
           {...proprietes}
           aujourdhui={aujourdhui}
@@ -646,5 +678,99 @@ function CorpsFiche({
         onConfirm={() => void supprimer()}
       />
     </>
+  )
+}
+
+/** Les contrats successifs de la personne (parcours RH, 2026-11-03) : du
+ * plus ancien au plus récent, celui ouvert marqué ; un clic ouvre un autre
+ * contrat. Rien quand la personne n'a qu'un contrat. */
+function ParcoursContrats({
+  id,
+  referentiel,
+  aujourdhui,
+  onOuvrir,
+}: {
+  id: number
+  referentiel: Referentiel
+  aujourdhui: string
+  onOuvrir?: (s: Salarie) => void
+}) {
+  const p = parcours(referentiel.salaries, aujourdhui).find((x) =>
+    x.contrats.some((c) => c.id === id),
+  )
+  if (!p || p.contrats.length < 2) return null
+  const libelle = (s: Salarie) =>
+    TYPES_CONTRAT.find((t) => t.code === s.type_contrat)?.libelle ??
+    s.type_contrat
+  const periode = (s: Salarie) =>
+    s.date_entree && s.date_sortie
+      ? `du ${dateFr(s.date_entree)} au ${dateFr(s.date_sortie)}`
+      : s.date_entree
+        ? `depuis le ${dateFr(s.date_entree)}`
+        : s.date_sortie
+          ? `jusqu’au ${dateFr(s.date_sortie)}`
+          : 'sans dates'
+  const poste = (s: Salarie) => {
+    const c =
+      s.competences.find((x) => x.niveau === 'titulaire') ?? s.competences.at(0)
+    return referentiel.postes.find((x) => x.id === c?.poste_id)?.nom
+  }
+  return (
+    <section aria-label="Contrats" className="flex flex-col gap-2">
+      <h3 className="text-sm font-semibold">
+        Contrats{' '}
+        <span className="text-xs font-normal text-muted-foreground">
+          {p.contrats.length}
+        </span>
+      </h3>
+      <ol className="flex flex-col overflow-hidden rounded-lg border">
+        {p.contrats.map((s) => {
+          const ici = s.id === id
+          const contenu = (
+            <>
+              <span className="font-medium">{libelle(s)}</span>
+              <span className="text-muted-foreground">{periode(s)}</span>
+              {poste(s) && (
+                <span className="truncate text-muted-foreground">
+                  · {poste(s)}
+                </span>
+              )}
+              <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                {ici
+                  ? 'Ce contrat'
+                  : couvre(s, aujourdhui)
+                    ? 'En cours'
+                    : s.date_entree && s.date_entree > aujourdhui
+                      ? 'À venir'
+                      : 'Terminé'}
+              </span>
+            </>
+          )
+          return (
+            <li key={s.id} className="border-b last:border-b-0">
+              {ici || !onOuvrir ? (
+                <div
+                  aria-current={ici || undefined}
+                  className={cn(
+                    'flex items-center gap-2 px-3 py-2 text-sm',
+                    ici && 'bg-primary/5',
+                  )}
+                >
+                  {contenu}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onOuvrir(s)}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-accent/40"
+                >
+                  {contenu}
+                </button>
+              )}
+            </li>
+          )
+        })}
+      </ol>
+    </section>
   )
 }
