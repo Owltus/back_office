@@ -2,26 +2,9 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import {
-  FenetreCalcul,
-  duree,
-  periodeSemaine,
-} from '#/components/planning/FenetreCalcul.tsx'
+import { FenetreCalcul } from '#/components/planning/FenetreCalcul.tsx'
 
 afterEach(cleanup)
-
-describe('periodeSemaine / duree', () => {
-  it('dit la semaine en clair, même à cheval sur deux mois', () => {
-    expect(periodeSemaine('2026-11-09')).toBe('du 9 au 15 novembre')
-    expect(periodeSemaine('2026-11-30')).toBe('du 30 novembre au 6 décembre')
-    expect(periodeSemaine('2026-12-28')).toBe('du 28 décembre au 3 janvier')
-  })
-  it('écrit le temps en minutes et secondes', () => {
-    expect(duree(0)).toBe('0:00')
-    expect(duree(7.9)).toBe('0:07')
-    expect(duree(72)).toBe('1:12')
-  })
-})
 
 describe('FenetreCalcul (demande utilisateur du 2026-11-03)', () => {
   let t = 0
@@ -44,15 +27,16 @@ describe('FenetreCalcul (demande utilisateur du 2026-11-03)', () => {
     expect(screen.queryByRole('alertdialog')).toBeNull()
   })
 
-  it('montre la semaine, le compteur et les semaines faites', () => {
+  it('montre les semaines faites, sans texte de date ni de temps', () => {
     render(
       <FenetreCalcul calcul={mois} onArreter={() => {}} maintenant={horloge} />,
     )
-    const fenetre = screen.getByRole('alertdialog')
-    expect(fenetre.textContent).toContain('Compléter le mois')
-    expect(fenetre.textContent).toContain(
-      'Semaine 2 sur 5 · du 9 au 15 novembre',
-    )
+    const fenetre = screen.getByRole('alertdialog', {
+      name: 'Compléter le mois',
+    })
+    // Refusé (2026-11-03) : ni semaine, ni date, ni temps, ni consigne.
+    for (const mot of ['Semaine', 'novembre', 'min au plus', 'proposition'])
+      expect(fenetre.textContent).not.toContain(mot)
     const barre = screen.getByRole('progressbar')
     expect(barre.getAttribute('aria-valuenow')).toBe('1')
     expect(barre.getAttribute('aria-valuemax')).toBe('5')
@@ -64,18 +48,20 @@ describe('FenetreCalcul (demande utilisateur du 2026-11-03)', () => {
       'a-faire',
       'a-faire',
     ])
-    expect(fenetre.textContent).toContain('Les semaines finies restent')
   })
 
-  it('le temps de la semaine avance, et repart à zéro à la suivante', () => {
+  it('la semaine en cours se remplit avec le temps, et repart à zéro', () => {
     const { rerender } = render(
       <FenetreCalcul calcul={mois} onArreter={() => {}} maintenant={horloge} />,
     )
+    const rempli = () =>
+      (document.querySelector('.planning-calcul-temps') as HTMLElement).style
+        .width
     act(() => {
-      t = 14_000
+      t = 30_000
       vi.advanceTimersByTime(500)
     })
-    expect(screen.getByRole('alertdialog').textContent).toContain('0:14')
+    expect(rempli()).toBe('50%')
     rerender(
       <FenetreCalcul
         calcul={{ ...mois, i: 3, lundi: '2026-11-16' }}
@@ -83,17 +69,20 @@ describe('FenetreCalcul (demande utilisateur du 2026-11-03)', () => {
         maintenant={horloge}
       />,
     )
-    expect(screen.getByRole('alertdialog').textContent).toContain('0:00')
+    expect(rempli()).toBe('0%')
   })
 
-  it('avec l’horloge par défaut, le temps avance aussi', () => {
-    // Une horloge neuve à chaque rendu remettait le compte à 0:00.
+  it('avec l’horloge par défaut, la barre avance aussi', () => {
+    // Une horloge neuve à chaque rendu remettait le compte à zéro.
     vi.setSystemTime(0)
     render(<FenetreCalcul calcul={mois} onArreter={() => {}} />)
     act(() => {
-      vi.advanceTimersByTime(3_000)
+      vi.advanceTimersByTime(6_000)
     })
-    expect(screen.getByRole('alertdialog').textContent).toContain('0:03')
+    expect(
+      (document.querySelector('.planning-calcul-temps') as HTMLElement).style
+        .width,
+    ).toBe('10%')
   })
 
   it('Arrêter le calcul appelle l’arrêt une fois, puis attend', () => {
@@ -127,24 +116,5 @@ describe('FenetreCalcul (demande utilisateur du 2026-11-03)', () => {
     fireEvent.keyDown(screen.getByRole('alertdialog'), { key: 'Escape' })
     expect(screen.getByRole('alertdialog')).toBeTruthy()
     expect(onArreter).not.toHaveBeenCalled()
-  })
-
-  it('une seule semaine : pas de compteur sur plusieurs', () => {
-    render(
-      <FenetreCalcul
-        calcul={{
-          titre: 'Compléter la semaine',
-          i: 1,
-          n: 1,
-          lundi: '2026-11-09',
-        }}
-        onArreter={() => {}}
-        maintenant={horloge}
-      />,
-    )
-    const texte = screen.getByRole('alertdialog').textContent
-    expect(texte).toContain('Semaine du 9 au 15 novembre')
-    expect(texte).not.toContain('sur 1')
-    expect(texte).toContain('Le planning reste en proposition')
   })
 })
