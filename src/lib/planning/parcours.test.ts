@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { couvre, dansLEquipe, parcours } from '#/lib/planning/parcours.ts'
+import {
+  chevauche,
+  couvre,
+  dansLEquipe,
+  parcours,
+} from '#/lib/planning/parcours.ts'
 
 /*
  * Parcours d'une personne (2026-11-03) : l'exemple de l'utilisateur, un CDD,
@@ -67,5 +72,75 @@ describe('parcours', () => {
     expect(couvre(p.courant, '2026-05-01')).toBe(true)
     // Désactivé : il ne couvre plus rien.
     expect(couvre({ ...p.courant, actif: false }, '2026-05-01')).toBe(false)
+  })
+})
+
+describe('chevauche', () => {
+  const [cdd, cdi, retour] = PARCOURS
+  it('refusé : des dates qui recouvrent un autre contrat', () => {
+    const contrats = [cdd, cdi, retour]
+    expect(
+      chevauche(contrats, {
+        id: null,
+        date_entree: '2026-06-01',
+        date_sortie: '2026-07-31',
+      })?.id,
+    ).toBe(2)
+    // Sans fin : recouvre le retour d'octobre.
+    expect(
+      chevauche(contrats, {
+        id: null,
+        date_entree: '2026-09-01',
+        date_sortie: null,
+      })?.id,
+    ).toBe(3)
+    // Sans début : recouvre tout ce qui précède sa fin.
+    expect(
+      chevauche(contrats, {
+        id: null,
+        date_entree: null,
+        date_sortie: '2026-01-10',
+      })?.id,
+    ).toBe(1)
+  })
+  it('accepté : un trou entre deux contrats, ou le contrat lui-même', () => {
+    const contrats = [cdd, cdi, retour]
+    expect(
+      chevauche(contrats, {
+        id: null,
+        date_entree: '2026-07-01',
+        date_sortie: '2026-09-30',
+      }),
+    ).toBeNull()
+    expect(
+      chevauche(contrats, {
+        id: 2,
+        date_entree: '2026-04-01',
+        date_sortie: '2026-06-30',
+      }),
+    ).toBeNull()
+    // Bord à bord : le lendemain de la fin.
+    expect(
+      chevauche(contrats, {
+        id: null,
+        date_entree: '2026-04-01',
+        date_sortie: '2026-04-06',
+      }),
+    ).toBeNull()
+  })
+})
+
+describe('chevauche : un contrat désactivé (relecture du 2026-11-03)', () => {
+  it('un extra sans fin, désactivé, ne bloque plus un nouveau contrat', () => {
+    const extra = contrat(5, '2026-07-01', null, 2, true)
+    const nouveau = {
+      id: null,
+      date_entree: '2026-12-01',
+      date_sortie: '2027-03-31',
+    }
+    // Actif : il recouvre (il n'a pas de fin).
+    expect(chevauche([extra], nouveau)?.id).toBe(5)
+    // Désactivé : il ne compte plus.
+    expect(chevauche([{ ...extra, actif: false }], nouveau)).toBeNull()
   })
 })

@@ -15,7 +15,7 @@
  * semaines verrouillées ne sont jamais réécrits (la base refuserait tout).
  */
 
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Trash2, X } from 'lucide-react'
@@ -108,7 +108,11 @@ import type {
   Referentiel,
   Salarie,
 } from '#/lib/planning/types.ts'
-import { couvre, parcours } from '#/lib/planning/parcours.ts'
+import { chevauche, couvre, parcours } from '#/lib/planning/parcours.ts'
+import type { TypeContrat } from '#/lib/planning/types.ts'
+import { Input } from '#/components/ui/input.tsx'
+import { Label } from '#/components/ui/label.tsx'
+import { Liste } from '#/components/planning/parametres/equipe/Champs.tsx'
 import { cn } from '#/lib/utils.ts'
 
 /** Pose puis retire les jours qui changent (une transaction par appel). */
@@ -351,11 +355,28 @@ function CorpsFiche({
     qc.getQueryData<Referentiel>(planningKeys.referentiel())?.verrous ??
     referentiel.verrous
 
+  // Les autres contrats de la personne (parcours, 2026-11-03).
+  const autresContrats = () =>
+    b.id === null
+      ? []
+      : (parcours(referentiel.salaries, aujourdhui).find((x) =>
+          x.contrats.some((c) => c.id === b.id),
+        )?.contrats ?? [])
+  const recouvre = (c: Salarie) =>
+    c.type_contrat === 'extra' && !c.date_sortie
+      ? `Ces dates recouvrent son contrat d'extra ${periodeContrat(c)}, qui n'a pas de fin : désactivez-le dans sa fiche (« Inactif »), puis recommencez.`
+      : `Ces dates recouvrent son contrat ${periodeContrat(c)} : une personne n'a qu'un contrat à la fois. Changez d'abord les dates de l'un des deux.`
+
   const enregistrer = () =>
     uneFois(async () => {
       if (!gerer) return
       if (erreur) {
         notifier(erreur, 'attention')
+        return
+      }
+      const pris = chevauche(autresContrats(), b)
+      if (pris) {
+        notifier(recouvre(pris), 'attention')
         return
       }
       let id = b.id
@@ -419,9 +440,81 @@ function CorpsFiche({
         notifier(r.message, 'attention')
         return
       }
+      // Un autre contrat de la personne reste : on l'ouvre.
+      const avant = autresContrats()
+      const supprime = avant.find((c) => c.id === id)
+      // Comme la base : ce qui suivait le contrat supprimé suit ce qui le
+      // précédait (sinon le plus ancien de ses suivants).
+      const reste = avant
+        .filter((c) => c.id !== id)
+        .map((c) =>
+          c.suite_de === id
+            ? { ...c, suite_de: supprime?.suite_de ?? null }
+            : c,
+        )
+      if (reste.length && onOuvrirContrat) {
+        notifier('Contrat supprimé')
+        const enCours =
+          reste.find((c) => couvre(c, aujourdhui)) ??
+          reste.find((c) => !!c.date_entree && c.date_entree > aujourdhui) ??
+          (reste.at(-1) as Salarie)
+        onOuvrirContrat(enCours)
+        return
+      }
       notifier(`${prenom} a été retiré(e) de l'équipe`)
       onFermer()
     })
+
+  /** Ajoute un contrat à la personne, à n'importe quelles dates (2026-11-03) :
+   * mêmes postes, groupe et semaine type que la fiche ouverte, relié à elle. */
+  const ajouterContrat = async (v: NouveauContrat): Promise<boolean> =>
+    (await uneFois(async () => {
+      const enregistre = referentiel.salaries.find((s) => s.id === b.id)
+      if (!gerer || !enregistre) return false
+      if (modifie) {
+        notifier(
+          'Enregistrez ou annulez vos modifications avant d’ajouter un contrat.',
+          'attention',
+        )
+        return false
+      }
+      const nouveau: Brouillon = {
+        ...brouillonDe(enregistre, []),
+        id: null,
+        type_contrat: v.type,
+        heures_hebdo: v.type === 'extra' ? 0 : v.heures,
+        forfait_jours: v.type === 'extra' ? false : enregistre.forfait_jours,
+        date_entree: v.debut || null,
+        date_sortie: v.fin || null,
+        actif: true,
+        suite_de: enregistre.id,
+      }
+      const err = erreurBrouillon(nouveau)
+      if (err) {
+        notifier(err, 'attention')
+        return false
+      }
+      const pris = chevauche(autresContrats(), nouveau)
+      if (pris) {
+        notifier(recouvre(pris), 'attention')
+        return false
+      }
+      let nouvelId: number | null = null
+      const r = await ecrire(async () => {
+        nouvelId = await enregistrerSalarie(valeursSalarie(nouveau), null)
+      }, "Le contrat n'a pas pu être ajouté")
+      if (!r.ok || nouvelId === null) {
+        notifier(r.message ?? "Le contrat n'a pas pu être ajouté.", 'danger')
+        return false
+      }
+      notifier('Contrat ajouté : réglez-le dans sa fiche si besoin')
+      onOuvrirContrat?.({
+        ...enregistre,
+        ...valeursSalarie(nouveau),
+        id: nouvelId,
+      })
+      return true
+    })) ?? false
 
   const evoluer = async (e: Evolution): Promise<boolean> =>
     (await uneFois(async () => {
@@ -429,6 +522,21 @@ function CorpsFiche({
       const err = erreurEvolution(b, e)
       if (err) {
         notifier(err, 'attention')
+        return false
+      }
+      // Le nouveau contrat ne recouvre aucun AUTRE contrat de la personne
+      // (relecture du 2026-11-03 : un contrat suivant déjà prévu).
+      const sansFin = !(b.date_sortie && b.date_sortie >= e.date)
+      const pris = chevauche(
+        autresContrats().filter((c) => c.id !== b.id),
+        {
+          id: null,
+          date_entree: e.date,
+          date_sortie: sansFin ? null : b.date_sortie,
+        },
+      )
+      if (pris) {
+        notifier(recouvre(pris), 'attention')
         return false
       }
       const id = b.id
@@ -565,6 +673,9 @@ function CorpsFiche({
             id={b.id}
             referentiel={referentiel}
             aujourdhui={aujourdhui}
+            gerer={gerer}
+            occupe={enCours}
+            onAjouter={ajouterContrat}
             onOuvrir={
               onOuvrirContrat &&
               ((s) =>
@@ -671,9 +782,21 @@ function CorpsFiche({
       <ConfirmDialog
         open={confirmerSuppression}
         onOpenChange={setConfirmerSuppression}
-        title={`Retirer ${nomBrouillon(initial) || 'cette personne'} de l'équipe ?`}
-        description="Sa fiche, ses shifts et ses absences sont supprimés. Pour quelqu'un qui part, indiquez plutôt sa fin de contrat : son historique reste."
-        confirmLabel="Supprimer la fiche"
+        title={
+          autresContrats().length > 1
+            ? 'Supprimer ce contrat ?'
+            : `Retirer ${nomBrouillon(initial) || 'cette personne'} de l'équipe ?`
+        }
+        description={
+          autresContrats().length > 1
+            ? 'Ce contrat, ses shifts et ses absences sont supprimés. Ses autres contrats restent, toujours reliés.'
+            : "Sa fiche, ses shifts et ses absences sont supprimés. Pour quelqu'un qui part, indiquez plutôt sa fin de contrat : son historique reste."
+        }
+        confirmLabel={
+          autresContrats().length > 1
+            ? 'Supprimer le contrat'
+            : 'Supprimer la fiche'
+        }
         destructive
         onConfirm={() => void supprimer()}
       />
@@ -681,35 +804,57 @@ function CorpsFiche({
   )
 }
 
+/** « du 01/07 au 31/08 », « depuis le … », « jusqu'au … ». */
+function periodeContrat(s: Pick<Salarie, 'date_entree' | 'date_sortie'>) {
+  return s.date_entree && s.date_sortie
+    ? `du ${dateFr(s.date_entree)} au ${dateFr(s.date_sortie)}`
+    : s.date_entree
+      ? `depuis le ${dateFr(s.date_entree)}`
+      : s.date_sortie
+        ? `jusqu’au ${dateFr(s.date_sortie)}`
+        : 'sans dates'
+}
+
+interface NouveauContrat {
+  type: TypeContrat
+  debut: string
+  fin: string
+  heures: number
+}
+
 /** Les contrats successifs de la personne (parcours RH, 2026-11-03) : du
  * plus ancien au plus récent, celui ouvert marqué ; un clic ouvre un autre
- * contrat. Rien quand la personne n'a qu'un contrat. */
+ * contrat ; la gestion en ajoute un à n'importe quelles dates (un contrat
+ * se modifie dans sa fiche, et se supprime par « Supprimer »). Rien pour
+ * un contrat seul en lecture. */
 function ParcoursContrats({
   id,
   referentiel,
   aujourdhui,
+  gerer,
+  occupe,
+  onAjouter,
   onOuvrir,
 }: {
   id: number
   referentiel: Referentiel
   aujourdhui: string
+  gerer: boolean
+  /** Une écriture en cours : les boutons attendent, la liste reste. */
+  occupe: boolean
+  onAjouter: (v: NouveauContrat) => Promise<boolean>
   onOuvrir?: (s: Salarie) => void
 }) {
+  const [ajout, setAjout] = useState<NouveauContrat | null>(null)
+  const idChamp = useId()
   const p = parcours(referentiel.salaries, aujourdhui).find((x) =>
     x.contrats.some((c) => c.id === id),
   )
-  if (!p || p.contrats.length < 2) return null
+  if (!p || (p.contrats.length < 2 && !gerer)) return null
   const libelle = (s: Salarie) =>
     TYPES_CONTRAT.find((t) => t.code === s.type_contrat)?.libelle ??
     s.type_contrat
-  const periode = (s: Salarie) =>
-    s.date_entree && s.date_sortie
-      ? `du ${dateFr(s.date_entree)} au ${dateFr(s.date_sortie)}`
-      : s.date_entree
-        ? `depuis le ${dateFr(s.date_entree)}`
-        : s.date_sortie
-          ? `jusqu’au ${dateFr(s.date_sortie)}`
-          : 'sans dates'
+  const periode = periodeContrat
   const poste = (s: Salarie) => {
     const c =
       s.competences.find((x) => x.niveau === 'titulaire') ?? s.competences.at(0)
@@ -771,6 +916,108 @@ function ParcoursContrats({
           )
         })}
       </ol>
+      {gerer && !ajout && (
+        <div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={occupe}
+            onClick={() =>
+              setAjout({
+                type: p.courant.type_contrat,
+                debut: '',
+                fin: '',
+                heures: p.courant.heures_hebdo || 35,
+              })
+            }
+          >
+            Ajouter un contrat
+          </Button>
+        </div>
+      )}
+      {gerer && ajout && (
+        <div className="flex flex-col gap-3 rounded-lg border border-primary/40 bg-primary/5 p-3">
+          <strong className="text-sm">Nouveau contrat</strong>
+          <p className="text-xs text-muted-foreground">
+            À n'importe quelles dates : avant, entre ou après ses autres
+            contrats, sans les recouvrir. Il reprend les postes, le groupe et la
+            semaine type de ce contrat ; tout se règle ensuite dans sa fiche.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Liste
+              label="Type de contrat"
+              valeur={ajout.type}
+              options={TYPES_CONTRAT.map((t) => ({
+                valeur: t.code,
+                libelle: t.libelle,
+              }))}
+              onChange={(v) => setAjout({ ...ajout, type: v as TypeContrat })}
+            />
+            {ajout.type !== 'extra' && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor={`${idChamp}-h`} className="text-xs">
+                  Heures par semaine
+                </Label>
+                <Input
+                  id={`${idChamp}-h`}
+                  type="number"
+                  min={1}
+                  max={48}
+                  step={0.5}
+                  value={ajout.heures}
+                  onChange={(e) =>
+                    setAjout({ ...ajout, heures: Number(e.target.value) })
+                  }
+                />
+              </div>
+            )}
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={`${idChamp}-d`} className="text-xs">
+                Début
+              </Label>
+              <Input
+                id={`${idChamp}-d`}
+                type="date"
+                value={ajout.debut}
+                onChange={(e) => setAjout({ ...ajout, debut: e.target.value })}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={`${idChamp}-f`} className="text-xs">
+                Fin (vide : sans fin)
+              </Label>
+              <Input
+                id={`${idChamp}-f`}
+                type="date"
+                min={ajout.debut || undefined}
+                value={ajout.fin}
+                onChange={(e) => setAjout({ ...ajout, fin: e.target.value })}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setAjout(null)}
+            >
+              Annuler
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={!ajout.debut || occupe}
+              onClick={async () => {
+                if (await onAjouter(ajout)) setAjout(null)
+              }}
+            >
+              Ajouter le contrat
+            </Button>
+          </div>
+        </div>
+      )}
     </section>
   )
 }

@@ -1196,6 +1196,7 @@ export function VueMois({
         salarieId={fiche}
         ouvert={fiche !== null}
         onFermer={() => setFiche(null)}
+        onOuvrirContrat={(s) => setFiche(s.id)}
       />
 
       <ConfirmDialog

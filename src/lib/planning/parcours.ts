@@ -69,3 +69,30 @@ export const dansLEquipe = (p: Parcours<Contrat>, aujourdhui: string) =>
   p.contrats.some(
     (s) => s.actif && (!s.date_sortie || s.date_sortie >= aujourdhui),
   )
+
+/** Le contrat de la personne qui chevauche ces dates (null : aucun). Deux
+ * contrats d'une même personne ne se recouvrent jamais : elle serait deux
+ * fois dans l'équipe le même jour. Une date absente est ouverte (depuis
+ * toujours, ou sans fin). `id` : le contrat lui-même, ignoré. Un contrat
+ * désactivé (un extra qu'on n'appelle plus, sans fin possible) ne recouvre
+ * rien : il ne compte plus nulle part (`couvre`). */
+export function chevauche<T extends Contrat>(
+  contrats: T[],
+  c: {
+    id: number | null
+    date_entree: string | null
+    date_sortie: string | null
+  },
+): T | null {
+  const debutC = c.date_entree ?? ''
+  const finC = c.date_sortie ?? '9999-12-31'
+  return (
+    contrats.find(
+      (s) =>
+        s.id !== c.id &&
+        s.actif &&
+        (s.date_entree ?? '') <= finC &&
+        debutC <= (s.date_sortie ?? '9999-12-31'),
+    ) ?? null
+  )
+}

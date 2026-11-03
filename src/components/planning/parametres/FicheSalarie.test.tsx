@@ -414,6 +414,47 @@ describe('FicheSalarie', () => {
     })
   })
 
+  it('ajouter un contrat : refusé s’il recouvre le sien, accepté après sa fin (2026-11-03)', async () => {
+    const lucas = demo.referentiel.salaries.find((s) => s.id === LUCAS)!
+    const avant = { entree: lucas.date_entree, sortie: lucas.date_sortie }
+    lucas.date_entree = '2026-01-05'
+    lucas.date_sortie = '2026-06-30'
+    try {
+      ouvrir(LUCAS)
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Ajouter un contrat' }),
+      )
+      const debut = screen.getByLabelText('Début')
+      // Refusé : il commence pendant son contrat actuel.
+      fireEvent.change(debut, { target: { value: '2026-06-01' } })
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Ajouter le contrat' }),
+      )
+      expect(await screen.findByText(/recouvrent son contrat/)).toBeTruthy()
+      expect(service.enregistrerSalarie).not.toHaveBeenCalled()
+      // Accepté : trois mois après la fin, relié à ce contrat.
+      fireEvent.change(debut, { target: { value: '2026-10-01' } })
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Ajouter le contrat' }),
+      )
+      await waitFor(() => expect(service.enregistrerSalarie).toHaveBeenCalled())
+      const [v, id] = service.enregistrerSalarie.mock.calls[0] as [
+        Record<string, unknown>,
+        number | null,
+      ]
+      expect(id).toBeNull()
+      expect(v).toMatchObject({
+        date_entree: '2026-10-01',
+        date_sortie: null,
+        suite_de: LUCAS,
+        actif: true,
+      })
+    } finally {
+      lucas.date_entree = avant.entree
+      lucas.date_sortie = avant.sortie
+    }
+  })
+
   it('supprimer demande confirmation puis appelle le service', async () => {
     ouvrir(LUCAS)
     fireEvent.click(await screen.findByRole('button', { name: /Supprimer/ }))

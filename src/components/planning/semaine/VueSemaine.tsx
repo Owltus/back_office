@@ -1089,6 +1089,7 @@ export function VueSemaine({
         salarieId={ficheId}
         ouvert={ficheId !== null}
         onFermer={() => setFicheId(null)}
+        onOuvrirContrat={(s) => setFicheId(s.id)}
       />
 
       {semaine && referentiel && (

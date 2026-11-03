@@ -140,7 +140,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':J', (select j from t_ids)::text);
 $$;
 
-select plan(79);
+select plan(81);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -464,6 +464,26 @@ select is(pg_temp.essai('ecriture', array[pg_temp.q(
   pg_temp.q('select public.planning_appliquer_generation(:F, public.planning_etat_semaine(:F), 0, false, ''{}'', false, ''[]''::jsonb)'),
   pg_temp.q('select count(*) from public.planning_absences where salarie_id = :S3 and jour between :F::date and :F::date + 6')]),
   '0', 'JFR : une nouvelle génération efface le JFR proposé');
+
+-- Supprimer un contrat garde le parcours d'un seul tenant (2026-11-03) :
+-- S1 <- S2 <- S3 ; S2 supprimé, S3 suit désormais S1.
+select is(pg_temp.essai('gestion', array[
+  pg_temp.q('update public.planning_salaries set suite_de = :S1 where id = :S2'),
+  pg_temp.q('update public.planning_salaries set suite_de = :S2 where id = :S3'),
+  pg_temp.q('select public.planning_supprimer_salarie(:S2)'),
+  pg_temp.q('select suite_de::text from public.planning_salaries where id = :S3')]),
+  (select s1 from t_ids)::text, 'contrat supprimé : le suivant est rattaché au précédent');
+
+-- Le premier contrat supprimé, deux suivants : ils restent une personne.
+-- S2 en tête, S3 et Test4 le suivent ; S2 supprimé : S3 (le plus ancien)
+-- devient la tête et Test4 le suit.
+select is(pg_temp.essai('gestion', array[
+  pg_temp.q('update public.planning_salaries set suite_de = null, date_entree = ''2030-01-01'' where id = :S2'),
+  pg_temp.q('update public.planning_salaries set suite_de = :S2, date_entree = ''2031-01-01'' where id = :S3'),
+  pg_temp.q('insert into public.planning_salaries (prenom, nom, suite_de, date_entree) values (''Test4'', ''PLANNING'', :S2, ''2032-01-01'')'),
+  pg_temp.q('select public.planning_supprimer_salarie(:S2)'),
+  pg_temp.q('select coalesce(s.suite_de::text, ''tete'') || ''/'' || (select (t.suite_de = :S3)::text from public.planning_salaries t where t.prenom = ''Test4'' and t.nom = ''PLANNING'') from public.planning_salaries s where s.id = :S3')]),
+  'tete/true', 'premier contrat supprimé : le plus ancien suivant devient la tête, l''autre le suit');
 
 select * from finish();
 rollback;
