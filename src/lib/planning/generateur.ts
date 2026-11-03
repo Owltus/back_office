@@ -45,6 +45,7 @@ import {
 } from '#/lib/planning/modele.ts'
 import {
   CHANGEMENTS_MOMENT_MAX,
+  EQUIPE_TOLERANCE,
   JOURS_AFFILES_CONSEILLES,
   MOMENT_ARRIERE_JOURS,
   JOURS_AFFILES_MAX,
@@ -361,6 +362,16 @@ export const POIDS_RETOUR_WEEKEND = 5_000
 /** Règle 14 : un service qui finit après 21:00 la veille d'un jour d'école,
  * ou qui commence avant 08:00 le lendemain. */
 export const POIDS_ECOLE_ABORDS = 6_000
+/** Règle 17 (2026-11-03) : à l'accueil, des arrivées du soir à plus de
+ * `EQUIPE_TOLERANCE` les unes des autres, une fois par jour. */
+export const POIDS_EQUIPE_ARRIVEE = 4_000
+/** Règle 17 : des départs du soir à plus de `EQUIPE_TOLERANCE` les uns des
+ * autres (l'une reste seule la fin du soir), une fois par jour. */
+export const POIDS_EQUIPE_DEPART = 3_000
+/** Règle 17 : une personne du soir qui arrive sans croiser une personne du
+ * matin le temps de la relève réglée, par personne (la relève du jour,
+ * `POIDS_RELEVE`, n'en exige qu'une paire). */
+export const POIDS_RELEVE_CHACUN = 5_000
 /** Règle 12 : par minute au-delà du contrat et par heure d'avance sur le
  * moins chargé du groupe (heures en plus des 4 semaines d'avant, ramenées à
  * la part de chacun), au plus `EQUITE_HEURES_PLUS_MAX` heures comptées. */
@@ -489,7 +500,12 @@ export function pireMoral(c: Creneau): number {
     POIDS_RETOUR_SIXIEME +
     POIDS_RETOUR_WEEKEND +
     2 * POIDS_ECOLE_ABORDS +
-    POIDS_MEMES_REPOS
+    POIDS_MEMES_REPOS +
+    // Règle 17 : une personne ajoutée au soir étale au plus ses arrivées et
+    // ses départs (un coût par jour chacun), et manque au plus sa relève.
+    POIDS_EQUIPE_ARRIVEE +
+    POIDS_EQUIPE_DEPART +
+    POIDS_RELEVE_CHACUN
   )
 }
 
@@ -1165,6 +1181,11 @@ export function construire(
     ),
   )
   const releves = relevesAccueil(m, p, termesDe)
+  equipesSynchro(m, p, termesDe, (c) =>
+    c.accueil
+      ? (sommesAccueil.get(c.id)?.n ?? 0)
+      : p.salaries.filter((s) => x.has(cle(s.id, c.id))).length,
+  )
 
   // Une « expression » : termes + constante.
   type Expr = { termes: Terme[]; constante: number }
@@ -2548,6 +2569,157 @@ function relevesAccueil(
     m.ajoute([...z.map((v) => [1, v] as Terme), [1, manque]], '>=', 1)
     m.cout(POIDS_RELEVE, manque)
     r.push({ jour, v: manque })
+  }
+  return r
+}
+
+/**
+ * Règle 17 du PRD (demande utilisateur du 2026-11-03 : « éviter d'avoir des
+ * hôteliers seuls le soir ; qu'ils restent ensemble le maximum possible, à
+ * trente minutes près ; synchro comme le matin ; un changement de shift
+ * parfait »). À l'accueil (`equipesAccueil`, personnes autonomes), chaque
+ * jour, souple :
+ *   - ARRIVÉES DU SOIR : y_t = « quelqu'un du soir commence à t » (0/1,
+ *     y_t >= n_c / K) ; deux débuts pris à plus de `EQUIPE_TOLERANCE` l'un
+ *     de l'autre étalent le soir : `POIDS_EQUIPE_ARRIVEE` UNE fois par jour
+ *     (w >= y_t + y_u - 1 pour chaque telle paire) ;
+ *   - DÉPARTS DU SOIR : la même chose sur les fins (`POIDS_EQUIPE_DEPART`) :
+ *     personne ne reste seul la fin du soir ;
+ *   - RELÈVE DE CHACUN (matin et soir demandés, `releveMinutes` > 0) :
+ *     chaque personne du soir croise une personne du matin au moins le
+ *     temps réglé (`POIDS_RELEVE_CHACUN`) :
+ *       r_c >= n_c - K_c × Σ_{matins m qui la croisent assez} n_m.
+ *     L'arrivée du soir suit donc les départs réels du matin, sans heure
+ *     écrite en dur.
+ * Le MATIN n'a pas de coût (« pour le matin c'est bien ») : l'ouverture de
+ * 07:00 le regroupe déjà, et le même coût sur ses arrivées rendait une
+ * semaine de l'hôtel de démo dix fois plus longue (6 s -> 60 s, le
+ * plafond ; le soir seul : 11 s). Le vérificateur le signale quand même.
+ * Une fenêtre fixe (premier début possible) a été essayée et écartée : elle
+ * faisait payer une personne SEULE le soir et passait devant un trou.
+ * Aucun horaire inventé. Même définition que l'oracle (`equipesDesynchro`,
+ * verificateur.ts).
+ */
+function equipesSynchro(
+  m: Modele,
+  p: Probleme,
+  termesDe: (c: Creneau, quoi: 'autonomes') => Terme[],
+  borne: (c: Creneau) => number,
+): void {
+  const R = p.releveMinutes ?? 0
+  /** Une heure (début ou fin) prise par quelqu'un : y_t >= n_c / K. Deux
+   * heures prises à plus de la tolérance l'une de l'autre : le jour est
+   * étalé, `poids` une fois (w >= y_t + y_u - 1 pour chaque paire). */
+  const etalement = (
+    liste: Creneau[],
+    heure: (c: Creneau) => number,
+    poids: number,
+  ) => {
+    const parHeure = new Map<number, Creneau[]>()
+    for (const c of liste)
+      parHeure.set(heure(c), [...(parHeure.get(heure(c)) ?? []), c])
+    const heures = [...parHeure.keys()].sort((a, b) => a - b)
+    if (heures.length < 2 || heures.at(-1)! - heures[0] <= EQUIPE_TOLERANCE)
+      return
+    const y = new Map<number, string>()
+    for (const t of heures) {
+      const termes = parHeure.get(t)!.flatMap((c) => termesDe(c, 'autonomes'))
+      const k = parHeure.get(t)!.reduce((n, c) => n + borne(c), 0)
+      if (!termes.length || k <= 0) continue
+      const v = m.bool()
+      m.ajoute([[k, v], ...termes.map(([q, w]) => [-q, w] as Terme)], '>=', 0)
+      y.set(t, v)
+    }
+    let w: string | null = null
+    for (const [t, vt] of y)
+      for (const [u, vu] of y) {
+        if (u - t <= EQUIPE_TOLERANCE) continue
+        if (!w) {
+          w = m.continu(0, 1)
+          m.cout(poids, w)
+        }
+        m.ajoute(
+          [
+            [1, w],
+            [-1, vt],
+            [-1, vu],
+          ],
+          '>=',
+          -1,
+        )
+      }
+  }
+  for (const { matins, soirs, releve } of equipesAccueil(p)) {
+    etalement(soirs, (c) => c.debut, POIDS_EQUIPE_ARRIVEE)
+    etalement(soirs, (c) => c.fin, POIDS_EQUIPE_DEPART)
+    if (!releve || R <= 0) continue
+    for (const c of soirs) {
+      const croisent = matins.filter(
+        (d) => Math.min(d.fin, c.fin) - Math.max(d.debut, c.debut) >= R,
+      )
+      if (!croisent.length) continue
+      const n = termesDe(c, 'autonomes')
+      const k = borne(c)
+      if (!n.length || k <= 0) continue
+      const v = m.continu(0, k)
+      m.ajoute(
+        [
+          [1, v],
+          ...n.map(([q, w]) => [-q, w] as Terme),
+          ...croisent.flatMap((d) =>
+            termesDe(d, 'autonomes').map(([q, w]) => [k * q, w] as Terme),
+          ),
+        ],
+        '>=',
+        0,
+      )
+      m.cout(POIDS_RELEVE_CHACUN, v)
+    }
+  }
+}
+
+/** Les équipes de l'accueil, jour par jour (règle 17) : les créneaux du
+ * matin pur et du soir pur des postes de l'accueil du jour (pas la nuit,
+ * pas le middle), et si la relève se cherche ce jour-là (matin et soir
+ * demandés). */
+export function equipesAccueil(
+  p: Pick<Probleme, 'creneaux' | 'consignes' | 'nbJours'>,
+): Array<{
+  jour: number
+  matins: Creneau[]
+  soirs: Creneau[]
+  releve: boolean
+}> {
+  const postesJour = new Set(
+    p.creneaux
+      .filter((c) => c.accueil && !c.presence.includes('nuit'))
+      .map((c) => c.poste),
+  )
+  const pur = (c: Creneau, moment: 'matin' | 'soir') =>
+    c.presence.length === 1 && c.presence[0] === moment
+  const demande = (j: number, periode: 'matin' | 'soir') =>
+    p.consignes.some(
+      (c) => c.jour === j && c.periode === periode && c.minimum > 0,
+    )
+  const r: Array<{
+    jour: number
+    matins: Creneau[]
+    soirs: Creneau[]
+    releve: boolean
+  }> = []
+  for (let jour = 0; jour < p.nbJours; jour++) {
+    const duJour = p.creneaux.filter(
+      (c) => postesJour.has(c.poste) && jourDe(c) === jour,
+    )
+    const matins = duJour.filter((c) => pur(c, 'matin'))
+    const soirs = duJour.filter((c) => pur(c, 'soir'))
+    if (!matins.length && !soirs.length) continue
+    r.push({
+      jour,
+      matins,
+      soirs,
+      releve: demande(jour, 'matin') && demande(jour, 'soir'),
+    })
   }
   return r
 }

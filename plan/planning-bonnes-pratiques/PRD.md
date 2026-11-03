@@ -474,6 +474,36 @@ Pour chacun : **énoncé**, **pourquoi**, **comment** (règle mesurable), **exce
   `POIDS_JFR_COLLE` (`generateur.ts`), alerte JOUR-FERIE (`verificateur.ts`), motif JFR
   (migration `20261102120000`), mention Férié à l'écran.
 
+#### 17. Une équipe qui travaille ensemble
+
+- **Pourquoi.** Demande de l'utilisateur du 2026-11-03 : « éviter d'avoir des hôteliers seuls le
+  soir ; qu'ils restent ensemble le maximum possible, à trente minutes près ; synchro comme le
+  matin ; un changement de shift parfait ». Une personne qui arrive à 16 h 15 quand l'autre est là
+  depuis 14 h 30, ou qui reste seule de 23 h 15 à minuit, travaille seule sans raison.
+- **Comment.** À l'accueil (Réception et Club ensemble, personnes autonomes ; la nuit à part),
+  chaque jour :
+  - les personnes du soir arrivent à 30 min près (`EQUIPE_TOLERANCE`) ;
+  - elles partent à 30 min près : personne ne reste seul la fin du soir ;
+  - chacune croise une personne du matin au moins le temps de la relève réglée (30 min par défaut,
+    page Besoins), pas seulement une paire par jour. L'heure d'arrivée du soir n'est pas écrite :
+    elle suit les départs réels du matin (« autour de 15 h » avec un matin qui part à 15 h 45).
+  - Le matin n'a pas de coût : l'ouverture de 07:00 le regroupe déjà (écart moyen des arrivées du
+    matin : 3 à 5 min sur le banc). Le même coût sur le matin rendait une semaine de démo dix fois
+    plus longue.
+- **Exception.** Jamais une place vide ni des heures dues perdues pour elle (ordre Q1). Un soir
+  qui ne demande qu'une personne la laisse seule : c'est le chiffre des Besoins.
+- **Statut.** EN PLACE (local, non livré) le 2026-11-03. `equipesSynchro` et `equipesAccueil`
+  (`generateur.ts`, poids `POIDS_EQUIPE_ARRIVEE` 4 000, `POIDS_EQUIPE_DEPART` 3 000 une fois par
+  jour, `POIDS_RELEVE_CHACUN` 5 000 par personne, comptés dans `pireMoral`), oracle
+  `equipesDesynchro` (`verificateur.ts`), message « Soir jeudi 5 : arrivées étalées de 14 h 30 à
+  16 h 15… » dans les points d'attention (`phraseEquipe`). Tests `equipes.test.ts`. Banc du
+  2026-11-03 (6 scénarios réels de 9 semaines, en mémoire) : écart moyen des arrivées du soir 44-56
+  → 19-24 min, des départs 49-59 → 19-26 min ; soirs aux arrivées étalées 13-15 → 0 ; soirs aux
+  départs étalés 18-23 → 0-2 ; personnes du soir sans relève 7-11 → 0 ; aucune infraction, aucune
+  place vide, aucune semaine sous les heures dues de plus. Écartées : une fenêtre fixe (elle
+  faisait payer une personne seule et passait devant un trou) et une fenêtre choisie par le
+  calcul (dix fois plus lent).
+
 ### Tableau récapitulatif
 
 | N°  | Règle                               | Statut                      | Où                                                                                    |
@@ -494,6 +524,7 @@ Pour chacun : **énoncé**, **pourquoi**, **comment** (règle mesurable), **exce
 | 14  | École des apprentis protégée        | en place                    | `ECOLE_VEILLE_FIN`, `ECOLE_LENDEMAIN_DEBUT`, `POIDS_ECOLE_ABORDS`, ECOLE-ABORDS       |
 | 15  | Planning qui se tient               | en place                    | `imposees`, PL423, PL409, `raisonsPlaces.ts`                                          |
 | 16  | Jour férié rattrapé (JFR)           | en place (local, non livré) | `feries.ts`, `droitAuRattrapage`, `POIDS_JFR_EN_ATTENTE`, alerte JOUR-FERIE           |
+| 17  | Équipe ensemble (soir, relève)      | en place (local, non livré) | `equipesSynchro`, `EQUIPE_TOLERANCE`, `POIDS_RELEVE_CHACUN`, `equipesDesynchro`       |
 
 Le code des règles 1, 3, 4, 6, 7, 8, 12, 13 et 14 date du 2026-11-02 : en place en local, pas
 encore livré. Relecture du 2026-11-03 (banc de 7 scénarios réels, en mémoire) : règles 1, 4, 8, 9,

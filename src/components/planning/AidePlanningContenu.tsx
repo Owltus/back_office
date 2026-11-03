@@ -30,6 +30,7 @@ import {
   CONGE_LONG,
   ECOLE_LENDEMAIN_DEBUT,
   ECOLE_VEILLE_FIN,
+  EQUIPE_TOLERANCE,
   FORFAIT_JOUR_MAX,
   JOUR_MAX_CATEGORIE,
   JOURNEE_ETOILE_MIN,
@@ -628,6 +629,7 @@ export function AidePlanningContenu({
               'D’un veilleur à l’autre : quand la nuit est demandée, l’accueil est tenu sans trou du départ du veilleur au matin jusqu’à l’arrivée du suivant le soir.',
               `Ouverture : un poste de l’accueil peut avoir une heure d’ouverture (07:00 pour la Réception et le Club). Quelqu’un y est dès cette heure, pendant au moins ${h(DUREE_OUVERTURE)}.`,
               'Relève : l’équipe du matin et celle du soir sont ensemble un moment chaque jour, le temps réglé sur la page Besoins (30 minutes par défaut).',
+              `Une équipe ensemble : le soir, les personnes arrivent à ${EQUIPE_TOLERANCE} minutes près et partent à ${EQUIPE_TOLERANCE} minutes près, pour que personne ne reste seul. Chacune croise le matin le temps de la relève. Le matin, l’ouverture les regroupe déjà. Une alerte dit quand ce n’est pas possible.`,
               'Un apprenti ou un stagiaire compte dans le chiffre de l’accueil, mais n’est jamais seul sur son poste.',
             ]}
           />

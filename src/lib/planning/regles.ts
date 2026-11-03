@@ -52,6 +52,11 @@ export const JOURS_AFFILES_CONSEILLES = 5
  * suivant (la loi dit 11 h, `REPOS_QUOTIDIEN`, qui reste dure). 12 h :
  * décision utilisateur du 2026-11-03 (13 h avant). */
 export const REPOS_CONFORT = 12 * H
+/** Règle 17 (demande utilisateur du 2026-11-03 : « qu'ils restent ensemble
+ * le maximum possible, à trente minutes près, synchro comme le matin ») :
+ * à l'accueil, les personnes d'un même moment (matin, soir) arrivent à
+ * cette tolérance près, celles du soir partent à cette tolérance près. */
+export const EQUIPE_TOLERANCE = 30
 /** Règle 6 : changements de moment (matin, middle, soir, nuit) au plus
  * dans une semaine, et de préférence vers plus tard (matin puis soir). */
 export const CHANGEMENTS_MOMENT_MAX = 1

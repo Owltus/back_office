@@ -695,7 +695,10 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
     // et l'extra qui coûte en plus tout le moral et le confort qu'il
     // épargnerait (`partMoraleExtra`), donc un pire coût d'une place plus
     // haut.
-    expect(empreinte(textes.join('\n=====\n'))).toBe('98d3081a')
+    // 6e510457 (2026-11-03, règle 17, équipes de l'accueil) : seul le pire
+    // coût d'une place change ici (arrivées et départs du soir étalés,
+    // relève de chacun) ; ces semaines n'ont pas de candidat de l'accueil.
+    expect(empreinte(textes.join('\n=====\n'))).toBe('6e510457')
   })
 })
 

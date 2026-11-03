@@ -18,7 +18,7 @@ import {
 } from '#/lib/planning/raisonsPlaces.ts'
 import type { RaisonClaire } from '#/lib/planning/raisonsPlaces.ts'
 import { POSTE_ID_ACCUEIL } from '#/lib/planning/semaine.ts'
-import type { SemaineOut } from '#/lib/planning/semaine.ts'
+import type { EquipeOut, SemaineOut } from '#/lib/planning/semaine.ts'
 import { ORDRE_PERIODES, tientLaNuit } from '#/lib/planning/presence.ts'
 import { ajouterJours } from '#/lib/planning/temps.ts'
 import { JOURS } from '#/lib/planning/types.ts'
@@ -116,6 +116,8 @@ export interface TrouAttention {
   fin: string
   /** Relève manquée ce jour-là (2026-11-01) : pas d'heures. */
   releve?: boolean
+  /** Équipe de l'accueil désynchronisée (règle 17, 2026-11-03). */
+  equipe?: EquipeOut
 }
 
 export interface PointPersonne {
@@ -359,6 +361,20 @@ export function pointsAttention(
         releve: true,
       })
     }
+    // Règle 17 (2026-11-03) : une équipe du matin ou du soir étalée.
+    for (const e of s.equipes ?? []) {
+      const date = ajouterJours(s.lundi, e.jour)
+      if (!garder(date)) continue
+      trous.push({
+        cle: `${date}-equipe-${e.moment}`,
+        date,
+        posteId: 0,
+        poste: undefined,
+        debut: '',
+        fin: '',
+        equipe: e,
+      })
+    }
   }
   shifts.sort(
     (a, b) => a.date.localeCompare(b.date) || a.debut.localeCompare(b.debut),
@@ -545,6 +561,28 @@ export function phraseCycle(
     : `${n} de trop ${MOMENT[e.periode]} ${jour}`
 }
 
+/** « Soir mardi 3 : arrivées étalées de 14 h 30 à 16 h 15, une personne
+ * arrive sans relève ». Règle 17 du PRD (2026-11-03). */
+export function phraseEquipe(e: EquipeOut, jour: string): string {
+  const parties: string[] = []
+  if (e.arrivees)
+    parties.push(
+      `arrivées étalées de ${heureParlee(e.arrivees.debut)} à ${heureParlee(e.arrivees.fin)}`,
+    )
+  if (e.departs)
+    parties.push(
+      `départs étalés de ${heureParlee(e.departs.debut)} à ${heureParlee(e.departs.fin)}`,
+    )
+  if (e.sans_releve)
+    parties.push(
+      e.sans_releve === 1
+        ? 'une personne arrive sans relève'
+        : `${e.sans_releve} personnes arrivent sans relève`,
+    )
+  const moment = e.moment === 'matin' ? 'Matin' : 'Soir'
+  return `${moment} ${jour} : ${parties.join(', ')}`
+}
+
 /** « 15 h », « 15 h 30 » ; minuit en fin de plage : « 0 h ». */
 export function heureParlee(h: string): string {
   const [hh, mm] = h.split(':').map(Number)
@@ -554,6 +592,7 @@ export function heureParlee(h: string): string {
 
 /** « Réception mardi : personne de 15 h à 16 h ». */
 export function phraseTrou(t: TrouAttention, jour: string): string {
+  if (t.equipe) return phraseEquipe(t.equipe, jour)
   if (t.releve)
     return `Relève ${jour} : l'équipe du matin et celle de l'après-midi ne se croisent pas`
   // `poste_id` 0 : trou de l'accueil entier, Réception et Club ensemble

@@ -112,6 +112,7 @@ import {
   raisonsBlocage,
   raisonsBlocageAccueil,
   relevesManquantes,
+  equipesDesynchro,
   transmissions,
   reposHebdoTrouve,
   trous,
@@ -258,6 +259,16 @@ export interface BilanOut {
   jfr_proposes?: number[]
 }
 
+export interface EquipeOut {
+  jour: number
+  moment: 'matin' | 'soir'
+  /** Arrivées étalées : la première et la dernière (heures d'horloge). */
+  arrivees: { debut: string; fin: string } | null
+  /** Soir : départs étalés. */
+  departs: { debut: string; fin: string } | null
+  sans_releve: number
+}
+
 export interface SemaineOut {
   lundi: string
   affectations: ShiftOut[]
@@ -274,6 +285,10 @@ export interface SemaineOut {
   /** Jours (0 à 6) sans relève entre l'équipe du matin et celle de
    * l'après-midi (2026-11-01). Absent : données d'avant. */
   releves_manquantes?: number[]
+  /** Équipes de l'accueil désynchronisées (règle 17 du PRD, 2026-11-03) :
+   * arrivées étalées, départs du soir étalés, personnes du soir sans relève,
+   * en heures d'horloge. Absent : données d'avant. */
+  equipes?: EquipeOut[]
   /** Transmissions de l'accueil d'une équipe à l'autre, jour par jour
    * (`transmissions`). Absent : données d'avant. */
   transmissions?: Transmissions[]
@@ -2422,6 +2437,17 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
   )
   const sansReleve = relevesManquantes(pReglages, affs)
   const passations = accueil ? transmissions(pReglages, affs, sansReleve) : []
+  const plage = (x: { debut: number; fin: number } | null) =>
+    x && { debut: heureMurale(lundi, x.debut), fin: heureMurale(lundi, x.fin) }
+  const equipes: EquipeOut[] = accueil
+    ? equipesDesynchro(pReglages, affs).map((e) => ({
+        jour: e.jour,
+        moment: e.moment,
+        arrivees: plage(e.arrivees),
+        departs: plage(e.departs),
+        sans_releve: e.sansReleve,
+      }))
+    : []
 
   const infractions = toutes.filter((v) => v.nature === 'loi').length
   return {
@@ -2442,6 +2468,7 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
       ...ouverturesVides,
     ],
     releves_manquantes: sansReleve,
+    equipes,
     transmissions: passations,
     stats: {
       places:

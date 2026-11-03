@@ -2383,6 +2383,29 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   solveur ne donne aucun pourcentage : n'en inventer aucun) ; « Arrêter le
   calcul » appelle l'arrêt existant. L'horloge passe par une référence (une
   fonction neuve à chaque rendu figeait le compteur à 0:00).
+- **RÈGLE 17, ÉQUIPE ENSEMBLE (2026-11-03, demande utilisateur : « éviter
+  des hôteliers seuls le soir ; ensemble à trente minutes près ; synchro
+  comme le matin ; un changement de shift parfait »)** : à l'accueil
+  (`equipesAccueil`, matin pur et soir pur, autonomes), `equipesSynchro`
+  dans `generateur.ts` : arrivées du soir étalées de plus de
+  `EQUIPE_TOLERANCE` (30 min, `regles.ts`) = `POIDS_EQUIPE_ARRIVEE` une fois
+  par jour (y_t 0/1 par heure prise, w >= y_t + y_u - 1), départs du soir
+  idem (`POIDS_EQUIPE_DEPART`), et RELÈVE DE CHACUN : chaque personne du
+  soir croise une personne du matin le temps réglé (`POIDS_RELEVE_CHACUN`
+  par personne, linéaire sans 0/1) ; les trois dans `pireMoral`. Le MATIN
+  n'a pas de coût (l'ouverture le regroupe) : ⚠ une fenêtre CHOISIE par le
+  calcul (0/1 par début) ou un coût sur les arrivées du matin rendait la
+  semaine de démo dix fois plus longue (6 s -> 60 s) ; une fenêtre FIXE
+  (premier début possible) faisait payer une personne seule et passait
+  devant un trou. Ne pas y revenir sans mesurer. Oracle `equipesDesynchro`
+  (matin compris) → `SemaineOut.equipes` → points d'attention
+  (`phraseEquipe`, « Soir jeudi 5 : arrivées étalées de 14 h 30 à
+  16 h 15… »). Tests `equipes.test.ts` (7 mutations attrapées). Empreinte
+  `generateur.test.ts` 6e510457. Banc (6 scénarios réels hors dépôt) :
+  écart moyen des arrivées du soir ~50 → ~20 min, des départs ~55 → ~22,
+  soirs étalés 13-15 → 0, personnes du soir sans relève 7-11 → 0, sans
+  infraction, place vide ni heures dues perdues ; un peu plus de semaines
+  à 2 changements de moment dans deux scénarios.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

@@ -37,6 +37,7 @@ import {
   CHANGEMENTS_MOMENT_MAX,
   ECOLE_LENDEMAIN_DEBUT,
   ECOLE_VEILLE_FIN,
+  EQUIPE_TOLERANCE,
   JOURS_AFFILES_MAX,
   MOMENT_ARRIERE_JOURS,
   NUITS_AFFILEES_MAX,
@@ -1349,6 +1350,99 @@ export function relevesManquantes(
       if (suite >= k) ok = true
     }
     if (!ok) r.push(jour)
+  }
+  return r
+}
+
+/** Une équipe de l'accueil désynchronisée un jour (règle 17 du PRD,
+ * 2026-11-03) : heures réelles depuis le lundi. */
+export interface EquipeDesynchro {
+  jour: number
+  moment: 'matin' | 'soir'
+  /** Arrivées étalées au-delà de `EQUIPE_TOLERANCE` : la première et la
+   * dernière. */
+  arrivees: { debut: number; fin: number } | null
+  /** Soir seulement : départs étalés (l'une reste seule à la fin). */
+  departs: { debut: number; fin: number } | null
+  /** Soir seulement : personnes qui arrivent sans croiser une personne du
+   * matin le temps de la relève, alors qu'un horaire du matin le permettait. */
+  sansReleve: number
+}
+
+/**
+ * Règle 17 du PRD (demande utilisateur du 2026-11-03 : « qu'ils restent
+ * ensemble le maximum possible, à trente minutes près »). À l'accueil
+ * (postes de l'accueil du jour, matin pur et soir pur, personnes
+ * autonomes), une alerte par jour et par moment : des arrivées à plus de
+ * `EQUIPE_TOLERANCE` les unes des autres (matin et soir), des départs du
+ * soir à plus de `EQUIPE_TOLERANCE` les uns des autres, ou une personne du
+ * soir qui ne croise personne du matin le temps de la relève (matin et
+ * soir demandés, un horaire du matin qui le permettait). Recompté ici sans
+ * rien du générateur.
+ */
+export function equipesDesynchro(
+  p: Probleme,
+  affectations: AffectationSolveur[],
+): EquipeDesynchro[] {
+  const R = p.releveMinutes ?? 0
+  const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
+  const salaries = new Map(p.salaries.map((s) => [s.id, s]))
+  const postesJour = new Set(
+    p.creneaux
+      .filter((c) => c.accueil && !c.presence.includes('nuit'))
+      .map((c) => c.poste),
+  )
+  const pur = (c: Creneau, moment: 'matin' | 'soir') =>
+    c.presence.length === 1 && c.presence[0] === moment
+  const demande = (j: number, periode: 'matin' | 'soir') =>
+    p.consignes.some(
+      (c) => c.jour === j && c.periode === periode && c.minimum > 0,
+    )
+  const faits = affectationsCompletes(p, affectations).flatMap((a) => {
+    const c = creneaux.get(a.creneauId)
+    const s = salaries.get(a.salarieId)
+    if (!c || !s || !postesJour.has(c.poste)) return []
+    if (role(s, c.poste) === 'soutien') return []
+    return [c]
+  })
+  const etendue = (heures: number[]) => {
+    if (!heures.length) return null
+    const debut = Math.min(...heures)
+    const fin = Math.max(...heures)
+    return fin - debut > EQUIPE_TOLERANCE ? { debut, fin } : null
+  }
+  const r: EquipeDesynchro[] = []
+  for (let jour = 0; jour < p.nbJours; jour++) {
+    const matins = faits.filter((c) => jourDe(c) === jour && pur(c, 'matin'))
+    const soirs = faits.filter((c) => jourDe(c) === jour && pur(c, 'soir'))
+    const arriveesMatin = etendue(matins.map((c) => c.debut))
+    if (arriveesMatin)
+      r.push({
+        jour,
+        moment: 'matin',
+        arrivees: arriveesMatin,
+        departs: null,
+        sansReleve: 0,
+      })
+    if (!soirs.length) continue
+    let sansReleve = 0
+    if (R > 0 && demande(jour, 'matin') && demande(jour, 'soir')) {
+      const croise = (d: Creneau, c: Creneau) =>
+        Math.min(d.fin, c.fin) - Math.max(d.debut, c.debut) >= R
+      const possibles = p.creneaux.filter(
+        (d) => postesJour.has(d.poste) && jourDe(d) === jour && pur(d, 'matin'),
+      )
+      for (const c of soirs)
+        if (
+          possibles.some((d) => croise(d, c)) &&
+          !matins.some((d) => croise(d, c))
+        )
+          sansReleve++
+    }
+    const arrivees = etendue(soirs.map((c) => c.debut))
+    const departs = etendue(soirs.map((c) => c.fin))
+    if (arrivees || departs || sansReleve)
+      r.push({ jour, moment: 'soir', arrivees, departs, sansReleve })
   }
   return r
 }
