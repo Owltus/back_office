@@ -72,6 +72,7 @@ import {
   momentsAccueil,
   periodeLibre,
   periodeShift,
+  tientLaNuit,
 } from '#/lib/planning/presence.ts'
 import type { PresenceOut } from '#/lib/planning/presence.ts'
 // Cycle d'import voulu (semaine → raisonsPlaces → coherence → semaine) :
@@ -2436,7 +2437,18 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
     }),
   )
   const sansReleve = relevesManquantes(pReglages, affs)
-  const passations = accueil ? transmissions(pReglages, affs, sansReleve) : []
+  // La nuit du dimanche d'avant (vue mois : le trait continue d'une semaine
+  // à l'autre). Les postes de la nuit de l'accueil, vraies heures.
+  const postesParId = new Map(d.referentiel.postes.map((x) => [x.id, x]))
+  const veilleDuLundi = d.avant
+    .filter((a) => a.jour === 6 && tientLaNuit(postesParId.get(a.poste_id)))
+    .map((a) => {
+      const [debut, fin] = bornes(lundi, -1, a.debut, a.fin)
+      return { debut, fin }
+    })
+  const passations = accueil
+    ? transmissions(pReglages, affs, sansReleve, veilleDuLundi)
+    : []
   const plage = (x: { debut: number; fin: number } | null) =>
     x && { debut: heureMurale(lundi, x.debut), fin: heureMurale(lundi, x.fin) }
   const equipes: EquipeOut[] = accueil

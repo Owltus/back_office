@@ -1237,13 +1237,16 @@ export interface Transmissions {
  * les soutiens. Matin et soir : la relève de `relevesManquantes` quand elle
  * est réglée (le jour sans relève = `manque`), sinon le simple contact. Nuit :
  * le veilleur arrive avant que le dernier du soir parte, et le premier du
- * matin arrive avant que le veilleur parte. Le lundi, la nuit d'avant n'est
- * pas lue : null.
+ * matin arrive avant que le veilleur parte. Le lundi, la nuit d'avant vient
+ * de `veilleDuLundi` (les shifts de nuit du dimanche d'avant, en minutes de
+ * cette semaine : la vue mois relie les jours d'une semaine à l'autre) ;
+ * absente, null.
  */
 export function transmissions(
   p: Probleme,
   affectations: AffectationSolveur[],
   sansReleve: readonly number[],
+  veilleDuLundi: ReadonlyArray<Pick<Creneau, 'debut' | 'fin'>> = [],
 ): Transmissions[] {
   const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
   const salaries = new Map(p.salaries.map((s) => [s.id, s]))
@@ -1261,7 +1264,10 @@ export function transmissions(
   })
   const de = (jour: number, moment: 'matin' | 'soir' | 'nuit') =>
     faits.filter((c) => jourDe(c) === jour && c.presence.includes(moment))
-  const contact = (avant: Creneau[], apres: Creneau[]): EtatTransmission =>
+  const contact = (
+    avant: ReadonlyArray<Pick<Creneau, 'debut' | 'fin'>>,
+    apres: Creneau[],
+  ): EtatTransmission =>
     !avant.length || !apres.length
       ? null
       : Math.max(...avant.map((c) => c.fin)) >=
@@ -1273,12 +1279,12 @@ export function transmissions(
     const matins = de(jour, 'matin').filter((c) => !c.presence.includes('nuit'))
     const soirs = de(jour, 'soir').filter((c) => !c.presence.includes('nuit'))
     const nuits = de(jour, 'nuit')
-    const veille = jour > 0 ? de(jour - 1, 'nuit') : []
+    const veille = jour > 0 ? de(jour - 1, 'nuit') : veilleDuLundi
     let matinSoir = contact(matins, soirs)
     if (matinSoir && sansReleve.includes(jour)) matinSoir = 'manque'
     r.push({
       jour,
-      nuitMatin: jour > 0 ? contact(veille, matins) : null,
+      nuitMatin: contact(veille, matins),
       matinSoir,
       soirNuit: contact(soirs, nuits),
     })

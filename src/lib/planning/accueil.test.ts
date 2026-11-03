@@ -1173,6 +1173,25 @@ describe('transmissions entre équipes (points reliés du mois, 2026-11-02)', ()
     expect(r[0].nuitMatin).toBeNull()
   })
 
+  it('le lundi, la nuit du dimanche d’avant relie les deux semaines (2026-11-03)', () => {
+    const p = probleme({
+      salaries,
+      creneaux: [cand('m0', 'rec', 0, 7, 15, ['matin'])],
+      nbJours: 1,
+    })
+    const lundi = (fin: number) =>
+      transmissions(
+        p,
+        [{ salarieId: 'm', creneauId: 'm0' }],
+        [],
+        [{ debut: -60, fin }],
+      )[0].nuitMatin
+    // Accepté : le veilleur part à 7 h, le matin arrive à 7 h.
+    expect(lundi(7 * 60)).toBe('ok')
+    // Refusé : le veilleur part à 6 h, une heure sans personne.
+    expect(lundi(6 * 60)).toBe('manque')
+  })
+
   it('un soutien seul ne fait pas la transmission', () => {
     const r = transmissions(
       probleme({
