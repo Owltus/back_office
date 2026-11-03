@@ -10,7 +10,6 @@
 import { Check } from 'lucide-react'
 
 import { basculerIds } from '#/components/planning/parametres/reglages/tousOuCertains.ts'
-import { Tip } from '#/components/shared/Tip.tsx'
 import {
   dureeHoraire,
   grouperHoraires,
@@ -60,32 +59,33 @@ export function ChoixCodes({
               {g.horaires.map((h) => {
                 const choisi = choisis.includes(h.id)
                 return (
-                  <Tip
+                  <button
                     key={h.id}
-                    label={`${heures(dureeHoraire(h.debut, h.fin) - h.pause)} de travail`}
+                    type="button"
+                    aria-pressed={choisi}
+                    aria-label={libelleHoraire(h)}
+                    disabled={disabled}
+                    onClick={() => basculer([h.id], !choisi)}
+                    className={cn(
+                      'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs tabular-nums transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed',
+                      choisi
+                        ? 'border-primary bg-primary/15 text-foreground ring-1 ring-primary'
+                        : 'border-dashed text-muted-foreground opacity-70 hover:text-foreground hover:opacity-100',
+                    )}
                   >
-                    <button
-                      type="button"
-                      aria-pressed={choisi}
-                      aria-label={libelleHoraire(h)}
-                      disabled={disabled}
-                      onClick={() => basculer([h.id], !choisi)}
-                      className={cn(
-                        'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs tabular-nums transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed',
-                        choisi
-                          ? 'border-primary bg-primary/15 text-foreground ring-1 ring-primary'
-                          : 'border-dashed text-muted-foreground opacity-70 hover:text-foreground hover:opacity-100',
-                      )}
-                    >
-                      {choisi && <Check className="size-3 text-primary" />}
-                      <span
-                        aria-hidden
-                        className="size-2.5 shrink-0 rounded-full"
-                        style={{ background: h.couleur }}
-                      />
-                      <span>{libelleHoraire(h)}</span>
-                    </button>
-                  </Tip>
+                    {choisi && <Check className="size-3 text-primary" />}
+                    <span
+                      aria-hidden
+                      className="size-2.5 shrink-0 rounded-full"
+                      style={{ background: h.couleur }}
+                    />
+                    <span>{libelleHoraire(h)}</span>
+                    {/* Le travail pur, pause déduite (demande utilisateur
+                          du 2026-11-03). */}
+                    <span className="text-muted-foreground">
+                      ({heures(dureeHoraire(h.debut, h.fin) - h.pause)})
+                    </span>
+                  </button>
                 )
               })}
             </div>
