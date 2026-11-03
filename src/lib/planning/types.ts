@@ -57,6 +57,9 @@ export interface Poste {
   /** Heure d'ouverture (HH:MM) : ce poste de l'accueil est tenu dès cette
    * heure chaque matin (2026-11-01). Null : aucune. */
   ouverture?: string | null
+  /** Rang dans l'organigramme (0 = le plus haut ; 2026-11-03), réglé par
+   * Monter / Descendre. À égalité, l'id départage. Absent : 0. */
+  ordre?: number
 }
 
 /** Réglages généraux du planning (table `planning_reglages`, une ligne). */

@@ -45,18 +45,21 @@ export function LigneCompacte({
   libelle,
   detail,
   onOuvrir,
+  actions,
 }: {
   etiquette: string
   pastille: ReactNode
   libelle: ReactNode
   detail?: ReactNode
   onOuvrir: () => void
+  /** Boutons à côté de la ligne (Monter / Descendre des postes). */
+  actions?: ReactNode
 }) {
   return (
-    <li>
+    <li className="flex items-center">
       <button
         type="button"
-        className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors outline-none hover:bg-muted/50 focus-visible:bg-muted/50"
+        className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left text-sm transition-colors outline-none hover:bg-muted/50 focus-visible:bg-muted/50"
         onClick={onOuvrir}
         aria-label={etiquette}
       >
@@ -71,6 +74,11 @@ export function LigneCompacte({
         )}
         <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
       </button>
+      {actions && (
+        <span className="flex shrink-0 items-center gap-0.5 pr-2">
+          {actions}
+        </span>
+      )}
     </li>
   )
 }

@@ -33,7 +33,7 @@ import { supabase } from '#/lib/supabase.ts'
 const COL_HORAIRE = 'id, nom, debut, fin, couleur, pause, periode'
 const COL_MOTIF = 'id, code, nom, couleur, decompte, nature'
 const COL_POSTE =
-  'id, nom, categorie, couleur, horaires_autorises, presence, accueil_nuit, ferme, ouverture'
+  'id, nom, categorie, couleur, horaires_autorises, presence, accueil_nuit, ferme, ouverture, ordre'
 const COL_CONSIGNE = 'id, jour, periode, minimum, maximum'
 const COL_GROUPE = 'id, nom, ordre, postes_autorises'
 const COL_SALARIE =
@@ -106,7 +106,12 @@ export async function fetchReferentiel(): Promise<Referentiel> {
       .order('debut')
       .order('id'),
     supabase.from('planning_motifs').select(COL_MOTIF).order('id'),
-    supabase.from('planning_postes').select(COL_POSTE).order('id'),
+    // L'organigramme (2026-11-03) : menus, listes et lignes dans cet ordre.
+    supabase
+      .from('planning_postes')
+      .select(COL_POSTE)
+      .order('ordre')
+      .order('id'),
     supabase
       .from('planning_groupes')
       .select(COL_GROUPE)
@@ -485,6 +490,22 @@ export const supprimerSalarie = (id: number) =>
 export async function supprimerGroupe(id: number): Promise<void> {
   auMoinsUne(
     await supabase.from('planning_groupes').delete().eq('id', id).select('id'),
+  )
+}
+
+/** Réordonne les postes (ordre = position dans la liste, 2026-11-03) :
+ * toute la liste est réécrite, deux postes n'ont jamais le même rang. */
+export async function ordonnerPostes(ids: number[]): Promise<void> {
+  await Promise.all(
+    ids.map(async (id, ordre) => {
+      auMoinsUne(
+        await supabase
+          .from('planning_postes')
+          .update({ ordre })
+          .eq('id', id)
+          .select('id'),
+      )
+    }),
   )
 }
 

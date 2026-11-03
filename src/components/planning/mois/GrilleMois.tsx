@@ -412,7 +412,7 @@ export function GrilleMois({
             </tr>
           </thead>
           <tbody>
-            {parGroupe(presents, groupes).map((g) => [
+            {parGroupe(presents, groupes, referentiel.postes).map((g) => [
               <tr key={`g-${g.id}`}>
                 <td
                   colSpan={nbColonnes}

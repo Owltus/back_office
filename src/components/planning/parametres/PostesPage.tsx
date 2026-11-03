@@ -9,7 +9,7 @@
 
 import { useState } from 'react'
 import type { ReactNode } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react'
 
 import {
   useDroitsPlanning,
@@ -64,7 +64,12 @@ import { Segmente } from '#/components/planning/parametres/equipe/Segmente.tsx'
 import { tientLaNuit } from '#/lib/planning/presence.ts'
 import { dureeHoraire, heures } from '#/lib/planning/affichage.ts'
 import { JOUR_MAX_CATEGORIE } from '#/lib/planning/regles.ts'
-import { enregistrerPoste, supprimerPoste } from '#/lib/planning/service.ts'
+import {
+  enregistrerPoste,
+  ordonnerPostes,
+  supprimerPoste,
+} from '#/lib/planning/service.ts'
+import { Tip } from '#/components/shared/Tip.tsx'
 import { CATEGORIES } from '#/lib/planning/types.ts'
 import type { Poste, Referentiel } from '#/lib/planning/types.ts'
 
@@ -124,6 +129,24 @@ export function PostesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
     onOuvert,
   )
 
+  // L'organigramme (2026-11-03) : Monter / Descendre, jamais de chiffre ;
+  // toute la liste est réécrite, aucun rang partagé.
+  const ecrire = useEcriture()
+  const notifier = useNotifier()
+  const [deplacement, setDeplacement] = useState(false)
+  const deplacer = async (i: number, sens: -1 | 1) => {
+    if (!ref.data || deplacement) return
+    const ids = ref.data.postes.map((p) => p.id)
+    ;[ids[i], ids[i + sens]] = [ids[i + sens], ids[i]]
+    setDeplacement(true)
+    const r = await ecrire(
+      () => ordonnerPostes(ids),
+      "L'ordre des postes n'a pas pu être enregistré",
+    )
+    setDeplacement(false)
+    if (!r.ok) notifier(r.message, 'danger')
+  }
+
   const creer = () => {
     if (!ref.data) return
     setOuvert(null)
@@ -161,7 +184,7 @@ export function PostesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
         <>
           <EnTeteSection
             titre="Les postes de l'hôtel"
-            texte="Un clic sur un poste ouvre son réglage : nom, catégorie HCR (elle fixe la durée maximale d'un service selon la convention HCR), couleur et horaires possibles."
+            texte="Un clic sur un poste ouvre son réglage : nom, catégorie HCR (elle fixe la durée maximale d'un service selon la convention HCR), couleur et horaires possibles. L'ordre de la liste est l'organigramme : les flèches montent ou descendent un poste, et le planning range chaque groupe dans cet ordre, du poste le plus haut au plus bas."
           />
           <div className="overflow-hidden rounded-xl border bg-card">
             <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b bg-muted/40 px-3 py-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
@@ -169,9 +192,39 @@ export function PostesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
               <span>Horaires · personnes</span>
             </div>
             <ul className="divide-y">
-              {ref.data.postes.map((p) => (
+              {ref.data.postes.map((p, i, tous) => (
                 <LigneCompacte
                   key={p.id}
+                  actions={
+                    modifiable ? (
+                      <>
+                        <Tip label={`Monter ${p.nom}`}>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={`Monter ${p.nom}`}
+                            disabled={i === 0 || deplacement}
+                            onClick={() => void deplacer(i, -1)}
+                          >
+                            <ArrowUp />
+                          </Button>
+                        </Tip>
+                        <Tip label={`Descendre ${p.nom}`}>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={`Descendre ${p.nom}`}
+                            disabled={i === tous.length - 1 || deplacement}
+                            onClick={() => void deplacer(i, 1)}
+                          >
+                            <ArrowDown />
+                          </Button>
+                        </Tip>
+                      </>
+                    ) : undefined
+                  }
                   etiquette={`Régler le poste ${p.nom}`}
                   pastille={
                     <span
@@ -295,7 +348,14 @@ function CartePoste({
 
   const enregistrer = async () => {
     if (erreurs.length || envoi || (!modifie && !neuf)) return
-    const valeurs = nettoyerPoste(p)
+    // Un nouveau poste arrive en bas de l'organigramme.
+    const valeurs = neuf
+      ? {
+          ...nettoyerPoste(p),
+          ordre:
+            Math.max(-1, ...referentiel.postes.map((x) => x.ordre ?? 0)) + 1,
+        }
+      : nettoyerPoste(p)
     setEnvoi(true)
     const r = await ecrire(
       () => enregistrerPoste(valeurs, id),

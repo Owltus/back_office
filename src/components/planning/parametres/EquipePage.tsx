@@ -175,7 +175,7 @@ export function EquipePage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
             Chaque fiche décrit le contrat, les postes tenus, la semaine type et
             les absences : le planning automatique s'en sert.
           </p>
-          {parGroupe(actifs, ref.data.groupes).map((g) => (
+          {parGroupe(actifs, ref.data.groupes, ref.data.postes).map((g) => (
             <section
               key={g.id}
               aria-label={g.nom}

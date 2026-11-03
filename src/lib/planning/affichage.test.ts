@@ -7,10 +7,11 @@ import {
   nomHoraire,
   nomsCourts,
   parGroupe,
+  rangOrganigramme,
   resumeEquite,
 } from '#/lib/planning/affichage.ts'
 import type { SemaineOut } from '#/lib/planning/semaine.ts'
-import type { Poste, Salarie } from '#/lib/planning/types.ts'
+import type { Niveau, Poste, Salarie } from '#/lib/planning/types.ts'
 
 describe('messageGeneration', () => {
   it('résumé des shifts proposés, avant les places restées vides', () => {
@@ -51,6 +52,56 @@ describe('parGroupe', () => {
         membres: [{ groupe_id: null }, { groupe_id: 9 }],
       },
     ])
+  })
+})
+
+describe('organigramme (2026-11-03)', () => {
+  // Postes dans l'ordre de la page Postes : direction (1), adjoint (2),
+  // technique (7), supervision (3), réception (4).
+  const postes = [1, 2, 7, 3, 4].map((id) => ({ id }))
+  const qui = (id: string, ...c: Array<[number, Niveau]>) => ({
+    id,
+    groupe_id: 1,
+    competences: c.map(([poste_id, niveau]) => ({ poste_id, niveau })),
+  })
+  it('dans un groupe, le poste le plus haut tenu en titulaire décide', () => {
+    const reception = qui('rec', [4, 'titulaire'])
+    const sup = qui('sup', [3, 'titulaire'], [4, 'occasionnel'])
+    const tech = qui('tech', [7, 'titulaire'])
+    const adj = qui('adj', [2, 'titulaire'], [4, 'occasionnel'])
+    const dir = qui('dir', [1, 'titulaire'])
+    const r = parGroupe(
+      [reception, sup, tech, adj, dir],
+      [{ id: 1, nom: 'Direction', ordre: 0, postes_autorises: [] }],
+      postes,
+    )
+    expect(r[0].membres.map((m) => m.id)).toEqual([
+      'dir',
+      'adj',
+      'tech',
+      'sup',
+      'rec',
+    ])
+  })
+  it('un dépannage haut ne passe pas devant un titulaire ; sans poste, en dernier', () => {
+    const depanne = qui('dep', [1, 'occasionnel'])
+    const titulaire = qui('tit', [4, 'titulaire'])
+    const rien = qui('rien')
+    expect(rangOrganigramme(titulaire, postes)).toBeLessThan(
+      rangOrganigramme(depanne, postes),
+    )
+    expect(rangOrganigramme(depanne, postes)).toBeLessThan(
+      rangOrganigramme(rien, postes),
+    )
+    // À rang égal, l'ordre reçu reste (le tri est stable).
+    const a = qui('a', [4, 'titulaire'])
+    const b = qui('b', [4, 'titulaire'])
+    const r = parGroupe(
+      [b, a],
+      [{ id: 1, nom: 'G', ordre: 0, postes_autorises: [] }],
+      postes,
+    )
+    expect(r[0].membres.map((m) => m.id)).toEqual(['b', 'a'])
   })
 })
 

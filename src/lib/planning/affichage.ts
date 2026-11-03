@@ -285,12 +285,40 @@ export function metier(
   return [...new Set(noms)].join(' · ')
 }
 
-/** Range le staff par groupe (ordre choisi), puis « Sans groupe ». */
-export function parGroupe<T extends Pick<Salarie, 'groupe_id'>>(
+/** Rang d'une personne dans l'organigramme (2026-11-03) : la place, dans
+ * `postes` (déjà dans l'ordre), de son poste le plus haut tenu en
+ * titulaire ; sans titulaire, celui de ses autres postes, après tous les
+ * titulaires ; sans poste, en dernier. */
+export function rangOrganigramme(
+  s: Partial<Pick<Salarie, 'competences'>>,
+  postes: ReadonlyArray<Pick<Poste, 'id'>>,
+): number {
+  const place = new Map(postes.map((p, i) => [p.id, i]))
+  const n = postes.length
+  let rang = 2 * n
+  for (const c of s.competences ?? []) {
+    const i = place.get(c.poste_id)
+    if (i === undefined) continue
+    rang = Math.min(rang, c.niveau === 'titulaire' ? i : n + i)
+  }
+  return rang
+}
+
+/** Range le staff par groupe (ordre choisi), puis « Sans groupe ». Dans un
+ * groupe, par l'organigramme (`rangOrganigramme`, quand `postes` est
+ * donné), puis dans l'ordre reçu. */
+export function parGroupe<
+  T extends Pick<Salarie, 'groupe_id'> & Partial<Pick<Salarie, 'competences'>>,
+>(
   salaries: T[],
   groupes: Groupe[],
+  postes?: ReadonlyArray<Pick<Poste, 'id'>>,
 ): Array<{ id: number; nom: string; membres: T[] }> {
   const connus = new Set(groupes.map((g) => g.id))
+  if (postes) {
+    const rangs = new Map(salaries.map((s) => [s, rangOrganigramme(s, postes)]))
+    salaries = [...salaries].sort((a, b) => rangs.get(a)! - rangs.get(b)!)
+  }
   return [
     ...[...groupes]
       .sort((a, b) => a.ordre - b.ordre || a.id - b.id)

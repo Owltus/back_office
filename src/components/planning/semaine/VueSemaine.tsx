@@ -327,7 +327,11 @@ export function VueSemaine({
       cache.set(s.id, { cle, ligne })
       lignes.set(s.id, ligne)
     }
-    const enGroupes = parGroupe(visibles, referentiel.groupes).map((g) => ({
+    const enGroupes = parGroupe(
+      visibles,
+      referentiel.groupes,
+      referentiel.postes,
+    ).map((g) => ({
       id: g.id,
       nom: g.nom,
       lignes: g.membres.map((m) => lignes.get(m.id) as DonneesLigne),

@@ -2436,6 +2436,14 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   au groupe choisi) et le FORFAIT JOURS (`Evolution.forfait_jours`) à
   partir de la date. Aucune migration. Un poste qui n'est plus tenu
   (ex. plus d'adjoint) : ses besoins restent, à retirer ou fermer le poste.
+- **ORGANIGRAMME (demande utilisateur du 2026-11-03)** : colonne
+  `planning_postes.ordre` (migration `20261103100000_planning_postes_ordre`,
+  ajout seul, tous à 0, l'id départage), réglée par Monter / Descendre dans
+  la page Postes (`ordonnerPostes` réécrit 0..n : jamais de rang partagé ni
+  de chiffre saisi). Les postes se lisent dans cet ordre partout. Lignes du
+  planning : groupe (son ordre) puis `rangOrganigramme` (poste le plus haut
+  tenu en titulaire, puis les autres niveaux, puis sans poste), puis l'ordre
+  reçu.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 
