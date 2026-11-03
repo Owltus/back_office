@@ -2412,6 +2412,13 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   (`generateur.ts`, boucle des consignes), relevé seulement par les shifts
   posés à la main. Avant, le surplus souple (D8) ajoutait un deuxième
   veilleur pour lui donner ses heures dues. Le jour garde D8.
+- **JAMAIS D'EXTRA AU CALCUL (décision utilisateur du 2026-11-03 : « les
+  extras, c'est des gens qu'il faut d'abord contacter avant de shifter,
+  laisse les cases vides »)** : `compatible` exclut tout `placementManuel`
+  (remplace D7 « extra avant vide » et Q17) ; posés à la main, ils sont
+  gardés. Une place que l'équipe ne peut pas tenir reste vide, raison
+  EXTRA « à appeler et poser à la main » (`raisonsBlocage` et
+  `raisonsBlocageAccueil`).
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

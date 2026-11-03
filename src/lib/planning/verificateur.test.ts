@@ -1235,9 +1235,10 @@ describe('tableau de l’accueil (vérificateur)', () => {
       consignes: chiffres,
     })
     const r = raisonsBlocageAccueil(q, [aff('d', 'pm')], ['pm', 'px'])
-    // Libre : aucune raison. Un extra libre est libre (pas « à appeler »).
+    // Libre : aucune raison. Un extra libre est « à appeler » : le calcul
+    // ne le place jamais (2026-11-03).
     expect(r.get('a')).toEqual([])
-    expect(r.get('e')).toEqual([])
+    expect(r.get('e')!.map((v) => v.regle)).toEqual(['EXTRA'])
     expect(r.get('f')!.map((v) => v.regle)).toEqual(['HORAIRE-PERSO'])
     expect(r.get('x')!.map((v) => v.regle)).toEqual(['ABSENCE'])
     // Ni l'apprenti (jamais seul), ni qui ne tient pas l'accueil, ni qui

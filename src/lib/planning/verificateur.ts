@@ -1131,6 +1131,18 @@ export function raisonsBlocageAccueil(
         meilleure = liste
       if (!liste.length) break
     }
+    // Un extra libre n'est jamais placé par le calcul (2026-11-03) : il
+    // reste à appeler, comme sur une place (`raisonsBlocage`).
+    if (meilleure !== null && s.placementManuel && meilleure.length === 0)
+      meilleure = [
+        {
+          salarieId: s.id,
+          regle: 'EXTRA',
+          message: 'extra disponible : à appeler et poser à la main',
+          creneaux: cibles.map((c) => c.id),
+          nature: 'organisation',
+        },
+      ]
     if (meilleure !== null) raisons.set(s.id, meilleure)
   }
   return raisons

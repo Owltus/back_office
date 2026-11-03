@@ -872,9 +872,9 @@ export function AidePlanningContenu({
               Le titulaire avant le dépannage
             </span>{' '}
             : un titulaire à l’horaire demandé, puis un titulaire sur un autre
-            horaire du même moment, puis un dépannage, puis un extra. Un
-            collègue en dépannage vaut mieux qu’une règle du bien-être
-            enfreinte.
+            horaire du même moment, puis un dépannage. Jamais un extra : il
+            s’appelle d’abord, puis se pose à la main. Un collègue en dépannage
+            vaut mieux qu’une règle du bien-être enfreinte.
           </li>
           <li>
             <span className="font-medium text-foreground">Le confort</span> :
@@ -1000,7 +1000,7 @@ export function AidePlanningContenu({
             items={[
               `Partage des week-ends, des soirs et des matins tôt, sur les ${SEMAINES_EQUITE} dernières semaines, entre tout l’accueil (Réception et Club, apprentis compris), à la part de contrat de chacun. Une semaine d’absence ne met personne en retard.`,
               'Le week-end libre passe avant la semaine type : un samedi ou un dimanche fixé en Travaille dans la fiche est libéré une fois sur 4 semaines, et les repos fixes de cette semaine-là peuvent bouger. Une alerte le dit.',
-              'Un extra ne sert jamais à libérer un week-end ni à mieux répartir : il coûte de l’argent. L’app ne le propose que pour une place qui resterait vide.',
+              'Le calcul ne place jamais un extra : il faut d’abord l’appeler. Une place que l’équipe ne peut pas tenir reste vide, et les ronds et triangles du mois le montrent en rouge.',
               `Les heures au-delà du contrat vont d’abord à qui en a fait le moins sur les ${SEMAINES_EQUITE} dernières semaines. Au-delà du contrat ${SEMAINES_EN_PLUS_ALERTE} semaines sur 4 : une alerte.`,
               'Les jours fériés travaillés sont rattrapés dans les semaines qui suivent, même sur un jour habituel de la semaine type.',
             ]}

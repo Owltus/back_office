@@ -74,6 +74,12 @@ n'y a pas le choix, il faut faire au mieux, le meilleur compromis. » Les besoin
 chiffres de l'accueil) passent donc avant toute règle morale ; une règle morale cède quand il n'y a
 pas le choix, sans jamais faire échouer le calcul, et une alerte le dit.
 
+**Les extras ne sont JAMAIS placés par le calcul** (décision utilisateur du 2026-11-03, soir :
+« les extras, c'est des gens qu'il faut d'abord contacter avant de shifter, laisse les cases
+vides »). `compatible` les exclut de tout créneau ; posés à la main, ils sont gardés. Une place
+que l'équipe ne peut pas tenir reste vide, et sa raison dit « extra disponible : à appeler et
+poser à la main ». Ce qui suit est l'HISTORIQUE (avant ce soir) :
+
 **Les extras** (décision utilisateur du 2026-11-03) : un extra coûte de l'argent. Il ne sert jamais
 à libérer un week-end ni à mieux répartir la charge. Il ne vient que pour une place qui resterait
 vide autrement (vrai manque de personnel). Moteur : `coutExtra` compte, en plus de ce qu'il

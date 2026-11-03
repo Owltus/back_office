@@ -743,9 +743,11 @@ export function compatible(s: SalarieSolveur, c: Creneau): boolean {
   const j = jourDe(c)
   const r = role(s, c.poste)
   return (
-    // Un extra n'est placé que sur un candidat de l'accueil (D7) ; un
-    // soutien y trouve toujours sa place (D5), accompagné (`construire`).
-    (!s.placementManuel || c.accueil) &&
+    // Un extra n'est JAMAIS placé par le calcul (décision utilisateur du
+    // 2026-11-03 : « on contacte un extra avant de le shifter, laisse les
+    // cases vides ») : seulement posé à la main. Un soutien trouve toujours
+    // sa place sur l'accueil (D5), accompagné (`construire`).
+    !s.placementManuel &&
     r !== null &&
     (r !== 'soutien' || c.soutien > 0 || c.accueil) &&
     !s.indisponibilites.has(j) &&

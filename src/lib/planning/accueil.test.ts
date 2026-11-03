@@ -361,7 +361,7 @@ describe('un soutien compte, jamais seul (D5)', () => {
 
 // -------------------------------------------------------- ordre D7
 
-describe('titulaire < dépannage < extra < vide (D7)', () => {
+describe('titulaire < dépannage < vide, jamais un extra (D7, 2026-11-03)', () => {
   const tit = sal('tit')
   const dep = sal('dep', { postesOccasionnels: new Set(['rec', 'club']) })
   const ext = extra('ext')
@@ -380,12 +380,17 @@ describe('titulaire < dépannage < extra < vide (D7)', () => {
       expect(qui(gen(p([ext, dep], graine)))).toEqual(['dep@rm'])
     }
     expect(qui(gen(p([ext, dep, tit])))).toEqual(['tit@rm'])
-    // Accepté : un extra est placé par l'app sur l'accueil (changement de
-    // règle du 2026-11-01).
-    expect(qui(gen(p([ext])))).toEqual(['ext@rm'])
-    // Vide : personne.
-    const vide = p([])
-    expect(ecarts(vide, gen(vide))).toEqual([-1])
+    // Refusé (décision utilisateur du 2026-11-03) : un extra seul ne vient
+    // pas, la case reste vide (on l'appelle avant de le poser à la main).
+    const avecExtra = p([ext])
+    expect(qui(gen(avecExtra))).toEqual([])
+    expect(ecarts(avecExtra, gen(avecExtra))).toEqual([-1])
+    // Accepté : posé à la main, il est gardé.
+    const pose = probleme({
+      ...p([ext]),
+      imposees: new Set(['ext|rm']),
+    })
+    expect(qui(gen(pose))).toEqual(['ext@rm'])
   })
 
   it('refusé : un extra n’est jamais placé hors de l’accueil', () => {
@@ -445,7 +450,8 @@ describe('titulaire < dépannage < extra < vide (D7)', () => {
       expect(r.affectations.some((a) => a.salarieId === 'ext')).toBe(false)
       expect(ecarts(p, r).slice(-2)).toEqual([0, 0])
     }
-    // Accepté : personne d'autre pour le samedi, l'extra vient.
+    // Refusé aussi quand personne d'autre ne peut venir le samedi : la
+    // case reste vide (2026-11-03).
     const seul = probleme({
       salaries: [
         sal('a', {
@@ -459,7 +465,7 @@ describe('titulaire < dépannage < extra < vide (D7)', () => {
       consignes: [chiffre(5, 'matin', 1), chiffre(6, 'matin', 1)],
       nbJours: 7,
     })
-    expect(qui(gen(seul))).toEqual(['a@m6', 'ext@m5'])
+    expect(qui(gen(seul))).toEqual(['a@m6'])
   })
 })
 
