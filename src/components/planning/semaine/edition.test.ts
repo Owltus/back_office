@@ -173,11 +173,10 @@ describe('statutDuJour', () => {
       ),
     ).toMatchObject({ genre: 'ecole', fixe: true })
   })
-  it('repos seulement s’il est sûr : fiche ou semaine complète', () => {
+  it('repos seulement s’il est officiel : la semaine type (2026-11-03)', () => {
     expect(statutDuJour(bilan(), 3, MOTIFS)).toBeNull()
-    expect(
-      statutDuJour(bilan({ repos_deduits: [3] }), 3, MOTIFS),
-    ).toMatchObject({ genre: 'repos', fixe: false })
+    // Refusé : un repos deviné sur un jour vide ; la case reste vide.
+    expect(statutDuJour(bilan({ repos_deduits: [3] }), 3, MOTIFS)).toBeNull()
     expect(statutDuJour(bilan({ repos_fixes: [3] }), 3, MOTIFS)).toMatchObject({
       genre: 'repos',
       fixe: true,
@@ -201,18 +200,19 @@ describe('repos validés comme les shifts (2026-10-31)', () => {
       proposition: false,
     })
   })
-  it('repos déduit : une proposition, à écrire en base pour la valider', () => {
-    expect(validationRepos(bilan({ repos_deduits: [3] }), 3, motifs)).toEqual({
+  it('repos déduit sur un congé en trop : une proposition, à écrire pour la valider', () => {
+    const conge = bilan({ repos_deduits: [3], absences: { 3: 1 } })
+    expect(validationRepos(conge, 3, motifs)).toEqual({
       valide: false,
       deduit: true,
     })
-    expect(
-      statutDuJour(bilan({ repos_deduits: [3] }), 3, motifs),
-    ).toMatchObject({ proposition: true })
+    expect(statutDuJour(conge, 3, motifs)).toMatchObject({ proposition: true })
     // Semaine verrouillée : le planning est réalisé, rien n'est proposé.
-    expect(
-      statutDuJour(bilan({ repos_deduits: [3] }), 3, motifs, true),
-    ).toMatchObject({ proposition: false })
+    expect(statutDuJour(conge, 3, motifs, true)).toMatchObject({
+      proposition: false,
+    })
+    // Refusé : sur un jour vide, plus rien à valider (2026-11-03).
+    expect(validationRepos(bilan({ repos_deduits: [3] }), 3, motifs)).toBeNull()
   })
   it('repos posé : validé ou en proposition', () => {
     expect(validationRepos(bilan({ absences: { 1: 9 } }), 1, motifs)).toEqual({
@@ -245,23 +245,28 @@ describe('repos validés comme les shifts (2026-10-31)', () => {
     ).toBeNull()
     expect(validationRepos(bilan(), 1, motifs)).toBeNull()
   })
-  it('repos à valider et compteurs : déduits et posés en proposition', () => {
+  it('repos à valider et compteurs : déduits sur un congé, et posés en proposition', () => {
     const semaine = {
       affectations: [shift({ epinglee: false })],
       bilan: [
-        bilan({ salarie_id: 1, repos_deduits: [5, 6] }),
-        bilan({ salarie_id: 2, repos_deduits: [6], repos_proposes: [2] }),
+        // Le 5 est un congé en trop ; le 6, un jour vide (plus rien déduit).
+        bilan({ salarie_id: 1, repos_deduits: [5, 6], absences: { 5: 1 } }),
+        bilan({
+          salarie_id: 2,
+          repos_deduits: [6],
+          repos_proposes: [2],
+          absences: { 2: 9, 6: 1 },
+        }),
       ],
       verrouillee: false,
     } as unknown as SemaineOut
     expect(reposAValider(semaine)).toEqual([
       { salarie_id: 1, jour: 5 },
-      { salarie_id: 1, jour: 6 },
       { salarie_id: 2, jour: 6 },
     ])
     expect(reposAValider(semaine, 6, 2)).toEqual([{ salarie_id: 2, jour: 6 }])
-    expect(reposProposesParJour(semaine)).toEqual([0, 0, 1, 0, 0, 1, 2])
-    expect(compteurs(semaine)).toMatchObject({ propositions: 5, valides: 0 })
+    expect(reposProposesParJour(semaine)).toEqual([0, 0, 1, 0, 0, 1, 1])
+    expect(compteurs(semaine)).toMatchObject({ propositions: 4, valides: 0 })
     const verrouillee = { ...semaine, verrouillee: true } as SemaineOut
     expect(reposAValider(verrouillee)).toEqual([])
     expect(reposProposesParJour(verrouillee)).toEqual([0, 0, 0, 0, 0, 0, 0])
@@ -269,9 +274,10 @@ describe('repos validés comme les shifts (2026-10-31)', () => {
 })
 
 describe('reposDe', () => {
-  it('repos fixé ou déduit ; ni une absence, ni hors contrat, ni rien', () => {
+  it('repos de la semaine type seulement ; ni deviné, ni une absence, ni hors contrat', () => {
     expect(reposDe(bilan({ repos_fixes: [3] }), 3)).toEqual({ fixe: true })
-    expect(reposDe(bilan({ repos_deduits: [3] }), 3)).toEqual({ fixe: false })
+    // Refusé : un repos deviné (2026-11-03).
+    expect(reposDe(bilan({ repos_deduits: [3] }), 3)).toBeNull()
     expect(
       reposDe(bilan({ repos_fixes: [3], absences: { 3: 1 } }), 3),
     ).toBeNull()

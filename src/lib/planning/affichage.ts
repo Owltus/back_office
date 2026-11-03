@@ -410,15 +410,15 @@ export function resumeEquite(
     : ''
 }
 
-/** Un jour sans shift ni absence est un repos (pas « non attribué ») quand
- * c'est sûr : repos de la fiche, ou semaine déjà complète (repos déduits).
- * Sinon la case reste « non attribué » (décision utilisateur du 2026-10-27 :
- * retirer un shift doit remettre la case à vide, un repos n'est pas posé). */
+/** Un jour sans shift ni absence n'est un repos que s'il est OFFICIEL : un
+ * repos de la semaine type. Sinon la case reste « non attribué » (décisions
+ * utilisateur du 2026-10-27, puis du 2026-11-03 : « en temps normal, leur
+ * planning est censé être vide ; les repos ne se posent qu'à la main ou par
+ * la génération »). Les repos d'une génération sont ENREGISTRÉS en
+ * proposition (`reposAProposer`) : ils passent par les absences, comme un
+ * repos posé, et se retirent avec « Vider la case ». */
 export function jourDeRepos(b: BilanOut, jour: number): boolean {
-  // Une semaine couverte par l'école ou les congés passe par les repos
-  // déduits du moteur (qui n'en donne ni aux extras, ni aux apprentis, ni aux
-  // stagiaires) : plus de seconde règle ici.
-  return b.repos_fixes.includes(jour) || b.repos_deduits.includes(jour)
+  return b.repos_fixes.includes(jour)
 }
 
 /** Sous contrat ce jour-là et proposé au planning. */

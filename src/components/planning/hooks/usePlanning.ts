@@ -19,6 +19,7 @@ import {
   analyser,
   aPoserFixes,
   preparerGeneration,
+  reposAProposer,
 } from '#/lib/planning/semaine.ts'
 import type {
   DonneesSemaine,
@@ -276,8 +277,34 @@ export function useGenerer() {
         nouvelles,
         absences: g.absences(resultat),
       })
+      let apres = await fetchSemaine(lundi)
+      // Une génération COMPLÈTE pose aussi ses repos, en proposition
+      // (2026-11-03) : ceux que la semaine générée déduit, sur les jours
+      // vides. Jamais pour la pose des horaires fixes (`seulement`).
+      const motifRepos = options.seulement
+        ? undefined
+        : referentiel.motifs?.find((m) => m.nature === 'repos')
+      if (motifRepos) {
+        const repos = reposAProposer(
+          analyser(donneesSemaine(lundi, referentiel, apres), aujourdhui),
+          g.depuis,
+          motifRepos.id,
+        )
+        if (repos.length) {
+          await appliquerGeneration({
+            lundi,
+            etat: await fetchEtatSemaine(lundi),
+            depuis: g.depuis,
+            tout: false,
+            exclus: [],
+            sansEffacer: true,
+            nouvelles: [],
+            absences: repos,
+          })
+          apres = await fetchSemaine(lundi)
+        }
+      }
       await qc.invalidateQueries({ queryKey: planningKeys.all })
-      const apres = await fetchSemaine(lundi)
       qc.setQueryData(planningKeys.semaine(lundi), apres)
       return {
         poses,

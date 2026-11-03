@@ -34,6 +34,7 @@ import {
   preparerGeneration,
   raisonCommune,
   remplacantsDe,
+  reposAProposer,
   semaineRemplie,
 } from '#/lib/planning/semaine.ts'
 import { REGLES_BLOCAGE } from '#/lib/planning/raisonsPlaces.ts'
@@ -2407,5 +2408,47 @@ describe('Martin V3-I : remplaçants, propriété', () => {
       ),
       { numRuns: 500 },
     )
+  })
+})
+
+describe('reposAProposer (2026-11-03)', () => {
+  const b = (kw: Record<string, unknown>) =>
+    ({
+      salarie_id: 1,
+      repos_deduits: [],
+      absences: {},
+      hors_contrat: [],
+      repos_fixes: [],
+      ...kw,
+    }) as never
+  it('pose les repos déduits des jours vides à venir, en proposition', () => {
+    const r = reposAProposer(
+      {
+        affectations: [{ salarie_id: 1, jour: 4 }] as never,
+        bilan: [
+          b({
+            repos_deduits: [0, 2, 4, 5, 6],
+            absences: { 5: 3 },
+            hors_contrat: [6],
+          }),
+        ],
+      },
+      1,
+      12,
+    )
+    // 0 : passé ; 4 : un shift ; 5 : une absence ; 6 : hors contrat.
+    expect(r).toEqual([{ salarie_id: 1, jour: 2, motif_id: 12 }])
+  })
+  it('refusé : un repos de la semaine type (déjà officiel)', () => {
+    expect(
+      reposAProposer(
+        {
+          affectations: [],
+          bilan: [b({ repos_deduits: [3], repos_fixes: [3] })],
+        },
+        0,
+        12,
+      ),
+    ).toEqual([])
   })
 })

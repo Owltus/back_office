@@ -173,7 +173,9 @@ export function validationRepos(
 }
 
 /** Repos déduits à écrire validés par « Valider » : toute la semaine, ou un
- * jour, ou une personne. Rien sur une semaine verrouillée. */
+ * jour, ou une personne. Seulement ceux qui tombent sur un jour de congé en
+ * trop (le repos y remplace le congé) : sur un jour vide, plus rien n'est
+ * deviné (2026-11-03). Rien sur une semaine verrouillée. */
 export function reposAValider(
   semaine: SemaineOut | null | undefined,
   jour: number | null = null,
@@ -184,6 +186,7 @@ export function reposAValider(
     salarieId !== null && b.salarie_id !== salarieId
       ? []
       : b.repos_deduits
+          .filter((j) => j in b.absences)
           .filter((j) => jour === null || j === jour)
           .map((j) => ({ salarie_id: b.salarie_id, jour: j })),
   )
@@ -197,7 +200,8 @@ export function reposProposesParJour(semaine: SemaineOut): number[] {
   if (semaine.verrouillee) return n
   for (const b of semaine.bilan)
     for (const j of [
-      ...b.repos_deduits,
+      // Déduit : seulement sur un congé en trop (un jour vide n'en a plus).
+      ...b.repos_deduits.filter((x) => x in b.absences),
       ...b.repos_proposes,
       ...(b.jfr_proposes ?? []),
     ])

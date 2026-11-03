@@ -140,7 +140,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':J', (select j from t_ids)::text);
 $$;
 
-select plan(82);
+select plan(83);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -490,6 +490,13 @@ select is(pg_temp.essai('gestion', array[
   pg_temp.q('select public.planning_supprimer_salarie(:S2)'),
   pg_temp.q('select coalesce(s.suite_de::text, ''tete'') || ''/'' || (select (t.suite_de = :S3)::text from public.planning_salaries t where t.prenom = ''Test4'' and t.nom = ''PLANNING'') from public.planning_salaries s where s.id = :S3')]),
   'tete/true', 'premier contrat supprimé : le plus ancien suivant devient la tête, l''autre le suit');
+
+-- Une génération pose ses repos en proposition (2026-11-03) : un motif de
+-- nature repos est accepté, comme un JFR, jamais validé d'office.
+select is(pg_temp.essai('ecriture', array[
+  pg_temp.q('select public.planning_appliquer_generation(:F, public.planning_etat_semaine(:F), 0, false, ''{}'', true, jsonb_build_array(jsonb_build_object(''salarie_id'', :S3, ''jour'', 4, ''motif_id'', :R)))'),
+  pg_temp.q('select string_agg(epinglee::text, '','') from public.planning_absences where salarie_id = :S3 and jour = :F::date + 4 and motif_id = :R')]),
+  'false', 'génération : un repos se pose en proposition');
 
 select * from finish();
 rollback;

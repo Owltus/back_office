@@ -3015,3 +3015,36 @@ export function joursFixesManquants(
       : [],
   )
 }
+
+/** Les repos qu'une génération complète POSE en proposition (2026-11-03,
+ * demande utilisateur : « en temps normal, leur planning est censé être
+ * vide ; les repos ne se posent qu'à la main ou par la génération »). Ce
+ * sont les repos déduits (`reposDeduits`) de la semaine générée, sur un jour
+ * à venir (`depuis`) sans shift ni absence ni hors contrat ; écrits comme un
+ * jour férié rattrapé proposé (pointillés, « Valider » les garde,
+ * « Effacer » ou un nouveau calcul les retire, « Vider la case » aussi). */
+export function reposAProposer(
+  semaine: Pick<SemaineOut, 'bilan' | 'affectations'>,
+  depuis: number,
+  motifRepos: number,
+): NouvelleAbsence[] {
+  const pris = new Set(
+    semaine.affectations.map((a) => `${a.salarie_id}|${a.jour}`),
+  )
+  return semaine.bilan.flatMap((b) =>
+    b.repos_deduits
+      .filter(
+        (j) =>
+          j >= depuis &&
+          !(j in b.absences) &&
+          !b.hors_contrat.includes(j) &&
+          !b.repos_fixes.includes(j) &&
+          !pris.has(`${b.salarie_id}|${j}`),
+      )
+      .map((jour) => ({
+        salarie_id: b.salarie_id,
+        jour,
+        motif_id: motifRepos,
+      })),
+  )
+}

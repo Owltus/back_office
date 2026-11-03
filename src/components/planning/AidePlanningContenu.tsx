@@ -217,7 +217,7 @@ const STATUTS: ReadonlyArray<{
     nom: 'Repos proposé',
     pastille: <CarteStatut s={statut({ proposition: true })} />,
     texte:
-      'Pointillés. Déduit par l’app quand la semaine est remplie : les jours libres qui restent deviennent des repos. Validez-le comme un shift.',
+      'Pointillés. Posé par la génération sur les jours libres qui restent. Validez-le comme un shift, ou retirez-le avec Vider la case.',
   },
   {
     nom: 'Repos posé',
@@ -795,7 +795,7 @@ export function AidePlanningContenu({
           <Liste
             items={[
               'Deux repos par semaine pour chacun. Un jour hors contrat en retire un, deux jours hors contrat les retirent tous les deux.',
-              'Ils sont déduits quand la semaine est remplie (générée ou faite à la main), ou dès que les heures dues sont faites.',
+              'Une case vide reste vide : l’app ne devine aucun repos. La génération pose les repos en proposition ; à la main, on les pose d’un clic droit. Un repos posé, proposé ou validé, se retire avec Vider la case.',
               'En congé toute la semaine, deux jours de congé deviennent des repos proposés : les jours de congé ne sont pas des jours de repos.',
               'Apprentis et stagiaires : leur ligne reste vide, sauf l’école, tant que la semaine n’est pas remplie.',
               'Un repos proposé part avec les propositions quand on recalcule ou qu’on efface.',

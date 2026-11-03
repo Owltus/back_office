@@ -2457,6 +2457,15 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   créée par erreur » (jamais servie). Un extra qu'on n'appelle plus se
   désactive ; un extra embauché : son contrat d'extra s'arrête la veille du
   nouveau contrat, tout seul.
+- **LES REPOS SE POSENT, ILS NE SE DEVINENT PLUS (décision utilisateur du
+  2026-11-03 : « en temps normal, leur planning est censé être vide »)** :
+  une case vide n'affiche plus de repos déduit (`jourDeRepos` = la semaine
+  type seulement) ; une génération COMPLÈTE (jamais la pose des fixes,
+  `seulement`) enregistre ses repos en proposition (`reposAProposer`,
+  second appel de `planning_appliquer_generation`, qui accepte un motif de
+  nature repos depuis la migration `20261103120000_planning_generation_repos`),
+  validables, effacés par un nouveau calcul ou Effacer, retirés par « Vider
+  la case ». Seul reste déduit à l'écran le repos sur un congé en trop.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 
