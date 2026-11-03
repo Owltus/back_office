@@ -30,6 +30,8 @@ const etat = vi.hoisted(() => ({
   absences: [] as Absence[],
   verrous: [] as string[],
   shifts: [] as Affectation[],
+  /** Shifts + absences par contrat (0 par défaut : jamais servi). */
+  historique: {} as Record<number, number>,
 }))
 const service = vi.hoisted(() => ({
   enregistrerSalarie: vi.fn(async (_v: unknown, id: number | null) => id ?? 99),
@@ -63,6 +65,8 @@ vi.mock('#/lib/planning/service.ts', () => ({
     etat.absences.filter((a) => a.salarie_id === id),
   fetchShiftsSalarie: async (id: number) =>
     etat.shifts.filter((a) => a.salarie_id === id),
+  fetchHistoriqueContrats: async (ids: number[]) =>
+    Object.fromEntries(ids.map((i) => [i, etat.historique[i] ?? 0])),
   fetchSemaine: vi.fn(),
   fetchEtatSemaine: vi.fn(),
   appliquerGeneration: vi.fn(),
@@ -84,6 +88,7 @@ beforeEach(() => {
   etat.absences = []
   etat.verrous = []
   etat.shifts = []
+  etat.historique = {}
   vi.clearAllMocks()
   service.enregistrerSalarie.mockImplementation(
     async (_v: unknown, id: number | null) => id ?? 99,
@@ -470,20 +475,23 @@ describe('FicheSalarie', () => {
     }
     demo.referentiel.salaries.push(suite)
     try {
+      etat.historique = { [LUCAS]: 40 }
       ouvrir(LUCAS)
-      expect(
-        await screen.findByRole('button', { name: /Supprimer ce contrat/ }),
-      ).toBeTruthy()
-      // Refusé : « Supprimer la fiche » n'apparaît pas, il ne supprime
-      // jamais la personne entière.
+      const corbeille = await screen.findByRole('button', {
+        name: /Supprimer le contrat CDD du 01\/10\/2026/,
+      })
+      // Refusé : en bas, rien ne supprime la personne qui a travaillé.
       expect(
         screen.queryByRole('button', { name: /Supprimer la fiche/ }),
       ).toBeNull()
-      fireEvent.click(
+      // Refusé : le contrat qui a un historique ne se supprime pas.
+      expect(
         screen.getByRole('button', {
-          name: /Supprimer le contrat CDD du 01\/10\/2026/,
+          name: /Supprimer le contrat CDI du 05\/01\/2026/,
         }),
-      )
+      ).toHaveProperty('disabled', true)
+      await waitFor(() => expect(corbeille).toHaveProperty('disabled', false))
+      fireEvent.click(corbeille)
       expect(
         await screen.findByText(/Supprimer le contrat CDD du 01\/10\/2026/),
       ).toBeTruthy()
@@ -503,9 +511,62 @@ describe('FicheSalarie', () => {
     }
   })
 
+  it('embaucher un extra : son contrat d’extra s’arrête la veille du nouveau', async () => {
+    const lucas = demo.referentiel.salaries.find((s) => s.id === LUCAS)!
+    const avant = { ...lucas }
+    Object.assign(lucas, {
+      type_contrat: 'extra',
+      heures_hebdo: 0,
+      date_entree: '2026-03-01',
+      date_sortie: null,
+    })
+    try {
+      ouvrir(LUCAS)
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Ajouter un contrat' }),
+      )
+      fireEvent.change(screen.getByLabelText('Type de contrat'), {
+        target: { value: 'cdi' },
+      })
+      fireEvent.change(screen.getByLabelText('Début'), {
+        target: { value: '2026-12-01' },
+      })
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Ajouter le contrat' }),
+      )
+      await waitFor(() =>
+        expect(service.enregistrerSalarie).toHaveBeenCalledTimes(2),
+      )
+      const [[extra, idExtra], [cdi, idCdi]] = service.enregistrerSalarie.mock
+        .calls as [Record<string, unknown>, number | null][]
+      expect(idExtra).toBe(LUCAS)
+      expect(extra).toMatchObject({
+        type_contrat: 'extra',
+        date_sortie: '2026-11-30',
+      })
+      expect(idCdi).toBeNull()
+      expect(cdi).toMatchObject({ date_entree: '2026-12-01', suite_de: LUCAS })
+    } finally {
+      Object.assign(lucas, avant)
+    }
+  })
+
+  it('une fiche qui a servi ne se supprime pas ; créée par erreur, si', async () => {
+    etat.historique = { [LUCAS]: 12 }
+    ouvrir(LUCAS)
+    await screen.findByRole('button', { name: 'Enregistrer' })
+    expect(
+      screen.queryByRole('button', { name: /Supprimer la fiche/ }),
+    ).toBeNull()
+  })
+
   it('supprimer demande confirmation puis appelle le service', async () => {
     ouvrir(LUCAS)
-    fireEvent.click(await screen.findByRole('button', { name: /Supprimer/ }))
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: /Supprimer la fiche créée par erreur/,
+      }),
+    )
     expect(service.supprimerSalarie).not.toHaveBeenCalled()
     fireEvent.click(
       await screen.findByRole('button', { name: 'Supprimer la fiche' }),

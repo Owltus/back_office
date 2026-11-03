@@ -2444,6 +2444,19 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   planning : groupe (son ordre) puis `rangOrganigramme` (poste le plus haut
   tenu en titulaire, puis les autres niveaux, puis sans poste), puis l'ordre
   reçu.
+- **CONTRATS D'UNE PERSONNE (2026-11-03, « applique les bonnes pratiques
+  RH »)** : une personne = des fiches liées par `suite_de` (`parcours.ts`),
+  une ligne dans l'Équipe, la liste « Contrats » dans la fiche (ouvrir,
+  « Ajouter un contrat » à n'importe quelles dates, corbeille par ligne).
+  Deux contrats actifs ne se recouvrent jamais (`chevauche`, à l'ajout, à
+  l'enregistrement, à l'évolution). On ne SUPPRIME pas l'historique de
+  quelqu'un qui a travaillé : `planning_supprimer_salarie` refuse tout
+  contrat qui a un shift ou une absence (migration
+  `20261103110000_planning_supprimer_contrat`, qui garde aussi le parcours
+  d'un seul tenant) ; le bas de la fiche n'offre que « Supprimer la fiche
+  créée par erreur » (jamais servie). Un extra qu'on n'appelle plus se
+  désactive ; un extra embauché : son contrat d'extra s'arrête la veille du
+  nouveau contrat, tout seul.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

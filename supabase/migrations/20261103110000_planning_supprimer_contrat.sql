@@ -7,9 +7,14 @@
 -- (FK `on delete set null`) : il devenait une autre personne. Désormais, ce
 -- qui suivait le contrat supprimé est rattaché à ce qui le précédait.
 --
--- La garde du planning réalisé reste : un contrat qui a des jours dans une
--- semaine verrouillée ne se supprime qu'une fois ces semaines déverrouillées
--- (le message le dit). Corps de fonction remplacé, même nom, même signature.
+-- BONNE PRATIQUE RH (décision utilisateur du même jour, « applique les bonnes
+-- pratiques ») : on ne supprime jamais l'historique de quelqu'un qui a
+-- travaillé (registre du personnel, heures, jours fériés dus, plannings
+-- réalisés). Un contrat qui a un shift ou une absence, quelle que soit la
+-- semaine, ne se supprime plus : on change ses dates, ou on indique sa fin.
+-- La suppression ne sert qu'à réparer une erreur (une fiche ou un contrat
+-- créé par erreur, jamais servi). Corps de fonction remplacé, même nom,
+-- même signature.
 
 create or replace function public.planning_supprimer_salarie(p_id bigint) returns void
   language plpgsql security invoker
@@ -21,12 +26,9 @@ begin
   if private.planning_niveau() < 3 then
     raise exception 'Réservé à la gestion du planning.' using errcode = '42501';
   end if;
-  if exists (select 1 from public.planning_affectations a
-              where a.salarie_id = p_id and private.planning_verrouillee(a.lundi))
-     or exists (select 1 from public.planning_absences ab
-                 where ab.salarie_id = p_id
-                   and private.planning_verrouillee(private.planning_lundi(ab.jour))) then
-    raise exception 'Ce contrat a des jours dans des semaines verrouillées (planning réalisé) : déverrouillez-les d''abord, ou changez plutôt ses dates.'
+  if exists (select 1 from public.planning_affectations a where a.salarie_id = p_id)
+     or exists (select 1 from public.planning_absences ab where ab.salarie_id = p_id) then
+    raise exception 'Ce contrat a un historique (shifts ou absences) : on ne le supprime pas. Changez plutôt ses dates, ou indiquez sa fin de contrat.'
       using errcode = 'PL409';
   end if;
   -- Le parcours reste d'un seul tenant : ce qui suivait le contrat suit ce

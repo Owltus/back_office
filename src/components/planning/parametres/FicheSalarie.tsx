@@ -97,6 +97,7 @@ import { estEcole } from '#/lib/planning/semaine.ts'
 import {
   enregistrerSalarie,
   fetchAbsencesSalarie,
+  fetchHistoriqueContrats,
   fetchShiftsSalarie,
   poserAbsences,
   supprimerSalarie,
@@ -113,6 +114,7 @@ import type { TypeContrat } from '#/lib/planning/types.ts'
 import { Input } from '#/components/ui/input.tsx'
 import { Label } from '#/components/ui/label.tsx'
 import { Liste } from '#/components/planning/parametres/equipe/Champs.tsx'
+import { ajouterJours } from '#/lib/planning/temps.ts'
 import { cn } from '#/lib/utils.ts'
 
 /** Pose puis retire les jours qui changent (une transaction par appel). */
@@ -368,6 +370,24 @@ function CorpsFiche({
       ? `Ces dates recouvrent son contrat d'extra ${periodeContrat(c)}, qui n'a pas de fin : désactivez-le dans sa fiche (« Inactif »), puis recommencez.`
       : `Ces dates recouvrent son contrat ${periodeContrat(c)} : une personne n'a qu'un contrat à la fois. Changez d'abord les dates de l'un des deux.`
 
+  // Ce que chaque contrat a servi : seul un contrat jamais servi se
+  // supprime (bonne pratique RH, la base le refuse aussi).
+  const idsContrats = b.id === null ? [] : autresContrats().map((c) => c.id)
+  const historique = useQuery({
+    queryKey: planningKeys.historique(
+      idsContrats.length ? idsContrats : [b.id ?? 0],
+    ),
+    queryFn: () =>
+      fetchHistoriqueContrats(
+        idsContrats.length ? idsContrats : [b.id as number],
+      ),
+    enabled: b.id !== null,
+    staleTime: 0,
+  })
+  /** Vrai : jamais servi ; faux : un historique ; undefined : pas encore lu. */
+  const vierge = (id: number): boolean | undefined =>
+    historique.data ? (historique.data[id] ?? 0) === 0 : undefined
+
   /** « CDD du 01/07/2026 au 31/08/2026 » : le contrat visé par la suppression. */
   const cibleSuppression = () => {
     const c = autresContrats().find((x) => x.id === aSupprimer)
@@ -509,20 +529,49 @@ function CorpsFiche({
         notifier(err, 'attention')
         return false
       }
-      const pris = chevauche(autresContrats(), nouveau)
+      // Un extra embauché (bonne pratique RH) : son contrat d'extra, sans
+      // fin, s'arrête la veille du nouveau contrat ; il reste au parcours.
+      let extra: Salarie | null = null
+      let contrats = autresContrats()
+      const premier = chevauche(contrats, nouveau)
+      if (
+        premier &&
+        premier.type_contrat === 'extra' &&
+        !premier.date_sortie &&
+        nouveau.date_entree &&
+        (!premier.date_entree || premier.date_entree < nouveau.date_entree)
+      ) {
+        extra = {
+          ...premier,
+          date_sortie: ajouterJours(nouveau.date_entree, -1),
+        }
+        contrats = contrats.map((c) =>
+          c.id === premier.id ? (extra as Salarie) : c,
+        )
+      }
+      const pris = chevauche(contrats, nouveau)
       if (pris) {
         notifier(recouvre(pris), 'attention')
         return false
       }
       let nouvelId: number | null = null
       const r = await ecrire(async () => {
+        if (extra)
+          await enregistrerSalarie(
+            valeursSalarie(brouillonDe(extra, [])),
+            extra.id,
+          )
         nouvelId = await enregistrerSalarie(valeursSalarie(nouveau), null)
       }, "Le contrat n'a pas pu être ajouté")
       if (!r.ok || nouvelId === null) {
         notifier(r.message ?? "Le contrat n'a pas pu être ajouté.", 'danger')
         return false
       }
-      notifier('Contrat ajouté : réglez-le dans sa fiche si besoin')
+      notifier(
+        extra?.date_sortie
+          ? `Contrat ajouté. Son contrat d'extra s'arrête le ${dateFr(extra.date_sortie)}.`
+          : 'Contrat ajouté : réglez-le dans sa fiche si besoin',
+      )
       onOuvrirContrat?.({
         ...enregistre,
         ...valeursSalarie(nouveau),
@@ -692,6 +741,7 @@ function CorpsFiche({
             occupe={enCours}
             onAjouter={ajouterContrat}
             onSupprimer={(s) => setASupprimer(s.id)}
+            vierge={vierge}
             onOuvrir={
               onOuvrirContrat &&
               ((s) =>
@@ -745,20 +795,24 @@ function CorpsFiche({
       </div>
 
       <SheetFooter className="flex-row items-center justify-end gap-2 border-t">
-        {gerer && b.id !== null && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="mr-auto text-destructive hover:text-destructive"
-            disabled={enCours}
-            onClick={() => setASupprimer(b.id)}
-          >
-            <Trash2 />{' '}
-            {autresContrats().length > 1
-              ? 'Supprimer ce contrat'
-              : 'Supprimer la fiche'}
-          </Button>
-        )}
+        {/* Bonne pratique RH : on ne supprime pas quelqu'un qui a travaillé
+            (son départ est une fin de contrat) ; seule une fiche créée par
+            erreur, jamais servie, s'efface. Un contrat se supprime depuis
+            la liste « Contrats ». */}
+        {gerer &&
+          b.id !== null &&
+          autresContrats().length <= 1 &&
+          vierge(b.id) === true && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mr-auto text-destructive hover:text-destructive"
+              disabled={enCours}
+              onClick={() => setASupprimer(b.id)}
+            >
+              <Trash2 /> Supprimer la fiche créée par erreur
+            </Button>
+          )}
         {gerer && erreur && b.prenom.trim() !== '' && (
           <span className="mr-auto text-xs text-amber-500">{erreur}</span>
         )}
@@ -804,12 +858,12 @@ function CorpsFiche({
         title={
           autresContrats().length > 1
             ? `Supprimer le contrat ${cibleSuppression()} ?`
-            : `Retirer ${nomBrouillon(initial) || 'cette personne'} de l'équipe ?`
+            : `Effacer la fiche de ${nomBrouillon(initial) || 'cette personne'} ?`
         }
         description={
           autresContrats().length > 1
-            ? 'Ce contrat seul, ses shifts et ses absences sont supprimés. La personne et ses autres contrats restent, toujours reliés.'
-            : "Sa fiche, ses shifts et ses absences sont supprimés. Pour quelqu'un qui part, indiquez plutôt sa fin de contrat : son historique reste."
+            ? "Ce contrat n'a jamais servi : il est effacé. La personne et ses autres contrats restent, toujours reliés."
+            : "Cette fiche n'a jamais servi (aucun shift, aucune absence) : elle est effacée. Pour quelqu'un qui part, on indique sa fin de contrat."
         }
         confirmLabel={
           autresContrats().length > 1
@@ -854,6 +908,7 @@ function ParcoursContrats({
   occupe,
   onAjouter,
   onSupprimer,
+  vierge,
   onOuvrir,
 }: {
   id: number
@@ -865,6 +920,8 @@ function ParcoursContrats({
   onAjouter: (v: NouveauContrat) => Promise<boolean>
   /** Supprimer CE contrat (confirmé ensuite), jamais la personne entière. */
   onSupprimer: (s: Salarie) => void
+  /** Le contrat n'a jamais servi (seul cas où il se supprime). */
+  vierge: (id: number) => boolean | undefined
   onOuvrir?: (s: Salarie) => void
 }) {
   const [ajout, setAjout] = useState<NouveauContrat | null>(null)
@@ -940,18 +997,26 @@ function ParcoursContrats({
                 )}
               </div>
               {gerer && p.contrats.length > 1 && (
-                <Tip label="Supprimer ce contrat seulement">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    className="mr-1 text-muted-foreground hover:text-destructive"
-                    aria-label={`Supprimer le contrat ${libelle(s)} ${periode(s)}`}
-                    disabled={occupe}
-                    onClick={() => onSupprimer(s)}
-                  >
-                    <Trash2 />
-                  </Button>
+                <Tip
+                  label={
+                    vierge(s.id) === false
+                      ? 'Ce contrat a un historique : on ne le supprime pas. Changez plutôt ses dates.'
+                      : 'Supprimer ce contrat créé par erreur'
+                  }
+                >
+                  <span tabIndex={vierge(s.id) === true ? -1 : 0}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="mr-1 text-muted-foreground hover:text-destructive"
+                      aria-label={`Supprimer le contrat ${libelle(s)} ${periode(s)}`}
+                      disabled={occupe || vierge(s.id) !== true}
+                      onClick={() => onSupprimer(s)}
+                    >
+                      <Trash2 />
+                    </Button>
+                  </span>
                 </Tip>
               )}
             </li>

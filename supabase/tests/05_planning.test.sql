@@ -140,7 +140,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':J', (select j from t_ids)::text);
 $$;
 
-select plan(81);
+select plan(82);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -467,7 +467,12 @@ select is(pg_temp.essai('ecriture', array[pg_temp.q(
 
 -- Supprimer un contrat garde le parcours d'un seul tenant (2026-11-03) :
 -- S1 <- S2 <- S3 ; S2 supprimé, S3 suit désormais S1.
+-- Bonne pratique RH : un contrat qui a un historique ne se supprime pas,
+-- même hors d'une semaine verrouillée (S2 a un shift proposé à venir).
+select is(pg_temp.essai('gestion', array[pg_temp.q('select public.planning_supprimer_salarie(:S2)')]),
+  'err=PL409', 'un contrat avec un historique ne se supprime pas');
 select is(pg_temp.essai('gestion', array[
+  pg_temp.q('delete from public.planning_affectations where salarie_id = :S2'),
   pg_temp.q('update public.planning_salaries set suite_de = :S1 where id = :S2'),
   pg_temp.q('update public.planning_salaries set suite_de = :S2 where id = :S3'),
   pg_temp.q('select public.planning_supprimer_salarie(:S2)'),
@@ -478,6 +483,7 @@ select is(pg_temp.essai('gestion', array[
 -- S2 en tête, S3 et Test4 le suivent ; S2 supprimé : S3 (le plus ancien)
 -- devient la tête et Test4 le suit.
 select is(pg_temp.essai('gestion', array[
+  pg_temp.q('delete from public.planning_affectations where salarie_id = :S2'),
   pg_temp.q('update public.planning_salaries set suite_de = null, date_entree = ''2030-01-01'' where id = :S2'),
   pg_temp.q('update public.planning_salaries set suite_de = :S2, date_entree = ''2031-01-01'' where id = :S3'),
   pg_temp.q('insert into public.planning_salaries (prenom, nom, suite_de, date_entree) values (''Test4'', ''PLANNING'', :S2, ''2032-01-01'')'),

@@ -261,6 +261,32 @@ export async function fetchAbsencesSalarie(
 
 /** Shifts d'une personne à partir de la semaine de `depuis` (fiche : ceux
  * qu'un jour d'école posé retirerait). */
+/** Ce que chaque contrat a servi : ses shifts et ses absences, comptés
+ * (0 = jamais servi, la seule suppression permise ; 2026-11-03). */
+export async function fetchHistoriqueContrats(
+  ids: number[],
+): Promise<Record<number, number>> {
+  const r: Record<number, number> = {}
+  await Promise.all(
+    ids.map(async (id) => {
+      const [a, b] = await Promise.all([
+        supabase
+          .from('planning_affectations')
+          .select('id', { count: 'exact', head: true })
+          .eq('salarie_id', id),
+        supabase
+          .from('planning_absences')
+          .select('id', { count: 'exact', head: true })
+          .eq('salarie_id', id),
+      ])
+      if (a.error) throw a.error
+      if (b.error) throw b.error
+      r[id] = (a.count ?? 0) + (b.count ?? 0)
+    }),
+  )
+  return r
+}
+
 export async function fetchShiftsSalarie(
   salarieId: number,
   depuis: string,
