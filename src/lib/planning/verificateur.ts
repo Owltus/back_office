@@ -547,19 +547,38 @@ function alertesMorales(
     const premiere = k === 0
     const complete = jours.length === 7
 
-    // Règle 1 : deux repos qui se suivent DANS la semaine. Un dimanche
-    // libre de la semaine d'avant ne fait pas la paire avec le lundi
-    // (relecture du 2026-11-03 : lundi et jeudi de repos passaient pour
-    // collés). Une semaine d'un seul repos n'a pas de paire à faire.
-    if (!s.placementManuel && !s.reposConsecutifs && complete) {
+    // Règle 1 : deux repos qui se suivent. Depuis le 2026-11-04 (règle de
+    // l'hôtel, que le calcul ne sacrifie plus, `POIDS_REPOS_SEPARES`) : une
+    // semaine d'un seul repos (6 jours) n'a pas sa paire non plus, et le
+    // dimanche et le lundi d'à côté font la paire quand ce jour voisin est
+    // connu libre (un rythme du mardi au samedi). Avant (relecture du
+    // 2026-11-03), seule la semaine comptait. Même définition que le
+    // générateur. Une semaine type qui fixe deux repos ou plus a décidé
+    // elle-même : rien n'est dit.
+    if (
+      !s.placementManuel &&
+      !s.reposConsecutifs &&
+      s.reposFixes.size < 2 &&
+      complete
+    ) {
       const libres = jours.filter((j) => !travaille(j))
-      const colles = jours
-        .slice(0, -1)
-        .some((j) => !travaille(j) && !travaille(j + 1))
-      if (libres.length >= 2 && !colles)
+      const voisinLibre = (d: number) =>
+        d < 0
+          ? s.joursSemainePrecedente !== null && s.serieAvant === 0
+          : d >= nbJours
+            ? s.joursSemaineSuivante !== null && s.serieApres === 0
+            : !travaille(d)
+      const colles =
+        jours.slice(0, -1).some((j) => !travaille(j) && !travaille(j + 1)) ||
+        (!travaille(jours[0]) && voisinLibre(jours[0] - 1)) ||
+        (!travaille(jours[6]) && voisinLibre(jours[6] + 1))
+      // Sept jours : la loi le dit déjà (R-SIX-JOURS-MAX).
+      if (libres.length && !colles)
         ajoute(
           'REPOS-SEPARES',
-          'ses jours de repos de la semaine ne se suivent pas',
+          libres.length >= 2
+            ? 'ses jours de repos de la semaine ne se suivent pas'
+            : 'pas deux jours de repos de suite dans la semaine',
           semaine,
         )
     }

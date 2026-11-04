@@ -536,13 +536,15 @@ describe('règle 7 : les nuits avec mesure', () => {
     }
   })
   it('six nuits d’affilée pour ses heures dues : faites, et dites', () => {
-    // Q1 : les heures dues passent avant la règle morale.
+    // Q1 : les heures dues passent avant la règle morale. La 6e nuit est
+    // celle du dimanche d'avant : dans la semaine, deux repos de suite
+    // (2026-11-04).
     const p = probleme({
-      salaries: [personne('a', 48, { minutesHebdoMax: 48 * H })],
-      creneaux: [0, 1, 2, 3, 4, 5].map((j) => nuit(`n${j}`, j)),
+      salaries: [personne('a', 40, { nuitsAvant: new Set([-1]) })],
+      creneaux: [0, 1, 2, 3, 4].map((j) => nuit(`n${j}`, j)),
     })
     const r = resoudre(p)
-    expect(de(r, 'a')).toHaveLength(6)
+    expect(de(r, 'a')).toHaveLength(5)
     expect(alertes(p, r, 'NUITS').map((v) => v.message)).toEqual([
       "6 nuits d'affilée (au plus 5 conseillées)",
     ])
@@ -841,21 +843,34 @@ describe('règle 1 : deux repos qui se suivent dans la semaine', () => {
     expect(controle([1, 3])).toHaveLength(1)
     expect(controle([1, 2])).toEqual([])
   })
-  it('dimanche libre la semaine d’avant puis lundi et jeudi : séparés', () => {
-    // Relecture du 2026-11-03 : le dimanche d'avant ne fait pas la paire.
+  it('dimanche libre la semaine d’avant puis lundi : la paire (2026-11-04)', () => {
+    // Deux jours de repos de suite, à cheval sur deux semaines : ils se
+    // suivent vraiment (renverse la relecture du 2026-11-03, qui ne
+    // comptait que la semaine).
     const avant = { joursSemainePrecedente: 5, serieAvant: 0 }
-    expect(controle([0, 3], avant)).toHaveLength(1)
+    expect(controle([0, 3], avant)).toEqual([])
+    // Dimanche d'avant travaillé : lundi et jeudi sont séparés.
     expect(
       controle([0, 3], { joursSemainePrecedente: 6, serieAvant: 1 }),
     ).toHaveLength(1)
-    // Semaine d'avant inconnue : rien n'excuse non plus un lundi libre.
+    // Semaine d'avant inconnue : rien n'excuse un lundi libre.
     expect(controle([0, 3], { joursSemainePrecedente: null })).toHaveLength(1)
+    // Dimanche libre et lundi d'après connu libre : la paire aussi.
+    expect(
+      controle([3, 6], { joursSemaineSuivante: 5, serieApres: 0 }),
+    ).toEqual([])
+    expect(
+      controle([3, 6], { joursSemaineSuivante: 5, serieApres: 1 }),
+    ).toHaveLength(1)
+    // Une semaine de six jours n'a pas sa paire (2026-11-04).
+    expect(controle([3])).toHaveLength(1)
     expect(controle([0, 1], avant)).toEqual([])
   })
-  it('évité : dimanche d’avant libre, les deux repos se collent quand même', () => {
+  it('évité : dimanche d’avant travaillé, les deux repos se collent quand même', () => {
     // 40 h en 5 jours au plus, une place chaque jour, jours habituels mardi,
     // mercredi, vendredi, samedi et dimanche : lundi et jeudi seraient
-    // permis par les habitudes, mais séparés.
+    // permis par les habitudes, mais séparés (le dimanche d'avant est
+    // travaillé : il ne fait pas la paire avec le lundi).
     for (const graine of graines) {
       const p = probleme({
         creneaux: [0, 1, 2, 3, 4, 5, 6].map((j) => cr(`j${j}`, j, 9, 17)),
@@ -864,7 +879,7 @@ describe('règle 1 : deux repos qui se suivent dans la semaine', () => {
             joursTravaillesMaxSemaine: 5,
             travailFixe: new Set([1, 2, 4, 5, 6]),
             joursSemainePrecedente: 5,
-            serieAvant: 0,
+            serieAvant: 1,
           }),
         ],
         graine,

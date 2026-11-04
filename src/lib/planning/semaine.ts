@@ -2221,9 +2221,11 @@ export function raisonCommune(
   for (const raisons of parCode) {
     for (const vs of raisons.values()) {
       // Une règle morale du PRD ne bloque pas : la personne pourrait venir.
+      // Sauf les deux repos de suite, que le calcul ne sacrifie plus
+      // (2026-11-04, `POIDS_REPOS_SEPARES`).
       const regles = vs
         .map((v) => v.regle)
-        .filter((r) => !REGLES_MORALES.has(r))
+        .filter((r) => r === 'REPOS-SEPARES' || !REGLES_MORALES.has(r))
       if (regles.length === 1 && regles[0] === 'EXTRA') continue
       if (!regles.length) return null
       listes.push(regles)

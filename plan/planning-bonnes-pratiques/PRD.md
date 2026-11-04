@@ -154,7 +154,7 @@ Les règles morales, entre les heures dues et le confort (2026-11-02) :
 | Plus de 5 nuits d'affilée (règle 7)                            | `POIDS_NUIT_AFFILEE` 12 000 par nuit en trop                               |
 | Plus de 5 jours d'affilée                                      | `POIDS_JOUR_AFFILE_CONSEILLE` 10 000                                       |
 | Reprise de jour moins de 2 jours après une nuit (règle 7)      | `POIDS_REPRISE_APRES_NUIT` 10 000                                          |
-| Deux repos qui se suivent                                      | `POIDS_REPOS_SEPARES` 8 000                                                |
+| Deux repos qui se suivent                                      | DUR depuis le 2026-11-04 (avant les places)                                |
 | Moins de 12 h entre deux services (règle 3)                    | `POIDS_REPOS_COURT` 6 000 par paire (+ 6 000 au retour d'un congé)         |
 | Retour en arrière à 2 jours au plus, soir puis matin (règle 6) | `POIDS_MOMENT_ARRIERE` 6 000 par paire de jours                            |
 | Abords d'un jour d'école (règle 14)                            | `POIDS_ECOLE_ABORDS` 6 000 par service                                     |
@@ -261,9 +261,20 @@ Pour chacun : **énoncé**, **pourquoi**, **comment** (règle mesurable), **exce
   décrocher.
 - **Comment.** Chaque semaine civile, au moins une paire de jours de repos consécutifs. Mesure :
   nombre de semaines où les repos sont séparés.
-- **Exception.** Quand les deux repos ne peuvent pas se coller sans laisser une place vide ou
-  manquer une loi.
-- **Statut.** EN PLACE. Moteur : `POIDS_REPOS_SEPARES` (8 000) ; placement des repos déduits :
+- **Exception.** Quand des shifts déjà posés ou validés, ou l'école, n'en laissent aucune. Une
+  semaine type qui fixe deux repos ou plus décide seule.
+- **RÉVISÉ le 2026-11-04 (décision d'une responsable : « 90 % du temps, les hôteliers doivent
+  avoir deux jours de repos consécutifs ; fais au mieux pour les personnes présentes, et si je dois
+  avoir des trous dans mes besoins, tu me dis »).** La paire passe AVANT les places nécessaires :
+  contrainte dure du calcul sur une semaine complète, une place reste vide plutôt que de la casser,
+  et la place vide le dit (« Perdrait ses deux jours de repos de suite », REPOS-SEPARES bloque dans
+  `raisonCommune`). Plus de 6e jour par le calcul (il ne laisse qu'un repos). Le dimanche et le
+  lundi d'à côté font la paire quand ce jour voisin est connu libre (rythme du mardi au samedi),
+  ce qui renverse la relecture du 2026-11-03 ci-dessous. Alerte REPOS-SEPARES aussi pour une
+  semaine de 6 jours. Banc de décembre (copie locale, en mémoire) : semaines sans paire 25 → 15
+  (toutes expliquées : repos fixes dimanche-lundi, paire à cheval, shifts validés), 6e jours 4 → 1,
+  aucune place vide de plus, 6 h dues de moins sur le mois, même temps de calcul.
+- **Statut.** EN PLACE. Moteur : `POIDS_REPOS_SEPARES` (8 000, avant le 2026-11-04) ; placement des repos déduits :
   `placerRepos` (règle 2, les repos se suivent). Alerte REPOS-SEPARES quand une semaine a au moins
   deux repos et aucune paire. **Corrigé le 2026-11-03 (relecture du banc)** : la paire se cherche
   DANS la semaine. Un dimanche libre de la semaine d'avant suivi du lundi libre ne la remplace plus :

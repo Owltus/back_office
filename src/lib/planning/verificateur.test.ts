@@ -88,8 +88,13 @@ function sal(id = 'a', kw: Partial<SalarieSolveur> = {}): SalarieSolveur {
   })
 }
 
+// Les limites légales ici. Deux repos de suite (REPOS-SEPARES, règle de
+// l'hôtel depuis le 2026-11-04) se disent aussi d'une semaine de 6 jours :
+// testés à part (reglesMorales.test.ts), écartés de ces semaines d'essai.
 const controle = (s: SalarieSolveur, creneaux: Creneau[], nbJours = 7) =>
-  violationsSalarie(s, creneaux, nbJours)
+  violationsSalarie(s, creneaux, nbJours).filter(
+    (v) => v.regle !== 'REPOS-SEPARES',
+  )
 const regles = (s: SalarieSolveur, creneaux: Creneau[], nbJours = 7) =>
   controle(s, creneaux, nbJours).map((v) => v.regle)
 const messages = (
@@ -532,11 +537,14 @@ describe('R-ECOLE-JOURS : un jour d’école est un jour travaillé', () => {
     expect(weekEnd(sal('a', { indisponibilites: ECOLE, ...contrat }))).toEqual(
       new Set(['sam', 'dim']),
     )
+    // Cinq jours d'école : le week-end est la seule paire de repos qui
+    // reste, il est libre (deux repos de suite, règle de l'hôtel du
+    // 2026-11-04 ; avant : un des deux jours travaillé, 6 jours).
     expect(
       weekEnd(
         sal('a', { indisponibilites: ECOLE, joursHorsSite: ECOLE, ...contrat }),
       ).size,
-    ).toBe(1)
+    ).toBe(0)
   })
 
   it('le moteur garde 3 repos sur deux semaines avec l’école', () => {

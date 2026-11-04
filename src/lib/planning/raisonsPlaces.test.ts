@@ -41,6 +41,7 @@ const MENTIONS: readonly Mention[] = [
   'à appeler',
   'à placer',
   'à éviter',
+  'règle de l’hôtel',
 ]
 
 /** Chaque message que `violationsSalarie` et `raisonsBlocage` écrivent,
@@ -572,8 +573,8 @@ describe('place que rien ne remplit : la raison commune en clair', () => {
     'JOUR-FERIE',
     'R-JOURNEE-ETOILE',
     'EXTRA',
-    // Règles morales du PRD : à éviter, jamais bloquantes.
-    'REPOS-SEPARES',
+    // Règles morales du PRD : à éviter, jamais bloquantes (sauf deux repos
+    // de suite depuis le 2026-11-04, qui bloque).
     'JOUR-ISOLE',
     'REPOS-COURT',
     'WEEKEND-LIBRE',

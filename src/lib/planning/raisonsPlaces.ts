@@ -28,6 +28,7 @@ export type Mention =
   | 'à appeler'
   | 'à placer'
   | 'à éviter'
+  | 'règle de l’hôtel'
 
 export type Issue =
   | { genre: 'lien'; lien: LienReglage; action: string }
@@ -81,7 +82,6 @@ export const REGLES_BLOCAGE = [
 /** Règles morales du PRD : elles ne bloquent pas une place, elles la
  * rendent « à éviter » pour cette personne. */
 const PHRASES_MORALES: Record<string, string> = {
-  'REPOS-SEPARES': 'Ses repos ne se suivraient plus',
   'JOUR-ISOLE': 'Ce serait un jour de travail seul entre deux repos',
   'REPOS-COURT': 'Moins de 12 h de repos avec un autre shift',
   'WEEKEND-LIBRE': 'Pas de week-end libre depuis 4 semaines',
@@ -239,7 +239,13 @@ export function raisonClaire(
       )
     case 'EXTRA':
       return r('Extra libre', mention('à appeler'))
+    // Deux repos de suite (2026-11-04) : le calcul ne les sacrifie plus,
+    // la place reste vide plutôt.
     case 'REPOS-SEPARES':
+      return r(
+        'Perdrait ses deux jours de repos de suite',
+        mention('règle de l’hôtel'),
+      )
     case 'JOUR-ISOLE':
     case 'REPOS-COURT':
     case 'WEEKEND-LIBRE':
@@ -341,9 +347,10 @@ const PHRASES_COMMUNES: Record<(typeof REGLES_BLOCAGE)[number], string> = {
   'R-REPOS-HEBDO-35H': 'Personne ne garderait son repos de 35 h.',
   'R-REPOS-HEBDO-MINEUR':
     'Tout le monde est mineur : deux jours de repos de suite.',
+  // Deux repos de suite : la seule règle morale qui bloque (2026-11-04).
+  'REPOS-SEPARES': 'Chacun perdrait ses deux jours de repos de suite.',
   // Règles morales : jamais « Je ne peux pas » (`phraseCommune` rend null,
   // elles ne bloquent pas), la phrase ne sert qu'à l'exhaustivité.
-  'REPOS-SEPARES': 'Les repos de chacun ne se suivraient plus.',
   'JOUR-ISOLE': 'Ce serait pour chacun un jour de travail seul.',
   'REPOS-COURT': 'Tout le monde aurait moins de 12 h de repos.',
   'WEEKEND-LIBRE': 'Tout le monde attend son week-end libre.',

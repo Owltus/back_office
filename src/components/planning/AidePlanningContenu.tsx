@@ -854,11 +854,19 @@ export function AidePlanningContenu({
           </li>
           <li>
             <span className="font-medium text-foreground">
+              Deux repos de suite
+            </span>{' '}
+            pour chacun, chaque semaine. Une place reste vide plutôt que de les
+            casser, et la page le dit : à vous de compenser. Seuls des shifts
+            déjà posés ou validés peuvent l’empêcher.
+          </li>
+          <li>
+            <span className="font-medium text-foreground">
               Les places nécessaires
             </span>{' '}
             et le chiffre de l’accueil du matin, du soir et de la nuit. Une
             place ne reste vide que si personne ne peut la tenir sans enfreindre
-            la loi.
+            la loi ni perdre ses deux repos de suite.
           </li>
           <li>
             <span className="font-medium text-foreground">
@@ -1001,13 +1009,13 @@ export function AidePlanningContenu({
 
       <Section
         id="bien-etre"
-        intro="Ce n’est pas parce que l’on peut que l’on doit. Au-delà de la loi, l’app cherche un planning vivable et juste, le même pour tous. Ces règles cèdent devant les places nécessaires, jamais l’inverse. Toutes cèdent devant les heures dues (des heures payées doivent être faites), sauf les 6 jours d’affilée, que le calcul ne dépasse jamais. À heures égales, celles de la fatigue (12 h de repos, repos après des nuits, week-end libre) passent en premier. Quand l’une cède, une alerte orange le dit à la personne qui fait le planning."
+        intro="Ce n’est pas parce que l’on peut que l’on doit. Au-delà de la loi, l’app cherche un planning vivable et juste, le même pour tous. Ces règles cèdent devant les places nécessaires, jamais l’inverse, sauf les deux repos de suite. Toutes cèdent devant les heures dues (des heures payées doivent être faites), sauf les 6 jours d’affilée, que le calcul ne dépasse jamais. À heures égales, celles de la fatigue (12 h de repos, repos après des nuits, week-end libre) passent en premier. Quand l’une cède, une alerte orange le dit à la personne qui fait le planning."
       >
         <Sous titre="Le repos">
           <Liste
             items={[
               'Deux repos par semaine, même en congé.',
-              'Deux repos qui se suivent dans la semaine. Un dimanche libre suivi d’un lundi libre ne remplace pas cette paire.',
+              'Deux repos qui se suivent, chaque semaine, avant les places nécessaires. Un dimanche libre suivi du lundi libre compte, à cheval sur deux semaines. Une semaine type qui fixe deux repos décide seule.',
               `${JOURS_AFFILES_MAX} jours de travail d’affilée au plus, ${JOURS_AFFILES_CONSEILLES} visés, semaines voisines comprises.`,
               `Au moins ${h(REPOS_CONFORT)} entre la fin d’un service et le début du suivant (la loi en demande ${h(REPOS_QUOTIDIEN)}).`,
               `Un week-end complet libre, samedi et dimanche, au moins une fois sur ${SEMAINES_EQUITE} semaines. Un congé ou un repos compte comme libre ; une maladie, une formation, un sans solde ou l’école, non. La nuit du dimanche au lundi est écrite le dimanche : elle rend le week-end travaillé.`,

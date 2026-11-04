@@ -171,19 +171,22 @@ describe('les poids sont des paliers dérivés', () => {
 })
 
 describe('P1 : une place nécessaire passe avant le 6e jour et les heures en plus (D3 = A)', () => {
-  it('le samedi nécessaire est tenu, au prix d’un 6e jour et de 4 h au-delà du contrat', () => {
-    // Avant l'étape 10 : trou de 4 h (24 000) < 6e jour (15 000) + 4 h en
-    // plus (12 000) : le samedi restait vide.
+  it('le samedi nécessaire reste vide plutôt que de casser les deux repos de suite (2026-11-04)', () => {
+    // De l'étape 10 au 2026-11-04 : tenu au prix d'un 6e jour et de 4 h
+    // au-delà du contrat. Désormais, deux repos de suite d'abord, et la
+    // place vide le dit.
     const p = probleme({
       salaries: [personne('a', 35)],
       creneaux: semaineEtSamedi({}),
     })
     const r = gen(p)
-    expect(r.manques).toEqual([])
-    expect(pris(r).has('sam')).toBe(true)
-    expect(new Set(violations(p, r.affectations).map((v) => v.regle))).toEqual(
-      new Set(['SIXIEME-JOUR']),
-    )
+    expect(r.manques).toEqual([{ creneauId: 'sam', manquant: 1 }])
+    expect(
+      raisonsBlocage(p, r.affectations, 'sam')
+        .get('a')!
+        .map((v) => v.regle),
+    ).toContain('REPOS-SEPARES')
+    expect(violations(p, r.affectations)).toEqual([])
   })
 
   it('un samedi facultatif n’est PAS tenu s’il coûte un 6e jour', () => {
@@ -202,13 +205,21 @@ describe('P1 : une place nécessaire passe avant le 6e jour et les heures en plu
       creneaux: [0, 1, 2, 3, 4, 5, 6].map((j) => creneau(`m${j}`, j, 7, 12)),
     })
     const r = gen(p)
-    expect(r.affectations).toHaveLength(6)
-    expect(manquants(p, r.affectations).size).toBe(1)
-    const [vide] = [...manquants(p, r.affectations).keys()]
+    // Deux repos de suite (2026-11-04) : cinq jours, deux places vides.
+    expect(r.affectations).toHaveLength(5)
+    expect(manquants(p, r.affectations).size).toBe(2)
+    for (const vide of manquants(p, r.affectations).keys())
+      expect(
+        raisonsBlocage(p, r.affectations, vide)
+          .get('a')!
+          .map((v) => v.regle),
+      ).toContain('REPOS-SEPARES')
+    // Sept jours : la loi.
     expect(
-      raisonsBlocage(p, r.affectations, vide)
-        .get('a')!
-        .map((v) => v.regle),
+      violations(
+        p,
+        p.creneaux.map((c) => ({ salarieId: 'a', creneauId: c.id })),
+      ).map((v) => v.regle),
     ).toContain('R-SIX-JOURS-MAX')
   })
 
@@ -231,11 +242,13 @@ describe('P2 : le matin et le soir, sous les places nécessaires (D1 = A)', () =
     maximum: null,
   })
 
-  it('une personne qui manque le matin passe avant un 6e jour', () => {
-    // Cinq jours déjà tenus du mardi au samedi ; le lundi, un renfort de
-    // 8 h facultatif qui compte dans la consigne « au moins 1 ».
+  it('une personne qui manque le matin passe avant des heures en plus', () => {
+    // Quatre jours déjà tenus du mardi au vendredi ; le lundi, un renfort de
+    // 8 h facultatif qui compte dans la consigne « au moins 1 ». (Avant le
+    // 2026-11-04, du mardi au samedi : le lundi était un 6e jour, que les
+    // deux repos de suite interdisent désormais.)
     const creneaux = [
-      ...[1, 2, 3, 4, 5].map((j) => creneau(`m${j}`, j, 7, 14)),
+      ...[1, 2, 3, 4].map((j) => creneau(`m${j}`, j, 7, 14)),
       creneau('lun', 0, 7, 15, {
         effectif: 0,
         facultatif: 1,
@@ -243,12 +256,12 @@ describe('P2 : le matin et le soir, sous les places nécessaires (D1 = A)', () =
       }),
     ]
     const sans = gen(
-      probleme({ salaries: [personne('a', 35)], creneaux, consignes: [] }),
+      probleme({ salaries: [personne('a', 28)], creneaux, consignes: [] }),
     )
     expect(pris(sans).has('lun')).toBe(false)
     const avec = gen(
       probleme({
-        salaries: [personne('a', 35)],
+        salaries: [personne('a', 28)],
         creneaux,
         consignes: [lundi(1)],
       }),
@@ -620,10 +633,14 @@ describe('propriété : jamais d’infraction, une place vide a toujours une rai
             for (const [, liste] of raisonsBlocage(p, r.affectations, vide)) {
               // Une raison légale ou d'éligibilité, jamais le seul confort ni
               // une règle morale : une place passe avant elles (Q1 du PRD).
+              // Sauf deux repos de suite, qui passent avant les places
+              // depuis le 2026-11-04 (`POIDS_REPOS_SEPARES`).
               expect(
                 liste.some(
                   (v) =>
-                    v.regle !== 'SIXIEME-JOUR' && !REGLES_MORALES.has(v.regle),
+                    v.regle === 'REPOS-SEPARES' ||
+                    (v.regle !== 'SIXIEME-JOUR' &&
+                      !REGLES_MORALES.has(v.regle)),
                 ),
               ).toBe(true)
             }
@@ -950,8 +967,11 @@ describe('cycles : le minimum d’une consigne est une place nécessaire (D7)', 
   })
 
   it('un matin de 2 h manquant passe avant un 6e jour et des heures en plus', () => {
+    // Le matin est tenu par un 5e jour (du mardi au vendredi tenus) : un 6e
+    // jour casserait les deux repos de suite (2026-11-04). Les poids, eux,
+    // restent comparés au 6e jour.
     const creneaux = [
-      ...[1, 2, 3, 4, 5].map((j) => creneau(`m${j}`, j, 7, 14)),
+      ...[1, 2, 3, 4].map((j) => creneau(`m${j}`, j, 7, 14)),
       creneau('lun', 0, 7, 9, {
         effectif: 0,
         facultatif: 1,
@@ -959,23 +979,23 @@ describe('cycles : le minimum d’une consigne est une place nécessaire (D7)', 
       }),
     ]
     // Avant la vague (P2, plafonné) : 12 000 < 6e jour + 2 h en plus.
-    expect(coutConsigne([creneaux[5]])).toBeLessThan(
+    expect(coutConsigne([creneaux[4]])).toBeLessThan(
       POIDS_SIXIEME_JOUR + POIDS_SUR_CONTRAT * 2 * H,
     )
-    expect(coutManqueMinimum([creneaux[5]], 0)).toBeGreaterThan(
+    expect(coutManqueMinimum([creneaux[4]], 0)).toBeGreaterThan(
       POIDS_SIXIEME_JOUR + POIDS_SUR_CONTRAT * 2 * H,
     )
     for (const graine of graines) {
       const r = gen(
         probleme({
-          salaries: [personne('a', 35)],
+          salaries: [personne('a', 28)],
           creneaux,
           consignes: [lundi('matin', 1)],
           graine,
         }),
       )
       expect(qui(r, 'lun')).toEqual(['a'])
-      expect(r.affectations).toHaveLength(6)
+      expect(r.affectations).toHaveLength(5)
     }
   })
 

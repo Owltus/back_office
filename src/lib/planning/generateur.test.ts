@@ -385,11 +385,12 @@ describe('générateur', () => {
     const [p, tenus] = tenusPar(salarieSolveur({ id: 'a', ...base39 }))
     expect([...tenus].filter((c) => idsCourts.has(c)).length).toBe(1)
     for (const c of pleins) expect(tenus.has(c.id)).toBe(true)
+    // La loi ; le jour seul entre deux repos choisis n'est qu'une alerte.
     expect(
       violations(
         p,
         [...tenus].map((c) => aff('a', c)),
-      ),
+      ).filter((v) => !REGLES_MORALES.has(v.regle)),
     ).toEqual([])
 
     const libre = salarieSolveur({
@@ -429,7 +430,7 @@ describe('générateur', () => {
     expect(r.manques).toEqual([])
   })
 
-  it('repos accolés de préférence, mais les besoins d’abord', () => {
+  it('deux repos de suite, avant les besoins (2026-11-04)', () => {
     let p = probleme({
       salaries: [receptionniste('r0')],
       creneaux: range(7).map((j) =>
@@ -443,6 +444,10 @@ describe('générateur', () => {
     expect(libres.length).toBe(2)
     expect(libres[1] - libres[0]).toBe(1)
 
+    // Cinq soirs les lundi, mardi, mercredi, vendredi et samedi : les tenir
+    // tous laisserait le jeudi et le dimanche, deux repos séparés. Un soir
+    // reste vide, et c'est dit (décision d'une responsable : « si je dois
+    // avoir des trous dans mes besoins, tu me dis »).
     p = probleme({
       salaries: [receptionniste('r0')],
       creneaux: [0, 1, 2, 4, 5].map((j) =>
@@ -450,8 +455,17 @@ describe('générateur', () => {
       ),
     })
     const r = gen(p)
-    expect(complet(r)).toBe(true)
-    expect(r.affectations.length).toBe(5)
+    expect(r.affectations.length).toBe(4)
+    const tenus = new Set(
+      r.affectations.map((a) => Number(a.creneauId.split('-')[1])),
+    )
+    expect(range(6).some((j) => !tenus.has(j) && !tenus.has(j + 1))).toBe(true)
+    const [vide] = r.manques.map((m) => m.creneauId)
+    expect(
+      raisonsBlocage(p, r.affectations, vide)
+        .get('r0')!
+        .map((v) => v.regle),
+    ).toContain('REPOS-SEPARES')
   })
 
   it('journée étoile fixée un jour', () => {
@@ -532,20 +546,28 @@ describe('générateur', () => {
     })
     const r = gen(p)
     const tenus = pris(r)
-    expect(tenus.has('matin-0')).toBe(true)
+    // Depuis le 2026-11-04, le lundi et le mardi restent libres : deux repos
+    // de suite, qui couvrent le repos de 35 h. Ni le soir qui l'aurait
+    // coupé, ni le matin.
+    expect(tenus.has('matin-0')).toBe(false)
     expect(tenus.has('soir-0')).toBe(false)
     expect(violations(p, r.affectations)).toEqual([])
 
     const fixes = matins.map((c) => aff('r0', c.id))
+    // Six jours : sans deux repos de suite non plus (2026-11-04).
     expect(reglesDe(p, [...fixes, aff('r0', 'soir-0')])).toEqual(
-      new Set(['R-REPOS-HEBDO-35H']),
+      new Set(['R-REPOS-HEBDO-35H', 'REPOS-SEPARES']),
     )
     expect(violations(p, fixes)).toEqual([])
     const sans = probleme({
       salaries: [receptionniste('r0', 35, { joursTravaillesMaxSemaine: 6 })],
       creneaux: p.creneaux,
     })
-    expect(violations(sans, [...fixes, aff('r0', 'soir-0')])).toEqual([])
+    expect(
+      violations(sans, [...fixes, aff('r0', 'soir-0')]).filter(
+        (v) => !REGLES_MORALES.has(v.regle),
+      ),
+    ).toEqual([])
   })
 
   const sixJours = (kw: Partial<SalarieSolveur> = {}) =>
@@ -558,11 +580,13 @@ describe('générateur', () => {
   const soirs = () =>
     range(7).map((j) => creneau(`soir-${j}`, 'reception', j, 15, 22))
 
-  it('six jours pour couvrir un trou, jamais sept', () => {
+  it('cinq jours et deux repos de suite, même avec un trou ; jamais sept', () => {
+    // Avant le 2026-11-04 : six jours pour couvrir un trou. Les deux repos
+    // de suite passent désormais avant la place.
     const p = probleme({ salaries: [sixJours()], creneaux: soirs() })
     const r = gen(p)
-    expect(r.affectations.length).toBe(6)
-    expect(reglesDe(p, r.affectations)).toEqual(new Set(['SIXIEME-JOUR']))
+    expect(r.affectations.length).toBe(5)
+    expect(reglesDe(p, r.affectations)).toEqual(new Set())
     const sept = p.creneaux.map((c) => aff('r0', c.id))
     expect(reglesDe(p, sept).has('R-SIX-JOURS-MAX')).toBe(true)
   })
@@ -707,7 +731,10 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
     // le veilleur, décisions de l'utilisateur) : poids de la fatigue sous
     // une heure due ; le pire coût d'une place change (passation d'un
     // veilleur) ; ces semaines n'ont pas de nuit de l'accueil.
-    expect(empreinte(textes.join('\n=====\n'))).toBe('30e32394')
+    // 887b8ecd (2026-11-04, deux repos de suite, décision d'une
+    // responsable) : la paire de repos devient une contrainte dure (plus de
+    // prime de repos accolés) ; un 6e jour n'en laisse plus.
+    expect(empreinte(textes.join('\n=====\n'))).toBe('887b8ecd')
   })
 })
 

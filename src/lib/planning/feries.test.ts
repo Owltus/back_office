@@ -831,9 +831,10 @@ describe('mineurs : pas de jour férié si on peut l’éviter', () => {
 })
 
 describe('le poids d’un mineur un jour férié', () => {
-  // A et B (39 h) se partagent du lundi au samedi : 2 places par jour, une
-  // seule le jeudi (férié) et le samedi. L'un des deux travaille le jeudi,
-  // l'autre le samedi : jamais le mineur le jeudi.
+  // A et B (40 h, cinq jours) : 2 places du lundi au mercredi, une du
+  // jeudi (férié) au dimanche. Avec deux repos de suite (2026-11-04), l'un
+  // prend jeudi et vendredi, l'autre samedi et dimanche : jamais le mineur
+  // le jeudi.
   const H = 60
   const base = {
     postes: new Set(['1']),
@@ -844,13 +845,13 @@ describe('le poids d’un mineur un jour férié', () => {
     joursPreferesSemaine: 5,
     minutesHebdoContrat: 40 * H,
   }
-  const creneaux = [0, 1, 2, 3, 4, 5].map((j) =>
+  const creneaux = [0, 1, 2, 3, 4, 5, 6].map((j) =>
     creneau({
       id: `b${j}`,
       poste: '1',
       debut: j * 1440 + 8 * H,
       fin: j * 1440 + 16 * H,
-      effectif: j === 3 || j === 5 ? 1 : 2,
+      effectif: j < 3 ? 2 : 1,
     }),
   )
   const probleme = (mineur: 'A' | 'B') => ({

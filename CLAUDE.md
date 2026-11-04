@@ -2550,6 +2550,29 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   repos lundi-mardi à lundi travaillé, mêmes places, trous et heures.
   Empreinte de `generateur.test.ts` inchangée (aucun contrat ne commence
   dans la semaine de démo).
+- **DEUX REPOS DE SUITE AVANT LES PLACES (2026-11-04, décision d'une
+  responsable, collègue de l'utilisateur : « 90 % du temps, les hôteliers
+  doivent avoir deux jours de repos consécutifs ; fais au mieux pour les
+  personnes présentes, et si je dois avoir des trous dans mes besoins, tu
+  me dis »)** : renverse « repos accolés au confort » (8 000, sacrifié dès
+  qu'une heure, une passation ou une fatigue était en jeu). Contrainte DURE
+  du calcul sur une semaine complète (même bloc que le mineur,
+  `generer`) : une paire de jours libres, jours posés et école exclus ; sans
+  paire possible, rien (jamais de modèle impossible). Le dimanche et le
+  lundi d'à côté font la paire quand ce jour voisin est connu libre
+  (`joursSemainePrecedente`/`serieAvant`, `joursSemaineSuivante`/
+  `serieApres`), ce qui renverse la relecture du 2026-11-03. Une semaine
+  type qui fixe deux repos ou plus décide seule (pas de règle, pas
+  d'alerte). Plus de 6e jour par le calcul. Vérificateur : REPOS-SEPARES
+  aussi pour une semaine de 6 jours (pas 7 : la loi le dit), même
+  définition ; c'est la SEULE règle morale qui bloque une place
+  (`raisonCommune`, mention « règle de l'hôtel », « Chacun perdrait ses
+  deux jours de repos de suite. »). `POIDS_REPOS_SEPARES` ne sert plus
+  qu'au pire coût d'une place. Empreinte `generateur.test.ts` 887b8ecd. Une
+  semaine de l'hôtel de démo : 27 s → 57 s (second temps des remplaçants,
+  places vides). Banc décembre (copie locale, en mémoire) : semaines sans
+  paire 25 → 15 (toutes expliquées), 6e jours 4 → 1, aucune place vide de
+  plus, 6 h dues de moins sur le mois, 17 s pour le mois comme avant.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

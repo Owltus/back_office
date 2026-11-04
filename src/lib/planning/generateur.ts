@@ -253,11 +253,17 @@ import type {
 // P5 — confort.
 /** Par jour d'écart à sa part (week-ends, soirs, matins tôt). */
 export const POIDS_EQUITE = 100
-/** Deux jours de repos qui se suivent (demande utilisateur du 2026-11-01 :
- * « il faut que ça soit une priorité ; à défaut, des plannings un peu
- * biscornus »). Au-dessus de tout le reste du confort (jour habituel,
- * équité), sous les contrats et les places : les poids P1 et le surplus en
- * dérivent. */
+/** Deux jours de repos qui se suivent. DUR pour le calcul depuis le
+ * 2026-11-04 (décision d'une responsable : « 90 % du temps, les hôteliers
+ * doivent avoir deux jours de repos consécutifs ; fais au mieux pour les
+ * personnes présentes, et si je dois avoir des trous dans mes besoins, tu
+ * me dis ») : chaque semaine complète a une paire de jours libres, sauf si
+ * les shifts déjà posés et l'école n'en laissent aucune (voir la règle dans
+ * `generer`). Une place peut donc rester vide pour elle, et l'écran le dit
+ * (REPOS-SEPARES bloque, `raisonCommune`). Ce poids ne sert plus qu'au pire
+ * coût d'une place (`pireCoutRemplir`, `partMoraleExtra`), où il reste une
+ * borne prudente. Avant : 8 000 au confort, sacrifié dès qu'une heure, une
+ * passation ou une fatigue était en jeu. */
 export const POIDS_REPOS_SEPARES = 8_000
 /** Un jour de travail seul entre deux jours sans travail (congé, repos,
  * absence ; demande utilisateur du 2026-11-02 : « je ne vais pas prendre 4
@@ -1610,18 +1616,39 @@ export function construire(
         ),
       )
 
-      if (s.reposConsecutifs) {
+      // Deux jours de repos qui se suivent : la loi pour un mineur
+      // (R-REPOS-HEBDO-MINEUR, DANS la semaine), la règle de l'hôtel pour
+      // tous les autres depuis le 2026-11-04 (`POIDS_REPOS_SEPARES`), sur
+      // une semaine complète. Pour eux, le dimanche et le lundi d'à côté
+      // font aussi la paire quand ce jour voisin est connu libre (un rythme
+      // du mardi au samedi a ses deux repos de suite). Un jour posé ou
+      // d'école ne peut pas être libre : ces paires ne comptent pas, et sans
+      // aucune paire possible, rien n'est demandé (jamais de modèle
+      // impossible). Une semaine type qui fixe deux repos ou plus a décidé
+      // elle-même (les repos fixes passent d'abord, 2026-11-03) : rien de
+      // plus. Même définition que REPOS-SEPARES (verificateur.ts).
+      const regleHotel =
+        !s.reposConsecutifs && !s.placementManuel && s.reposFixes.size < 2
+      if (s.reposConsecutifs || (regleHotel && jours.length === 7)) {
+        const pris = (d: number) =>
+          fixes.some((c) => jourDe(c) === d) || s.joursHorsSite.has(d)
+        const candidats: number[][] = []
+        for (const j of jours.slice(0, -1)) candidats.push([j, j + 1])
+        if (regleHotel) {
+          const lundi = jours[0]
+          const dimanche = jours[6]
+          if (lundi > 0) candidats.push([lundi - 1, lundi])
+          else if (s.joursSemainePrecedente !== null && s.serieAvant === 0)
+            candidats.push([lundi])
+          if (dimanche + 1 < p.nbJours) candidats.push([dimanche, dimanche + 1])
+          else if (s.joursSemaineSuivante !== null && s.serieApres === 0)
+            candidats.push([dimanche])
+        }
         const paires: string[] = []
-        for (const j of jours.slice(0, -1)) {
-          if (
-            joursFixes.has(j) ||
-            joursFixes.has(j + 1) ||
-            ecole.has(j) ||
-            ecole.has(j + 1)
-          )
-            continue
+        for (const jj of candidats) {
+          if (jj.some(pris)) continue
           const libre = m.bool()
-          for (const d of [j, j + 1]) {
+          for (const d of jj) {
             const t = travaille.get(d)
             if (t)
               m.ajoute(
@@ -1645,49 +1672,6 @@ export function construire(
 
       if (s.reposHebdoMin && siens.length) {
         reposHebdo(m, s, siens, xv, travaille, jours, fixes, reduire)
-      }
-
-      if (!s.reposConsecutifs) {
-        const accoles: string[] = []
-        // Règle 1 : la paire se cherche DANS la semaine. Un dimanche libre de
-        // la semaine d'avant puis le lundi libre ne la remplacent pas
-        // (relecture du 2026-11-03) : sinon lundi et jeudi passaient pour
-        // collés, et le jeudi restait un repos seul au milieu du travail.
-        for (const j of jours.slice(0, -1)) {
-          if (ecole.has(j) || ecole.has(j + 1)) continue
-          const libre = m.bool()
-          for (const d of [j, j + 1]) {
-            const t = travaille.get(d)
-            if (t)
-              m.ajoute(
-                [
-                  [1, libre],
-                  [1, t],
-                ],
-                '<=',
-                1,
-              )
-          }
-          accoles.push(libre)
-        }
-        if (accoles.length) {
-          const deux = m.bool()
-          for (const a of accoles)
-            m.ajoute(
-              [
-                [1, deux],
-                [-1, a],
-              ],
-              '>=',
-              0,
-            )
-          m.ajoute(
-            [[1, deux], ...accoles.map((a) => [-1, a] as Terme)],
-            '<=',
-            0,
-          )
-          m.cout(-POIDS_REPOS_SEPARES, deux)
-        }
       }
 
       // Jours d'affilée, semaines voisines comprises : chaque fenêtre de

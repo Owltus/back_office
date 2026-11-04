@@ -870,7 +870,9 @@ describe('assemblage d’une semaine (semaine.ts)', () => {
     // Les shifts de l'accueil ont l'horaire et le poste d'un candidat.
     const analyse = analyser(p.donnees(LUNDI))
     expect(analyse.presence).toEqual(sem.presence)
-  }, 60_000)
+    // 2026-11-04 : deux repos de suite pour tous laissent des places vides,
+    // donc le second temps du calcul (remplaçants) tourne : ~27 s → ~57 s.
+  }, 150_000)
 })
 
 // ------------------------------------------------- 24 h sur 24 (audit)
