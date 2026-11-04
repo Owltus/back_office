@@ -6,9 +6,9 @@
  * (horaire, validation, journée étoile), glisser pour déplacer, et les
  * actions du mois (compléter, valider, effacer, cadenas).
  *
- * Périmètres (anomalie 9 de la spec) : grille et compteur de validation =
- * jours du mois ; jauge, bouclier, points d'attention et actions = semaines
- * ENTIÈRES. Les actions ne touchent que les semaines OUVERTES (ni passées,
+ * Périmètres (anomalie 9 de la spec) : compteur de validation et total
+ * d'heures = jours du mois ; grille (jours du mois voisin grisés), jauge,
+ * bouclier, points d'attention et actions = semaines ENTIÈRES. Les actions ne touchent que les semaines OUVERTES (ni passées,
  * ni verrouillées, ni avant le dernier planning réalisé) ; libellés et menu
  * le disent.
  *

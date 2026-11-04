@@ -10,6 +10,7 @@ import {
   cleBandeau,
   compter,
   etatSemaine,
+  joursAffiches,
   joursDuMois,
   listeSemaines,
   lundisDe,
@@ -37,6 +38,18 @@ describe('calendrier du mois', () => {
         Number(l.slice(8)),
       ),
     ).toBe('S2, S9 et S16')
+  })
+
+  it('la grille montre toujours des semaines entières (2026-11-04)', () => {
+    // Novembre 2026 : du dimanche 1er au lundi 30. La grille va du lundi
+    // 26 octobre au dimanche 6 décembre : 6 semaines de 7 jours.
+    const jours = joursAffiches('2026-11')
+    expect(jours).toHaveLength(42)
+    expect(jours[0]).toBe('2026-10-26')
+    expect(jours.at(-1)).toBe('2026-12-06')
+    expect(lundisDe(jours)).toEqual(lundisDe(joursDuMois('2026-11')))
+    // Un mois qui commence un lundi et finit un dimanche : rien de plus.
+    expect(joursAffiches('2027-02')).toEqual(joursDuMois('2027-02'))
   })
 
   it('état d’une semaine : passée, verrouillée, ouverte (U8)', () => {

@@ -3,10 +3,12 @@
  * jours du mois, les semaines qui le couvrent, ce qu'il y a dans une case,
  * les bandeaux, l'état de chaque semaine et les compteurs.
  *
- * Périmètres (anomalie 9 de la spec, rendue honnête) : la grille et le
- * compteur de validation ne montrent que les jours du MOIS ; les actions
- * (compléter, valider, effacer, verrouiller) portent sur des semaines
- * ENTIÈRES, jours du mois voisin compris. Les libellés le disent.
+ * Périmètres (anomalie 9 de la spec, rendue honnête) : la grille montre
+ * des semaines ENTIÈRES, jours du mois voisin compris et grisés (demande
+ * utilisateur du 2026-11-04 : « toute semaine affichée l'est en entier ») ;
+ * le compteur de validation et le total d'heures ne comptent que les jours
+ * du MOIS ; les actions (compléter, valider, effacer, verrouiller) portent
+ * sur les semaines entières. Les libellés le disent.
  */
 
 import type { BilanOut, ShiftOut, SemaineOut } from '#/lib/planning/semaine.ts'
@@ -23,6 +25,17 @@ import type { Motif, Salarie } from '#/lib/planning/types.ts'
 export function joursDuMois(mois: string): string[] {
   const jours: string[] = []
   for (let j = `${mois}-01`; j.slice(0, 7) === mois; j = ajouterJours(j, 1))
+    jours.push(j)
+  return jours
+}
+
+/** Les jours affichés pour un mois : du lundi de la semaine du 1er au
+ * dimanche de la semaine du dernier jour, toujours des semaines entières. */
+export function joursAffiches(mois: string): string[] {
+  const duMois = joursDuMois(mois)
+  const jours: string[] = []
+  const fin = ajouterJours(lundiDe(duMois[duMois.length - 1]), 6)
+  for (let j = lundiDe(duMois[0]); j <= fin; j = ajouterJours(j, 1))
     jours.push(j)
   return jours
 }

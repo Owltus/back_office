@@ -52,6 +52,22 @@ import type { AlerteOut, SemaineOut, ShiftOut } from '#/lib/planning/semaine.ts'
 import { ajouterJours, heureAffichee } from '#/lib/planning/temps.ts'
 import type { Horaire, Referentiel, Salarie } from '#/lib/planning/types.ts'
 import { JOURS } from '#/lib/planning/types.ts'
+
+/** Le mois écrit à côté du 1er, quand la grille montre deux mois. */
+const MOIS_COURT = [
+  'janv.',
+  'févr.',
+  'mars',
+  'avr.',
+  'mai',
+  'juin',
+  'juil.',
+  'août',
+  'sept.',
+  'oct.',
+  'nov.',
+  'déc.',
+]
 import { cn } from '#/lib/utils.ts'
 import { ligneAuLieuDe } from '#/components/planning/semaine/Cartes.tsx'
 import { PointsPresence } from '#/components/planning/semaine/Presence.tsx'
@@ -387,14 +403,26 @@ export function GrilleMois({
                     className={cn(
                       'sticky top-7 z-20 border-b bg-muted py-1 text-center font-normal leading-tight',
                       jour === 0 && 'border-l border-l-foreground/25',
+                      !d.startsWith(mois) && 'text-muted-foreground/60',
                       d === aujourdhui && 'bg-primary/15 text-primary',
                     )}
+                    data-hors-mois={d.startsWith(mois) ? undefined : ''}
                   >
                     <span className="block text-[10px] text-muted-foreground">
                       {JOURS[jour][0]}
                     </span>
-                    <span className="block text-xs font-medium tabular-nums">
+                    <span
+                      className={cn(
+                        'block text-xs tabular-nums',
+                        d.startsWith(mois) ? 'font-medium' : 'font-normal',
+                      )}
+                    >
                       {Number(d.slice(8))}
+                      {d.slice(8) === '01' && (
+                        <span className="ml-0.5 text-[10px] font-normal">
+                          {MOIS_COURT[Number(d.slice(5, 7)) - 1]}
+                        </span>
+                      )}
                     </span>
                     <PointsPresence
                       presence={semaine?.presence.filter(
@@ -520,6 +548,7 @@ function LigneMois({
 }) {
   const nom = `${s.prenom} ${s.nom}`.trim()
   const shifts = jours
+    .filter((d) => d.startsWith(mois))
     .map((d) => lire(s.id, d))
     .filter(
       (c): c is Extract<CaseMois, { type: 'shift' }> => c?.type === 'shift',
@@ -544,6 +573,7 @@ function LigneMois({
   }
   const fondJour = (date: string) =>
     cn(
+      !date.startsWith(mois) && 'planning-mois-voisin',
       date === aujourdhui && 'bg-primary/10',
       verrouillee(reperer(date).lundi) && 'planning-mois-verrouillee',
     )

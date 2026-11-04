@@ -25,12 +25,13 @@ import { fetchShifts } from '#/lib/planning/service.ts'
 import { ajouterJours, lundiDe } from '#/lib/planning/temps.ts'
 import {
   etatSemaine,
-  joursDuMois,
+  joursAffiches,
   lundisDe,
 } from '#/components/planning/mois/mois.ts'
 
 export function useMois(mois: string) {
-  const jours = useMemo(() => joursDuMois(mois), [mois])
+  // Semaines entières, jours du mois voisin compris (2026-11-04).
+  const jours = useMemo(() => joursAffiches(mois), [mois])
   const lundis = useMemo(() => lundisDe(jours), [jours])
   const premier = lundis[0]
   const dernier = lundis[lundis.length - 1]

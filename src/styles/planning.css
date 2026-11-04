@@ -56,6 +56,12 @@
   background: color-mix(in srgb, var(--color-muted-foreground) 8%, transparent);
 }
 
+/* Jour du mois voisin (la grille montre des semaines entières, 2026-11-04) :
+ * un fond légèrement grisé, le contenu reste lisible. */
+.planning-mois-voisin {
+  background: color-mix(in srgb, var(--color-muted) 70%, transparent);
+}
+
 /* Semaine verrouillée (planning réalisé) : curseur par défaut. Plus de
  * hachures (retirées le 2026-10-27, décision utilisateur : « pas très beau,
  * ajoute de la confusion ») ; le cadenas de l'en-tête suffit. */
