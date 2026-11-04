@@ -266,19 +266,25 @@ export const POIDS_REPOS_SEPARES = 8_000
  * comme du travail : continuité avec la semaine d'à côté. Confort, sous les
  * repos accolés. */
 export const POIDS_JOUR_ISOLE = 4_000
-/** LA FATIGUE AVANT LES HEURES (décision utilisateur du 2026-11-03 : « un
- * placement le plus humain possible ; vise l'efficacité et non la fatigue
- * des employés »). Quatre règles de repos passent AVANT les heures dues :
- * moins de 12 h entre deux services (règle 3), une reprise de jour moins de
- * 2 jours après des nuits (règle 7), aucun week-end libre sur 4 semaines
- * (règle 4) : leur poids dépasse les heures dues d'un shift de 12 h
- * (`POIDS_SOUS_CONTRAT` × 720 = 288 000, figé par un test), on laisse
- * plutôt quelques heures manquer, signalées ; les places nécessaires passent
- * toujours devant (`coutPlaceVide` relit ces poids). La quatrième, plus de
- * 6 jours d'affilée, est DURE pour le calcul (plus bas, PRD règle 2 :
- * « au-delà, seulement à la main ») : à ce poids, elle doublait le temps
- * d'une semaine réelle et l'amenait au plafond. */
-export const POIDS_FATIGUE = 290_000
+/** LES HEURES AVANT LA FATIGUE (décision utilisateur du 2026-11-04, qui
+ * renverse celle du 2026-11-03 : « le respect du nombre d'heures est très
+ * important ; si on ne le respecte pas, on les paye quand même alors qu'il
+ * ne les a pas faites »). Trois règles de repos : moins de 12 h entre deux
+ * services (règle 3), une reprise de jour moins de 2 jours après des nuits
+ * (règle 7), aucun week-end libre sur 4 semaines (règle 4). Leur poids est
+ * SOUS les heures dues d'une heure de travail (`POIDS_SOUS_CONTRAT` × 60 =
+ * 24 000, figé par un test) : le calcul ne retire jamais un shift pour
+ * elles. Limite assumée : 20 000 valent 50 minutes dues ; pour éviter UNE
+ * de ces règles, un horaire plus court de 45 minutes au plus peut être
+ * préféré (deux règles : 1 h 40). À heures égales, il les évite avant le
+ * 6e jour, la relève, les jours d'affilée conseillés, les repos accolés et
+ * les heures en plus (jusqu'à 6 h 40) ; le rythme de 5 jours, une personne
+ * en plus, l'ouverture, la passation et un mineur un jour férié passent
+ * devant. Les places nécessaires
+ * passent toujours devant (`coutPlaceVide` relit ces poids). Plus de 6
+ * jours d'affilée reste DUR pour le calcul (PRD règle 2 : « au-delà,
+ * seulement à la main »). */
+export const POIDS_FATIGUE = 20_000
 /** Par jour au-delà de 6 d'affilée, sur chaque fenêtre de 7 jours qui
  * traverse une semaine voisine (`JOURS_AFFILES_MAX`). DUR pour le calcul
  * depuis le 2026-11-03 ; ce poids ne sert plus qu'au pire coût d'une place
@@ -320,10 +326,12 @@ export function pireJfr(reductionMax: number): number {
 }
 export { RYTHME_CONTRAT_MIN }
 /** Horizon glissant (2026-11-04) : une personne qui manque un jour de la
- * semaine SUIVANTE esquissée. Au-dessus du week-end libre (comme dans la
- * vraie semaine : les places passent avant la fatigue), sous les places
- * de la semaine écrite (`pireHorizon` entre dans leur coût). */
-export const POIDS_PREVISION_MANQUE = POIDS_FATIGUE + 10_000
+ * semaine SUIVANTE esquissée (une place qui y resterait vide). Au-dessus du
+ * week-end libre et des heures d'un shift de 12 h (les places passent avant
+ * les heures et la fatigue), sous les places de la semaine écrite
+ * (`pireHorizon` entre dans leur coût). Valeur d'avant le 2026-11-04 : la
+ * fatigue a baissé, pas les places. */
+export const POIDS_PREVISION_MANQUE = 300_000
 /** P1 : le pire que coûte, dans l'esquisse de la semaine suivante, un
  * shift ajouté à la semaine écrite. Il peut la priver d'un jour (jours
  * d'affilée) : un jour attendu en moins et UN manque (un jour de présence
@@ -342,6 +350,18 @@ export function pireHorizon(suivante: Probleme['suivante']): number {
  * heure. « Obligatoire » (2026-11-01) : au-dessus des contrats d'un jour de
  * travail. */
 export const POIDS_OUVERTURE_QUART = 40_000
+/** PASSATION AVEC LE VEILLEUR (décision utilisateur du 2026-11-04 : « une
+ * passation pour le soir, c'est très important ; le shift finit à 23 h pour
+ * le soir et celui de la nuit commence à 23 h ; il faut qu'elle soit
+ * nickel »). Par nuit de l'accueil et par côté : le soir, le veilleur
+ * arrive avant que le dernier du soir parte (à la minute près : une fin à
+ * 23:00 pour une nuit à 23:00 suffit) ; le matin, le premier du matin
+ * arrive avant que le veilleur parte. Au-dessus des heures dues d'un shift
+ * de 12 h (288 000, figé par un test) : on ne laisse pas un veilleur seul
+ * pour donner des heures ; sous les places (un veilleur ajouté peut en
+ * manquer deux, `pireMoral`). Même définition que l'oracle
+ * (`transmissions`, verificateur.ts). */
+export const POIDS_PASSATION = 300_000
 /** Pas de relève (l'équipe du matin et celle de l'après-midi jamais
  * ensemble le temps réglé) : au-dessus du 6e jour et des repos accolés,
  * sous les contrats. */
@@ -540,7 +560,9 @@ export function pireMoral(c: Creneau): number {
     // ses départs (un coût par jour chacun), et manque au plus sa relève.
     POIDS_EQUIPE_ARRIVEE +
     POIDS_EQUIPE_DEPART +
-    POIDS_RELEVE_CHACUN
+    POIDS_RELEVE_CHACUN +
+    // Un veilleur ajouté peut manquer sa passation des deux côtés.
+    (c.presence.includes('nuit') ? 2 * POIDS_PASSATION : 0)
   )
 }
 
@@ -739,6 +761,13 @@ export interface Trou {
   fin: number
 }
 
+/** Une passation avec le veilleur : le jour où la nuit est écrite, et le
+ * côté (le soir qui lui passe la main, ou le matin qui la reprend). */
+export interface Passation {
+  jour: number
+  cote: 'soir' | 'matin'
+}
+
 /** Le résultat du générateur, avec les trous entre équipes restés. */
 export type ResultatGeneration = Resultat & {
   trous: Trou[]
@@ -746,6 +775,8 @@ export type ResultatGeneration = Resultat & {
   ouvertures: Trou[]
   /** Jours sans relève entre l'équipe du matin et celle de l'après-midi. */
   relevesManquantes: number[]
+  /** Passations avec le veilleur manquées (jour de la nuit, côté). */
+  passationsManquantes: Passation[]
   /** Calcul qui a servi (mesure seulement, voir `generer`) : 1 = sans les
    * remplaçants non imposés, 2 = problème complet. */
   etapes: 1 | 2
@@ -953,6 +984,8 @@ interface Construit {
   ouvertures: Array<Trou & { v: string }>
   /** Relève manquée, une variable par jour. */
   releves: Array<{ jour: number; v: string }>
+  /** Passation avec le veilleur manquée, une variable par nuit et par côté. */
+  passations: Array<Passation & { v: string }>
   /** Variables de manque au chiffre d'un moment (une par moment demandé),
    * avec l'indice du moment dans `Probleme.consignes`. */
   minimums: Array<{ v: string; consigne: number }>
@@ -1232,11 +1265,12 @@ export function construire(
     ),
   )
   const releves = relevesAccueil(m, p, termesDe)
-  equipesSynchro(m, p, termesDe, (c) =>
+  const borneDe = (c: Creneau) =>
     c.accueil
       ? (sommesAccueil.get(c.id)?.n ?? 0)
-      : p.salaries.filter((s) => x.has(cle(s.id, c.id))).length,
-  )
+      : p.salaries.filter((s) => x.has(cle(s.id, c.id))).length
+  const passations = passationsVeilleur(m, p, termesDe, borneDe)
+  equipesSynchro(m, p, termesDe, borneDe)
 
   // Une « expression » : termes + constante.
   type Expr = { termes: Terme[]; constante: number }
@@ -1934,6 +1968,7 @@ export function construire(
     trous,
     ouvertures,
     releves,
+    passations,
     minimums,
     sousContrat,
     jfrs,
@@ -2836,6 +2871,169 @@ function relevesAccueil(
 }
 
 /**
+ * Passation avec le veilleur (`POIDS_PASSATION`), la MÊME règle que l'oracle
+ * (`transmissions`, verificateur.ts), qui juge des PRÉSENCES :
+ *   - soir : le dernier du soir part à l'arrivée du PREMIER veilleur ou
+ *     après (max des fins du soir >= min des débuts de nuit) ;
+ *   - matin : le premier du matin arrive au départ du DERNIER veilleur ou
+ *     avant (max des fins de nuit >= min des débuts du matin).
+ * Pour chaque créneau de nuit n d'une zone (`zonesPassation`), avec
+ * t(n) = « n est tenu » (0/1, borne × t >= ceux qui le tiennent) :
+ *   manque >= t(n) - Σ relais de n - Σ nuits de la zone qui la précèdent
+ *   (soir : arrivée plus tôt ; matin : départ plus tard).
+ * Une nuit plus tardive est donc excusée par une plus tôt tenue, comme le
+ * min de l'oracle ; deux veilleurs sur la même nuit n'en font qu'une. Le
+ * lundi matin, la nuit du dimanche d'avant est un fait
+ * (`Probleme.veilleDuLundi`). Un manque par zone, entre 0 et 1. Ajouter
+ * quelqu'un de jour ne crée jamais de manque ; ajouter un veilleur en crée
+ * au plus deux (`pireMoral`).
+ */
+function passationsVeilleur(
+  m: Modele,
+  p: Probleme,
+  termesDe: (c: Creneau, quoi: 'autonomes') => Terme[],
+  borne: (c: Creneau) => number,
+): Array<Passation & { v: string }> {
+  const r: Array<Passation & { v: string }> = []
+  const tenu = new Map<string, Terme[]>()
+  const tenuDe = (n: Creneau): Terme[] => {
+    const deja = tenu.get(n.id)
+    if (deja) return deja
+    const termes = termesDe(n, 'autonomes')
+    const k = borne(n)
+    let t: Terme[] = []
+    if (termes.length === 1 && k <= 1) t = termes
+    else if (termes.length && k > 0) {
+      const b = m.bool()
+      m.ajoute([[k, b], ...termes.map(([q, w]) => [-q, w] as Terme)], '>=', 0)
+      t = [[1, b]]
+    }
+    tenu.set(n.id, t)
+    return t
+  }
+  const moins = (cs: Creneau[]): Terme[] =>
+    cs.flatMap((c) =>
+      termesDe(c, 'autonomes').map(([q, w]) => [-q, w] as Terme),
+    )
+  for (const z of zonesPassation(p)) {
+    // manque >= tenu - relais - nuits d'avant ; tenu = 1 pour la veille.
+    const lignes: Array<{ termes: Terme[]; tenue: number }> = []
+    if (z.veille !== null)
+      lignes.push({ termes: moins(z.relais(z.veille)), tenue: 1 })
+    for (const n of z.nuits) {
+      const t = tenuDe(n)
+      if (!t.length) continue
+      lignes.push({
+        termes: [...t, ...moins(z.relais(n)), ...moins(z.avant(n))],
+        tenue: 0,
+      })
+    }
+    if (!lignes.length) continue
+    const v = m.continu(0, 1)
+    for (const { termes, tenue } of lignes)
+      m.ajoute(
+        [[1, v], ...termes.map(([q, w]) => [-q, w] as Terme)],
+        '>=',
+        tenue,
+      )
+    m.cout(POIDS_PASSATION, v)
+    r.push({ jour: z.jour, cote: z.cote, v })
+  }
+  return r
+}
+
+/** Une zone de passation avec le veilleur (`zonesPassation`). */
+export interface ZonePassation {
+  /** Jour où la nuit est écrite (-1 : le dimanche d'avant, côté matin). */
+  jour: number
+  cote: 'soir' | 'matin'
+  /** Créneaux de nuit de l'accueil de ce jour (vide pour le dimanche
+   * d'avant, qui est `veille`). */
+  nuits: Creneau[]
+  /** Le lundi matin : la nuit du dimanche d'avant (fait), sinon null. */
+  veille: Pick<Creneau, 'debut' | 'fin'> | null
+  /** Les créneaux de jour qui relaient une nuit : soir fini à son arrivée
+   * ou après, matin arrivé à son départ ou avant. */
+  relais: (n: Pick<Creneau, 'debut' | 'fin'>) => Creneau[]
+  /** Les nuits de la zone qui l'excusent si elles sont tenues : arrivée
+   * plus tôt (soir), départ plus tard (matin). */
+  avant: (n: Creneau) => Creneau[]
+}
+
+/** Les passations à tenir avec le veilleur, par jour où une nuit de
+ * l'accueil est écrite et par côté, seulement si le moment de jour qui la
+ * relaie est demandé (chiffre du soir de ce jour, du matin du lendemain),
+ * comme la relève : un soir non demandé n'est pas ajouté pour elle. Le
+ * dernier matin (lendemain dans la semaine suivante) n'est pas cherché ; le
+ * lundi matin l'est, face à `Probleme.veilleDuLundi`. */
+export function zonesPassation(
+  p: Pick<Probleme, 'creneaux' | 'nbJours' | 'consignes' | 'veilleDuLundi'>,
+): ZonePassation[] {
+  const postesAccueil = new Set(
+    p.creneaux.filter((c) => c.accueil).map((c) => c.poste),
+  )
+  const deJour = p.creneaux.filter(
+    (c) => postesAccueil.has(c.poste) && !c.presence.includes('nuit'),
+  )
+  const demande = (j: number, periode: 'matin' | 'soir') =>
+    p.consignes.some(
+      (k) => k.jour === j && k.periode === periode && k.minimum > 0,
+    )
+  const matinsDe = (j: number) =>
+    deJour.filter((c) => jourDe(c) === j && c.presence.includes('matin'))
+  const r: ZonePassation[] = []
+  const veilles = p.veilleDuLundi ?? []
+  if (veilles.length && demande(0, 'matin')) {
+    const matins = matinsDe(0)
+    const veille = {
+      debut: Math.min(...veilles.map((c) => c.debut)),
+      fin: Math.max(...veilles.map((c) => c.fin)),
+    }
+    if (matins.length)
+      r.push({
+        jour: -1,
+        cote: 'matin',
+        nuits: [],
+        veille,
+        relais: (n) => matins.filter((c) => c.debut <= n.fin),
+        avant: () => [],
+      })
+  }
+  for (let jour = 0; jour < p.nbJours; jour++) {
+    const nuits = p.creneaux.filter(
+      (c) =>
+        postesAccueil.has(c.poste) &&
+        c.presence.includes('nuit') &&
+        jourDe(c) === jour,
+    )
+    if (!nuits.length) continue
+    const soirs = deJour.filter(
+      (c) => jourDe(c) === jour && c.presence.includes('soir'),
+    )
+    if (soirs.length && demande(jour, 'soir'))
+      r.push({
+        jour,
+        cote: 'soir',
+        nuits,
+        veille: null,
+        relais: (n) => soirs.filter((c) => c.fin >= n.debut),
+        avant: (n) => nuits.filter((x) => x.debut < n.debut),
+      })
+    const matins = matinsDe(jour + 1)
+    if (matins.length && demande(jour + 1, 'matin'))
+      r.push({
+        jour,
+        cote: 'matin',
+        nuits,
+        veille: null,
+        relais: (n) => matins.filter((c) => c.debut <= n.fin),
+        avant: (n) => nuits.filter((x) => x.fin > n.fin),
+      })
+  }
+  return r
+}
+
+/**
  * Règle 17 du PRD (demande utilisateur du 2026-11-03 : « éviter d'avoir des
  * hôteliers seuls le soir ; qu'ils restent ensemble le maximum possible, à
  * trente minutes près ; synchro comme le matin ; un changement de shift
@@ -3116,6 +3314,7 @@ const echec = (): Resolution => ({
   trous: [],
   ouvertures: [],
   relevesManquantes: [],
+  passationsManquantes: [],
   manqueMinimum: 0,
   sousContrat: new Set(),
   auDessusContrat: new Set(),
@@ -3142,6 +3341,7 @@ function resoudreUneFois(
     trous,
     ouvertures,
     releves,
+    passations,
     minimums,
     sousContrat,
     jfrs,
@@ -3182,6 +3382,8 @@ function resoudreUneFois(
       ouvertures: [],
       // Personne ne peut venir : chaque relève cherchée manque.
       relevesManquantes: releves.map(({ jour }) => jour),
+      // Personne : aucune nuit tenue, aucune passation à faire.
+      passationsManquantes: [],
       manqueMinimum: 0,
       sousContrat: new Set(),
       auDessusContrat: new Set(),
@@ -3261,6 +3463,9 @@ function resoudreUneFois(
     relevesManquantes: releves
       .filter(({ v }) => valeur(v) > 0.5)
       .map(({ jour }) => jour),
+    passationsManquantes: passations
+      .filter(({ v }) => valeur(v) > 0.5)
+      .map(({ jour, cote }) => ({ jour, cote })),
     manqueMinimum: minimums
       .filter(({ consigne }) => remplacables.has(consigne))
       .reduce((t, { v }) => t + valeur(v), 0),

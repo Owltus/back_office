@@ -862,19 +862,24 @@ export function AidePlanningContenu({
             <span className="font-medium text-foreground">
               L’accueil sans trou
             </span>{' '}
-            : personne ne manque entre deux équipes, l’ouverture est tenue.
-          </li>
-          <li>
-            <span className="font-medium text-foreground">La fatigue</span> :
-            jamais plus de 6 jours d’affilée, 12 h entre deux services, 2 jours
-            après des nuits avant de reprendre de jour, un week-end libre sur 4
-            semaines. Elles passent avant les heures dues : mieux vaut quelques
-            heures en moins, signalées, qu’une personne épuisée.
+            : personne ne manque entre deux équipes, l’ouverture est tenue. La
+            passation avec le veilleur aussi : le soir reste jusqu’à son
+            arrivée, à la minute près (fin à 23:00 pour une nuit à 23:00), et le
+            matin arrive avant son départ.
           </li>
           <li>
             <span className="font-medium text-foreground">Les contrats</span> :
-            d’abord les heures dues, puis éviter une personne en plus, un 6e
-            jour, des heures au-delà du contrat.
+            d’abord les heures dues, sur une semaine complète de 5 jours. Des
+            heures payées doivent être faites. Puis éviter une personne en plus.
+          </li>
+          <li>
+            <span className="font-medium text-foreground">La fatigue</span> : 12
+            h entre deux services, 2 jours après des nuits avant de reprendre de
+            jour, un week-end libre sur 4 semaines. Elle passe après les heures
+            dues : quand seules des heures en moins la sauveraient, les heures
+            passent devant et une alerte orange le dit. Elle passe avant un 6e
+            jour et les heures au-delà du contrat. Plus de 6 jours d’affilée,
+            jamais.
           </li>
           <li>
             <span className="font-medium text-foreground">La relève</span> : une
@@ -994,7 +999,7 @@ export function AidePlanningContenu({
 
       <Section
         id="bien-etre"
-        intro="Ce n’est pas parce que l’on peut que l’on doit. Au-delà de la loi, l’app cherche un planning vivable et juste, le même pour tous. Ces règles cèdent devant les places nécessaires, jamais l’inverse. Celles de la fatigue (jours d’affilée, 12 h de repos, repos après des nuits, week-end libre) passent aussi avant les heures dues ; les autres cèdent devant elles. Quand l’une cède, une alerte orange le dit à la personne qui fait le planning."
+        intro="Ce n’est pas parce que l’on peut que l’on doit. Au-delà de la loi, l’app cherche un planning vivable et juste, le même pour tous. Ces règles cèdent devant les places nécessaires, jamais l’inverse. Toutes cèdent devant les heures dues (des heures payées doivent être faites), sauf les 6 jours d’affilée, que le calcul ne dépasse jamais. À heures égales, celles de la fatigue (12 h de repos, repos après des nuits, week-end libre) passent en premier. Quand l’une cède, une alerte orange le dit à la personne qui fait le planning."
       >
         <Sous titre="Le repos">
           <Liste

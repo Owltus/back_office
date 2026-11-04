@@ -355,6 +355,10 @@ export interface Probleme {
   }>
   /** Relève entre le matin et le soir, en minutes (0 ou absent : aucune). */
   releveMinutes?: number
+  /** La nuit du dimanche d'avant (shifts de nuit de l'accueil, minutes de
+   * cette semaine) : la passation du lundi matin se fait avec elle
+   * (`zonesPassation`). Absent : rien à chercher. */
+  veilleDuLundi?: ReadonlyArray<{ debut: number; fin: number }>
   /** Horizon glissant (2026-11-04) : la semaine SUIVANTE esquissée dans le
    * même calcul, pour que la semaine écrite ne la mette pas dans une impasse
    * (jours d'affilée, week-end libre, personnes nécessaires). Rien n'en est

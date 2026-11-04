@@ -703,7 +703,11 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
     // week-end libre au poids `POIDS_FATIGUE` ; plus de 6 jours d'affilée
     // devient une contrainte dure ; la nuit du vendredi compte pour le
     // week-end.
-    expect(empreinte(textes.join('\n=====\n'))).toBe('69dca6e4')
+    // 30e32394 (2026-11-04, les heures avant la fatigue et la passation avec
+    // le veilleur, décisions de l'utilisateur) : poids de la fatigue sous
+    // une heure due ; le pire coût d'une place change (passation d'un
+    // veilleur) ; ces semaines n'ont pas de nuit de l'accueil.
+    expect(empreinte(textes.join('\n=====\n'))).toBe('30e32394')
   })
 })
 

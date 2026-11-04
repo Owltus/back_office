@@ -321,7 +321,9 @@ describe('3. R-REPOS-HEBDO-35H', () => {
       expect([lundi, sem.stats.infractions]).toEqual([lundi, 0])
       expect([lundi, sem.stats.pourvues]).toEqual([lundi, sem.stats.places])
     }
-  })
+    // Quatre semaines calculées : plus que les 5 s par défaut quand toute la
+    // suite tourne en même temps.
+  }, 30_000)
 })
 
 // ------------------------------- 4. R-JOUR-MAX du poste sur un shift manuel

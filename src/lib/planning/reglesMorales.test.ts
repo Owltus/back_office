@@ -111,13 +111,22 @@ describe('les poids moraux : sous les places et les heures dues, au-dessus du d�
     }
   })
 
-  it('la fatigue avant les heures : plus que les heures d’un shift de 12 h (2026-11-03)', () => {
+  it('les heures avant la fatigue : moins qu’une heure due, plus que les autres règles (2026-11-04)', () => {
     for (const w of [
       POIDS_REPOS_COURT,
       POIDS_WEEKEND_LIBRE,
       POIDS_REPRISE_APRES_NUIT,
-    ])
-      expect(w).toBeGreaterThan(POIDS_SOUS_CONTRAT * 12 * H)
+    ]) {
+      expect(w).toBeLessThan(POIDS_SOUS_CONTRAT * H)
+      for (const autre of [
+        POIDS_MOMENT_EN_TROP,
+        POIDS_MOMENT_ARRIERE,
+        POIDS_NUIT_AFFILEE,
+        POIDS_RETOUR_WEEKEND,
+        POIDS_ECOLE_ABORDS,
+      ])
+        expect(w).toBeGreaterThan(autre)
+    }
     // Plus de 6 jours d'affilée : dur pour le calcul, ce poids ne sert qu'au
     // pire d'une place.
     expect(POIDS_JOUR_AFFILE).toBeLessThan(POIDS_SOUS_CONTRAT * 4 * H)
@@ -135,12 +144,12 @@ describe('les poids moraux : sous les places et les heures dues, au-dessus du d�
   })
 })
 
-describe('la fatigue passe avant les heures dues (2026-11-03)', () => {
-  it('refusé : elle n’enchaîne pas un soir et un matin pour ses heures', () => {
+describe('les heures dues passent avant la fatigue (2026-11-04)', () => {
+  it('accepté : elle enchaîne un soir et un matin pour ses heures, et c’est dit', () => {
     // Elle a fini à 22 h la veille ; le seul shift du lundi commence à 9 h
-    // (11 h de repos : légal, mais sous les 12 h). Il lui manque ces heures :
-    // elle les perd plutôt que de se fatiguer, et c'est dit.
-    // Un collègue sans heures dues peut tenir la place.
+    // (11 h de repos : légal, mais sous les 12 h). Il lui manque ces heures,
+    // le collègue n'en doit aucune : elle le prend (décision utilisateur :
+    // des heures payées doivent être faites), l'alerte le dit.
     const b = personne('b', 0)
     for (const graine of graines) {
       const p = probleme({
@@ -149,15 +158,19 @@ describe('la fatigue passe avant les heures dues (2026-11-03)', () => {
         graine,
       })
       const r = resoudre(p)
-      expect(de(r, 'a')).toEqual([])
-      expect(de(r, 'b')).toEqual(['lun'])
+      expect(de(r, 'a')).toEqual(['lun'])
+      expect(alertes(p, r, 'REPOS-COURT').length).toBe(1)
     }
-    // Accepté : avec 12 h de repos, elle le prend.
+    // Refusé : à heures égales (le collègue en doit autant), la fatigue
+    // décide, le collègue reposé le prend.
     const p = probleme({
-      salaries: [personne('a', 8, { finServicePrecedent: -3 * H }), b],
+      salaries: [
+        personne('a', 8, { finServicePrecedent: -2 * H }),
+        personne('b', 8),
+      ],
       creneaux: [cr('lun', 0, 9, 17)],
     })
-    expect(de(resoudre(p), 'a')).toEqual(['lun'])
+    expect(de(resoudre(p), 'b')).toEqual(['lun'])
     // La place passe toujours avant : seule possible, elle la prend.
     const seule = probleme({
       salaries: [personne('a', 8, { finServicePrecedent: -2 * H })],

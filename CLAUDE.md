@@ -2502,6 +2502,30 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   mois (2 semaines courtes de plus) — l'ordre voulu (fatigue avant heures) ;
   41 s au lieu de 49 s pour le mois. Non fait : une personne qui change de
   fiche (`suite_de`) au lundi de k+1 n'a pas ses jours d'affilée reliés.
+- **LES HEURES AVANT LA FATIGUE + PASSATION AVEC LE VEILLEUR (2026-11-04,
+  décisions utilisateur : « si on ne respecte pas les heures, on les paye
+  quand même » ; « la passation du soir, à la minute près, très
+  importante »)** : renverse « la fatigue avant les heures » du 2026-11-03.
+  `POIDS_FATIGUE` 20 000 (sous une heure due, 24 000 ; au-dessus des autres
+  règles morales), 6 jours d'affilée toujours dur, `POIDS_PREVISION_MANQUE`
+  gardé à 300 000 (places de k+1). Passation (`passationsVeilleur`,
+  `zonesPassation`, `POIDS_PASSATION` 300 000 par zone, plus que les heures
+  d'un shift de 12 h) : le dernier du soir part à l'arrivée du PREMIER
+  veilleur ou après, le premier du matin arrive au départ du DERNIER ou
+  avant (une présence par nuit, binaire « tenu », jamais un compte de
+  personnes) ; le lundi matin face à `Probleme.veilleDuLundi` (nuit du
+  dimanche d'avant) ; zone seulement si le moment de jour qui relaie est
+  demandé ; même définition que `transmissions` (oracle, déjà affiché par
+  les liens du mois) ; un veilleur ajouté en compte deux dans `pireMoral`.
+  Limite assumée : la fatigue (20 000) vaut 50 min dues, un horaire plus
+  court de 45 min peut être préféré pour éviter UN repos court. `ResultatGeneration.passationsManquantes`.
+  Banc décembre (copie locale, en mémoire, hors dépôt) : heures manquantes
+  36 h → 0, semaines courtes 6 → 0, passations du soir 5 → 1 (jour validé),
+  toutes les semaines à l'optimum prouvé ; en contrepartie WEEKEND-LIBRE
+  0 → 18 (choix réel, vérifié par un essai inverse). Empreinte
+  `generateur.test.ts` 30e32394. Pas de passe de réparation : chaque
+  semaine atteint l'optimum, les incohérences venaient de l'ordre des
+  priorités et de la règle absente.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

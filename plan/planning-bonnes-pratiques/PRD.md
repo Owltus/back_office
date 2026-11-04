@@ -105,6 +105,25 @@ L'ordre devient donc : loi > places > fatigue (ces quatre règles) > heures dues
 morales > confort. Le paragraphe Q1 ci-dessus et le tableau 2.1 décrivent l'état d'avant pour ces
 quatre règles.
 
+**RENVERSÉ LE 2026-11-04 : LES HEURES AVANT LA FATIGUE (décision utilisateur : « le respect du
+nombre d'heures est très important ; si on ne le respecte pas, on les paye quand même alors qu'il
+ne les a pas faites »)**. `POIDS_FATIGUE` passe à 20 000 : sous les heures dues d'une heure de
+travail (24 000), au-dessus des autres règles morales. Plus de 6 jours d'affilée reste dur. Ordre :
+loi > places > passation avec le veilleur et ouverture > heures dues (semaine complète, rythme de
+5 jours) > fatigue > autres règles morales > confort. Mesuré sur décembre (copie locale, en
+mémoire) : heures manquantes 36 h → 0, semaines courtes 6 → 0 ; en contrepartie, 18 alertes de
+week-end libre (0 avant) : en décembre, l'équipe ne peut pas donner à la fois toutes les heures
+et tous les week-ends. Un essai avec le week-end libre au-dessus d'un shift (150 000) gardait
+24 h manquantes pour 4 alertes : c'est bien un choix entre les deux, pas un défaut du calcul.
+
+**PASSATION AVEC LE VEILLEUR (décision utilisateur du 2026-11-04 : « c'est très important ; le
+shift finit à 23 h pour le soir et celui de la nuit commence à 23 h »)** : par nuit de l'accueil,
+le dernier du soir part à l'arrivée du veilleur ou après, le premier du matin arrive à son départ
+ou avant, le lundi matin avec le veilleur du dimanche d'avant (`POIDS_PASSATION` 300 000, plus
+que les heures d'un shift de 12 h ; une présence, pas un compte de personnes : la même règle que
+l'oracle `transmissions` ; cherchée seulement quand le moment de jour qui relaie est demandé). Décembre : 5 passations du soir manquées sur 35 nuits → 1, sur un jour déjà
+validé.
+
 Règle d'or : **quand l'hôtel ne peut pas faire autrement, le calcul peut enfreindre une règle
 morale, mais il le dit dans une alerte.** Il ne peut jamais enfreindre la loi.
 

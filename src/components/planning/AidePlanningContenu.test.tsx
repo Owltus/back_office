@@ -147,6 +147,8 @@ describe('AidePlanningContenu (aide du bouton ?)', () => {
     )
     const rang = (mot: string) => items.findIndex((x) => x.startsWith(mot))
     expect(rang('Les contrats')).toBeLessThan(rang('Le bien-être'))
+    // Les heures avant la fatigue (décision utilisateur du 2026-11-04).
+    expect(rang('Les contrats')).toBeLessThan(rang('La fatigue'))
     expect(rang('Le bien-être')).toBeLessThan(rang('Le confort'))
   })
 

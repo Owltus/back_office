@@ -220,11 +220,13 @@ describe('horizon glissant', () => {
   it('la semaine suivante garde du monde : pas tous en week-end libre à la fois', () => {
     // A et B travaillent tous les deux le week-end ; la semaine d'après en
     // demande un par jour. Les deux ne peuvent pas être libres ensemble là :
-    // l'un des deux a son week-end libre MAINTENANT.
+    // l'un des deux a son week-end libre MAINTENANT. Contrats de 30 h : pas
+    // de rythme de 5 jours, qui passe avant le week-end libre (les heures
+    // et la semaine complète d'abord, 2026-11-04).
     const p = probleme({
       salaries: [
-        personne('A'),
-        personne('B'),
+        personne('A', { minutesHebdoContrat: 30 * H }),
+        personne('B', { minutesHebdoContrat: 30 * H }),
         personne('C', { minutesHebdoContrat: 24 * H }),
       ],
       creneaux: places(),
@@ -248,6 +250,39 @@ describe('horizon glissant', () => {
       return !j.has(5) && !j.has(6)
     })
     expect(libres.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('à temps plein, la semaine complète passe avant le week-end libre (2026-11-04)', () => {
+    // Le même cas à 40 h : les heures et le rythme de 5 jours d'abord
+    // (décision utilisateur : des heures payées doivent être faites).
+    const p = probleme({
+      salaries: [
+        personne('A'),
+        personne('B'),
+        personne('C', { minutesHebdoContrat: 24 * H }),
+      ],
+      creneaux: places(),
+      suivante: {
+        personnes: new Map([
+          ['A', esquisse()],
+          ['B', esquisse()],
+        ]),
+        groupes: [
+          {
+            membres: new Set(['A', 'B']),
+            postes: new Set(['r']),
+            besoins: [1, 1, 1, 1, 1, 2, 2],
+          },
+        ],
+      },
+    })
+    const r = generer(p, highs)
+    // Les 9 places vont à A et B (C, à 24 h, n'a pas de rythme) : B fait
+    // ses 5 jours, A 4. Libérer le week-end de l'un coûterait 3 jours à
+    // l'autre (rythme de 5 jours, au-dessus du week-end libre).
+    const jours = ['A', 'B'].map((id) => joursDe(r, p, id))
+    expect(jours.map((j) => j.size).sort()).toEqual([4, 5])
+    expect(jours.every((j) => j.has(5) || j.has(6))).toBe(true)
   })
 })
 

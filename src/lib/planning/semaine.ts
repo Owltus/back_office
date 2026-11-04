@@ -2594,14 +2594,8 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
   )
   const sansReleve = relevesManquantes(pReglages, affs)
   // La nuit du dimanche d'avant (vue mois : le trait continue d'une semaine
-  // à l'autre). Les postes de la nuit de l'accueil, vraies heures.
-  const postesParId = new Map(d.referentiel.postes.map((x) => [x.id, x]))
-  const veilleDuLundi = d.avant
-    .filter((a) => a.jour === 6 && tientLaNuit(postesParId.get(a.poste_id)))
-    .map((a) => {
-      const [debut, fin] = bornes(lundi, -1, a.debut, a.fin)
-      return { debut, fin }
-    })
+  // à l'autre).
+  const veilleDuLundi = veilleDuLundiDe(d, lundi)
   const passations = accueil
     ? transmissions(pReglages, affs, sansReleve, veilleDuLundi)
     : []
@@ -2748,6 +2742,23 @@ function empreinte(aEviter: Set<string>): number {
  * si `tout`, et les shifts des `exclus`), construit le problème autour de ce
  * qui reste (épinglés et jours passés), et dit comment traduire le résultat.
  */
+/** La nuit du dimanche d'avant : les shifts des postes de la nuit de
+ * l'accueil, vraies heures, en minutes de la semaine de `lundi`. Lue par
+ * l'oracle (`transmissions`) et par le calcul (`Probleme.veilleDuLundi`,
+ * passation du lundi matin). */
+function veilleDuLundiDe(
+  d: DonneesSemaine,
+  lundi: string,
+): Array<{ debut: number; fin: number }> {
+  const postesParId = new Map(d.referentiel.postes.map((x) => [x.id, x]))
+  return d.avant
+    .filter((a) => a.jour === 6 && tientLaNuit(postesParId.get(a.poste_id)))
+    .map((a) => {
+      const [debut, fin] = bornes(lundi, -1, a.debut, a.fin)
+      return { debut, fin }
+    })
+}
+
 export function preparerGeneration(
   d: DonneesSemaine,
   o: OptionsGeneration,
@@ -3056,6 +3067,8 @@ export function preparerGeneration(
     releveMinutes: accueilEnService(ctx)
       ? (d.referentiel.reglages?.releve_minutes ?? 0)
       : 0,
+    // Passation du lundi matin avec le veilleur du dimanche d'avant.
+    veilleDuLundi: veilleDuLundiDe(d, lundi),
     // 60 s au plus par semaine (décision utilisateur du 2026-11-03 ; 40 s
     // depuis le 2026-11-01, 10 s avant) : à 10 s, HiGHS s'arrêtait avant
     // l'optimum sur une semaine réelle (décembre : des contrats à 32 h et des
