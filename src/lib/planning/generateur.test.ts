@@ -734,7 +734,11 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
     // 887b8ecd (2026-11-04, deux repos de suite, décision d'une
     // responsable) : la paire de repos devient une contrainte dure (plus de
     // prime de repos accolés) ; un 6e jour n'en laisse plus.
-    expect(empreinte(textes.join('\n=====\n'))).toBe('887b8ecd')
+    // 8874c146 (2026-11-04, semaines de 5 jours, décision d'une
+    // responsable) : pour un contrat de 35 h et plus (`rythmeHumain`), plus
+    // de 5 jours d'affilée et le jour isolé deviennent des contraintes dures ;
+    // les autres contrats gardent le modèle d'avant.
+    expect(empreinte(textes.join('\n=====\n'))).toBe('8874c146')
   })
 })
 

@@ -17,7 +17,7 @@ import {
 } from '#/lib/planning/semaine.ts'
 import type { DonneesSemaine } from '#/lib/planning/semaine.ts'
 import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
-import { ajouterJours, MINUTES_PAR_JOUR } from '#/lib/planning/temps.ts'
+import { ajouterJours } from '#/lib/planning/temps.ts'
 import type { Absence, Affectation, Salarie } from '#/lib/planning/types.ts'
 
 /*
@@ -230,10 +230,14 @@ describe('soirs et matins tôt : écart à sa part (générateur)', () => {
     creneauModele({
       id,
       poste: 'r',
-      debut: 2 * MINUTES_PAR_JOUR + debutH * H,
-      fin: 2 * MINUTES_PAR_JOUR + (debutH + 7) * H,
+      // Le lundi : la semaine d'avant est inconnue (`joursSemainePrecedente`
+      // null), le shift n'est donc pas un jour isolé (règle dure du
+      // 2026-11-04 pour un contrat de 35 h et plus). Un mercredi seul dans
+      // une semaine vide le serait : personne ne pourrait venir.
+      debut: debutH * H,
+      fin: (debutH + 7) * H,
       effectif: 1,
-      jourPlanning: 2,
+      jourPlanning: 0,
       ...kw,
     })
   const qui = (r: Resultat, c: string) =>

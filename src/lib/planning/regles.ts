@@ -36,6 +36,41 @@ export const JOURS_TRAVAILLES_PREFERES = 5
 export const JOURS_AFFILES_MAX = 6
 /** Contrats à rythme de 5 jours : 35 h et plus (2026-11-01). */
 export const RYTHME_CONTRAT_MIN = 35 * 60
+
+/** Les semaines « humaines » du 2026-11-04 (décision d'une responsable) :
+ * au plus `JOURS_AFFILES_CONSEILLES` jours d'affilée et jamais un jour de
+ * travail seul entre deux repos, DURS pour le calcul. Pour un contrat de
+ * 35 h et plus, ni forfait jours ni extra : un petit contrat a des jours
+ * seuls par nature. Une seule source pour le générateur, le vérificateur
+ * et les repos obligés. */
+export function rythmeHumain(s: {
+  contratIndicatif: boolean
+  placementManuel: boolean
+  minutesHebdoContrat: number
+  minutesContrat?: number
+}): boolean {
+  // Le contrat, jamais les heures dues de la semaine : un congé, un JFR ou
+  // l'école ne doivent pas lever ces règles (relecture du 2026-11-04 : 39 h
+  // et quatre jours de congé, le vendredi restait seul).
+  return (
+    !s.contratIndicatif &&
+    !s.placementManuel &&
+    (s.minutesContrat ?? s.minutesHebdoContrat) >= RYTHME_CONTRAT_MIN
+  )
+}
+
+/** Le jour `v` (0 = lundi de la période ; négatif, la semaine d'avant ;
+ * au-delà, la suivante) est APRÈS la fin du contrat. Pour le jour isolé, il
+ * compte comme du travail : le dernier jour d'un contrat n'est pas un jour
+ * seul. Les jours AVANT l'arrivée, eux, comptent comme du repos : un stage
+ * ne commence ni par un jour seul, ni par ses repos (relecture du
+ * 2026-11-04). Une heure de marge pour un changement d'heure. */
+export function apresContrat(
+  s: { contratFin: number | null },
+  v: number,
+): boolean {
+  return s.contratFin !== null && v * 24 * 60 >= s.contratFin - 60
+}
 /** Jours d'affilée visés (demande utilisateur du 2026-11-02 : « tu abuses
  * encore beaucoup trop des 6 jours d'affilée ») : le 6e jour enchaîné d'une
  * semaine à l'autre coûte déjà (`POIDS_JOUR_AFFILE_CONSEILLE`). */
@@ -297,6 +332,7 @@ export function versSolveur(f: Fiche): SalarieSolveur {
     id: f.id,
     postes: f.postes,
     minutesHebdoContrat: heuresDues(f),
+    minutesContrat: f.minutesHebdo,
     minutesHebdoMax: plafondHebdo(f),
     minutesJourMax: plafondJour(f),
     // Mineurs : deux jours de repos consécutifs (R-REPOS-HEBDO-MINEUR).

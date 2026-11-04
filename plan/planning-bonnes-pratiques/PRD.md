@@ -414,6 +414,23 @@ Pour chacun : **énoncé**, **pourquoi**, **comment** (règle mesurable), **exce
 
 #### 9. Jamais un jour de travail isolé
 
+**RÉVISÉ le 2026-11-04 (décisions d'une responsable : « tu ne peux pas donner des jours et redonner
+des jours ensuite, ce n'est ni joli ni une bonne pratique » ; « privilégie vraiment les semaines
+de 5 jours, plus humain »)** : pour un contrat de 35 h et plus (`rythmeHumain`, sur le CONTRAT,
+jamais les heures dues de la semaine), jamais un jour seul entre deux jours sans travail ET au
+plus 5 jours d'affilée, semaines voisines comprises et aussi dans la semaine : contraintes DURES
+du calcul, une place reste vide plutôt et sa raison le dit (« règle de l'hôtel »). Jours avant
+l'arrivée = repos, jours après le départ = travail, école = travail, semaine voisine inconnue =
+rien demandé (le lundi esquissé de k+1 ne tient jamais un dimanche). Le dimanche d'avant
+travaillé et le samedi d'avant libre poussent le lundi (`POIDS_DIMANCHE_SEUL`, souple). Petits
+contrats : comme avant (coût et alerte « à éviter »). Repos obligé : un jour vide entre deux repos
+certains est montré « Repos ». Relecture adverse (3 agents, chaque constat vérifié) : 6 défauts
+reproduits et corrigés (règles levées par un congé, raison cachée par un jour isolé déjà posé,
+semaine suivante lue autrement par le calcul et l'écran, lundi-samedi d'affilée, arrivée et départ,
+repos obligé). Banc de décembre (copie locale, en mémoire) : 6 séries de 6 jours → 0, 6 jours
+isolés → 1 (le dernier jour de la période), aucune place vide de plus, 14 h de contrat en moins
+sur le mois (deux personnes, une journée chacune).
+
 - **Pourquoi.** Revenir un seul jour entre un congé et des repos, c'est perdre le bénéfice des
   deux.
 - **Comment.** Pas de jour de travail seul entre deux jours sans travail (congé, repos, absence).
@@ -562,25 +579,25 @@ Pour chacun : **énoncé**, **pourquoi**, **comment** (règle mesurable), **exce
 
 ### Tableau récapitulatif
 
-| N°  | Règle                               | Statut                      | Où                                                                                    |
-| --- | ----------------------------------- | --------------------------- | ------------------------------------------------------------------------------------- |
-| 1   | Deux repos qui se suivent           | en place                    | `POIDS_REPOS_SEPARES`, `placerRepos`, alerte REPOS-SEPARES                            |
-| 2   | 6 jours d'affilée au plus, viser 5  | en place                    | `JOURS_AFFILES_MAX`, `POIDS_JOUR_AFFILE`, `POIDS_SIXIEME_JOUR`, `POIDS_JOUR_MANQUANT` |
-| 3   | 12 h entre deux services            | en place                    | `REPOS_CONFORT`, `POIDS_REPOS_COURT`, alerte REPOS-COURT                              |
-| 4   | Un week-end libre par mois          | en place, partage d'abord   | `weekendLibreAvant`, `weekendLibere`, `POIDS_WEEKEND_LIBRE`, WEEKEND-LIBRE / -LIBERE  |
-| 5   | Repos posé ou validé sacré          | en place                    | `reposFixes`, `epinglee`, `planning_valider_avec_repos`                               |
-| 6   | Semaine stable                      | en place                    | `CHANGEMENTS_MOMENT_MAX`, `POIDS_MOMENT_EN_TROP`, `POIDS_MOMENT_ARRIERE`, MOMENTS     |
-| 7   | Nuits avec mesure                   | en place                    | `NUITS_AFFILEES_MAX`, `REPOS_APRES_NUITS`, `POIDS_NUIT_AFFILEE`, alerte NUITS         |
-| 8   | Mêmes repos d'une semaine à l'autre | en place (préférence)       | `reposAvant`, `weekendTravailleAvant`, `POIDS_MEMES_REPOS`, MEMES-REPOS               |
-| 9   | Pas de jour isolé                   | en place (limite écrite)    | `POIDS_JOUR_ISOLE`, `placerRepos`, alerte JOUR-ISOLE                                  |
-| 10  | Moments pénibles partagés           | en place (sauf nuits)       | `SEMAINES_EQUITE`, `POIDS_EQUITE`, `equiteDe`                                         |
-| 11  | Jours de fête partagés              | reportée                    | (un an d'historique manque)                                                           |
-| 12  | Heures en plus partagées            | en place                    | `coefsHeuresPlus`, `POIDS_EQUITE_HEURES_PLUS`, alerte HEURES-PLUS                     |
-| 13  | Retour de congé en douceur          | en place                    | `CONGE_LONG`, `retourConge`, `POIDS_RETOUR_*`, alerte RETOUR-CONGE                    |
-| 14  | École des apprentis protégée        | en place                    | `ECOLE_VEILLE_FIN`, `ECOLE_LENDEMAIN_DEBUT`, `POIDS_ECOLE_ABORDS`, ECOLE-ABORDS       |
-| 15  | Planning qui se tient               | en place                    | `imposees`, PL423, PL409, `raisonsPlaces.ts`                                          |
-| 16  | Jour férié rattrapé (JFR)           | en place (local, non livré) | `feries.ts`, `droitAuRattrapage`, `POIDS_JFR_EN_ATTENTE`, alerte JOUR-FERIE           |
-| 17  | Équipe ensemble (soir, relève)      | en place (local, non livré) | `equipesSynchro`, `EQUIPE_TOLERANCE`, `POIDS_RELEVE_CHACUN`, `equipesDesynchro`       |
+| N°  | Règle                               | Statut                      | Où                                                                                   |
+| --- | ----------------------------------- | --------------------------- | ------------------------------------------------------------------------------------ |
+| 1   | Deux repos qui se suivent           | en place                    | `POIDS_REPOS_SEPARES`, `placerRepos`, alerte REPOS-SEPARES                           |
+| 2   | 5 jours d'affilée au plus (35 h +)  | DUR (35 h et plus)          | `JOURS_AFFILES_CONSEILLES`, `rythmeHumain`, alerte JOURS-AFFILES                     |
+| 3   | 12 h entre deux services            | en place                    | `REPOS_CONFORT`, `POIDS_REPOS_COURT`, alerte REPOS-COURT                             |
+| 4   | Un week-end libre par mois          | en place, partage d'abord   | `weekendLibreAvant`, `weekendLibere`, `POIDS_WEEKEND_LIBRE`, WEEKEND-LIBRE / -LIBERE |
+| 5   | Repos posé ou validé sacré          | en place                    | `reposFixes`, `epinglee`, `planning_valider_avec_repos`                              |
+| 6   | Semaine stable                      | en place                    | `CHANGEMENTS_MOMENT_MAX`, `POIDS_MOMENT_EN_TROP`, `POIDS_MOMENT_ARRIERE`, MOMENTS    |
+| 7   | Nuits avec mesure                   | en place                    | `NUITS_AFFILEES_MAX`, `REPOS_APRES_NUITS`, `POIDS_NUIT_AFFILEE`, alerte NUITS        |
+| 8   | Mêmes repos d'une semaine à l'autre | en place (préférence)       | `reposAvant`, `weekendTravailleAvant`, `POIDS_MEMES_REPOS`, MEMES-REPOS              |
+| 9   | Pas de jour isolé                   | DUR (35 h et plus)          | `rythmeHumain`, `POIDS_DIMANCHE_SEUL`, alerte JOUR-ISOLE                             |
+| 10  | Moments pénibles partagés           | en place (sauf nuits)       | `SEMAINES_EQUITE`, `POIDS_EQUITE`, `equiteDe`                                        |
+| 11  | Jours de fête partagés              | reportée                    | (un an d'historique manque)                                                          |
+| 12  | Heures en plus partagées            | en place                    | `coefsHeuresPlus`, `POIDS_EQUITE_HEURES_PLUS`, alerte HEURES-PLUS                    |
+| 13  | Retour de congé en douceur          | en place                    | `CONGE_LONG`, `retourConge`, `POIDS_RETOUR_*`, alerte RETOUR-CONGE                   |
+| 14  | École des apprentis protégée        | en place                    | `ECOLE_VEILLE_FIN`, `ECOLE_LENDEMAIN_DEBUT`, `POIDS_ECOLE_ABORDS`, ECOLE-ABORDS      |
+| 15  | Planning qui se tient               | en place                    | `imposees`, PL423, PL409, `raisonsPlaces.ts`                                         |
+| 16  | Jour férié rattrapé (JFR)           | en place (local, non livré) | `feries.ts`, `droitAuRattrapage`, `POIDS_JFR_EN_ATTENTE`, alerte JOUR-FERIE          |
+| 17  | Équipe ensemble (soir, relève)      | en place (local, non livré) | `equipesSynchro`, `EQUIPE_TOLERANCE`, `POIDS_RELEVE_CHACUN`, `equipesDesynchro`      |
 
 Le code des règles 1, 3, 4, 6, 7, 8, 12, 13 et 14 date du 2026-11-02 : en place en local, pas
 encore livré. Relecture du 2026-11-03 (banc de 7 scénarios réels, en mémoire) : règles 1, 4, 8, 9,

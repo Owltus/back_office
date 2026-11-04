@@ -53,6 +53,8 @@ import {
   REPOS_APRES_NUITS,
   REPOS_CONFORT,
   RYTHME_CONTRAT_MIN,
+  rythmeHumain,
+  apresContrat,
 } from '#/lib/planning/regles.ts'
 import type {
   AffectationSolveur,
@@ -268,10 +270,21 @@ export const POIDS_REPOS_SEPARES = 8_000
 /** Un jour de travail seul entre deux jours sans travail (congé, repos,
  * absence ; demande utilisateur du 2026-11-02 : « je ne vais pas prendre 4
  * jours de congé, enchaîner avec 1 jour de travail et reprendre avec mes
- * repos »). L'école, un jour hors contrat et le bord du calcul comptent
- * comme du travail : continuité avec la semaine d'à côté. Confort, sous les
- * repos accolés. */
+ * repos »). L'école, un jour hors contrat et un jour voisin inconnu
+ * comptent comme du travail : continuité avec la semaine d'à côté. DUR
+ * pour le calcul depuis le 2026-11-04 (décision d'une responsable : « tu ne
+ * peux pas donner des jours et redonner des jours ensuite, ce n'est ni joli
+ * ni une bonne pratique »), pour un contrat de 35 h et plus
+ * (`rythmeHumain`), sauf un jour posé ; ce poids ne sert plus qu'aux autres
+ * et au pire coût d'une place. */
 export const POIDS_JOUR_ISOLE = 4_000
+/** Le dimanche d'avant travaillé, le samedi d'avant libre : sans le lundi,
+ * ce dimanche resterait seul entre deux repos (2026-11-04, banc de
+ * décembre : la semaine d'avant comptait sur un lundi que la suivante n'a
+ * pas donné). Il ne peut plus changer : le lundi est poussé, au-dessus de
+ * la fatigue et d'une heure en plus, sous les places. SOUPLE : un lundi
+ * impossible (congé, repos de 11 h) ne rend jamais le modèle impossible. */
+export const POIDS_DIMANCHE_SEUL = 50_000
 /** LES HEURES AVANT LA FATIGUE (décision utilisateur du 2026-11-04, qui
  * renverse celle du 2026-11-03 : « le respect du nombre d'heures est très
  * important ; si on ne le respecte pas, on les paye quand même alors qu'il
@@ -299,9 +312,11 @@ export const POIDS_FATIGUE = 20_000
 export const POIDS_JOUR_AFFILE = 12_000
 /** Par jour au-delà de 5 d'affilée, sur chaque fenêtre de 6 jours qui
  * traverse une semaine voisine (`JOURS_AFFILES_CONSEILLES`, demande
- * utilisateur du 2026-11-02) : un 6e jour enchaîné coûte presque autant
- * qu'un 7e. Au-dessus des repos accolés : on déplace les repos plutôt que
- * d'enchaîner. */
+ * utilisateur du 2026-11-02). DUR pour le calcul depuis le 2026-11-04
+ * (décision d'une responsable : « privilégie vraiment les semaines de 5
+ * jours, plus humain »), pour un contrat de 35 h et plus
+ * (`rythmeHumain`) : ce poids ne sert plus qu'aux autres et au pire coût
+ * d'une place. */
 export const POIDS_JOUR_AFFILE_CONSEILLE = 10_000
 /** Un mineur placé un jour férié (permis en hôtellerie par dérogation, à
  * éviter : décision utilisateur du 2026-11-02). Au-dessus du confort et du
@@ -1696,7 +1711,13 @@ export function construire(
             // Fenêtre tout entière dans la semaine esquissée : déjà bornée
             // par son plafond et son 6e jour (`esquisserSuivante`).
             if (sk && a >= p.nbJours) continue
+            // Une fenêtre DANS une semaine est déjà bornée par le 6e jour et
+            // R-SIX-JOURS-MAX, sauf la fenêtre de 6 jours d'un contrat de
+            // 35 h et plus : du lundi au samedi d'affilée, c'est aussi trop
+            // (relecture du 2026-11-04 : avec le dimanche et le lundi
+            // suivant libres, la paire de repos le laissait passer).
             if (
+              !(plafond === JOURS_AFFILES_CONSEILLES && rythmeHumain(s)) &&
               a >= 0 &&
               derniere < p.nbJours &&
               Math.floor(a / 7) === Math.floor(derniere / 7)
@@ -1718,8 +1739,13 @@ export function construire(
             }
             if (constante + termes.length <= plafond) continue
             // Plus de 6 jours d'affilée : jamais par le calcul (fatigue,
-            // 2026-11-03) ; les jours posés à la main restent des faits.
-            if (plafond === JOURS_AFFILES_MAX) {
+            // 2026-11-03) ; plus de 5 non plus depuis le 2026-11-04 (des
+            // semaines de 5 jours, plus humain), sauf un contrat indicatif.
+            // Les jours posés à la main restent des faits.
+            if (
+              plafond === JOURS_AFFILES_MAX ||
+              (plafond === JOURS_AFFILES_CONSEILLES && rythmeHumain(s))
+            ) {
               let poses = 0
               for (
                 let d = Math.max(a, 0);
@@ -1741,10 +1767,74 @@ export function construire(
         }
       }
 
+      // Le dimanche d'avant, seul s'il n'y a pas de lundi
+      // (`POIDS_DIMANCHE_SEUL`) : travaillé (série de 1), samedi d'avant
+      // libre, lundi possible et pas déjà posé.
+      if (
+        k === 0 &&
+        rythmeHumain(s) &&
+        s.joursSemainePrecedente !== null &&
+        s.serieAvant === 1 &&
+        !s.joursHorsSite.has(0) &&
+        !s.horsContrat.has(0)
+      ) {
+        const t0 = travaille.get(0)
+        if (t0 && !fixes.some((c) => jourDe(c) === 0))
+          m.cout(-POIDS_DIMANCHE_SEUL, t0)
+      }
+
       // Jour isolé : isole >= travaille(j) - travaille(j-1) - travaille(j+1).
+      // DUR depuis le 2026-11-04 (`POIDS_JOUR_ISOLE`) : travaille(j) <=
+      // travaille(j-1) + travaille(j+1), d'une semaine à l'autre comprise
+      // (le jour voisin connu libre compte 0, inconnu ou travaillé : rien
+      // n'est demandé). Jamais sur un jour posé : le modèle reste possible
+      // (ne pas travailler satisfait tout). Même définition que JOUR-ISOLE
+      // (verificateur.ts).
       for (const j of jours) {
         const t = travaille.get(j)
         if (!t) continue
+        if (rythmeHumain(s)) {
+          if (fixes.some((c) => jourDe(c) === j)) continue
+          const autour: Terme[] = []
+          let continu = false
+          for (const v of [j - 1, j + 1]) {
+            // L'école et les jours après le contrat comptent comme du
+            // travail ; les jours avant l'arrivée, comme du repos (aucune
+            // variable : voisin libre).
+            if (s.joursHorsSite.has(v) || apresContrat(s, v)) {
+              continu = true
+              break
+            }
+            if (v < 0) {
+              if (s.joursSemainePrecedente === null || s.serieAvant > 0) {
+                continu = true
+                break
+              }
+              continue
+            }
+            // La semaine d'après se lit comme le vérificateur la lit (une
+            // seule définition, relecture du 2026-11-04) : connue et libre ce
+            // lundi, voisin libre ; sinon rien n'est demandé. Jamais
+            // l'esquisse : son lundi n'est pas écrit, il ne peut pas tenir un
+            // dimanche (le dimanche s'appuie sur le samedi).
+            if (v >= p.nbJours) {
+              if (s.joursSemaineSuivante === null || s.serieApres > 0) {
+                continu = true
+                break
+              }
+              continue
+            }
+            const tv = travaille.get(v)
+            if (tv) autour.push([1, tv])
+          }
+          if (continu) continue
+          m.ajoute(
+            [[1, t], ...autour.map(([c, v]) => [-c, v] as Terme)],
+            '<=',
+            0,
+          )
+          continue
+        }
         const voisins: string[] = []
         let continu = false
         for (const v of [j - 1, j + 1]) {

@@ -65,6 +65,28 @@ const obliges = (
   )
 
 describe('repos obligés', () => {
+  it('un jour seul entre deux repos certains : un 35 h ne le travaille pas (2026-11-04)', () => {
+    // Repos fixes le mardi et le jeudi : le mercredi serait seul.
+    const r = obliges(
+      [0, 4].map((j) => service(j)),
+      { reposFixes: new Set([1, 3]) },
+    )
+    expect(r).toContainEqual({
+      jour: 2,
+      raison: 'sinon un jour de travail seul entre deux repos',
+    })
+    // Refusé : un petit contrat peut, rien n'est obligé ce jour-là.
+    expect(
+      obliges(
+        [0, 4].map((j) => service(j)),
+        {
+          reposFixes: new Set([1, 3]),
+          minutesHebdoContrat: 20 * H,
+        },
+      ).map((o) => o.jour),
+    ).not.toContain(2)
+  })
+
   it('plus de 6 jours d’affilée, semaine d’avant comprise : le jour qui coupe', () => {
     // Vendredi, samedi, dimanche d'avant ; lundi, puis mercredi à vendredi.
     const r = obliges(
@@ -72,7 +94,7 @@ describe('repos obligés', () => {
       { serieAvant: 3 },
     )
     expect(r).toEqual([
-      { jour: 1, raison: "sinon 8 jours de travail d'affilée (6 au plus)" },
+      { jour: 1, raison: "sinon 8 jours de travail d'affilée (5 au plus)" },
     ])
   })
   it('la semaine d’après compte aussi', () => {
@@ -85,15 +107,28 @@ describe('repos obligés', () => {
       [1, 2, 3, 4, 5].map((j) => service(j)),
       { serieApres: 2 },
     )
-    expect(r.map((o) => o.jour)).toEqual([0, 6].filter((j) => j === 6))
+    // Le lundi aussi depuis le 2026-11-04 : suivi du mardi au samedi, il
+    // ferait 6 jours d'affilée (5 au plus pour un 35 h).
+    expect(r.map((o) => o.jour)).toEqual([0, 6])
   })
   it('refusé : 6 jours tout juste, ou un jour déjà travaillé', () => {
+    // Petit contrat : 6 jours tout juste, permis.
+    expect(
+      obliges(
+        [0, 2, 3, 4].map((j) => service(j)),
+        { serieAvant: 1, minutesHebdoContrat: 30 * H },
+      ),
+    ).toEqual([])
+    // 35 h et plus (2026-11-04) : 6 jours à cheval sur deux semaines, c'est
+    // un de trop.
     expect(
       obliges(
         [0, 2, 3, 4].map((j) => service(j)),
         { serieAvant: 1 },
       ),
-    ).toEqual([])
+    ).toEqual([
+      { jour: 1, raison: "sinon 6 jours de travail d'affilée (5 au plus)" },
+    ])
     // Le mardi travaillé n'est jamais un repos ; le samedi, lui, en ferait 9.
     expect(
       obliges(
@@ -145,24 +180,27 @@ describe('repos obligés', () => {
     expect(obliges([service(0)])).toEqual([])
   })
   it('le plafond de jours de la semaine (un mineur : 5)', () => {
+    // Lundi, mardi, jeudi, vendredi, dimanche : jamais plus de 5 d'affilée
+    // (2026-11-04), seul le plafond de la semaine joue.
+    const jours = [0, 1, 3, 4, 6]
     const r = obliges(
-      [0, 1, 2, 3, 4].map((j) => service(j)),
+      jours.map((j) => service(j)),
       {
         joursTravaillesMaxSemaine: 5,
       },
     )
     expect(r).toEqual([
       {
-        jour: 5,
+        jour: 2,
         raison: 'sinon 6 jours de travail dans la semaine (5 au plus)',
       },
       {
-        jour: 6,
+        jour: 5,
         raison: 'sinon 6 jours de travail dans la semaine (5 au plus)',
       },
     ])
     // Refusé : un adulte (6 au plus) peut encore travailler un 6e jour.
-    expect(obliges([0, 1, 2, 3, 4].map((j) => service(j)))).toEqual([])
+    expect(obliges(jours.map((j) => service(j)))).toEqual([])
   })
 })
 

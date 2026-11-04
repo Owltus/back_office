@@ -82,7 +82,6 @@ export const REGLES_BLOCAGE = [
 /** Règles morales du PRD : elles ne bloquent pas une place, elles la
  * rendent « à éviter » pour cette personne. */
 const PHRASES_MORALES: Record<string, string> = {
-  'JOUR-ISOLE': 'Ce serait un jour de travail seul entre deux repos',
   'REPOS-COURT': 'Moins de 12 h de repos avec un autre shift',
   'WEEKEND-LIBRE': 'Pas de week-end libre depuis 4 semaines',
   MOMENTS: 'Sa semaine changerait trop d’horaires',
@@ -196,11 +195,24 @@ export function raisonClaire(
       return r('Mineur, et c’est un jour férié', mention('à éviter'))
     case 'JOUR-FERIE':
       return r('A un jour férié à rattraper', mention('à éviter'))
+    // Plus de 5 jours d'affilée, un jour isolé (2026-11-04) : le calcul ne
+    // les fait plus, la place reste vide plutôt.
     case 'JOURS-AFFILES':
       return r(
-        'Plus de 6 jours de travail d’affilée',
-        mention('au-delà de son contrat'),
+        'Trop de jours de travail d’affilée',
+        mention('règle de l’hôtel'),
       )
+    case 'JOUR-ISOLE':
+      return message.includes('à éviter')
+        ? r(
+            'Ce serait un jour de travail seul entre deux repos',
+            mention('à éviter'),
+            'JOUR-ISOLE:eviter',
+          )
+        : r(
+            'Ce serait un jour de travail seul entre deux repos',
+            mention('règle de l’hôtel'),
+          )
     case 'R-SEMAINE-MAX':
       return r(
         // L'école compte dans la semaine (R-ECOLE-HEURES) : le dire.
@@ -246,7 +258,6 @@ export function raisonClaire(
         'Perdrait ses deux jours de repos de suite',
         mention('règle de l’hôtel'),
       )
-    case 'JOUR-ISOLE':
     case 'REPOS-COURT':
     case 'WEEKEND-LIBRE':
     case 'MOMENTS':
@@ -339,7 +350,7 @@ const PHRASES_COMMUNES: Record<(typeof REGLES_BLOCAGE)[number], string> = {
   'R-SIX-JOURS-MAX': 'Tout le monde a déjà trop de jours de travail.',
   'R-REPOS-HEBDO-HCR': 'Tout le monde a déjà trop de jours de travail.',
   'SIXIEME-JOUR': 'Ce serait un 6e jour pour tout le monde.',
-  'JOURS-AFFILES': 'Tout le monde enchaînerait plus de 6 jours de travail.',
+  'JOURS-AFFILES': 'Tout le monde enchaînerait trop de jours de travail.',
   'MINEUR-FERIE': 'Seuls des mineurs sont libres, et c’est un jour férié.',
   'JOUR-FERIE': 'Tout le monde a un jour férié à rattraper.',
   'R-SEMAINE-MAX': 'Tout le monde est au maximum de ses heures.',
@@ -351,7 +362,8 @@ const PHRASES_COMMUNES: Record<(typeof REGLES_BLOCAGE)[number], string> = {
   'REPOS-SEPARES': 'Chacun perdrait ses deux jours de repos de suite.',
   // Règles morales : jamais « Je ne peux pas » (`phraseCommune` rend null,
   // elles ne bloquent pas), la phrase ne sert qu'à l'exhaustivité.
-  'JOUR-ISOLE': 'Ce serait pour chacun un jour de travail seul.',
+  'JOUR-ISOLE':
+    'Ce serait pour chacun un jour de travail seul entre deux repos.',
   'REPOS-COURT': 'Tout le monde aurait moins de 12 h de repos.',
   'WEEKEND-LIBRE': 'Tout le monde attend son week-end libre.',
   MOMENTS: 'Tout le monde changerait trop d’horaires.',

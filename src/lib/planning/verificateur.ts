@@ -38,12 +38,15 @@ import {
   ECOLE_LENDEMAIN_DEBUT,
   ECOLE_VEILLE_FIN,
   EQUIPE_TOLERANCE,
+  JOURS_AFFILES_CONSEILLES,
   JOURS_AFFILES_MAX,
   MOMENT_ARRIERE_JOURS,
   NUITS_AFFILEES_MAX,
   REPOS_APRES_NUITS,
   REPOS_CONFORT,
   SEMAINES_EN_PLUS_ALERTE,
+  rythmeHumain,
+  apresContrat,
 } from '#/lib/planning/regles.ts'
 import { heuresLisibles as h } from '#/lib/planning/temps.ts'
 import type { Periode, PeriodePresence } from '#/lib/planning/types.ts'
@@ -68,6 +71,11 @@ export function violationsSalarie(
   s: SalarieSolveur,
   liste: Creneau[],
   nbJours: number,
+  /** Pour juger une place (`raisonsBlocage`) : le jour isolé d'un contrat
+   * de 35 h et plus est dit même dans une semaine de moins de 3 jours, que
+   * le calcul refuse aussi. À l'écran d'une semaine, non : un planning en
+   * cours de saisie en serait plein. */
+  pourUnePlace = false,
 ): Violation[] {
   const erreurs: Violation[] = []
   const ajoute = (
@@ -220,10 +228,18 @@ export function violationsSalarie(
       const n = f - d + 1
       const ici = liste.filter((c) => jourDe(c) >= d && jourDe(c) <= f)
       const uneSemaine = d >= 0 && Math.floor(d / 7) === Math.floor(f / 7)
-      if (n > JOURS_AFFILES_MAX && ici.length && !uneSemaine)
+      // Depuis le 2026-11-04, 5 au plus pour un contrat de 35 h et plus (le
+      // calcul ne va plus au-delà, `rythmeHumain`), 6 sinon.
+      const plafond = rythmeHumain(s)
+        ? JOURS_AFFILES_CONSEILLES
+        : JOURS_AFFILES_MAX
+      // Dans une semaine, 6 jours se disent aussi pour un 35 h (le calcul ne
+      // les fait plus) ; les autres ont le 6e jour et R-SIX-JOURS-MAX.
+      const dansSemaineCompte = plafond === JOURS_AFFILES_CONSEILLES
+      if (n > plafond && ici.length && (dansSemaineCompte || !uneSemaine))
         ajoute(
           'JOURS-AFFILES',
-          `${n} jours de travail d'affilée sans repos (au plus ${JOURS_AFFILES_MAX} conseillés)`,
+          `${n} jours de travail d'affilée sans repos (au plus ${plafond} conseillés)`,
           ici,
           'organisation',
         )
@@ -372,10 +388,46 @@ export function violationsSalarie(
       'organisation',
     )
   }
-  alertesMorales(s, liste, parJour, nbJours, (regle, message, creneaux) =>
-    ajoute(regle, message, creneaux, 'organisation'),
+  alertesMorales(
+    s,
+    liste,
+    parJour,
+    nbJours,
+    (regle, message, creneaux) =>
+      ajoute(regle, message, creneaux, 'organisation'),
+    pourUnePlace,
   )
   return erreurs
+}
+
+/** JOUR-ISOLE : le message dit si le calcul l'interdit (contrat de 35 h et
+ * plus, `rythmeHumain`, 2026-11-04 : une place reste vide pour lui) ou si
+ * ce n'est qu'un conseil (petit contrat). */
+export const JOUR_ISOLE_INTERDIT =
+  'un jour de travail seul entre deux jours sans travail'
+export const JOUR_ISOLE_A_EVITER =
+  'un jour de travail seul entre deux jours sans travail (à éviter)'
+
+/** Ce qui distingue deux violations pour savoir ce qu'une place ajoute :
+ * la règle et le message, et pour un jour isolé le jour lui-même (un jour
+ * isolé déjà posé ne doit pas cacher celui que la place créerait :
+ * relecture du 2026-11-04). */
+function cleViolation(v: Violation): string {
+  return v.regle === 'JOUR-ISOLE'
+    ? `${v.regle}|${v.message}|${[...v.creneaux].sort().join(',')}`
+    : `${v.regle}|${v.message}`
+}
+
+/** Une violation qui bloque une place malgré sa nature morale : deux repos
+ * de suite, et le jour isolé d'un contrat de 35 h et plus (2026-11-04). */
+export function moraleQuiBloque(v: {
+  regle: string
+  message: string
+}): boolean {
+  return (
+    v.regle === 'REPOS-SEPARES' ||
+    (v.regle === 'JOUR-ISOLE' && v.message === JOUR_ISOLE_INTERDIT)
+  )
 }
 
 /** Les alertes des règles morales du PRD (`alertesMorales`) : toujours
@@ -414,6 +466,7 @@ function alertesMorales(
   parJour: Map<number, Creneau[]>,
   nbJours: number,
   ajoute: (regle: string, message: string, creneaux: Creneau[]) => void,
+  pourUnePlace: boolean,
 ): void {
   if (!liste.length) return
   const travaille = (d: number) => parJour.has(d) || s.joursHorsSite.has(d)
@@ -519,23 +572,35 @@ function alertesMorales(
   // le calcul ne l'évite que contre un jour où le travail est impossible,
   // l'alerte le dit partout). L'école, un jour hors contrat et une semaine
   // voisine inconnue comptent comme du travail. Une semaine de moins de 3
-  // jours (petit contrat, extra) a forcément des jours seuls : rien n'est dit.
+  // jours (petit contrat, extra) a forcément des jours seuls : rien n'est
+  // dit, SAUF pour un contrat de 35 h et plus (`rythmeHumain`), à qui le
+  // calcul l'interdit toujours depuis le 2026-11-04 : la place qui reste
+  // vide doit le dire (`pourUnePlace`). Pour les autres, l'alerte reste un
+  // conseil (message `JOUR_ISOLE_A_EVITER`), jamais une raison qui bloque
+  // une place.
   if (!s.placementManuel && !s.contratIndicatif) {
+    const dur = rythmeHumain(s)
+    const toujours = dur && pourUnePlace
     const parSemaine = (d: number) =>
       intervalle(7 * Math.floor(d / 7), 7 * Math.floor(d / 7) + 7).filter(
         (j) => j < nbJours && travaille(j),
       ).length
+    // Pour un contrat de 35 h et plus, le jour isolé se lit comme le calcul
+    // le lit : après le contrat, du travail ; avant l'arrivée, du repos.
+    // Pour les autres, un jour hors contrat compte comme du travail (comme
+    // avant le 2026-11-04).
     const libre = (d: number): boolean => {
+      if (dur ? apresContrat(s, d) : false) return false
       if (d < 0) return s.joursSemainePrecedente !== null && d < -s.serieAvant
       if (d >= nbJours)
         return s.joursSemaineSuivante !== null && d >= nbJours + s.serieApres
-      return !travaille(d) && !s.horsContrat.has(d)
+      return !travaille(d) && (dur || !s.horsContrat.has(d))
     }
     for (const [d, duJour] of [...parJour].sort(([a], [b]) => a - b))
-      if (parSemaine(d) >= 3 && libre(d - 1) && libre(d + 1))
+      if ((toujours || parSemaine(d) >= 3) && libre(d - 1) && libre(d + 1))
         ajoute(
           'JOUR-ISOLE',
-          'un jour de travail seul entre deux jours sans travail',
+          dur ? JOUR_ISOLE_INTERDIT : JOUR_ISOLE_A_EVITER,
           duJour,
         )
   }
@@ -1139,9 +1204,7 @@ export function raisonsBlocageAccueil(
       .map((a) => creneaux.get(a.creneauId))
       .filter((c): c is Creneau => c !== undefined)
     const avant = new Set(
-      violationsSalarie(s, siens, p.nbJours).map(
-        (v) => `${v.regle}|${v.message}`,
-      ),
+      violationsSalarie(s, siens, p.nbJours, true).map((v) => cleViolation(v)),
     )
     // Déjà compté dans ce moment : ce n'est pas lui qui manque.
     if (cibles.some((c) => siens.includes(c))) continue
@@ -1149,9 +1212,12 @@ export function raisonsBlocageAccueil(
     for (const cible of cibles) {
       const r = role(s, cible.poste)
       if (r !== 'titulaire' && r !== 'occasionnel') continue
-      const liste = violationsSalarie(s, [...siens, cible], p.nbJours).filter(
-        (v) => !avant.has(`${v.regle}|${v.message}`),
-      )
+      const liste = violationsSalarie(
+        s,
+        [...siens, cible],
+        p.nbJours,
+        true,
+      ).filter((v) => !avant.has(cleViolation(v)))
       if (meilleure === null || liste.length < meilleure.length)
         meilleure = liste
       if (!liste.length) break
@@ -1194,12 +1260,10 @@ export function raisonsBlocage(
       .filter((c): c is Creneau => c !== undefined)
     if (siens.includes(cible)) continue
     const avant = new Set(
-      violationsSalarie(s, siens, p.nbJours).map(
-        (v) => `${v.regle}|${v.message}`,
-      ),
+      violationsSalarie(s, siens, p.nbJours, true).map((v) => cleViolation(v)),
     )
-    const apres = violationsSalarie(s, [...siens, cible], p.nbJours)
-    let liste = apres.filter((v) => !avant.has(`${v.regle}|${v.message}`))
+    const apres = violationsSalarie(s, [...siens, cible], p.nbJours, true)
+    let liste = apres.filter((v) => !avant.has(cleViolation(v)))
     if (s.placementManuel && liste.length === 0) {
       liste = [
         {

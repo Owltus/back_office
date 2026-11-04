@@ -856,9 +856,10 @@ export function AidePlanningContenu({
             <span className="font-medium text-foreground">
               Deux repos de suite
             </span>{' '}
-            pour chacun, chaque semaine. Une place reste vide plutôt que de les
-            casser, et la page le dit : à vous de compenser. Seuls des shifts
-            déjà posés ou validés peuvent l’empêcher.
+            pour chacun, chaque semaine, au plus 5 jours de travail d’affilée,
+            et jamais un jour seul entre deux repos. Une place reste vide plutôt
+            que de les casser, et la page le dit : à vous de compenser. Seuls
+            des shifts déjà posés ou validés peuvent l’empêcher.
           </li>
           <li>
             <span className="font-medium text-foreground">
@@ -1016,7 +1017,7 @@ export function AidePlanningContenu({
             items={[
               'Deux repos par semaine, même en congé.',
               'Deux repos qui se suivent, chaque semaine, avant les places nécessaires. Un dimanche libre suivi du lundi libre compte, à cheval sur deux semaines. Une semaine type qui fixe deux repos décide seule.',
-              `${JOURS_AFFILES_MAX} jours de travail d’affilée au plus, ${JOURS_AFFILES_CONSEILLES} visés, semaines voisines comprises.`,
+              `${JOURS_AFFILES_CONSEILLES} jours de travail d’affilée au plus pour un contrat de 35 h et plus, semaines voisines comprises (${JOURS_AFFILES_MAX} pour les autres). L’école compte comme du travail.`,
               `Au moins ${h(REPOS_CONFORT)} entre la fin d’un service et le début du suivant (la loi en demande ${h(REPOS_QUOTIDIEN)}).`,
               `Un week-end complet libre, samedi et dimanche, au moins une fois sur ${SEMAINES_EQUITE} semaines. Un congé ou un repos compte comme libre ; une maladie, une formation, un sans solde ou l’école, non. La nuit du dimanche au lundi est écrite le dimanche : elle rend le week-end travaillé.`,
               'Un repos fixe, posé ou validé n’est jamais repris par le calcul.',
@@ -1029,7 +1030,7 @@ export function AidePlanningContenu({
               `Une semaine stable : au plus ${CHANGEMENTS_MOMENT_MAX} changement de moment (matin, middle, soir, nuit) d’un jour au suivant, et plutôt du matin vers le soir que l’inverse.`,
               `Pas plus de ${NUITS_AFFILEES_MAX} nuits d’affilée, puis ${REPOS_APRES_NUITS} jours sans travail avant de reprendre de jour.`,
               'Les mêmes jours de repos que la semaine d’avant, quand c’est possible. Après un week-end travaillé, passer ses repos au samedi et au dimanche est toujours permis : les week-ends tournent.',
-              'Pas de jour de travail seul entre deux jours sans travail. Le calcul l’évite contre un congé ou un repos fixe ; une alerte le signale partout.',
+              'Jamais un jour de travail seul entre deux jours sans travail, d’une semaine à l’autre comprise, pour un contrat de 35 h et plus. Une place reste vide plutôt, et la page le dit. Les jours avant une arrivée comptent comme du repos, ceux après un départ comme du travail.',
               'Un contrat de 35 h ou plus se fait en 5 jours, jamais 39 h en 4 jours de 10 h.',
             ]}
           />

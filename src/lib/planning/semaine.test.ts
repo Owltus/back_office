@@ -180,20 +180,22 @@ describe('compétences, semaine type et shifts épinglés (test_semaine_type.py)
       postes: new Set(),
       postesSoutien: new Set(['reception']),
     })
+    // Titulaire absent le mercredi (le mardi, le mercredi serait un jour
+    // isolé, interdit à un 35 h depuis le 2026-11-04).
     const titulaire = receptionniste('tit', 35, {
-      indisponibilites: new Set([1]),
+      indisponibilites: new Set([2]),
     })
     const p = probleme({ salaries: [stagiaire, titulaire], creneaux })
     const r = gen(p)
     const pris = new Set(
       r.affectations.map((a) => `${a.salarieId}|${a.creneauId}`),
     )
-    expect(pris.has('stag|rec-1')).toBe(false)
-    expect(pris.has('stag|rec-0') && pris.has('stag|rec-2')).toBe(true)
-    expect(r.manques.map((m) => m.creneauId)).toEqual(['rec-1'])
+    expect(pris.has('stag|rec-2')).toBe(false)
+    expect(pris.has('stag|rec-0') && pris.has('stag|rec-1')).toBe(true)
+    expect(r.manques.map((m) => m.creneauId)).toEqual(['rec-2'])
     expect(violations(p, r.affectations)).toEqual([])
     expect(
-      new Set(violations(p, [aff('stag', 'rec-1')]).map((v) => v.regle)),
+      new Set(violations(p, [aff('stag', 'rec-2')]).map((v) => v.regle)),
     ).toEqual(new Set(['SOUTIEN-SEUL']))
   })
 
@@ -1868,7 +1870,13 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
   })
 
   it('M3 possible : le moteur pose le M3, jamais un remplaçant', () => {
-    const d = donnees([besoin(100, M3)], [], [ALPHA])
+    // Un M3 lundi, mardi et mercredi : le mardi seul serait un jour isolé
+    // (interdit à un 35 h depuis le 2026-11-04).
+    const d = donnees(
+      [besoin(99, M3, 0), besoin(100, M3), besoin(101, M3, 2)],
+      [],
+      [ALPHA],
+    )
     const g = preparerGeneration(d, { aujourdhui: AUJOURDHUI })
     const mardi = g
       .traduire(generer(g.probleme, highs))

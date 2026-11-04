@@ -49,6 +49,7 @@ import {
   raisonsBlocage,
   trous as trousVerifies,
   violations,
+  moraleQuiBloque,
   REGLES_MORALES,
   violationsSalarie,
 } from '#/lib/planning/verificateur.ts'
@@ -633,12 +634,13 @@ describe('propriété : jamais d’infraction, une place vide a toujours une rai
             for (const [, liste] of raisonsBlocage(p, r.affectations, vide)) {
               // Une raison légale ou d'éligibilité, jamais le seul confort ni
               // une règle morale : une place passe avant elles (Q1 du PRD).
-              // Sauf deux repos de suite, qui passent avant les places
-              // depuis le 2026-11-04 (`POIDS_REPOS_SEPARES`).
+              // Sauf deux repos de suite et le jour isolé d'un contrat de
+              // 35 h et plus, qui passent avant les places depuis le
+              // 2026-11-04 (`moraleQuiBloque`).
               expect(
                 liste.some(
                   (v) =>
-                    v.regle === 'REPOS-SEPARES' ||
+                    moraleQuiBloque(v) ||
                     (v.regle !== 'SIXIEME-JOUR' &&
                       !REGLES_MORALES.has(v.regle)),
                 ),

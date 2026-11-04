@@ -659,6 +659,8 @@ describe('la génération place le JFR', () => {
 })
 
 describe('le poids du JFR en attente', () => {
+  // Le JFR le vendredi, collé au week-end : le jeudi, il ferait du vendredi
+  // un jour de travail seul, interdit depuis le 2026-11-04.
   // Deux places de 8 h du lundi au vendredi. A (39 h) a un JFR à prendre le
   // jeudi ; B (39 h) travaille ses 5 jours ; C dépanne. Le JFR de A laisse
   // une place du jeudi à C (un dépannage) : seul le poids du JFR en attente
@@ -687,7 +689,7 @@ describe('le poids du JFR en attente', () => {
         ...base,
         id: 'A',
         minutesHebdoContrat: 39 * H,
-        jfr: jfr ? { jours: new Set([3]), reduction: 7 * H } : null,
+        jfr: jfr ? { jours: new Set([4]), reduction: 7 * H } : null,
       }),
       salarieSolveur({ ...base, id: 'B', minutesHebdoContrat: 39 * H }),
       salarieSolveur({
@@ -709,15 +711,15 @@ describe('le poids du JFR en attente', () => {
 
   it('accepté : le JFR est pris, la place passe en dépannage', () => {
     const r = generer(probleme(true), highs)
-    expect(r.jfr).toEqual([{ salarieId: 'A', jour: 3 }])
-    expect(r.affectations).toContainEqual({ salarieId: 'C', creneauId: 'b3' })
+    expect(r.jfr).toEqual([{ salarieId: 'A', jour: 4 }])
+    expect(r.affectations).toContainEqual({ salarieId: 'C', creneauId: 'b4' })
     expect(r.manques).toEqual([])
   })
 
-  it('refusé : sans JFR à prendre, A tient sa place du jeudi', () => {
+  it('refusé : sans JFR à prendre, A tient sa place du vendredi', () => {
     const r = generer(probleme(false), highs)
     expect(r.jfr ?? []).toEqual([])
-    expect(r.affectations).toContainEqual({ salarieId: 'A', creneauId: 'b3' })
+    expect(r.affectations).toContainEqual({ salarieId: 'A', creneauId: 'b4' })
   })
 })
 

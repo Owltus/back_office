@@ -69,7 +69,13 @@ import {
   versSolveur,
 } from '#/lib/planning/regles.ts'
 import type { Fiche } from '#/lib/planning/regles.ts'
-import { JOURS_AFFILES_MAX, RYTHME_CONTRAT_MIN } from '#/lib/planning/regles.ts'
+import {
+  JOURS_AFFILES_CONSEILLES,
+  JOURS_AFFILES_MAX,
+  RYTHME_CONTRAT_MIN,
+  rythmeHumain,
+  apresContrat,
+} from '#/lib/planning/regles.ts'
 import {
   accueilActif,
   bilanPresence,
@@ -114,6 +120,7 @@ import type {
   Salarie,
 } from '#/lib/planning/types.ts'
 import {
+  moraleQuiBloque,
   REGLES_MORALES,
   ouverturesManquees,
   raisonsBlocage,
@@ -2146,12 +2153,40 @@ export function reposObliges(
     while (j + droite + 1 <= 6 && travaille.has(j + droite + 1)) droite++
     if (j + droite === 6) droite += sol.serieApres
     const affiles = gauche + 1 + droite
-    if (affiles > JOURS_AFFILES_MAX) {
+    // 5 au plus depuis le 2026-11-04 pour un contrat de 35 h et plus
+    // (`rythmeHumain`), comme le calcul et JOURS-AFFILES ; 6 sinon.
+    const plafondAffiles = rythmeHumain(sol)
+      ? JOURS_AFFILES_CONSEILLES
+      : JOURS_AFFILES_MAX
+    if (affiles > plafondAffiles) {
       r.push({
         jour: j,
-        raison: `sinon ${affiles} jours de travail d'affilée (${JOURS_AFFILES_MAX} au plus)`,
+        raison: `sinon ${affiles} jours de travail d'affilée (${plafondAffiles} au plus)`,
       })
       continue
+    }
+    // Un jour seul entre deux repos certains (2026-11-04, `rythmeHumain`) :
+    // le calcul ne le pose pas. Certain : une absence (hors école) ou un
+    // repos fixe ; le jour voisin d'une semaine connue et libre. Un jour
+    // simplement vide ne l'est pas (il peut encore être travaillé).
+    if (rythmeHumain(sol)) {
+      const libreSur = (d: number): boolean => {
+        if (apresContrat(sol, d)) return false
+        if (d < 0)
+          return sol.joursSemainePrecedente !== null && sol.serieAvant === 0
+        if (d > 6)
+          return sol.joursSemaineSuivante !== null && sol.serieApres === 0
+        if (travaille.has(d)) return false
+        // Avant l'arrivée (hors contrat, pas après la fin) : du repos.
+        return sol.horsContrat.has(d) || sol.reposFixes.has(d) || absents.has(d)
+      }
+      if (libreSur(j - 1) && libreSur(j + 1)) {
+        r.push({
+          jour: j,
+          raison: 'sinon un jour de travail seul entre deux repos',
+        })
+        continue
+      }
     }
     // Plafond de jours de la semaine (un mineur : 5).
     if (travaille.size >= sol.joursTravaillesMaxSemaine) {
@@ -2221,11 +2256,12 @@ export function raisonCommune(
   for (const raisons of parCode) {
     for (const vs of raisons.values()) {
       // Une règle morale du PRD ne bloque pas : la personne pourrait venir.
-      // Sauf les deux repos de suite, que le calcul ne sacrifie plus
-      // (2026-11-04, `POIDS_REPOS_SEPARES`).
+      // Sauf les deux repos de suite et le jour isolé d'un contrat de 35 h
+      // et plus, que le calcul ne sacrifie plus (2026-11-04,
+      // `moraleQuiBloque`).
       const regles = vs
+        .filter((v) => moraleQuiBloque(v) || !REGLES_MORALES.has(v.regle))
         .map((v) => v.regle)
-        .filter((r) => r === 'REPOS-SEPARES' || !REGLES_MORALES.has(r))
       if (regles.length === 1 && regles[0] === 'EXTRA') continue
       if (!regles.length) return null
       listes.push(regles)

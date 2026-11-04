@@ -117,6 +117,11 @@ export interface SalarieSolveur {
   /** Postes tenus seul (dont `postesOccasionnels`, en dépannage). */
   postes: ReadonlySet<string>
   minutesHebdoContrat: number
+  /** Le contrat lui-même (heures de la fiche), quand les heures DUES de la
+   * semaine (`minutesHebdoContrat`) en retirent des absences, l'école ou des
+   * jours hors contrat. `rythmeHumain` le lit : un congé ne change pas qui
+   * on est. Absent : `minutesHebdoContrat`. */
+  minutesContrat?: number
   minutesHebdoMax: number
   minutesJourMax: number
   joursTravaillesMaxSemaine: number

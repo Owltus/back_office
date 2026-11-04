@@ -568,14 +568,13 @@ describe('place que rien ne remplit : la raison commune en clair', () => {
   // appel mis à part), « Je ne peux pas » serait faux.
   const NON_BLOQUANTES = [
     'SIXIEME-JOUR',
-    'JOURS-AFFILES',
     'MINEUR-FERIE',
     'JOUR-FERIE',
     'R-JOURNEE-ETOILE',
     'EXTRA',
     // Règles morales du PRD : à éviter, jamais bloquantes (sauf deux repos
-    // de suite depuis le 2026-11-04, qui bloque).
-    'JOUR-ISOLE',
+    // de suite et le jour isolé, et les jours d'affilée, depuis le
+    // 2026-11-04 : règles de l'hôtel, la place reste vide).
     'REPOS-COURT',
     'WEEKEND-LIBRE',
     'MOMENTS',

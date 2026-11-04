@@ -2573,6 +2573,31 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   places vides). Banc décembre (copie locale, en mémoire) : semaines sans
   paire 25 → 15 (toutes expliquées), 6e jours 4 → 1, aucune place vide de
   plus, 6 h dues de moins sur le mois, 17 s pour le mois comme avant.
+- **SEMAINES HUMAINES (2026-11-04, même responsable : « tu ne peux pas
+  donner des jours et redonner des jours ensuite » ; « privilégie vraiment
+  les semaines de 5 jours »)** : pour un contrat de 35 h et plus
+  (`rythmeHumain`, regles.ts, sur `minutesContrat` = le CONTRAT, jamais
+  les heures dues de la semaine), jamais un jour de travail seul entre deux
+  jours sans travail et au plus 5 jours d'affilée (semaines voisines ET
+  dans la semaine) : contraintes DURES du calcul, jamais sur un jour posé
+  (le modèle reste toujours possible). Lecture des voisins, UNE définition
+  pour le moteur, le vérificateur (`libre`, `pourUnePlace`) et les repos
+  obligés : école et jours après le contrat (`apresContrat`) = travail,
+  jours avant l'arrivée = repos, semaine voisine inconnue = rien demandé,
+  JAMAIS le lundi esquissé de k+1. `POIDS_DIMANCHE_SEUL` (souple) pousse le
+  lundi après un dimanche travaillé et un samedi libre. Écran : JOUR-ISOLE
+  porte `JOUR_ISOLE_INTERDIT` (35 h et plus, bloque une place,
+  `moraleQuiBloque`) ou `JOUR_ISOLE_A_EVITER` (petits contrats) ; une
+  semaine de moins de 3 jours n'est dite que pour juger une place ;
+  `cleViolation` distingue deux jours isolés. JOURS-AFFILES : 5 pour un
+  35 h, mention « règle de l'hôtel ». Relecture adverse (3 agents + un
+  vérificateur par constat) : 6 défauts reproduits puis corrigés, tests de
+  non-régression dans `rythmeHumain.test.ts`, 6 mutants tués. Empreinte
+  `generateur.test.ts` 8874c146 (à relever si le modèle bouge). Banc
+  décembre (copie locale, en mémoire) : séries de 6 jours 6 → 0, jours
+  isolés 6 → 1 (dernier jour de la période), aucune place vide de plus,
+  14 h de contrat en moins sur le mois. L'école compte dans les 5 jours :
+  un apprenti ne tient plus le dimanche avant une semaine pleine de CFA.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 
