@@ -598,9 +598,9 @@ sur le mois (deux personnes, une journée chacune).
   de la semaine »), dites seulement pour juger une place, jamais pour un shift posé. Tests
   `journeesCalcul.test.ts` (13 mutants tués). Relecture adverse (3 agents, un vérificateur par
   constat) : 13 défauts réels sur 16 constats, tous corrigés. Banc de décembre (copie locale, en
-  mémoire, moteur d'avant comparé) : shifts hors 7 h / 8 h 8 → 0, heures en plus 9 h → 0 h,
-  heures de contrat non faites 36 → 50 h (une apprentie, 4 jours sur deux semaines, compensés
-  avant par des 9 h), une nuit vide (dimanche 27/12 : un veilleur en congé, l'autre à ses 39 h).
+  mémoire, horizon glissant comme dans l'app, moteur d'avant comparé) : shifts hors 7 h / 8 h
+  3 → 0, heures en plus 9 h → 0 h, heures de contrat non faites 16 → 15 h, la même nuit vide
+  qu'avant (lundi 21/12 : chacun dépasserait ses heures), 43 → 31 s pour le mois.
 - **Middle** (même décision) : posé seulement s'il reste des heures ; la superviseuse n'est pas
   comptée à l'accueil (poste principal d'abord, dépannage ensuite). Rien à changer au moteur.
 

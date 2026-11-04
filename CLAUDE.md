@@ -2615,8 +2615,10 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   seulement, clé par créneau). Middle : seulement s'il reste des heures,
   rien à changer. Relecture adverse : 13 défauts réels corrigés, tests
   `journeesCalcul.test.ts`, 13 mutants tués. Banc décembre : hors 7/8 h
-  8 → 0, heures en plus 9 → 0 h, contrat non fait 36 → 50 h, une nuit vide
-  (27/12).
+  3 → 0, heures en plus 9 → 0 h, contrat non fait 16 → 15 h, la même nuit
+  vide qu'avant (lundi 21/12), désormais expliquée, 43 → 31 s. ⚠ Un banc
+  de génération doit passer `horizon` comme l'app (VueMois, VueSemaine) :
+  sans lui, une apprentie semblait perdre 7 h sur deux semaines.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 
