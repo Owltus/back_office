@@ -368,6 +368,37 @@ export const POIDS_PASSATION = 300_000
 export const POIDS_RELEVE = 16_000
 /** Travailler un jour habituel (semaine type « travail »). */
 export const POIDS_JOUR_FIXE = 2_000
+/** Le premier jour du contrat est travaillé (demande d'une responsable du
+ * 2026-11-04 : « mes stagiaires commencent leur stage par deux jours de
+ * repos »). Rien ne retenait le calcul de poser les deux repos de la
+ * semaine sur l'arrivée. Prime sur le premier jour sur place de la semaine
+ * où le contrat commence (`premierJourSurPlace`). Au-dessus des repos
+ * accolés et du jour isolé, sous la fatigue et les heures : elle ne fait
+ * que déplacer un repos. Pas de prime en dépannage, comme le jour
+ * habituel (D13). */
+export const POIDS_PREMIER_JOUR = 10_000
+
+/** Premier jour (0 à `nbJours` - 1) où la personne peut être sur place
+ * la semaine où son contrat commence : le jour d'entrée, ou le suivant
+ * quand il est pris (absence, école, repos fixe). null : contrat commencé
+ * avant cette semaine, ou aucun jour sur place. */
+export function premierJourSurPlace(
+  s: Pick<
+    SalarieSolveur,
+    'contratDebut' | 'indisponibilites' | 'joursHorsSite' | 'reposFixes'
+  >,
+  nbJours: number,
+): number | null {
+  if (s.contratDebut === null || s.contratDebut < 0) return null
+  // Minutes réelles : un changement d'heure décale minuit d'une heure.
+  const debut = Math.floor((s.contratDebut + 720) / 1440)
+  for (let j = debut; j < Math.min(nbJours, 7); j++) {
+    if (s.indisponibilites.has(j) || s.joursHorsSite.has(j)) continue
+    if (s.reposFixes.has(j)) continue
+    return j
+  }
+  return null
+}
 
 /*
  * RÈGLES MORALES (PRD `plan/planning-bonnes-pratiques/PRD.md`, partie 4 ;
@@ -1468,6 +1499,7 @@ export function construire(
       }
     }
 
+    const arrivee = premierJourSurPlace(s, p.nbJours)
     for (let k = 0; k < nbSemaines; k++) {
       const jours = intervalle(7 * k, Math.min(7 * k + 7, p.nbJours))
       const dans = (j: number) => jours.includes(j)
@@ -1769,6 +1801,16 @@ export function construire(
       for (const j of s.travailFixe) {
         const t = travaille.get(j)
         if (dans(j) && t) m.cout(-POIDS_JOUR_FIXE, t)
+      }
+      // Le premier jour du contrat est travaillé (`POIDS_PREMIER_JOUR`).
+      if (k === 0 && arrivee !== null) {
+        const t = travaille.get(arrivee)
+        if (t) {
+          m.cout(-POIDS_PREMIER_JOUR, t)
+          for (const c of siens)
+            if (jourDe(c) === arrivee && role(s, c.poste) === 'occasionnel')
+              m.cout(POIDS_PREMIER_JOUR, xv(c))
+        }
       }
       // Pas de prime de jour habituel pour un shift en dépannage (D13) : la
       // prime du jour est annulée sur ce shift (un shift par jour).

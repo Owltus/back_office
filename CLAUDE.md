@@ -2537,6 +2537,19 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   (`ferieDuJour`) ; jamais de rattrapage (`feriesEnAttente` les saute).
   L'encadrement n'a pas de besoins à tenir (« c'est pas une question de
   planning comme les hôteliers »).
+- **PREMIER JOUR DU CONTRAT TRAVAILLÉ (2026-11-04, demande d'une
+  responsable, collègue de l'utilisateur : « mes stagiaires commencent leur
+  stage par deux jours de repos »)** : rien ne retenait le calcul de poser
+  les deux repos sur l'arrivée. La semaine où le contrat commence, prime
+  `POIDS_PREMIER_JOUR` (10 000, au-dessus des repos accolés et du jour
+  isolé, sous la fatigue) sur le premier jour sur place
+  (`premierJourSurPlace` : le jour d'entrée, ou le suivant s'il est pris par
+  une absence, l'école ou un repos fixe) ; annulée sur un shift en
+  dépannage, comme le jour habituel. Tests `premierJour.test.ts`. Banc
+  décembre (copie locale, en mémoire) : le stagiaire du 21/12 passe de
+  repos lundi-mardi à lundi travaillé, mêmes places, trous et heures.
+  Empreinte de `generateur.test.ts` inchangée (aucun contrat ne commence
+  dans la semaine de démo).
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

@@ -736,7 +736,8 @@ export function AidePlanningContenu({
           <p className="text-muted-foreground">
             Seuls les jours de présence comptent. Les jours avant l’entrée ou
             après la sortie sont hors contrat, et seules les journées de contrat
-            qui manquent sont retirées.
+            qui manquent sont retirées. Le premier jour du contrat est travaillé
+            : un stage ne commence pas par ses repos.
           </p>
           <Exemple>
             un 39 h qui part un jeudi est là 4 jours : il doit une journée de

@@ -812,6 +812,12 @@ jour de 7 h. La journée étoile se fait sur un vrai horaire d'au moins 7 h et d
 Les jours hors contrat ne comptent pas. Le rythme de 5 jours se compte sur les jours de présence :
 un départ un jeudi laisse 4 jours attendus (décision du 2026-11-02).
 
+Le premier jour du contrat est travaillé (demande d'une responsable du 2026-11-04 : « mes
+stagiaires commencent leur stage par deux jours de repos »). La semaine où le contrat commence, le
+premier jour sur place (le jour d'entrée, ou le suivant s'il est pris par une absence, l'école ou un
+repos fixe) reçoit une prime, `POIDS_PREMIER_JOUR` (10 000) : au-dessus des repos accolés et du jour
+isolé, sous la fatigue et les heures. Elle ne fait que déplacer un repos. Pas de prime en dépannage.
+
 ---
 
 ## 8. Ce que le calcul ne fait jamais
