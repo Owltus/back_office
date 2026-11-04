@@ -2470,6 +2470,38 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   nature repos depuis la migration `20261103120000_planning_generation_repos`),
   validables, effacés par un nouveau calcul ou Effacer, retirés par « Vider
   la case ». Seul reste déduit à l'écran le repos sur un congé en trop.
+- **REPOS OBLIGÉ (2026-11-04, décision utilisateur)** : un jour à venir sans
+  shift qu'aucun service ne peut tenir est montré « Repos » en proposition,
+  raison au survol (`reposObliges`, `BilanOut.repos_obliges`) : plus de 6 jours
+  d'affilée (semaines voisines comprises, école travaillée), plafond de jours
+  de la semaine atteint (mineur : 5), ou aucun des horaires de la personne
+  (`horairesPermis` : ses postes ouverts ∩ sa fiche) ne tient avec le repos
+  quotidien des deux côtés. Se valide comme un repos (`reposAValider`), posé
+  par la génération (`reposAProposer`). Rien sur une semaine verrouillée, un
+  extra, un placé à la main.
+- **HORIZON GLISSANT (2026-11-04, décision utilisateur : « mets en place
+  l'horizon glissant »)** : la semaine k est calculée avec la semaine k+1
+  ESQUISSÉE dans le même modèle (`Probleme.suivante`, `esquisseSuivante` dans
+  semaine.ts, `esquisserSuivante` + groupes dans generateur.ts) : un jour
+  travaillé ou non par personne, sans horaire. Règles : fenêtres de 7 jours
+  qui traversent k/k+1 (dures), plafond et 6e jour de k+1, jours attendus
+  (rythme de 5, école et absences décomptées), règle 4 couplée (sans week-end
+  libre les 2 semaines d'avant, celui de k OU de k+1 ; maladie, formation,
+  sans solde, école ne libèrent pas ; nuit du vendredi = travaillé), groupes
+  (accueil, chaque poste à part) avec leurs personnes par jour — un jour de
+  présence ne tient qu'UNE place (parts continues), l'école n'est pas une
+  présence, un shift gardé compte pour son poste. `pireHorizon` entre dans
+  `presenceLaPlusChere` (les places de k restent avant). Rien de k+1 n'est
+  écrit ; sans `suivante`, le modèle est identique au caractère près.
+  « Compléter le mois » : `suivanteRecalculee` quand k+1 est aussi visée (ses
+  propositions et repos proposés ne comptent plus) ; arrêt ou erreur sur k+1
+  après k → ses propositions sont RETIRÉES (`vider`), message à l'appui. Vue
+  semaine : k+1 gardée telle quelle. Jamais pour la pose des fixes. Banc sur
+  décembre (copie locale, en mémoire, hors dépôt) : week-ends libres manqués
+  4 → 0, jours isolés 3 → 1, repos séparés 18 → 15, pour 15 h de moins sur le
+  mois (2 semaines courtes de plus) — l'ordre voulu (fatigue avant heures) ;
+  41 s au lieu de 49 s pour le mois. Non fait : une personne qui change de
+  fiche (`suite_de`) au lundi de k+1 n'a pas ses jours d'affilée reliés.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

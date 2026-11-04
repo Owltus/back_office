@@ -45,7 +45,13 @@ const service = (j: number, debut = 7, fin = 15.75): Creneau =>
     debut: j * J + debut * H,
     fin: j * J + fin * H,
   })
-const obliges = (siens: Creneau[], kw = {}, passes = 0, plusCourt = 7 * H) =>
+const SEPT_HEURES = [{ debut: '08:00', fin: '15:00' }]
+const obliges = (
+  siens: Creneau[],
+  kw = {},
+  passes = 0,
+  horaires: Array<{ debut: string; fin: string }> = SEPT_HEURES,
+) =>
   reposObliges(
     x,
     sol(kw),
@@ -55,7 +61,7 @@ const obliges = (siens: Creneau[], kw = {}, passes = 0, plusCourt = 7 * H) =>
     new Set(),
     new Set(),
     passes,
-    plusCourt,
+    horaires,
   )
 
 describe('repos obligés', () => {
@@ -116,21 +122,47 @@ describe('repos obligés', () => {
         new Set(),
         new Set(),
         0,
-        7 * H,
+        SEPT_HEURES,
       ),
     ).toEqual([])
   })
-  it('aucun horaire ne tient entre deux services avec 11 h de repos', () => {
-    // Fin lundi à minuit, reprise mercredi à 6 h : mardi n'a que 8 h, pour
-    // un horaire de 8 h 45 au plus court.
+  it('aucun de SES horaires ne tient entre deux services avec 11 h de repos', () => {
+    // Fin lundi à minuit, reprise mercredi à 6 h : un service du mardi doit
+    // commencer après 11 h et finir avant 19 h.
     const autour = [service(0, 15, 24), service(2, 6, 14)]
-    expect(obliges(autour, {}, 0, 8.75 * H)).toEqual([
+    const siens = [
+      { debut: '07:00', fin: '15:45' },
+      { debut: '14:00', fin: '22:45' },
+    ]
+    expect(obliges(autour, {}, 0, siens)).toEqual([
       { jour: 1, raison: 'sinon moins de 11 h de repos entre deux services' },
     ])
-    // Refusé : un horaire de 7 h tiendrait.
-    expect(obliges(autour, {}, 0, 7 * H)).toEqual([])
+    // Refusé : un de ses horaires tient (11:00-18:45).
+    expect(
+      obliges(autour, {}, 0, [...siens, { debut: '11:00', fin: '18:45' }]),
+    ).toEqual([])
     // Refusé : sans services autour, rien n'empêche de travailler.
     expect(obliges([service(0)])).toEqual([])
+  })
+  it('le plafond de jours de la semaine (un mineur : 5)', () => {
+    const r = obliges(
+      [0, 1, 2, 3, 4].map((j) => service(j)),
+      {
+        joursTravaillesMaxSemaine: 5,
+      },
+    )
+    expect(r).toEqual([
+      {
+        jour: 5,
+        raison: 'sinon 6 jours de travail dans la semaine (5 au plus)',
+      },
+      {
+        jour: 6,
+        raison: 'sinon 6 jours de travail dans la semaine (5 au plus)',
+      },
+    ])
+    // Refusé : un adulte (6 au plus) peut encore travailler un 6e jour.
+    expect(obliges([0, 1, 2, 3, 4].map((j) => service(j)))).toEqual([])
   })
 })
 

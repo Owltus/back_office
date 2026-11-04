@@ -495,6 +495,14 @@ export function AidePlanningContenu({
           bloquant. Quand les quatre sont cochés, le planning est prêt à
           générer.
         </p>
+        <p>
+          Chaque semaine est calculée en regardant aussi la suivante : qui
+          pourra travailler quels jours, qui aura besoin de son week-end, et
+          combien de personnes il faudra. Ainsi une semaine ne laisse pas la
+          suivante dans une impasse (trop de jours d’affilée, un week-end à
+          rendre sans personne pour le tenir). Seule la semaine calculée est
+          écrite.
+        </p>
         <Exemple>
           vous posez et validez les shifts des personnes à horaires fixes et les
           congés connus, puis Compléter le mois fait le reste. Vous corrigez
@@ -796,6 +804,7 @@ export function AidePlanningContenu({
             items={[
               'Deux repos par semaine pour chacun. Un jour hors contrat en retire un, deux jours hors contrat les retirent tous les deux.',
               'Une case vide reste vide : l’app ne devine aucun repos. La génération pose les repos en proposition ; à la main, on les pose d’un clic droit. Un repos posé, proposé ou validé, se retire avec Vider la case.',
+              'Repos obligé : un jour où la personne ne peut pas travailler (plus de 6 jours d’affilée, plus de jours que permis dans la semaine, ou moins de 11 h de repos entre deux services). Il s’affiche Repos, en proposition, et la raison apparaît au survol.',
               'En congé toute la semaine, deux jours de congé deviennent des repos proposés : les jours de congé ne sont pas des jours de repos.',
               'Apprentis et stagiaires : leur ligne reste vide, sauf l’école, tant que la semaine n’est pas remplie.',
               'Un repos proposé part avec les propositions quand on recalcule ou qu’on efface.',

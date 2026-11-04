@@ -52,6 +52,7 @@ import {
   NUITS_AFFILEES_MAX,
   REPOS_APRES_NUITS,
   REPOS_CONFORT,
+  RYTHME_CONTRAT_MIN,
 } from '#/lib/planning/regles.ts'
 import type {
   AffectationSolveur,
@@ -60,6 +61,7 @@ import type {
   Probleme,
   Resultat,
   SalarieSolveur,
+  SuivantePersonne,
 } from '#/lib/planning/modele.ts'
 
 /*
@@ -316,8 +318,25 @@ export function pireJfr(reductionMax: number): number {
     ? POIDS_JFR_EN_ATTENTE + POIDS_JFR_COLLE + POIDS_SOUS_CONTRAT * reductionMax
     : 0
 }
-/** Contrats à rythme de 5 jours : 35 h et plus. */
-export const RYTHME_CONTRAT_MIN = 35 * 60
+export { RYTHME_CONTRAT_MIN }
+/** Horizon glissant (2026-11-04) : une personne qui manque un jour de la
+ * semaine SUIVANTE esquissée. Au-dessus du week-end libre (comme dans la
+ * vraie semaine : les places passent avant la fatigue), sous les places
+ * de la semaine écrite (`pireHorizon` entre dans leur coût). */
+export const POIDS_PREVISION_MANQUE = POIDS_FATIGUE + 10_000
+/** P1 : le pire que coûte, dans l'esquisse de la semaine suivante, un
+ * shift ajouté à la semaine écrite. Il peut la priver d'un jour (jours
+ * d'affilée) : un jour attendu en moins et UN manque (un jour de présence
+ * ne tient qu'une place, tous groupes confondus) ; et faire perdre le
+ * week-end libre couplé (règle 4). Sans esquisse : 0, le modèle d'avant. */
+export function pireHorizon(suivante: Probleme['suivante']): number {
+  if (!suivante) return 0
+  return (
+    POIDS_WEEKEND_LIBRE +
+    POIDS_JOUR_MANQUANT +
+    (suivante.groupes.length ? POIDS_PREVISION_MANQUE : 0)
+  )
+}
 /** Ouverture d'un poste de l'accueil (07:00 Réception et Club, réglage du
  * poste) : un quart d'heure sans personne sur ce poste dans la première
  * heure. « Obligatoire » (2026-11-01) : au-dessus des contrats d'un jour de
@@ -1000,7 +1019,9 @@ export function construire(
   // Sans JFR dans la semaine, rien ne change (même texte LP qu'avant).
   const presenceLaPlusChere =
     Math.max(0, ...coutsSurplus) +
-    pireJfr(Math.max(0, ...p.salaries.map((s) => s.jfr?.reduction ?? 0)))
+    pireJfr(Math.max(0, ...p.salaries.map((s) => s.jfr?.reduction ?? 0))) +
+    // Horizon glissant : ce qu'un shift ajouté peut coûter à l'esquisse.
+    pireHorizon(p.suivante)
   const coutsMinimum = comptent.map((cs) =>
     coutManqueMinimum(cs, presenceLaPlusChere, besoinDe),
   )
@@ -1224,6 +1245,9 @@ export function construire(
   const travailleDe = new Map<string, Map<number, string>>()
   const jfrs: Array<{ salarieId: string; jour: number; v: string }> = []
   const coefsPlus = coefsHeuresPlus(p)
+  // Horizon glissant : jour de l'esquisse (nbJours + 0..6) → 1 (travaillé
+  // d'office) ou la variable « travaille ». Un jour impossible est absent.
+  const esquisses = new Map<string, Map<number, string | 1>>()
 
   for (const s of p.salaries) {
     const siens = p.creneaux.filter((c) => x.has(cle(s.id, c.id)))
@@ -1238,6 +1262,16 @@ export function construire(
     }
     const travaille = new Map<number, string>()
     travailleDe.set(s.id, travaille)
+    const esquisse = p.suivante?.personnes.get(s.id)
+    const sk = esquisse ? new Map<number, string | 1>() : null
+    if (esquisse && sk) {
+      esquisses.set(s.id, sk)
+      for (let j = 0; j < 7; j++) {
+        const f = esquisse.fixes.get(j)
+        if (f === 0) continue
+        sk.set(p.nbJours + j, f === 1 ? 1 : m.bool())
+      }
+    }
     for (const [jour, liste] of parJour) {
       const nbFixes = fixes.filter((c) => jourDe(c) === jour).length
       m.ajoute(
@@ -1599,7 +1633,9 @@ export function construire(
         for (const c of siens)
           if (s.feriesEvites.has(jourDe(c))) m.cout(POIDS_MINEUR_FERIE, xv(c))
         const debut = -s.serieAvant
-        const fin = p.nbJours + s.serieApres
+        // Avec l'esquisse, la semaine suivante est DANS le calcul : ses
+        // jours sont des variables (ou des faits), plus une série figée.
+        const fin = p.nbJours + (sk ? 7 : s.serieApres)
         for (const [plafond, poids] of [
           [JOURS_AFFILES_MAX, POIDS_JOUR_AFFILE],
           [JOURS_AFFILES_CONSEILLES, POIDS_JOUR_AFFILE_CONSEILLE],
@@ -1607,6 +1643,9 @@ export function construire(
           const taille = plafond + 1
           for (let a = Math.max(debut, 1 - taille); a + taille <= fin; a++) {
             const derniere = a + taille - 1
+            // Fenêtre tout entière dans la semaine esquissée : déjà bornée
+            // par son plafond et son 6e jour (`esquisserSuivante`).
+            if (sk && a >= p.nbJours) continue
             if (
               a >= 0 &&
               derniere < p.nbJours &&
@@ -1616,7 +1655,11 @@ export function construire(
             const termes: Terme[] = []
             let constante = 0
             for (let d = a; d <= derniere; d++) {
-              if (d < 0 || d >= p.nbJours) constante++
+              if (d >= p.nbJours && sk) {
+                const v = sk.get(d)
+                if (v === 1) constante++
+                else if (v) termes.push([1, v])
+              } else if (d < 0 || d >= p.nbJours) constante++
               else if (s.joursHorsSite.has(d)) constante++
               else {
                 const t = travaille.get(d)
@@ -1761,7 +1804,70 @@ export function construire(
         sousContrat.push([s.id, moins, plus])
       }
     }
+    if (esquisse && sk)
+      esquisserSuivante(
+        m,
+        p,
+        s,
+        esquisse,
+        sk,
+        travaille,
+        // La nuit du vendredi au samedi rend le week-end travaillé (comme
+        // `weekend()` de la règle 4).
+        siens.filter((c) => jourDe(c) === 4 && c.moment === 'nuit').map(xv),
+      )
   }
+  // Horizon glissant : les personnes nécessaires chaque jour de la semaine
+  // suivante, par groupe (accueil, poste à part). Un manque se paie
+  // `POIDS_PREVISION_MANQUE` : la semaine écrite ne doit pas laisser la
+  // suivante sans monde.
+  // Un jour de présence ne tient qu'UNE place : une personne de plusieurs
+  // groupes y est répartie (part continue par groupe, somme au plus son
+  // jour) ; un jour d'école n'est pas une présence ; un shift gardé ne
+  // compte que pour les groupes de son poste.
+  const groupesSuivante = p.suivante?.groupes ?? []
+  const parts = groupesSuivante.map(() =>
+    Array.from({ length: 7 }, () => ({ termes: [] as Terme[], constante: 0 })),
+  )
+  for (const [id, e] of p.suivante?.personnes ?? []) {
+    const sk = esquisses.get(id)
+    if (!sk) continue
+    for (let j = 0; j < 7; j++) {
+      const v = sk.get(p.nbJours + j)
+      if (!v || e.horsSite.has(j)) continue
+      const garde = e.postesGardes.get(j)
+      const siens = groupesSuivante
+        .map((_, i) => i)
+        .filter(
+          (i) =>
+            groupesSuivante[i].membres.has(id) &&
+            (garde === undefined || groupesSuivante[i].postes.has(garde)),
+        )
+      if (!siens.length) continue
+      if (siens.length === 1) {
+        const cible = parts[siens[0]][j]
+        if (v === 1) cible.constante++
+        else cible.termes.push([1, v])
+        continue
+      }
+      const ys = siens.map((i) => {
+        const y = m.continu(0, 1)
+        parts[i][j].termes.push([1, y])
+        return [1, y] as Terme
+      })
+      if (v === 1) m.ajoute(ys, '<=', 1)
+      else m.ajoute([...ys, [-1, v]], '<=', 0)
+    }
+  }
+  groupesSuivante.forEach((g, i) => {
+    for (let j = 0; j < 7; j++) {
+      const { termes, constante } = parts[i][j]
+      if (g.besoins[j] <= constante) continue
+      const manqueJ = m.continu(0, g.besoins[j] - constante)
+      m.ajoute([[1, manqueJ], ...termes], '>=', g.besoins[j] - constante)
+      m.cout(POIDS_PREVISION_MANQUE, manqueJ)
+    }
+  })
 
   // Même personne sur deux fiches.
   const parPersonne = new Map<string, SalarieSolveur[]>()
@@ -1968,6 +2074,119 @@ function weekendsEquitables(
 
 /** Une somme de termes réutilisée plusieurs fois : une variable continue
  * égale à la somme (même substitution que les AGRÉGATS DE L'ACCUEIL). */
+/** Horizon glissant (2026-11-04) : les règles de l'esquisse de la semaine
+ * suivante pour une personne. Les jours d'affilée qui la traversent sont
+ * écrits avec les autres (fenêtres de 7 jours, `fin`). Ici : au plus 6
+ * jours (R-SIX-JOURS-MAX), le 6e coûte (R-REPOS-HEBDO-HCR), le rythme de
+ * 5 jours (`attendus`), et la règle 4 couplée : sans week-end libre les 2
+ * semaines d'avant, le week-end du calcul OU celui d'après doit l'être. */
+function esquisserSuivante(
+  m: Modele,
+  p: Probleme,
+  s: SalarieSolveur,
+  e: SuivantePersonne,
+  sk: ReadonlyMap<number, string | 1>,
+  travaille: ReadonlyMap<number, string>,
+  nuitVendredi: readonly string[],
+): void {
+  const termes: Terme[] = []
+  let constante = 0
+  for (const v of sk.values()) {
+    if (v === 1) constante++
+    else termes.push([1, v])
+  }
+  if (termes.length) {
+    m.ajoute(termes, '<=', Math.max(s.joursTravaillesMaxSemaine - constante, 0))
+    if (s.joursPreferesSemaine < s.joursTravaillesMaxSemaine) {
+      const six = m.entier(0, 7)
+      m.ajoute(
+        [[1, six], ...negatifs(termes)],
+        '>=',
+        constante - s.joursPreferesSemaine,
+      )
+      m.cout(POIDS_SIXIEME_JOUR, six)
+    }
+  }
+  if (e.attendus > constante) {
+    const ecart = m.entier(0, 7)
+    m.ajoute([[1, ecart], ...termes], '>=', e.attendus - constante)
+    m.cout(POIDS_JOUR_MANQUANT, ecart)
+  }
+  if (e.weekendLibreAvant !== false) return
+  // Week-end du calcul (samedi 5, dimanche 6 ; l'école compte travaillée)
+  // et week-end d'après (nbJours + 5, + 6).
+  const cote = (
+    jours: number[],
+    valeur: (j: number) => string | 1 | undefined,
+  ) => {
+    const vars: string[] = []
+    for (const j of jours) {
+      const v = valeur(j)
+      if (v === 1) return 1
+      if (v) vars.push(v)
+    }
+    if (!vars.length) return 0
+    const we = m.continu(0, 1)
+    for (const v of vars)
+      m.ajoute(
+        [
+          [1, we],
+          [-1, v],
+        ],
+        '>=',
+        0,
+      )
+    return we
+  }
+  const ici = cote([5, 6, -1], (j) =>
+    j === -1
+      ? undefined
+      : s.joursHorsSite.has(j) || e.nonLibresIci.has(j)
+        ? 1
+        : travaille.get(j),
+  )
+  // La nuit du vendredi s'ajoute aux termes du week-end du calcul.
+  const iciTout =
+    ici === 1 || !nuitVendredi.length
+      ? ici
+      : (() => {
+          const we = m.continu(0, 1)
+          if (ici !== 0)
+            m.ajoute(
+              [
+                [1, we],
+                [-1, ici],
+              ],
+              '>=',
+              0,
+            )
+          for (const v of nuitVendredi)
+            m.ajoute(
+              [
+                [1, we],
+                [-1, v],
+              ],
+              '>=',
+              0,
+            )
+          return we
+        })()
+  const apres = cote([p.nbJours + 5, p.nbJours + 6], (j) =>
+    e.nonLibres.has(j - p.nbJours) ? 1 : sk.get(j),
+  )
+  if (iciTout === 0 || apres === 0) return
+  if (iciTout === 1 && apres === 1) return
+  const w = m.continu(0, 1)
+  const t: Terme[] = [[1, w]]
+  let rhs = -1
+  for (const c of [iciTout, apres]) {
+    if (c === 1) rhs += 1
+    else if (typeof c === 'string') t.push([-1, c])
+  }
+  m.ajoute(t, '>=', rhs)
+  m.cout(POIDS_WEEKEND_LIBRE, w)
+}
+
 function sommeDe(m: Modele, termes: Terme[]): Terme[] {
   if (termes.length <= 1) return termes
   const v = m.continu(0, termes.length)

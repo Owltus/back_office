@@ -437,7 +437,13 @@ export function VueSemaine({
     try {
       await pendant(async () => {
         try {
-          const r = await generer(lundi, { ...options, signal: ctrl.signal })
+          // Horizon glissant : la semaine suivante est esquissée ; ses
+          // shifts, validés ou proposés, restent des faits.
+          const r = await generer(lundi, {
+            ...options,
+            signal: ctrl.signal,
+            horizon: { suivanteRecalculee: false },
+          })
           const n = trous(r.semaine, aujourdhui)
           const passes = noteJoursPasses(
             joursPassesVides([r.semaine], (d) => d < aujourdhui),

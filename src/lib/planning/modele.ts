@@ -355,6 +355,55 @@ export interface Probleme {
   }>
   /** Relève entre le matin et le soir, en minutes (0 ou absent : aucune). */
   releveMinutes?: number
+  /** Horizon glissant (2026-11-04) : la semaine SUIVANTE esquissée dans le
+   * même calcul, pour que la semaine écrite ne la mette pas dans une impasse
+   * (jours d'affilée, week-end libre, personnes nécessaires). Rien n'en est
+   * écrit : seule la semaine du calcul l'est. Absent : le modèle d'avant,
+   * au caractère près. */
+  suivante?: Suivante
+}
+
+/** L'esquisse de la semaine suivante : un jour travaillé ou non par
+ * personne, sans horaire. */
+export interface Suivante {
+  /** Par salarié (id du solveur). Absent : pas d'esquisse pour lui (extra,
+   * placé à la main). */
+  personnes: ReadonlyMap<string, SuivantePersonne>
+  /** Groupes de personnes et ce qu'il en faut chaque jour (0 à 6), déjà
+   * diminué de ce que tiennent les shifts posés hors esquisse. */
+  groupes: ReadonlyArray<GroupeSuivante>
+}
+
+export interface GroupeSuivante {
+  membres: ReadonlySet<string>
+  /** Postes (ids du solveur) que le groupe tient : un shift gardé ne compte
+   * que pour les groupes de son poste. */
+  postes: ReadonlySet<string>
+  besoins: readonly number[]
+}
+
+export interface SuivantePersonne {
+  /** Jour (0 à 6) → 1 : travaillé d'office (shift gardé, école) ; 0 :
+   * impossible (absence, hors contrat, repos fixe). Absent : à choisir. */
+  fixes: ReadonlyMap<number, 0 | 1>
+  /** Jours de travail attendus (rythme de 5 jours) ; 0 : aucun. */
+  attendus: number
+  /** Jours d'école (travaillés d'office, mais pas à l'hôtel : ils ne
+   * comptent dans aucun groupe). */
+  horsSite: ReadonlySet<number>
+  /** Jour → poste (id du solveur) du shift gardé : il ne compte que pour
+   * les groupes de ce poste. */
+  postesGardes: ReadonlyMap<number, string>
+  /** Samedi (5) ou dimanche (6) de la semaine suivante, ou du calcul
+   * (`nonLibresIci`), pris par une absence qui ne libère pas le week-end
+   * (maladie, formation, sans solde, école) : un week-end travaillé pour la
+   * règle 4, comme dans `weekendLibreAvantDe`. */
+  nonLibres: ReadonlySet<number>
+  nonLibresIci: ReadonlySet<number>
+  /** Week-end libre dans les 2 semaines d'avant le calcul : false = aucun,
+   * le week-end du calcul ou celui d'après doit l'être (règle 4) ; null :
+   * règle sans objet ou inconnue. */
+  weekendLibreAvant: boolean | null
 }
 
 export const cle = (salarie: string, creneauId: string) =>

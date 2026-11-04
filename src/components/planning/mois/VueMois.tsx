@@ -280,6 +280,9 @@ export function VueMois({
     libelle: string,
     visees: string[],
     action: (l: string) => Promise<unknown>,
+    /** Après un arrêt ou une erreur à la semaine `l` (la `i`-ième) : ce
+     * qu'il reste à faire, et la phrase qui le dit (vide : rien). */
+    apresEchec?: (l: string, i: number) => Promise<string>,
   ): Promise<boolean> => {
     try {
       for (let i = 0; i < visees.length; i++) {
@@ -288,13 +291,15 @@ export function VueMois({
         try {
           await action(l)
         } catch (err) {
+          const note = apresEchec ? await apresEchec(l, i) : ''
           if (err instanceof CalculArrete) {
             // Arrêt demandé : la semaine en cours n'est pas écrite.
             notifier(
               `${libelle} : arrêté à la semaine S${numeroSemaine(l)}. ` +
                 (i
                   ? `${i > 1 ? `Les ${i} semaines d'avant sont faites` : "La semaine d'avant est faite"}, en proposition.`
-                  : "Rien n'a changé."),
+                  : "Rien n'a changé.") +
+                note,
             )
             return false
           }
@@ -305,7 +310,8 @@ export function VueMois({
               messageErreur(err, 'Semaine non traitée') +
               (i
                 ? ` ${i > 1 ? `Les ${i} semaines d'avant sont faites.` : "La semaine d'avant est faite."}`
-                : ''),
+                : '') +
+              note,
             'danger',
           )
           return false
@@ -344,12 +350,38 @@ export function VueMois({
       const faites = new Map<string, SemaineOut>()
       let proposes = 0
       // Dans l'ordre : chaque semaine voit la précédente (repos de 11 h).
-      const ok = await parSemaine('Compléter le mois', visees, async (l) => {
-        if (ctrl.signal.aborted) throw new CalculArrete()
-        const r = await generer(l, { aujourdhui, signal: ctrl.signal })
-        faites.set(l, r.semaine)
-        proposes += r.poses
-      }).finally(() => {
+      const ok = await parSemaine(
+        'Compléter le mois',
+        visees,
+        async (l) => {
+          if (ctrl.signal.aborted) throw new CalculArrete()
+          // Horizon glissant : chaque semaine est calculée avec la suivante
+          // esquissée ; celle-ci sera recalculée juste après si elle fait
+          // partie des semaines visées (ses propositions ne comptent pas).
+          const r = await generer(l, {
+            aujourdhui,
+            signal: ctrl.signal,
+            horizon: {
+              suivanteRecalculee: visees.includes(ajouterJours(l, 7)),
+            },
+          })
+          faites.set(l, r.semaine)
+          proposes += r.poses
+        },
+        // Horizon glissant : la semaine d'avant a été calculée en comptant
+        // sur le recalcul de celle-ci. Ses anciennes propositions ne tiennent
+        // peut-être plus avec elle (repos de 11 h, jours d'affilée) : elles
+        // sont retirées, le validé reste.
+        async (l, i) => {
+          if (!i || visees[i - 1] !== ajouterJours(l, -7)) return ''
+          try {
+            await vider(l, true)
+            return ` Les propositions de la semaine S${numeroSemaine(l)} ont été retirées : elles ne tenaient plus avec la semaine d'avant.`
+          } catch {
+            return ` Recalculez la semaine S${numeroSemaine(l)} : ses propositions ne tiennent peut-être plus avec la semaine d'avant.`
+          }
+        },
+      ).finally(() => {
         arret.current = null
         setEnCompletion(false)
       })

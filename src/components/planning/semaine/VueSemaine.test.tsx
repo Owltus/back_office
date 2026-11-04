@@ -208,6 +208,7 @@ describe('VueSemaine', () => {
     await waitFor(() =>
       expect(etat.generer).toHaveBeenCalledWith(LUNDI, {
         signal: expect.any(AbortSignal),
+        horizon: { suivanteRecalculee: false },
       }),
     )
     const n = SEMAINE.a_pourvoir.reduce((t, x) => t + x.manquant, 0)

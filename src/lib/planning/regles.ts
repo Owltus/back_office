@@ -34,6 +34,8 @@ export const JOURS_TRAVAILLES_PREFERES = 5
  * laisser se reposer »). Le générateur l'évite (`POIDS_JOUR_AFFILE`), le
  * vérificateur le signale (JOURS-AFFILES) ; la loi en permet jusqu'à 12. */
 export const JOURS_AFFILES_MAX = 6
+/** Contrats à rythme de 5 jours : 35 h et plus (2026-11-01). */
+export const RYTHME_CONTRAT_MIN = 35 * 60
 /** Jours d'affilée visés (demande utilisateur du 2026-11-02 : « tu abuses
  * encore beaucoup trop des 6 jours d'affilée ») : le 6e jour enchaîné d'une
  * semaine à l'autre coûte déjà (`POIDS_JOUR_AFFILE_CONSEILLE`). */
