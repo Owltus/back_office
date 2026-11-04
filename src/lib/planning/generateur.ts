@@ -41,6 +41,7 @@ import {
   presenceMax,
   role,
   toucheLaNuit,
+  journeeDe,
   travail,
 } from '#/lib/planning/modele.ts'
 import {
@@ -873,10 +874,15 @@ export function compatible(s: SalarieSolveur, c: Creneau): boolean {
     dansLeContrat(s, c) &&
     !s.reposFixes.has(j) &&
     duree(c) <= presenceMax(s, c) &&
-    // Journée étoile fixée ce jour-là : pas d'horaire de 8 h (D3).
-    !(s.etoileFixe.has(j) && travail(c) >= s.journeePleine) &&
+    // Journée étoile fixée ce jour-là : pas d'horaire de 8 h (D3). Avec un
+    // JFR à placer, le modèle le dit (la journée étoile saute si le JFR est
+    // pris, `generer`).
+    !(s.etoileFixe.has(j) && journeeDe(c) >= s.journeePleine && !s.jfr) &&
     // Une version étoile se compte en heures : pas pour un contrat indicatif.
     !(c.etoile && s.contratIndicatif) &&
+    // Les journées du calcul (2026-11-04) : 35 h en 7 h, 39 h en 8 h et une
+    // de 7 h ; tout autre horaire seulement posé à la main.
+    (s.journeesCalcul === null || s.journeesCalcul.has(journeeDe(c))) &&
     !(s.nuitInterdite && toucheLaNuit(c)) &&
     codeDeLaFiche(s, c.typeShift) &&
     codeImposeRespecte(s, j, c.typeShift) &&
@@ -1444,6 +1450,34 @@ export function construire(
         const v = jfrDuJour.get(j)
         return v ? [[coef, v] as Terme] : []
       })
+    // Un JFR pris est une absence de la semaine : la journée étoile saute
+    // (2026-11-04, `etoileSacrifiee`), toutes les journées sont pleines.
+    // Sans lui, la journée étoile fixée reste sans horaire de 8 h.
+    if (jfrDuJour.size && s.journeePleine > 0) {
+      const pris = [...jfrDuJour.values()].map((v) => [1, v] as Terme)
+      const courtes: Terme[] = []
+      const pleinesEtoile: Terme[] = []
+      for (const c of siens) {
+        if (imposees.has(cle(s.id, c.id))) continue
+        const pleine = journeeDe(c) >= s.journeePleine
+        if (!pleine && s.journeesCalcul?.has(s.journeePleine))
+          courtes.push([1, xv(c)])
+        if (pleine && s.etoileFixe.has(jourDe(c)))
+          pleinesEtoile.push([1, xv(c)])
+      }
+      if (courtes.length) m.ajoute([...courtes, ...pris], '<=', 1)
+      for (const j of s.etoileFixe) {
+        const ceJour = pleinesEtoile.filter(([, v]) =>
+          siens.some((c) => xv(c) === v && jourDe(c) === j),
+        )
+        if (ceJour.length)
+          m.ajoute(
+            [...ceJour, ...pris.map(([, v]) => [-1, v] as Terme)],
+            '<=',
+            0,
+          )
+      }
+    }
 
     // Chevauchement et repos quotidien : paires interdites.
     //
@@ -1904,7 +1938,7 @@ export function construire(
         const courtes: string[] = []
         let courtesFixes = 0
         for (const c of siens) {
-          if (!dans(jourDe(c)) || travail(c) >= s.journeePleine) continue
+          if (!dans(jourDe(c)) || journeeDe(c) >= s.journeePleine) continue
           courtes.push(xv(c))
           if (imposees.has(cle(s.id, c.id))) courtesFixes++
         }
@@ -1940,6 +1974,29 @@ export function construire(
           [...nonNuls(enPlus), ...rattrape, [-1, plus]],
           '<=',
           s.minutesHebdoContrat,
+        )
+      }
+      // Les journées du calcul (2026-11-04) : 35 h = 5 × 7 h, 39 h = 4 × 8 h
+      // + 7 h, pas une minute de plus. Jamais d'heures en plus posées par le
+      // calcul. Un shift posé plus long que la plus longue journée permise
+      // (un 8 h pour un 35 h, un 9 h pour un 39 h) ajoute son surplus : le
+      // reste de la semaine garde ses journées (8 h + 4 × 7 h = 36 h).
+      if (s.journeesCalcul !== null) {
+        const longue = Math.max(...s.journeesCalcul)
+        let posees = 0
+        let surplus = 0
+        const journees: Terme[] = []
+        for (const c of siens) {
+          if (!dans(jourDe(c))) continue
+          journees.push([journeeDe(c), xv(c)])
+          if (!imposees.has(cle(s.id, c.id))) continue
+          posees += journeeDe(c)
+          surplus += Math.max(0, journeeDe(c) - longue)
+        }
+        m.ajoute(
+          [...journees, ...rattrape],
+          '<=',
+          Math.max(s.minutesHebdoContrat + surplus, posees),
         )
       }
       ecarts.push([plus, moins])

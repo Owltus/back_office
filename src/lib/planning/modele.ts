@@ -60,6 +60,11 @@ export interface Creneau {
    * `plan/planning-bonnes-pratiques/PRD.md`). Null : horaire sans moment,
    * aucune de ces deux règles. */
   moment: Periode | null
+  /** Travail de l'HORAIRE (heure murale, pause déduite) : la journée que
+   * juge la règle des journées du calcul (`journeesDuCalcul`). Une nuit de
+   * 23:00 à 07:00 reste une journée de 8 h la nuit d'un changement d'heure,
+   * où ses minutes réelles font 7 h ou 9 h. Null : les minutes réelles. */
+  travailMural: number | null
 }
 
 export function creneau(
@@ -82,6 +87,7 @@ export function creneau(
     soir: false,
     matinTot: false,
     moment: null,
+    travailMural: null,
     ...c,
   }
 }
@@ -98,6 +104,13 @@ export function duree(c: Creneau): number {
 /** Temps de travail effectif, pause déduite (plafonds d'heures). */
 export function travail(c: Creneau): number {
   return duree(c) - c.pause
+}
+
+/** La journée d'un créneau pour les journées du calcul (7 h, 8 h) et la
+ * journée étoile : le travail de son horaire en heure murale, ou ses
+ * minutes réelles sans horaire connu (`travailMural`). */
+export function journeeDe(c: Creneau): number {
+  return c.travailMural ?? travail(c)
 }
 
 export function toucheLaNuit(c: Creneau): boolean {
@@ -144,6 +157,9 @@ export interface SalarieSolveur {
   postesSoutien: ReadonlySet<string>
   journeesCourtesMax: number | null
   journeePleine: number
+  /** Durées de travail que le calcul peut poser (`journeesDuCalcul`,
+   * `regles.ts`) ; null : toutes. Les shifts posés n'y sont pas soumis. */
+  journeesCalcul: ReadonlySet<number> | null
   contratIndicatif: boolean
   placementManuel: boolean
   horsContrat: ReadonlySet<number>
@@ -266,6 +282,7 @@ export function salarieSolveur(
     postesSoutien: vide,
     journeesCourtesMax: null,
     journeePleine: 0,
+    journeesCalcul: null,
     contratIndicatif: false,
     placementManuel: false,
     horsContrat: vide,

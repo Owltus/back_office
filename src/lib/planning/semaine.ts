@@ -24,7 +24,7 @@ import {
   codesDuPoste,
   codesImposes,
 } from '#/lib/planning/eligibilite.ts'
-import { versionsEtoile } from '#/lib/planning/etoile.ts'
+import { travailHoraire, versionsEtoile } from '#/lib/planning/etoile.ts'
 import { codeDeLaFiche } from '#/lib/planning/eligibilite.ts'
 import {
   estJfr,
@@ -65,6 +65,7 @@ import {
   alerteBesoin,
   droitAuRattrapage,
   presenceMaxPoste,
+  CONTRAT_39H,
   reductionJourFerie,
   versSolveur,
 } from '#/lib/planning/regles.ts'
@@ -98,6 +99,7 @@ import {
   ecartJours,
   heuresLisibles,
   hhmm,
+  bornesMurales,
   horaireDe,
   lundiDe,
   minuteReelle,
@@ -730,6 +732,7 @@ export function fiche(
   // prototype retirée le 2026-10-27, décision utilisateur : ce repos « fixe
   // mais pas vraiment » paraissait arbitraire). Les règles HCR suffisent.
   const travailFixe = new Set<number>()
+  const imposes = codesImposes(semaine, [...(ctx.horaires?.values() ?? [])])
   const etoile = new Set<number>()
   semaine.forEach((e, j) => {
     if (e.mode === 'travail') travailFixe.add(j)
@@ -762,7 +765,13 @@ export function fiche(
     travailFixe,
     // L'horaire fixé ET ses versions étoile (`codesImposes`) ; un jour de
     // journée étoile fixée, le moteur n'y pose que les secondes (`compatible`).
-    shiftImpose: codesImposes(semaine, [...(ctx.horaires?.values() ?? [])]),
+    shiftImpose: imposes,
+    journeesFixees: new Set(
+      imposes.flatMap(([, code]) => {
+        const h = ctx.horaires?.get(Number(code))
+        return h ? [travailHoraire(h)] : []
+      }),
+    ),
     shiftsAutorises: codesDeLaFiche(x),
     etoileFixe: etoile,
     contratDebut: borneContrat(lundi, x.date_entree, 0),
@@ -862,6 +871,12 @@ export function equiteDe(
   }
 }
 
+/** Travail d'un horaire en heure murale, pause déduite (`travailMural`). */
+function muralDe(jour: number, debut: string, fin: string, pause: number) {
+  const [d, f] = bornesMurales(jour, debut, fin)
+  return f - d - pause
+}
+
 function presenceMaxDe(ctx: Contexte, posteId: number): number | null {
   const p = ctx.postes.get(posteId)
   return p ? presenceMaxPoste(p.categorie) : null
@@ -884,6 +899,7 @@ export function creneauBesoin(
     typeShift: b.horaire_id === null ? null : String(b.horaire_id),
     soutien: soutien ?? b.soutien,
     pause: h ? h.pause : 0,
+    travailMural: muralDe(b.jour, b.debut, b.fin, h ? h.pause : 0),
     facultatif: facultatif ?? b.renfort,
     jourPlanning: b.jour,
     presenceMax: presenceMaxDe(ctx, b.poste_id),
@@ -905,6 +921,7 @@ export function creneauAffectation(ctx: Contexte, a: Affectation): Creneau {
     effectif: 1,
     typeShift: a.horaire_id === null ? null : String(a.horaire_id),
     pause: a.pause,
+    travailMural: muralDe(a.jour, a.debut, a.fin, a.pause),
     jourPlanning: a.jour,
     ferme: true,
     presenceMax: presenceMaxDe(ctx, a.poste_id),
@@ -993,6 +1010,7 @@ export function creneauRemplacant(
     typeShift: String(h.id),
     soutien: 0,
     pause: h.pause,
+    travailMural: muralDe(b.jour, ecrit.debut, ecrit.fin, h.pause),
     facultatif: 0,
     jourPlanning: b.jour,
     ferme: false,
@@ -1041,6 +1059,7 @@ export function creneauCandidat(
     effectif: 0,
     typeShift: String(h.id),
     pause: h.pause,
+    travailMural: muralDe(jour, ecrit.debut, ecrit.fin, h.pause),
     jourPlanning: jour,
     presenceMax: presenceMaxPoste(poste.categorie),
     nuit: toucheLaNuit(jour, ecrit.debut, ecrit.fin),
@@ -2997,7 +3016,9 @@ export function preparerGeneration(
           sol.horsContrat.has(j) ||
           sol.joursHorsSite.has(j) ||
           sol.reposFixes.has(j) ||
-          sol.etoileFixe.has(j)
+          // 39 h : la journée étoile saute avec le JFR, quel que soit son
+          // jour (2026-11-04). Sinon, jamais le jour de l'étoile fixée.
+          (sol.etoileFixe.has(j) && sol.minutesContrat !== CONTRAT_39H)
         )
           continue
         jours.add(j)

@@ -1546,7 +1546,8 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
         debut,
         fin,
         couleur: '#888888',
-        pause: 30,
+        // 7 h de travail : les journées d'un 35 h (2026-11-04).
+        pause: 60,
         periode,
       },
       c,
@@ -2228,8 +2229,8 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
     // étoile de 7 h qui EXISTE (15:30–23:00) : posée sur la place du soir,
     // elle la tient, sans coût ni « au lieu de » ; avec un M3 de 07:00 à
     // 15:00, il n'y a personne de 15:00 à 15:30 ni de 23:00 à 23:30.
-    const SL = code(20, 'SL', '15:00', '23:30', 'soir')
-    const SE = code(21, 'SE', '15:30', '23:00', 'soir')
+    const SL = { ...code(20, 'SL', '15:00', '23:30', 'soir'), pause: 30 }
+    const SE = { ...code(21, 'SE', '15:30', '23:00', 'soir'), pause: 0 }
     const d = donnees([besoin(100, M3), besoin(101, SL)], [])
     d.referentiel.horaires = [...HORAIRES, SL, SE]
     d.referentiel.postes = POSTES.map((x) =>

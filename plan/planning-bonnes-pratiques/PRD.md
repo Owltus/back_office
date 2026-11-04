@@ -577,6 +577,33 @@ sur le mois (deux personnes, une journée chacune).
   faisait payer une personne seule et passait devant un trou) et une fenêtre choisie par le
   calcul (dix fois plus lent).
 
+#### 18. Des journées pleines et régulières
+
+- **Pourquoi.** Décision d'une responsable du 2026-11-04 : « en 35 h, place uniquement des
+  horaires de 7 h ; en 39 h, des journées de 8 h sauf une à 7 h ; les autres horaires, un peu
+  bâtards, ne seront placés que manuellement ».
+- **Comment.** `journeesDuCalcul` (`regles.ts`) : 35 h → journées de 7 h (5 × 7 h) ; 39 h →
+  8 h et 7 h, au plus une journée de 7 h (4 × 8 h + 7 h). Contraintes DURES du calcul
+  (`compatible` et un plafond aux heures dues : jamais d'heures en plus). La semaine d'une absence
+  décomptée, de l'école, d'une arrivée en cours de semaine ou d'un JFR pris, la journée étoile
+  d'un 39 h saute (`etoileSacrifiee`) : 39 h + un congé = 4 × 8 h = 32 h dues (31 h avant). La
+  journée est jugée sur l'heure murale de l'horaire (`travailMural`) : une nuit de 8 h reste de
+  8 h au changement d'heure.
+- **Exceptions.** Un shift posé ou validé n'est jamais refusé ; son surplus au-delà de la plus
+  longue journée permise s'ajoute au plafond (un 8 h posé pour un 35 h : 8 h + 4 × 7 h). Une
+  semaine type qui fixe un horaire ni de 7 h ni de 8 h décide seule. Forfait jours, extras et
+  contrats ni 35 h ni 39 h : rien ne change.
+- **Statut.** EN PLACE (local, non livré) le 2026-11-04. Raisons d'une place vide :
+  JOURNEE-TYPE (« Pas une journée de son contrat ») et HEURES-FAITES (« Dépasserait ses heures
+  de la semaine »), dites seulement pour juger une place, jamais pour un shift posé. Tests
+  `journeesCalcul.test.ts` (13 mutants tués). Relecture adverse (3 agents, un vérificateur par
+  constat) : 13 défauts réels sur 16 constats, tous corrigés. Banc de décembre (copie locale, en
+  mémoire, moteur d'avant comparé) : shifts hors 7 h / 8 h 8 → 0, heures en plus 9 h → 0 h,
+  heures de contrat non faites 36 → 50 h (une apprentie, 4 jours sur deux semaines, compensés
+  avant par des 9 h), une nuit vide (dimanche 27/12 : un veilleur en congé, l'autre à ses 39 h).
+- **Middle** (même décision) : posé seulement s'il reste des heures ; la superviseuse n'est pas
+  comptée à l'accueil (poste principal d'abord, dépannage ensuite). Rien à changer au moteur.
+
 ### Tableau récapitulatif
 
 | N°  | Règle                               | Statut                      | Où                                                                                   |
@@ -598,6 +625,7 @@ sur le mois (deux personnes, une journée chacune).
 | 15  | Planning qui se tient               | en place                    | `imposees`, PL423, PL409, `raisonsPlaces.ts`                                         |
 | 16  | Jour férié rattrapé (JFR)           | en place (local, non livré) | `feries.ts`, `droitAuRattrapage`, `POIDS_JFR_EN_ATTENTE`, alerte JOUR-FERIE          |
 | 17  | Équipe ensemble (soir, relève)      | en place (local, non livré) | `equipesSynchro`, `EQUIPE_TOLERANCE`, `POIDS_RELEVE_CHACUN`, `equipesDesynchro`      |
+| 18  | Journées de 7 h / 8 h (35 h, 39 h)  | DUR (35 h et 39 h)          | `journeesDuCalcul`, `etoileSacrifiee`, `journeeDe`, JOURNEE-TYPE, HEURES-FAITES      |
 
 Le code des règles 1, 3, 4, 6, 7, 8, 12, 13 et 14 date du 2026-11-02 : en place en local, pas
 encore livré. Relecture du 2026-11-03 (banc de 7 scénarios réels, en mémoire) : règles 1, 4, 8, 9,

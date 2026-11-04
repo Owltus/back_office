@@ -132,6 +132,11 @@ export const JOURNEES_COURTES_MAX = 1
  * 7 h (et de moins de 8 h), la journée de 7 h des 39 h. Un horaire plus
  * court (3 h, 5 h) n'est pas proposé comme journée étoile. */
 export const JOURNEE_ETOILE_MIN = JOURNEE_PLEINE - H
+/** Les journées du calcul (`journeesDuCalcul`) : 7 h et 8 h pile, et les
+ * deux contrats qui en ont une. */
+export const JOURNEE_COURTE = 7 * H
+export const CONTRAT_35H = 35 * H
+export const CONTRAT_39H = 39 * H
 /** R-ABSENCE-HEURES : un jour d'absence compté vaut une journée ; 5 au plus. */
 export const JOURS_CONTRAT = 5
 /** R-CADRE-FJ : seuls le repos de 11 h et le repos hebdo, soit 13 h d'amplitude. */
@@ -161,6 +166,10 @@ export interface Fiche {
   reposFixes?: ReadonlySet<number>
   travailFixe?: ReadonlySet<number>
   shiftImpose?: ReadonlyArray<readonly [number, string]>
+  /** Travail (minutes) de chaque horaire de `shiftImpose` : la semaine type
+   * ne prend la main sur les journées du calcul que si l'un d'eux n'est ni
+   * de 7 h ni de 8 h (`journeesDuCalcul`). Absent : inconnu, elle la prend. */
+  journeesFixees?: ReadonlySet<number>
   shiftsAutorises?: ReadonlySet<string>
   postesOccasionnels?: ReadonlySet<string>
   postesSoutien?: ReadonlySet<string>
@@ -229,6 +238,62 @@ export function etoileTravaillable(f: Fiche): boolean {
   return [...(f.etoileFixe ?? vide)].some((j) => !bloques.has(j))
 }
 
+/** Jours de la semaine pris par une absence décomptée ou l'école (au plus
+ * les cinq jours du contrat). */
+function joursAbsents(f: Fiche): number {
+  return Math.min(
+    (f.joursAbsenceDecomptes ?? 0) + (f.joursEcole?.size ?? 0),
+    JOURS_CONTRAT,
+  )
+}
+
+/** La journée étoile SAUTE la semaine d'une absence décomptée ou de l'école
+ * (décision d'une responsable du 2026-11-04 : « un congé, une formation,
+ * ça compte comme une journée complète ; en 39 h, tu sacrifies la journée
+ * étoile et tu mets une journée de 8 h ») : tous les jours travaillés sont
+ * des journées pleines. */
+export function etoileSacrifiee(f: Fiche): boolean {
+  // Le 39 h seulement : les autres contrats à étoile gardent leur calcul
+  // (« si ce n'est ni 35 h ni 39 h, fais au mieux »).
+  return (
+    journeeEtoile(f) && f.minutesHebdo === CONTRAT_39H && joursAbsents(f) > 0
+  )
+}
+
+/**
+ * Les journées du calcul (décision d'une responsable du 2026-11-04 : « en
+ * 35 h, uniquement des horaires de 7 h ; en 39 h, des journées de 8 h sauf
+ * une à 7 h ; les autres horaires ne seront placés que manuellement ») :
+ * durées de travail (présence moins pause) que le calcul peut poser. 35 h :
+ * 7 h (5 × 7 h). 39 h : 8 h, et 7 h pour la journée étoile (4 × 8 h + 7 h),
+ * 8 h seulement la semaine où elle saute (`etoileSacrifiee`). Un autre
+ * contrat, un forfait jours, un extra, une semaine type qui fixe un
+ * horaire ni de 7 h ni de 8 h : null, aucune contrainte (« si ce n'est ni 35 h ni 39 h, fais
+ * au mieux »). Un horaire posé à la main n'est jamais refusé (le calcul
+ * garde les shifts posés).
+ */
+export function journeesDuCalcul(f: Fiche): ReadonlySet<number> | null {
+  if (f.forfaitJours || f.typeContrat === 'extra') return null
+  // Une semaine type qui fixe un horaire ni de 7 h ni de 8 h décide seule
+  // (relecture du 2026-11-04) : un horaire choisi à la main n'est jamais
+  // refusé ni remplacé. Des horaires fixés de 7 h ou de 8 h (le veilleur, la
+  // technique) restent dans la règle, plafond compris.
+  if (
+    f.shiftImpose?.length &&
+    (!f.journeesFixees ||
+      [...f.journeesFixees].some(
+        (t) => t !== JOURNEE_COURTE && t !== JOURNEE_PLEINE,
+      ))
+  )
+    return null
+  if (f.minutesHebdo === CONTRAT_35H) return new Set([JOURNEE_COURTE])
+  if (f.minutesHebdo === CONTRAT_39H)
+    return etoileSacrifiee(f)
+      ? new Set([JOURNEE_PLEINE])
+      : new Set([JOURNEE_PLEINE, JOURNEE_COURTE])
+  return null
+}
+
 /**
  * Journée de contrat d'une personne : ce que vaut un jour d'absence décompté
  * ou un jour d'école. Contrat à journée étoile (au-delà de 35 h) : une
@@ -249,30 +314,27 @@ export function journeeContrat(f: Fiche): number {
  * R-ABSENCE-HEURES : heures à planifier dans la semaine, absences déduites.
  * Sans absence : le contrat. Sinon une journée de contrat (`journeeContrat`)
  * sur chaque jour qui reste (39 h et un congé : 4 × 8 h ; 35 h : 4 × 7 h).
- * Journée étoile fixée sur un jour travaillable : comptée courte.
+ * Pour un 39 h, la journée étoile saute alors (`etoileSacrifiee`,
+ * 2026-11-04), même fixée. Pour un autre contrat à journée étoile, une
+ * journée étoile fixée sur un jour travaillable reste comptée courte.
  *
  * R-ECOLE-HEURES (L6222-24, décision utilisateur du 2026-10-29) : un jour
  * d'école est une journée de travail COMPLÈTE, décomptée comme un jour
- * d'absence (39 h et deux jours d'école : 3 × 8 h, moins 1 h si la journée
- * étoile tombe sur un jour qui reste). Le plafond de la semaine lui réserve
+ * d'absence (39 h et deux jours d'école : 3 × 8 h). Le plafond de la semaine lui réserve
  * la même journée (`versSolveur`) : dues et plafond restent d'accord. École
  * et absences qui couvrent les cinq jours du contrat : rien de dû. Seule
  * source des heures dues : générateur, vérificateur et affichage les lisent.
  */
 export function heuresDues(f: Fiche): number {
-  const absents = Math.min(
-    (f.joursAbsenceDecomptes ?? 0) + (f.joursEcole?.size ?? 0),
-    JOURS_CONTRAT,
-  )
+  const absents = joursAbsents(f)
   if (!absents) return f.minutesHebdo
-  if (!journeeEtoile(f)) {
-    return Math.max(
-      0,
-      Math.min(f.minutesHebdo, (JOURS_CONTRAT - absents) * journeeContrat(f)),
-    )
-  }
   let dues = (JOURS_CONTRAT - absents) * journeeContrat(f)
-  if (dues && etoileTravaillable(f)) {
+  if (
+    journeeEtoile(f) &&
+    !etoileSacrifiee(f) &&
+    dues &&
+    etoileTravaillable(f)
+  ) {
     const courte = f.minutesHebdo - (JOURS_CONTRAT - 1) * JOURNEE_PLEINE
     dues -= JOURNEE_PLEINE - Math.max(0, Math.min(JOURNEE_PLEINE, courte))
   }
@@ -312,8 +374,10 @@ export const FERIE_RATTRAPAGE_JOURS = 91
  * congé (`heuresDues` avec un jour de plus) : ce qu'il retire aux heures
  * dues de la semaine (35 h : 4 × 7 h restent, 7 h de moins ; 39 h : 4 × 8 h
  * restent, 7 h de moins ; 39 h avec la journée étoile fixée : 31 h restent,
- * 8 h de moins). Le JFR n'est jamais placé sur le jour de l'étoile fixée
- * (`preparerGeneration`) : la baisse vaut pour chacun des jours permis. */
+ * 8 h de moins ; 39 h : la journée étoile saute, 4 × 8 h, 7 h de moins quel
+ * que soit le jour). Pour un autre contrat à étoile, le JFR n'est jamais
+ * placé sur le jour de l'étoile fixée (`preparerGeneration`) : la baisse
+ * vaut pour chacun des jours permis. */
 export function reductionJourFerie(f: Fiche): number {
   return Math.max(
     0,
@@ -357,7 +421,10 @@ export function versSolveur(f: Fiche): SalarieSolveur {
     reposFixes: f.reposFixes ?? vide,
     travailFixe: f.travailFixe ?? vide,
     horsContrat: f.horsContrat ?? vide,
-    etoileFixe: etoile ? (f.etoileFixe ?? vide) : vide,
+    // La semaine où la journée étoile saute, son jour fixé n'a plus rien
+    // de particulier : une journée de 8 h comme les autres.
+    etoileFixe: etoile && !etoileSacrifiee(f) ? (f.etoileFixe ?? vide) : vide,
+    journeesCalcul: journeesDuCalcul(f),
     journeesCourtesMax: etoile ? JOURNEES_COURTES_MAX : null,
     journeePleine: JOURNEE_PLEINE,
     contratIndicatif: !!f.forfaitJours || f.typeContrat === 'extra',

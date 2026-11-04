@@ -410,6 +410,11 @@ describe('une semaine de l’hôtel d’essai', () => {
       MI: 'middle',
       AM: 'soir',
       N: 'nuit',
+      // Les versions étoile (7 h) : seules journées d'un 35 h (2026-11-04).
+      M7: 'matin',
+      MI7: 'middle',
+      AM7: 'soir',
+      N7: 'nuit',
     }
     for (const h of referentiel.horaires)
       h.periode = moment[codeTest(h) ?? ''] ?? null
@@ -435,7 +440,8 @@ describe('une semaine de l’hôtel d’essai', () => {
     const recompte = (jour: number, periode: 'matin' | 'soir' | 'nuit') =>
       sem.affectations.filter((a) => {
         if (a.jour !== jour) return false
-        const c = code.get(a.type_shift_id ?? -1)
+        // Une version étoile (M7, AM7, N7…) compte comme son horaire de 8 h.
+        const c = code.get(a.type_shift_id ?? -1)?.replace(/7$/, '')
         if (periode === 'nuit') return a.poste_id === veille?.id && c === 'N'
         if (!postes.has(a.poste_id)) return false
         return periode === 'matin'

@@ -369,6 +369,8 @@ describe('4. R-JOUR-MAX du poste', () => {
 // --------------------------------- 5. heures dues : étoile fixée et absence
 
 describe('5. heures dues', () => {
+  // Depuis le 2026-11-04 (décision d'une responsable) : la semaine d'un
+  // congé, la journée étoile saute, même fixée. Tous les jours sont pleins.
   it('heures dues : étoile fixée et congé', () => {
     const base: Fiche = {
       id: 'pl',
@@ -383,7 +385,7 @@ describe('5. heures dues', () => {
         joursAbsenceDecomptes: 1,
         indisponibilites: new Set([0]),
       }),
-    ).toBe(31 * H)
+    ).toBe(32 * H)
     expect(
       heuresDues({
         ...base,
@@ -399,7 +401,7 @@ describe('5. heures dues', () => {
     const tech = p.salarie('Paul').id
     p.absent(tech, '2026-11-02', '2026-11-02', 'CP')
     const b = bilanDe(p.generer('2026-11-02'), tech)
-    expect(b.minutes_contrat).toBe(31 * H)
+    expect(b.minutes_contrat).toBe(32 * H)
     expect(b.minutes).toBe(b.minutes_contrat)
     expect(b.alertes.map((x) => x.regle)).not.toContain('HEURES-CONTRAT')
   })

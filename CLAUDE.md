@@ -2598,6 +2598,25 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   isolés 6 → 1 (dernier jour de la période), aucune place vide de plus,
   14 h de contrat en moins sur le mois. L'école compte dans les 5 jours :
   un apprenti ne tient plus le dimanche avant une semaine pleine de CFA.
+- **JOURNÉES DU CALCUL (2026-11-04, même responsable : « en 35 h,
+  uniquement des horaires de 7 h ; en 39 h, des journées de 8 h sauf une à
+  7 h ; les autres ne seront placés que manuellement »)** :
+  `journeesDuCalcul` (regles.ts) = 7 h pour un 35 h, 8 h et 7 h (une
+  seule) pour un 39 h, null pour tout autre contrat, forfait jours, extra,
+  ou semaine type qui fixe un horaire ni de 7 h ni de 8 h
+  (`journeesFixees`). DUR au calcul (`compatible`) avec un PLAFOND aux
+  heures dues (jamais d'heures en plus ; le surplus d'un shift posé au-delà
+  de la plus longue journée s'y ajoute). La semaine d'une absence, de
+  l'école ou d'un JFR pris, la journée étoile d'un 39 h SAUTE
+  (`etoileSacrifiee`, 39 h seulement) : 39 h + un congé = 32 h dues ; le
+  JFR peut alors prendre le jour de l'étoile fixée. Jugé sur l'heure murale
+  (`Creneau.travailMural`, `journeeDe`) : changement d'heure sans effet.
+  Raisons de place JOURNEE-TYPE et HEURES-FAITES (pour juger une place
+  seulement, clé par créneau). Middle : seulement s'il reste des heures,
+  rien à changer. Relecture adverse : 13 défauts réels corrigés, tests
+  `journeesCalcul.test.ts`, 13 mutants tués. Banc décembre : hors 7/8 h
+  8 → 0, heures en plus 9 → 0 h, contrat non fait 36 → 50 h, une nuit vide
+  (27/12).
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

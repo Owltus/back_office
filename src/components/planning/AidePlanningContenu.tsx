@@ -685,11 +685,11 @@ export function AidePlanningContenu({
           lignes={[
             [
               '39 h',
-              `5 jours : 4 journées de ${h(JOURNEE_PLEINE)} et une journée étoile de ${h(7 * 60)}. Au plus une journée courte par semaine. Une étoile fixée dans la fiche tombe ce jour-là.`,
+              `5 jours : 4 journées de ${h(JOURNEE_PLEINE)} et une journée étoile de ${h(7 * 60)}. Le calcul ne pose que ces journées, jamais d’heures en plus. Une étoile fixée dans la fiche tombe ce jour-là. La semaine d’un congé, de l’école ou d’un jour férié rattrapé, la journée étoile saute : toutes les journées sont de ${h(JOURNEE_PLEINE)}.`,
             ],
             [
               '35 h',
-              `5 jours de ${h(TEMPS_PLEIN / 5)}. Pas de journée étoile à faire.`,
+              `5 jours de ${h(TEMPS_PLEIN / 5)}. Le calcul ne pose que des journées de ${h(TEMPS_PLEIN / 5)}, jamais d’heures en plus. Apprentis et stagiaires compris.`,
             ],
             [
               'Temps partiel',
@@ -727,10 +727,16 @@ export function AidePlanningContenu({
             28 h.
           </p>
           <Exemple>
-            un 39 h avec deux jours de congé doit 3 × 8 h, moins 1 h si sa
-            journée étoile tombe sur un jour qui reste. Un 35 h avec deux jours
-            d’école doit 3 × 7 h.
+            un 39 h avec deux jours de congé doit 3 × 8 h : sa journée étoile
+            saute. Un 35 h avec deux jours d’école doit 3 × 7 h.
           </Exemple>
+          <p className="text-muted-foreground">
+            Les autres horaires (3 h, 4 h, 5 h, 9 h, 10 h) ne sont posés qu’à la
+            main pour un 35 h ou un 39 h. Un shift posé à la main ou validé
+            n’est jamais refusé, et le reste de la semaine garde ses journées.
+            Une semaine type qui fixe un tel horaire décide seule. Si une place
+            reste vide à cause de ces règles, la page le dit.
+          </p>
         </Sous>
         <Sous titre="Arrivée ou départ en cours de semaine">
           <p className="text-muted-foreground">

@@ -63,6 +63,8 @@ export const REGLES_BLOCAGE = [
   'JOUR-FERIE',
   'R-SEMAINE-MAX',
   'R-JOURNEE-ETOILE',
+  'JOURNEE-TYPE',
+  'HEURES-FAITES',
   'R-REPOS-HEBDO-35H',
   'R-REPOS-HEBDO-MINEUR',
   // Règles morales du PRD (alertes d'organisation, à éviter).
@@ -234,6 +236,23 @@ export function raisonClaire(
             mention('au-delà de son contrat'),
             'R-JOURNEE-ETOILE:nombre',
           )
+    // Les journées du calcul (2026-11-04) : 35 h en 7 h, 39 h en 8 h et une
+    // de 7 h, sans heures en plus ; le reste se pose à la main.
+    case 'JOURNEE-TYPE':
+      return r(
+        /que des journées de 8 h$/.test(message)
+          ? 'Semaine incomplète : seulement des journées de 8 h'
+          : 'Pas une journée de son contrat',
+        mention('règle de l’hôtel'),
+        /que des journées de 8 h$/.test(message)
+          ? 'JOURNEE-TYPE:pleines'
+          : 'JOURNEE-TYPE',
+      )
+    case 'HEURES-FAITES':
+      return r(
+        'Dépasserait ses heures de la semaine',
+        mention('règle de l’hôtel'),
+      )
     case 'R-REPOS-HEBDO-35H':
       // Deux sens : la semaine elle-même, ou la reprise qui couperait le
       // repos de 35 h de la semaine d'avant.
@@ -355,6 +374,8 @@ const PHRASES_COMMUNES: Record<(typeof REGLES_BLOCAGE)[number], string> = {
   'JOUR-FERIE': 'Tout le monde a un jour férié à rattraper.',
   'R-SEMAINE-MAX': 'Tout le monde est au maximum de ses heures.',
   'R-JOURNEE-ETOILE': 'Tout le monde a déjà sa journée étoile.',
+  'JOURNEE-TYPE': 'Le calcul ne pose que des journées de 7 h et de 8 h.',
+  'HEURES-FAITES': 'Chacun dépasserait ses heures de la semaine.',
   'R-REPOS-HEBDO-35H': 'Personne ne garderait son repos de 35 h.',
   'R-REPOS-HEBDO-MINEUR':
     'Tout le monde est mineur : deux jours de repos de suite.',

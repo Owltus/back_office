@@ -589,9 +589,9 @@ describe('la génération place le JFR', () => {
     expect(jfr('2027-02-15', '2027-02-13')).toBeNull()
   })
 
-  // 39 h, journée étoile fixée le mardi, un jour libre (mode auto). Un JFR ce
-  // jour-là rendrait l'étoile intravaillable : `heuresDues` baisserait de 7 h
-  // et non des 8 h que vise le générateur.
+  // 39 h, journée étoile fixée le mardi, un jour libre (mode auto). Depuis le
+  // 2026-11-04, un JFR pris fait sauter la journée étoile (absence de la
+  // semaine) : 39 h → 4 × 8 h, la baisse vaut 7 h quel que soit son jour.
   function avecEtoileMardi(d: DonneesSemaine): DonneesSemaine {
     return {
       ...d,
@@ -611,7 +611,7 @@ describe('la génération place le JFR', () => {
     }
   }
 
-  it('accepté : étoile fixée, le JFR évite son jour et la baisse concorde avec heuresDues', () => {
+  it('accepté : étoile fixée, le JFR peut prendre son jour et la baisse concorde avec heuresDues', () => {
     const d = avecEtoileMardi(donnees('2024-01-01'))
     const ctx = contexte(d)
     const x = ctx.staff.find((s) => s.id === ID)!
@@ -620,8 +620,9 @@ describe('la génération place le JFR', () => {
     const g = preparerGeneration(d, { aujourdhui: AUJOURDHUI, graine: 1 })
     const sol = g.probleme.salaries.find((s) => s.id === String(ID))!
     expect(sol.jfr).not.toBeNull()
-    expect(sol.jfr!.reduction).toBe(8 * 60)
-    expect(sol.jfr!.jours.has(1)).toBe(false)
+    expect(sol.jfr!.reduction).toBe(7 * 60)
+    // 39 h : le JFR peut prendre le jour de l'étoile, la journée saute.
+    expect(sol.jfr!.jours.has(1)).toBe(true)
     // Pour chaque jour permis, les heures dues avec le JFR posé ce jour-là
     // (vérificateur, affichage) égalent celles que vise le générateur.
     for (const j of sol.jfr!.jours) {
@@ -634,7 +635,7 @@ describe('la génération place le JFR', () => {
     }
   })
 
-  it('refusé : un JFR posé le jour de l’étoile laisserait un écart', () => {
+  it('accepté : même posé le jour de l’étoile, la baisse est la même', () => {
     const d = avecEtoileMardi(donnees('2024-01-01'))
     const ctx = contexte(d)
     const f = fiche(
@@ -647,7 +648,7 @@ describe('la génération place le JFR', () => {
       indisponibilites: new Set([...(f.indisponibilites ?? []), 1]),
       joursAbsenceDecomptes: (f.joursAbsenceDecomptes ?? 0) + 1,
     }
-    expect(heuresDues(f) - heuresDues(leMardi)).not.toBe(reductionJourFerie(f))
+    expect(heuresDues(f) - heuresDues(leMardi)).toBe(reductionJourFerie(f))
   })
 
   it('la fiche et le contexte voient le motif JFR', () => {

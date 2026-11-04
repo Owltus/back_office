@@ -84,6 +84,11 @@ const MESSAGES: Record<(typeof REGLES_BLOCAGE)[number], string[]> = {
     'sa journée étoile est fixée ce jour-là : un horaire de moins de 8 h',
     '2 journées de moins de 8 h dans la semaine, une seule journée étoile prévue au contrat',
   ],
+  'JOURNEE-TYPE': [
+    'horaire de 9 h : le calcul ne pose que des journées de 8 h et de 7 h',
+    'horaire de 7 h : le calcul ne pose que des journées de 8 h',
+  ],
+  'HEURES-FAITES': ['dépasserait ses 35 h de la semaine'],
   'R-REPOS-HEBDO-35H': [
     'pas de repos de 35 h consécutives dans la semaine',
     'reprend trop tôt : la semaine précédente perdrait son repos de 35 h consécutives',

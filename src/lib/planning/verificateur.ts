@@ -25,6 +25,7 @@ import {
   presenceMax,
   role,
   toucheLaNuit,
+  journeeDe,
   travail,
 } from '#/lib/planning/modele.ts'
 import type {
@@ -322,9 +323,15 @@ export function violationsSalarie(
     // R-JOURNEE-ETOILE (décisions utilisateur du 2026-11-02) : la journée
     // étoile est un horaire de moins de 8 h ; fixée un jour, ce jour-là n'a
     // pas d'horaire de 8 h ; au plus `journeesCourtesMax` dans la semaine.
-    const courtes = semaine.filter((c) => travail(c) < s.journeePleine)
+    const courtes = semaine.filter((c) => journeeDe(c) < s.journeePleine)
     for (const c of semaine) {
-      if (s.etoileFixe.has(jourDe(c)) && travail(c) >= s.journeePleine) {
+      // Un JFR à placer peut faire sauter la journée étoile (le générateur
+      // permet alors un 8 h ce jour-là, `compatible`) : rien à signaler.
+      if (
+        s.etoileFixe.has(jourDe(c)) &&
+        journeeDe(c) >= s.journeePleine &&
+        !s.jfr
+      ) {
         ajoute(
           'R-JOURNEE-ETOILE',
           `sa journée étoile est fixée ce jour-là : un horaire de moins de ${h(s.journeePleine)}`,
@@ -343,6 +350,42 @@ export function violationsSalarie(
         courtes,
         'organisation',
       )
+    }
+    // Les journées du calcul (2026-11-04) : ce que le calcul refuse de
+    // poser, dit pour juger une place. À l'écran, un shift posé à la main
+    // hors de ces journées est permis : rien n'est signalé.
+    if (pourUnePlace && s.journeesCalcul !== null) {
+      const permises = s.journeesCalcul
+      for (const c of semaine) {
+        if (permises.has(journeeDe(c))) continue
+        ajoute(
+          'JOURNEE-TYPE',
+          `horaire de ${h(journeeDe(c))} : le calcul ne pose que des journées de ${[
+            ...permises,
+          ]
+            .sort((a, b) => b - a)
+            .map(h)
+            .join(' et de ')}`,
+          [c],
+          'organisation',
+        )
+      }
+      // Comme le plafond du générateur : le surplus d'un shift plus long que
+      // la plus longue journée permise s'ajoute aux heures dues.
+      const longue = Math.max(...permises)
+      const faites = semaine.reduce((t, c) => t + journeeDe(c), 0)
+      const surplus = semaine.reduce(
+        (t, c) => t + Math.max(0, journeeDe(c) - longue),
+        0,
+      )
+      if (faites > s.minutesHebdoContrat + surplus) {
+        ajoute(
+          'HEURES-FAITES',
+          `dépasserait ses ${h(s.minutesHebdoContrat)} de la semaine`,
+          semaine,
+          'organisation',
+        )
+      }
     }
     if (
       s.reposHebdoMin &&
@@ -412,8 +455,12 @@ export const JOUR_ISOLE_A_EVITER =
  * la règle et le message, et pour un jour isolé le jour lui-même (un jour
  * isolé déjà posé ne doit pas cacher celui que la place créerait :
  * relecture du 2026-11-04). */
+/** Règles dites par créneau : deux occurrences ne se confondent pas (un
+ * shift posé à la main ne cache pas la raison de la place). */
+const PAR_CRENEAUX = new Set(['JOUR-ISOLE', 'JOURNEE-TYPE', 'HEURES-FAITES'])
+
 function cleViolation(v: Violation): string {
-  return v.regle === 'JOUR-ISOLE'
+  return PAR_CRENEAUX.has(v.regle)
     ? `${v.regle}|${v.message}|${[...v.creneaux].sort().join(',')}`
     : `${v.regle}|${v.message}`
 }

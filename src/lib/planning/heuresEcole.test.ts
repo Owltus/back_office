@@ -99,11 +99,12 @@ describe('journeeContrat : ce que vaut un jour d’école', () => {
 })
 
 describe('R-ECOLE-HEURES dans les heures dues', () => {
-  it('39 h et deux jours d’école : 3 × 8 h, moins 1 h pour la journée étoile', () => {
+  // La journée étoile saute la semaine de l'école (2026-11-04), même
+  // fixée : les jours qui restent sont pleins.
+  it('39 h et deux jours d’école : 3 × 8 h, étoile fixée ou non', () => {
     expect(dues({ minutesHebdo: 39 * H, etoileFixe: new Set([4]) })).toBe(
-      23 * H,
+      24 * H,
     )
-    // Sans journée étoile fixée (comme le prototype) : 3 journées pleines.
     expect(dues({ minutesHebdo: 39 * H })).toBe(24 * H)
     // Étoile fixée sur un jour d'école : elle ne tombe pas sur un jour qui
     // reste, les trois jours sont pleins.
@@ -116,9 +117,9 @@ describe('R-ECOLE-HEURES dans les heures dues', () => {
     expect(dues({})).toBe(21 * H)
   })
 
-  it('39 h et un jour d’école : 4 jours restants, dont la journée courte', () => {
+  it('39 h et un jour d’école : 4 jours restants, tous pleins', () => {
     const f = { minutesHebdo: 39 * H, joursEcole: new Set([0]) }
-    expect(dues({ ...f, etoileFixe: new Set([4]) })).toBe(31 * H)
+    expect(dues({ ...f, etoileFixe: new Set([4]) })).toBe(32 * H)
     expect(dues(f)).toBe(32 * H)
   })
 
@@ -306,7 +307,8 @@ describe('R-ECOLE-HEURES dans le générateur', () => {
   it('mineur : jamais plus de 35 h école comprise', () => {
     // Trois services de 8 h : 24 h + 14 h d'école = 38 h, donc deux au plus.
     const creneaux = [2, 3, 4].map((j) => cr(`h${j}`, j, 8, 16))
-    const s = versSolveur(fiche({ mineur: true }))
+    // Le plafond légal, pas les journées de l'hôtel (`journeesDuCalcul`).
+    const s = { ...versSolveur(fiche({ mineur: true })), journeesCalcul: null }
     const avec = probleme({ salaries: [s], creneaux })
     const r = generer(avec, highs)
     expect(r.affectations).toHaveLength(2)
@@ -322,7 +324,10 @@ describe('R-ECOLE-HEURES dans le générateur', () => {
   it('majeur 39 h : jamais plus de 48 h, deux jours d’école de 8 h compris', () => {
     // Trois services de 11 h : 33 h + 16 h d'école = 49 h, donc deux au plus.
     const creneaux = [2, 3, 4].map((j) => cr(`h${j}`, j, 7, 18))
-    const s = versSolveur(fiche({ minutesHebdo: 39 * H }))
+    const s = {
+      ...versSolveur(fiche({ minutesHebdo: 39 * H })),
+      journeesCalcul: null,
+    }
     const p = probleme({ salaries: [s], creneaux })
     const r = generer(p, highs)
     expect(r.affectations).toHaveLength(2)
