@@ -824,6 +824,7 @@ export function AidePlanningContenu({
             'Date d’entrée vide dans la fiche : l’app compte moins d’un an. Pas de droit tant que la date n’est pas remplie.',
             'Les extras n’ont pas de jour rattrapé.',
             'Un stagiaire a tous ses jours fériés, dès le premier jour : il n’est jamais placé ce jour-là, la case montre Jour férié, et une journée de contrat de moins est due dans sa semaine. Il n’a donc jamais de JFR.',
+            'L’encadrement (postes où la case Jours fériés chômés le jour même est cochée, page Postes) prend ses jours fériés le jour même, sans JFR. Un jour férié qui tombe un jour de travail de sa semaine type est chômé : la case montre Jour férié, une journée de contrat de moins est due. Un jour de repos habituel : rien. Sans jour Travaille dans la semaine type : tous les jours fériés. Il faut aussi un an d’ancienneté.',
             'Un mineur n’est pas placé un jour férié si on peut l’éviter. La loi le permet en hôtellerie, mais le calcul l’évite, et une alerte le signale s’il y travaille.',
             'Le JFR est proposé dès la semaine qui suit le jour férié, au plus un par semaine. Tant qu’il n’est pas rendu, il reste dû : une alerte le rappelle et l’app le propose à nouveau chaque semaine.',
             'La direction au forfait jours reçoit aussi son JFR : ce jour-là, sa place disparaît, comme quand elle est absente.',

@@ -33,7 +33,7 @@ import { supabase } from '#/lib/supabase.ts'
 const COL_HORAIRE = 'id, nom, debut, fin, couleur, pause, periode'
 const COL_MOTIF = 'id, code, nom, couleur, decompte, nature'
 const COL_POSTE =
-  'id, nom, categorie, couleur, horaires_autorises, presence, accueil_nuit, ferme, ouverture, ordre'
+  'id, nom, categorie, couleur, horaires_autorises, presence, accueil_nuit, ferme, ouverture, ordre, feries_chomes'
 const COL_CONSIGNE = 'id, jour, periode, minimum, maximum'
 const COL_GROUPE = 'id, nom, ordre, postes_autorises'
 const COL_SALARIE =

@@ -24,6 +24,7 @@ import {
   analyser,
   fiche,
   contexte,
+  feriesEnAttente,
   preparerGeneration,
 } from '#/lib/planning/semaine.ts'
 import type { DonneesSemaine, NouveauShift } from '#/lib/planning/semaine.ts'
@@ -879,5 +880,113 @@ describe('le poids d’un mineur un jour férié', () => {
     const r = generer(probleme('B'), highs)
     expect(r.affectations).toContainEqual({ salarieId: 'A', creneauId: 'b3' })
     expect(r.manques).toEqual([])
+  })
+})
+
+// Décisions utilisateur du 2026-11-04 : l'encadrement (direction, adjoints,
+// technique) prend ses jours fériés LE JOUR MÊME, sans rattrapage. Un jour
+// de travail de sa semaine type : chômé ; un jour de repos habituel : rien ;
+// sans jour « Travaille » : tous ; un an d'ancienneté quoi qu'il arrive.
+// Oracle : la date du 11/11/2026 (mercredi, jour 2 de la semaine du 9).
+describe('encadrement : jours fériés chômés le jour même', () => {
+  const encadrement = (
+    modif: (x: DonneesSemaine['referentiel']['salaries'][number]) => void,
+    chomes = true,
+  ): DonneesSemaine => {
+    const d = semaineDu11((x) => {
+      x.date_entree = '2020-01-01'
+      x.heures_hebdo = 35
+      modif(x)
+    })
+    const x = d.referentiel.salaries.find((y) => y.id === ID)!
+    const principal = x.competences.find((c) => c.niveau === 'titulaire')!
+    return {
+      ...d,
+      referentiel: {
+        ...d.referentiel,
+        postes: d.referentiel.postes.map((p) =>
+          p.id === principal.poste_id ? { ...p, feries_chomes: chomes } : p,
+        ),
+      },
+    }
+  }
+  const jours = (travail: number[]) =>
+    [0, 1, 2, 3, 4, 5, 6].map((j) => ({
+      mode: travail.includes(j) ? ('travail' as const) : ('auto' as const),
+    }))
+  const absenceDu11 = (d: DonneesSemaine) =>
+    analyser(d).bilan.find((x) => x.salarie_id === ID)!.absences[2]
+
+  it('accepté : le 11/11 tombe un jour de travail, il est chômé', () => {
+    const d = encadrement((x) => {
+      x.semaine_type = jours([0, 1, 2, 3, 4])
+    })
+    expect(absenceDu11(d)).toBe(JF.id)
+    const g = preparerGeneration(d, { aujourdhui: '2026-11-01', graine: 1 })
+    const r = generer(g.probleme, highs)
+    expect(
+      g
+        .traduire(r)
+        .filter((n) => n.salarie_id === ID)
+        .map((n) => n.jour),
+    ).not.toContain(2)
+  })
+
+  it('refusé : le 11/11 tombe un jour de repos habituel, rien n’est rendu', () => {
+    const d = encadrement((x) => {
+      x.semaine_type = jours([0, 1, 3, 4, 5])
+    })
+    expect(absenceDu11(d)).toBeUndefined()
+  })
+
+  it('sans jour Travaille dans la semaine type : tous les jours fériés', () => {
+    const d = encadrement((x) => {
+      x.semaine_type = jours([])
+    })
+    expect(absenceDu11(d)).toBe(JF.id)
+  })
+
+  it('refusé : moins d’un an d’ancienneté, le jour férié est un jour normal', () => {
+    const d = encadrement((x) => {
+      x.semaine_type = jours([0, 1, 2, 3, 4])
+      x.date_entree = '2026-03-01'
+    })
+    expect(absenceDu11(d)).toBeUndefined()
+  })
+
+  it('refusé : poste sans la case, aucun jour férié d’office', () => {
+    const d = encadrement((x) => {
+      x.semaine_type = jours([0, 1, 2, 3, 4])
+    }, false)
+    expect(absenceDu11(d)).toBeUndefined()
+  })
+
+  it('jamais de JFR : un 11/11 travaillé (posé à la main) ne se rattrape pas', () => {
+    const avec = encadrement((x) => {
+      x.semaine_type = jours([0, 1, 3, 4, 5])
+    })
+    const poste = avec.referentiel.salaries
+      .find((y) => y.id === ID)!
+      .competences.find((c) => c.niveau === 'titulaire')!.poste_id
+    const shift = {
+      id: 1,
+      lundi: AVANT,
+      salarie_id: ID,
+      poste_id: poste,
+      jour: 2,
+      horaire_id: null,
+      debut: '09:00',
+      fin: '17:00',
+      epinglee: true,
+      pause: 0,
+    } as unknown as Affectation
+    const ctx = contexte({ ...avec, affectations: [shift] })
+    expect(feriesEnAttente(ctx, [shift]).has(ID)).toBe(false)
+    // Le même shift, poste sans la case : le jour férié est à rattraper.
+    const sans = encadrement((x) => {
+      x.semaine_type = jours([0, 1, 3, 4, 5])
+    }, false)
+    const ctx2 = contexte({ ...sans, affectations: [shift] })
+    expect(feriesEnAttente(ctx2, [shift]).has(ID)).toBe(true)
   })
 })

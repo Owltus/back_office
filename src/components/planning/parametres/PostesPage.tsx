@@ -82,6 +82,7 @@ const saisieDe = (p: Poste): SaisiePoste => ({
   accueil_nuit: tientLaNuit({ ...p, ferme: false }),
   ferme: p.ferme ?? false,
   ouverture: p.ouverture ?? null,
+  feries_chomes: p.feries_chomes ?? false,
 })
 
 /** Le choix unique « Accueil » d'un poste (U1 du 2026-11-01). */
@@ -159,6 +160,7 @@ export function PostesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
       accueil_nuit: false,
       ferme: false,
       ouverture: null,
+      feries_chomes: false,
     })
   }
 
@@ -498,6 +500,25 @@ function CartePoste({
           </div>
         </div>
       )}
+
+      <label className="flex items-start gap-2 text-sm">
+        <Switch
+          checked={p.feries_chomes ?? false}
+          disabled={!modifiable}
+          onCheckedChange={(feries_chomes) => changer({ feries_chomes })}
+          aria-label="Jours fériés chômés le jour même"
+          className="mt-0.5"
+        />
+        <span className="flex flex-col gap-0.5">
+          <span className="font-medium">Jours fériés chômés le jour même</span>
+          <span className="text-xs text-muted-foreground">
+            Pour l’encadrement. Un jour férié qui tombe un jour de travail de la
+            semaine type est chômé, sans rattrapage. Un jour de repos habituel,
+            rien. Après un an d’ancienneté. Vaut pour qui a ce poste en premier
+            poste.
+          </span>
+        </span>
+      </label>
 
       <label className="flex items-start gap-2 text-sm">
         <Switch

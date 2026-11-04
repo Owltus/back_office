@@ -2526,6 +2526,17 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   `generateur.test.ts` 30e32394. Pas de passe de réparation : chaque
   semaine atteint l'optimum, les incohérences venaient de l'ordre des
   priorités et de la règle absente.
+- **JOURS FÉRIÉS DE L'ENCADREMENT (2026-11-04, décisions utilisateur)** :
+  case du POSTE `planning_postes.feries_chomes` (migration
+  `20261104100000_planning_postes_feries_chomes`, ajout seul, page Postes).
+  Qui a ce poste en PREMIER poste de titulaire (`feriesChomes`) prend ses
+  jours fériés le jour même, sans JFR : un jour de travail de sa semaine
+  type = absence JF ajoutée au calcul sans rien écrire (`avecFeriesDuJour`,
+  ex `avecFeriesStagiaires`) ; un jour de repos habituel = rien ; sans jour
+  « Travaille » = tous ; un an d'ancienneté quoi qu'il arrive
+  (`ferieDuJour`) ; jamais de rattrapage (`feriesEnAttente` les saute).
+  L'encadrement n'a pas de besoins à tenir (« c'est pas une question de
+  planning comme les hôteliers »).
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

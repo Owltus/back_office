@@ -128,6 +128,10 @@ describe('Postes', () => {
     fireEvent.click(r.getByRole('radio', { name: 'Nuit' }))
     fireEvent.click(r.getByRole('radio', { name: 'Matin et soir' }))
     fireEvent.click(r.getByRole('switch', { name: 'Poste fermé' }))
+    // Jours fériés chômés le jour même (encadrement, 2026-11-04).
+    fireEvent.click(
+      r.getByRole('switch', { name: 'Jours fériés chômés le jour même' }),
+    )
     expect(service.enregistrerPoste).not.toHaveBeenCalled()
     fireEvent.click(r.getByRole('button', { name: 'Enregistrer' }))
     await waitFor(() =>
@@ -142,6 +146,7 @@ describe('Postes', () => {
           accueil_nuit: false,
           ferme: true,
           ouverture: null,
+          feries_chomes: true,
         },
         2,
       ),

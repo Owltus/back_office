@@ -63,6 +63,7 @@ import {
   FERIE_RATTRAPAGE_JOURS,
   JOURS_CONTRAT,
   alerteBesoin,
+  droitAuRattrapage,
   presenceMaxPoste,
   reductionJourFerie,
   versSolveur,
@@ -458,7 +459,7 @@ export function contexte(d: DonneesSemaine): Contexte {
     ),
     ecole: new Set(d.referentiel.motifs.filter(estEcole).map((m) => m.id)),
     motifsRepos,
-    absences: avecFeriesStagiaires(d, lundi),
+    absences: avecFeriesDuJour(d, lundi),
     reposProposes: new Set(
       d.absences
         .filter((a) => a.epinglee === false && motifsRepos.has(a.motif_id))
@@ -504,7 +505,9 @@ export function shiftsConnus(
  * stagiaire) : rien.
  */
 export function feriesEnAttente(
-  ctx: Pick<Contexte, 'lundi' | 'staff' | 'absences' | 'motifsJfr'>,
+  ctx: Pick<Contexte, 'lundi' | 'staff' | 'absences' | 'motifsJfr'> & {
+    postes?: ReadonlyMap<number, Pick<Poste, 'feries_chomes'>>
+  },
   shifts: readonly Affectation[],
 ): Map<number, JourFerie[]> {
   const du = ajouterJours(ctx.lundi, -FERIE_RATTRAPAGE_JOURS)
@@ -525,6 +528,8 @@ export function feriesEnAttente(
   for (const x of ctx.staff) {
     const siens = travailles.get(x.id)
     if (!siens) continue
+    // Encadrement : le jour férié se prend le jour même, jamais rattrapé.
+    if (ctx.postes && feriesChomes(x, ctx.postes)) continue
     const poses = [...(ctx.absences.get(x.id) ?? [])]
       .filter(([, m]) => ctx.motifsJfr.has(m))
       .map(([date]) => date)
@@ -541,13 +546,43 @@ export function feriesEnAttente(
   return r
 }
 
-/** Les absences, plus les jours fériés des STAGIAIRES (décision utilisateur
- * du 2026-11-02 : « les stagiaires ont tous leurs jours fériés »). Un jour
- * férié sous contrat, sans absence ni shift déjà posé ce jour-là, devient
- * pour eux une absence au motif JF (Jour férié), décomptée comme un congé :
- * jamais placés ce jour-là, une journée de contrat de moins. Rien n'est
- * écrit en base : c'est relu à chaque calcul. Sans motif JF, rien. */
-export function avecFeriesStagiaires(
+/** Encadrement (décision utilisateur du 2026-11-04) : le PREMIER poste de
+ * titulaire de la fiche a ses jours fériés chômés le jour même
+ * (`Poste.feries_chomes`). */
+export function feriesChomes(
+  x: Pick<Salarie, 'competences'>,
+  postes: ReadonlyMap<number, Pick<Poste, 'feries_chomes'>>,
+): boolean {
+  const principal = x.competences.find((c) => c.niveau === 'titulaire')
+  return !!principal && !!postes.get(principal.poste_id)?.feries_chomes
+}
+
+/** Un jour férié pris le jour même par l'encadrement : après un an
+ * d'ancienneté (comme le rattrapage, « quoi qu'il arrive »), un jour de
+ * travail de sa semaine type ; une semaine type sans jour « Travaille » :
+ * tous les jours (décision utilisateur du 2026-11-04). Un jour férié qui
+ * tombe un jour de repos habituel n'est pas rendu. */
+export function ferieDuJour(
+  x: Pick<Salarie, 'type_contrat' | 'date_entree' | 'semaine_type'>,
+  date: string,
+): boolean {
+  if (!droitAuRattrapage(x, date)) return false
+  const travail = x.semaine_type.map((e) => e.mode === 'travail')
+  if (!travail.some(Boolean)) return true
+  return travail[ecartJours(lundiDe(date), date)] ?? false
+}
+
+/** Les absences, plus les jours fériés pris LE JOUR MÊME, ajoutés au calcul
+ * en absence au motif JF (Jour férié), décomptée comme un congé : jamais
+ * placés ce jour-là, une journée de contrat de moins. Rien n'est écrit en
+ * base : c'est relu à chaque calcul. Sans motif JF, rien. Pour :
+ *   - les STAGIAIRES, tous leurs jours fériés sous contrat (décision
+ *     utilisateur du 2026-11-02 : « les stagiaires ont tous leurs jours
+ *     fériés ») ;
+ *   - l'ENCADREMENT (`feriesChomes`, décision du 2026-11-04) : ceux de
+ *     `ferieDuJour`, sans rattrapage.
+ * Jamais sur un jour où une absence ou un shift est déjà posé. */
+export function avecFeriesDuJour(
   d: DonneesSemaine,
   lundi: string,
 ): Map<number, Map<string, number>> {
@@ -555,11 +590,15 @@ export function avecFeriesStagiaires(
   const jf = d.referentiel.motifs.find((m) => m.code === 'JF')
   if (!jf) return r
   const feries = feriesEntre(ajouterJours(lundi, -28), ajouterJours(lundi, 20))
+  const postes = new Map(d.referentiel.postes.map((p) => [p.id, p]))
   for (const x of d.referentiel.salaries) {
-    if (x.type_contrat !== 'stagiaire') continue
+    const stagiaire = x.type_contrat === 'stagiaire'
+    const encadrement = !stagiaire && feriesChomes(x, postes)
+    if (!stagiaire && !encadrement) continue
     for (const f of feries) {
       if (x.date_entree && f.date < x.date_entree) continue
       if (x.date_sortie && f.date > x.date_sortie) continue
+      if (encadrement && !ferieDuJour(x, f.date)) continue
       const posee = d.affectations.some(
         (a) =>
           a.salarie_id === x.id && ajouterJours(a.lundi, a.jour) === f.date,
