@@ -3785,7 +3785,8 @@ function resoudreUneFois(
  * AFFINAGE (2026-11-05), un second calcul du type « fixer puis optimiser » :
  * le calcul a décidé qui travaille, quel jour, sur quel poste et à quel
  * moment ; tout cela figé, un calcul minuscule ne choisit plus que l'horaire
- * précis de chaque shift de l'accueil dans son moment, pour qu'une personne
+ * précis de chaque shift de l'accueil dans son moment (et son poste de
+ * l'accueil : Réception ou Club, l'app répartit, D2), pour qu'une personne
  * garde ses horaires d'un jour à l'autre (`POIDS_AFFINAGE_HORAIRE` par
  * horaire de plus), sans que l'objectif d'origine dépasse celui du calcul de
  * plus de `AFFINAGE_TOLERANCE`. Mesuré sur les 18 semaines faites à la main :
@@ -3827,7 +3828,6 @@ function affiner(
       !!g &&
       g.accueil &&
       c.accueil &&
-      g.poste === c.poste &&
       g.moment !== null &&
       g.moment === c.moment
     )
