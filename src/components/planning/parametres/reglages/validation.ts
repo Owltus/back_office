@@ -130,20 +130,25 @@ export function heuresLibres(
 }
 
 /**
- * Change les heures (ou la pause) d'un horaire en cours de réglage. Tant que
- * la personne n'a pas choisi le moment elle-même dans ce volet
- * (`momentChoisi`), il suit les heures : `momentPropose` (décision
- * utilisateur du 2026-10-31 : proposé d'après les heures, puis modifiable).
+ * Change les heures (ou la pause) d'un horaire en cours de réglage : le
+ * moment suit TOUJOURS les heures (`momentPropose` ; décision du 2026-11-05,
+ * il n'est plus modifiable).
  */
 export function changerHeures(
   h: SaisieHoraire,
   maj: Partial<Pick<SaisieHoraire, 'debut' | 'fin' | 'pause'>>,
-  momentChoisi: boolean,
 ): Partial<SaisieHoraire> {
   const suite = { ...h, ...maj }
-  if (momentChoisi || !heuresCompletes(suite) || !Number.isFinite(suite.pause))
-    return maj
+  if (!heuresCompletes(suite) || !Number.isFinite(suite.pause)) return maj
   return { ...maj, periode: momentPropose(suite) }
+}
+
+/** Le moment montré dans le volet : celui des heures dès qu'elles sont
+ * complètes (2026-11-05), sinon le dernier connu (heure en cours de frappe). */
+export function momentDeLaSaisie(h: SaisieHoraire): SaisieHoraire['periode'] {
+  return heuresCompletes(h) && Number.isFinite(h.pause)
+    ? momentPropose(h)
+    : h.periode
 }
 
 /** Le moment est-il celui que les heures proposent ? */
@@ -196,7 +201,7 @@ export function erreursPoste(p: SaisiePoste): string[] {
 /** Ce qui part en base : le nom (obligatoire en base) écrit par l'app
  * d'après les heures et le moment, jamais saisi. */
 export function nettoyerHoraire(h: SaisieHoraire): Omit<Horaire, 'id'> {
-  return { ...h, nom: nomHoraire(h) }
+  return { ...h, periode: momentPropose(h), nom: nomHoraire(h) }
 }
 
 export function nettoyerMotif(m: SaisieMotif): SaisieMotif {

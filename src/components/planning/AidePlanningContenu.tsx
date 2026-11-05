@@ -564,11 +564,11 @@ export function AidePlanningContenu({
         />
         <Sous titre="Le moment de l’horaire">
           <p className="text-muted-foreground">
-            Chaque horaire a un moment. L’app le propose d’après les heures,
-            vous pouvez le changer.
+            Chaque horaire a un moment, calculé d’après ses heures. Il ne se
+            règle pas : le calcul ne regarde que les heures, jamais le nom.
           </p>
           <Tableau
-            entetes={['Moment', 'Proposé quand']}
+            entetes={['Moment', 'Quand']}
             lignes={[
               ['Nuit', 'il commence à 21 h ou plus tard, ou avant 5 h'],
               [

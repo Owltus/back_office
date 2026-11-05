@@ -2190,9 +2190,12 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   matins ET des soirs), `planning_importer` et `planning_supprimer_horaire`
   repris sans code. Un horaire se lit par `libelleHoraire` (« 07:00–15:45 »)
   et son moment (`libelleMoment`) ; `momentPropose` (règles en tête, relevées
-  sur les 35 horaires réels, test qui les rejoue) propose le moment, modifiable
-  dans les réglages (un moment choisi à la main est gardé quand les heures
-  changent) ; `nomHoraire` écrit la colonne `nom`, jamais saisie. Tests :
+  sur les 35 horaires réels, test qui les rejoue) CALCULE le moment ; depuis le
+  2026-11-05 (décision d'une responsable : « que matin, nuit… soient des
+  notions abstraites, que le moteur se concentre sur les horaires ») il n'est
+  plus modifiable : `lib/planning/moment.ts`, `avecMomentCalcule` à la
+  lecture (`fetchReferentiel`) et à l'enregistrement, volet en lecture seule
+  (les 37 horaires de la base locale avaient déjà le moment de leurs heures) ; `nomHoraire` écrit la colonne `nom`, jamais saisie. Tests :
   code d'essai HORS du type (`lib/planning/test/codesTest.ts`, `horaireTest`,
   `codeTest`). Les codes des MOTIFS (CP, MA, R…) restent. La règle ancienne
   « ne jamais changer ni ajouter de codes horaires » ne s'applique plus : on

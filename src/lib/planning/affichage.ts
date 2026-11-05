@@ -208,30 +208,7 @@ export function libelleMoment(p: Periode | null | undefined): string {
   return FAMILLES[rangFamille(p)]?.libelle ?? 'À part'
 }
 
-/**
- * Moment proposé pour un horaire d'après ses heures (décision utilisateur
- * du 2026-10-31 : proposé, puis modifiable dans les réglages). Règles,
- * relevées sur les 35 horaires de l'hôtel (toutes les retrouvent) :
- * - nuit : commence à 21 h ou plus tard, ou avant 5 h ;
- * - soir : finit à 21 h ou plus tard, après minuit, ou commence à 15 h ou
- *   plus tard ;
- * - matin : commence avant 9 h et finit à 17 h 45 au plus tard ;
- * - middle : le reste, à cheval sur le matin et le soir.
- * Plus de moment « court » (décision utilisateur du même jour : « s'il
- * commence à 17 h, c'est du soir ; à 7 h, du matin ») : un horaire court se
- * range d'après son début, sa longueur ne compte que pour les remplaçants
- * (`estCourt`, cycles.ts).
- */
-export function momentPropose(
-  h: Pick<Horaire, 'debut' | 'fin' | 'pause'>,
-): Periode {
-  const debut = minutes(h.debut)
-  const fin = minutes(h.fin)
-  if (debut >= 21 * 60 || debut < 5 * 60) return 'nuit'
-  if (fin <= debut || fin >= 21 * 60 || debut >= 15 * 60) return 'soir'
-  if (debut < 9 * 60 && fin <= 17 * 60 + 45) return 'matin'
-  return 'middle'
-}
+export { momentPropose } from '#/lib/planning/moment.ts'
 
 /** Horaires rangés et regroupés par moment (moments vides omis). */
 export function grouperHoraires<

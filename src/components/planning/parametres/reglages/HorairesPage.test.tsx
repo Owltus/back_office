@@ -14,8 +14,8 @@ import type { Referentiel } from '#/lib/planning/types.ts'
  * Horaires et absences contre un service simulé (la base n'est pas touchée).
  * Vérifié : en lecture, rien n'est modifiable ; rien ne part à la frappe ;
  * Enregistrer envoie l'horaire complet, sans code, avec le nom écrit par
- * l'app ; le moment est proposé d'après les heures puis gardé s'il est
- * choisi à la main ; deux horaires aux mêmes heures sont refusés avant
+ * l'app ; le moment est CALCULÉ d'après les heures, sans rien à choisir
+ * (2026-11-05) ; deux horaires aux mêmes heures sont refusés avant
  * l'envoi ; une pause plus longue que l'horaire est refusée avec le message,
  * sans appel ; un refus de la base à la suppression s'affiche en clair.
  */
@@ -146,7 +146,6 @@ describe('Horaires et absences', () => {
     fireEvent.change(carte.getByLabelText('Fin'), {
       target: { value: '15:30' },
     })
-    fireEvent.click(carte.getByRole('radio', { name: 'Matin' }))
     // Plus d'option « heures écrites en rouge » (2026-10-31).
     expect(carte.queryByRole('switch', { name: /rouge/i })).toBeNull()
     expect(service.enregistrerHoraire).not.toHaveBeenCalled()
@@ -264,73 +263,55 @@ describe('Horaires et absences', () => {
     expect(valeurs.nom).toBe('Middle de 10 h à 18 h 45')
   })
 
-  it("le moment est proposé d'après les heures, puis gardé quand on le choisit", async () => {
+  it("le moment est calculé d'après les heures, rien à choisir (2026-11-05)", async () => {
     monter(<HorairesPage />)
     const carte = within(carteNouvelle())
-    const coche = (nom: string) =>
-      carte.getByRole('radio', { name: nom }).getAttribute('aria-checked')
-    expect(coche('Middle')).toBe('true')
-    expect(carte.getByText("Proposé d'après les heures.")).toBeTruthy()
-    // Les heures changent : le moment suit.
+    // Aucun choix proposé : le moment se lit, il ne se règle pas.
+    expect(carte.queryByRole('radio', { name: 'Nuit' })).toBeNull()
+    expect(carte.getByText('Middle')).toBeTruthy()
     fireEvent.change(carte.getByLabelText('Début'), {
       target: { value: '23:00' },
     })
     fireEvent.change(carte.getByLabelText('Fin'), {
       target: { value: '07:45' },
     })
-    expect(coche('Nuit')).toBe('true')
-    expect(carte.getByText("Proposé d'après les heures.")).toBeTruthy()
-    // Choisi à la main : la phrase s'en va, et le moment ne bouge plus.
-    fireEvent.click(carte.getByRole('radio', { name: 'Soir' }))
-    expect(carte.queryByText("Proposé d'après les heures.")).toBeNull()
+    expect(carte.getByText('Nuit')).toBeTruthy()
+    expect(carte.getByText(/Calculé d'après les heures/)).toBeTruthy()
     fireEvent.change(carte.getByLabelText('Début'), {
       target: { value: '06:00' },
     })
     fireEvent.change(carte.getByLabelText('Fin'), {
       target: { value: '14:45' },
     })
-    expect(coche('Soir')).toBe('true')
+    expect(carte.getByText('Matin')).toBeTruthy()
     fireEvent.click(carte.getByRole('button', { name: "Créer l'horaire" }))
     await waitFor(() =>
       expect(service.enregistrerHoraire).toHaveBeenCalledTimes(1),
     )
-    expect(service.enregistrerHoraire.mock.calls[0][0].periode).toBe('soir')
+    expect(service.enregistrerHoraire.mock.calls[0][0].periode).toBe('matin')
   })
 
-  it('horaire existant : un moment choisi à la main est gardé quand les heures changent', () => {
-    // Oracle : décision utilisateur du 2026-10-31 (proposé, puis modifiable).
-    // 07:00-15:45 est proposé « Matin » ; rangé en Soir, c'est un choix.
-    const avecMoment = (periode: 'matin' | 'soir') => {
-      const ref = referentielDemo()
-      etat.referentiel = {
-        ...ref,
-        horaires: ref.horaires.map((h) => (h.id === 1 ? { ...h, periode } : h)),
-      }
+  it('horaire existant rangé à tort : le volet et l’envoi suivent les heures', async () => {
+    // Oracle : décision du 2026-11-05. 07:00-15:45 rangé « Soir » en base
+    // (ancien choix à la main) se montre et s'enregistre « Matin ».
+    const ref = referentielDemo()
+    etat.referentiel = {
+      ...ref,
+      horaires: ref.horaires.map((h) =>
+        h.id === 1 ? { ...h, periode: 'soir' as const } : h,
+      ),
     }
-    avecMoment('soir')
     monter(<HorairesPage />)
-    let carte = within(carteMatin())
+    const carte = within(carteMatin())
     fireEvent.change(carte.getByLabelText('Fin'), {
       target: { value: '15:30' },
     })
-    expect(
-      carte.getByRole('radio', { name: 'Soir' }).getAttribute('aria-checked'),
-    ).toBe('true')
-    cleanup()
-
-    // Rangé comme la proposition : il suit les heures.
-    avecMoment('matin')
-    monter(<HorairesPage />)
-    carte = within(carteMatin())
-    fireEvent.change(carte.getByLabelText('Début'), {
-      target: { value: '15:00' },
-    })
-    fireEvent.change(carte.getByLabelText('Fin'), {
-      target: { value: '23:45' },
-    })
-    expect(
-      carte.getByRole('radio', { name: 'Soir' }).getAttribute('aria-checked'),
-    ).toBe('true')
+    expect(carte.getByText('Matin')).toBeTruthy()
+    fireEvent.click(carte.getByRole('button', { name: 'Enregistrer' }))
+    await waitFor(() =>
+      expect(service.enregistrerHoraire).toHaveBeenCalledTimes(1),
+    )
+    expect(service.enregistrerHoraire.mock.calls[0][0].periode).toBe('matin')
   })
 
   it("deux horaires aux mêmes heures : refusé avant l'envoi", () => {

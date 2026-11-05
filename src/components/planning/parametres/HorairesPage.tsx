@@ -5,7 +5,7 @@
  * bouton, après contrôle des mêmes règles que la base (pause plus courte que
  * l'horaire, deux horaires aux mêmes heures…). Depuis le 2026-10-31 (décision utilisateur), un horaire
  * n'a plus de code ni de nom à saisir : il se lit par ses heures et son
- * moment ; le moment est proposé d'après les heures puis modifiable, et le
+ * moment ; le moment est CALCULÉ d'après les heures (2026-11-05), et le
  * nom rangé en base est écrit par l'app (`nomHoraire`). Un horaire modifié
  * fait suivre les shifts à venir (trigger en base), jamais ceux des semaines
  * verrouillées. Seule la gestion modifie.
@@ -56,8 +56,8 @@ import {
   erreursHoraire,
   erreursMotif,
   heuresLibres,
-  momentEstPropose,
   heureValide,
+  momentDeLaSaisie,
   nettoyerHoraire,
   nettoyerMotif,
   normaliserHeure,
@@ -642,18 +642,13 @@ function CarteHoraire({
   } = useBrouillon(enregistre)
   const [envoi, setEnvoi] = useState(false)
   const [suppression, setSuppression] = useState(false)
-  // Le moment suit les heures tant que la personne ne l'a pas choisi
-  // elle-même (décision utilisateur du 2026-10-31). Un horaire existant dont
-  // le moment diffère de la proposition a été choisi à la main : il le garde
-  // quand ses heures changent.
-  const [momentChoisi, setMomentChoisi] = useState(
-    () => id !== null && !momentEstPropose(enregistre),
-  )
+  // Le moment suit toujours les heures (décision du 2026-11-05) : il n'y a
+  // plus rien à choisir.
   const neuf = id === null
   const erreurs = erreursHoraire(h, referentiel.horaires, id)
   const heuresDe = (
     maj: Partial<Pick<SaisieHoraire, 'debut' | 'fin' | 'pause'>>,
-  ) => changer(changerHeures(h, maj, momentChoisi))
+  ) => changer(changerHeures(h, maj))
   const heuresChangees =
     !neuf &&
     (h.debut !== enregistre.debut ||
@@ -674,7 +669,6 @@ function CarteHoraire({
       return
     }
     adopter(h)
-    setMomentChoisi(!momentEstPropose(h))
     const libelle = libelleHoraire(valeurs)
     notifier(
       neuf
@@ -826,22 +820,15 @@ function CarteHoraire({
       <div className="flex flex-col gap-1.5">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <span className="text-sm text-muted-foreground">Moment</span>
-          <Segmente
-            etiquette="Moment de l'horaire"
-            valeur={h.periode ?? 'middle'}
-            options={PERIODES}
-            disabled={desactive}
-            onChange={(v) => {
-              setMomentChoisi(true)
-              changer({ periode: v === 'aucune' ? null : v })
-            }}
-          />
-        </div>
-        {!momentChoisi && momentEstPropose(h) && (
-          <span className="text-xs text-muted-foreground">
-            Proposé d'après les heures.
+          <span className="text-sm font-medium">
+            {libelleMoment(momentDeLaSaisie(h))}
           </span>
-        )}
+        </div>
+        <span className="text-xs text-muted-foreground">
+          {PERIODES.find((p) => p.valeur === (momentDeLaSaisie(h) ?? 'aucune'))
+            ?.aide ?? 'Ne compte pas dans le tableau Accueil'}
+          . Calculé d'après les heures.
+        </span>
       </div>
 
       <div className="flex flex-col gap-1.5">

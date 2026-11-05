@@ -82,8 +82,16 @@ const { Enveloppe, choisir, preparerJsdom } =
   await import('#/components/planning/parametres/equipe/testOutils.tsx')
 
 preparerJsdom()
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
 beforeEach(() => {
+  // Les absences « à venir » se jugent sur la date du jour : figée au lundi
+  // de l'hôtel de démo, sinon les tests vieillissent avec le calendrier
+  // (deux d'entre eux échouaient à partir du 2026-11-05).
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-11-02T10:00:00'))
   etat.niveau = 'gestion'
   etat.absences = []
   etat.verrous = []

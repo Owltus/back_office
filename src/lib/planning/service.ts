@@ -11,6 +11,7 @@
 
 import { refusDroits } from '#/lib/planning/erreurs.ts'
 import { SEMAINES_EQUITE } from '#/lib/planning/modele.ts'
+import { avecMomentCalcule } from '#/lib/planning/moment.ts'
 import { ORDRE_PERIODES } from '#/lib/planning/presence.ts'
 import { premierLundiLu } from '#/lib/planning/feries.ts'
 import type { NouveauShift, NouvelleAbsence } from '#/lib/planning/semaine.ts'
@@ -139,7 +140,8 @@ export async function fetchReferentiel(): Promise<Referentiel> {
       .maybeSingle(),
   ])
   return {
-    horaires: verifier(horaires),
+    // Le moment se déduit des heures (2026-11-05), quoi que dise la base.
+    horaires: (verifier(horaires) as Horaire[]).map(avecMomentCalcule),
     motifs: verifier(motifs),
     postes: (verifier(postes) as Poste[]).map((p) => ({
       ...p,
@@ -490,7 +492,7 @@ async function enregistrer<T extends { id: number }>(
 }
 
 export const enregistrerHoraire = (v: SansId<Horaire>, id: number | null) =>
-  enregistrer<Horaire>('planning_horaires', v, id)
+  enregistrer<Horaire>('planning_horaires', avecMomentCalcule(v), id)
 export const enregistrerMotif = (v: SansId<Motif>, id: number | null) =>
   enregistrer<Motif>('planning_motifs', v, id)
 export const enregistrerPoste = (v: SansId<Poste>, id: number | null) =>

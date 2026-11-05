@@ -88,26 +88,27 @@ describe('contrôles de saisie (miroir des contraintes de la base)', () => {
     ).toBeUndefined()
   })
 
-  it("le moment suit les heures tant qu'il n'est pas choisi à la main", () => {
-    const nuit = changerHeures(matin, { debut: '23:00', fin: '07:45' }, false)
+  it('le moment suit TOUJOURS les heures (2026-11-05)', () => {
+    const nuit = changerHeures(matin, { debut: '23:00', fin: '07:45' })
     expect(nuit).toEqual({ debut: '23:00', fin: '07:45', periode: 'nuit' })
     expect(momentEstPropose({ ...matin, ...nuit })).toBe(true)
-    // Choisi à la main : les heures changent, le moment reste.
+    // Un moment ancien, choisi à la main, ne survit pas aux heures.
     expect(
       changerHeures(
         { ...matin, periode: 'middle' },
         { debut: '23:00', fin: '07:45' },
-        true,
       ),
-    ).toEqual({ debut: '23:00', fin: '07:45' })
-    // Heure en cours de frappe : pas de proposition.
-    expect(changerHeures(matin, { fin: '15:4' }, false)).toEqual({
+    ).toEqual({ debut: '23:00', fin: '07:45', periode: 'nuit' })
+    // Heure en cours de frappe : rien à calculer.
+    expect(changerHeures(matin, { fin: '15:4' })).toEqual({
       fin: '15:4',
     })
     // Plus de moment « court » (2026-10-31) : moins de 7 h de travail, il
     // reste rangé d'après son début.
-    expect(changerHeures(matin, { pause: 120 }, false).periode).toBe('matin')
+    expect(changerHeures(matin, { pause: 120 }).periode).toBe('matin')
     expect(momentEstPropose({ ...matin, periode: 'soir' })).toBe(false)
+    // L'enregistrement écrit le moment des heures, jamais celui de la saisie.
+    expect(nettoyerHoraire({ ...matin, periode: 'nuit' }).periode).toBe('matin')
   })
 
   it("le nom rangé en base est écrit par l'app, d'après les heures", () => {
