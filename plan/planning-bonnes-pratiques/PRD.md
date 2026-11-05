@@ -604,6 +604,27 @@ sur le mois (deux personnes, une journée chacune).
 - **Middle** (même décision) : posé seulement s'il reste des heures ; la superviseuse n'est pas
   comptée à l'accueil (poste principal d'abord, dépannage ensuite). Rien à changer au moteur.
 
+#### 19. Le middle est un coup de main, l'équipe du matin arrive ensemble
+
+- **Pourquoi.** Une responsable, 2026-11-04 et 2026-11-05 : « les middles sont des shifts en
+  option, un coup de main » ; « que matin, nuit… soient des notions abstraites, que le moteur se
+  concentre sur les horaires ». Banc de la nuit du 2026-11-05 : les 18 semaines faites à la main
+  (29/06 au 26/10, copie locale, en mémoire) recalculées par le moteur et comparées aux vraies.
+- **Comment.** (a) Le moment d'un horaire se CALCULE d'après ses heures (`moment.ts`,
+  `avecMomentCalcule`), plus aucun choix à la main ; un horaire libre aussi (`momentLibre`). (b) Un
+  middle ne compte ni au matin ni au soir du tableau de l'accueil (`momentsAccueil`, révise D11) :
+  compté deux fois, il remplaçait un vrai soir. Il reste un candidat, posé s'il reste des heures,
+  et compte pour les trous. (c) Au matin de l'accueil, arriver après l'ouverture du poste coûte
+  un peu, par minute (`POIDS_ARRIVEE_MATIN_MINUTE`, `coutArriveeMatin`) : à la main, presque
+  tous les matins commencent à 07:00.
+- **Mesuré.** Personne seule à l'accueil, sur 126 jours : à 21 h, 69 jours avec l'ancien moteur,
+  12 avec le nouveau, 21 à la main ; à 07:15, 21 / 22 / 25. Places à pourvoir : 3 sur 855
+  (190 pour les plannings faits à la main, jugés sur les mêmes règles, avec 98 trous et 11
+  infractions ; le moteur : 2 trous, 0 infraction). Écarté : garder le même horaire toute la
+  semaine (31 % → 25 % de changements d'heure d'arrivée, 22 % à la main) triplait le temps de
+  calcul et dégradait les soirs.
+- **Statut.** EN PLACE (local, non livré) le 2026-11-05.
+
 ### Tableau récapitulatif
 
 | N°  | Règle                               | Statut                      | Où                                                                                   |
@@ -626,6 +647,7 @@ sur le mois (deux personnes, une journée chacune).
 | 16  | Jour férié rattrapé (JFR)           | en place (local, non livré) | `feries.ts`, `droitAuRattrapage`, `POIDS_JFR_EN_ATTENTE`, alerte JOUR-FERIE          |
 | 17  | Équipe ensemble (soir, relève)      | en place (local, non livré) | `equipesSynchro`, `EQUIPE_TOLERANCE`, `POIDS_RELEVE_CHACUN`, `equipesDesynchro`      |
 | 18  | Journées de 7 h / 8 h (35 h, 39 h)  | DUR (35 h et 39 h)          | `journeesDuCalcul`, `etoileSacrifiee`, `journeeDe`, JOURNEE-TYPE, HEURES-FAITES      |
+| 19  | Middle coup de main, matin ensemble | en place (local, non livré) | `moment.ts`, `momentsAccueil`, `momentLibre`, `coutArriveeMatin`                     |
 
 Le code des règles 1, 3, 4, 6, 7, 8, 12, 13 et 14 date du 2026-11-02 : en place en local, pas
 encore livré. Relecture du 2026-11-03 (banc de 7 scénarios réels, en mémoire) : règles 1, 4, 8, 9,

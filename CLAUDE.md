@@ -2622,6 +2622,30 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   vide qu'avant (lundi 21/12), désormais expliquée, 43 → 31 s. ⚠ Un banc
   de génération doit passer `horizon` comme l'app (VueMois, VueSemaine) :
   sans lui, une apprentie semblait perdre 7 h sur deux semaines.
+- **NUIT DU 2026-11-05 : LE MOTEUR FACE AUX PLANNINGS FAITS À LA MAIN**
+  (demande d'une responsable : « regarde comment les plannings ont été
+  construits, avec un œil critique, et améliore le moteur »). Banc hors
+  dépôt : les 18 semaines saisies d'après les PDF (29/06 au 26/10, copie
+  locale) recalculées EN MÉMOIRE à la suite, comme « Compléter le mois »,
+  et comparées aux vraies sur les mêmes mesures (présence à l'accueil heure
+  par heure, jours par semaine, repos, moments, horaires). Faits établis
+  sur les plannings humains : 5 jours et deux repos de suite presque
+  toujours, peu de changements de moment (0,6 par semaine), 4 horaires
+  pour 85 % de l'accueil (07:00-14:45, 07:00-15:45, 14:30-23:15,
+  15:00-22:45), tout le matin à 07:00 ; jugés sur les règles de l'app,
+  190 places à pourvoir, 98 trous, 11 infractions. Changements (règle 19
+  du PRD) : moment calculé d'après les heures (`moment.ts`, plus de choix à
+  la main), middle hors du tableau de l'accueil mais toujours posable
+  (révise D11), heures libres lues par leurs heures (`momentLibre`),
+  arrivée du matin à l'ouverture (`coutArriveeMatin`, linéaire, dans
+  `pireMoral`). Résultat : personne seule à 21 h 69 → 12 jours sur 126
+  (21 à la main), 3 places à pourvoir sur 855, 0 infraction ; décembre :
+  10 places à pourvoir annoncées au lieu d'être masquées par des middles
+  comptés deux fois. ⚠ Un banc de l'historique doit remettre `actif` aux
+  contrats finis depuis (CDD, stagiaires de l'été), sinon l'été manque de
+  monde. Écarté après mesure : « même horaire toute la semaine » (temps de
+  calcul × 3). L'algorithme (MIP HiGHS) reste : chaque semaine atteint
+  l'optimum en quelques secondes, les écarts venaient des règles.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 
