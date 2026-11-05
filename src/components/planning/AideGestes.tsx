@@ -6,20 +6,50 @@
  * l'explication quitte les paramètres pour ce bouton.
  */
 import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 
 import { AidePlanningContenu } from '#/components/planning/AidePlanningContenu.tsx'
+import { planningKeys } from '#/lib/planning/keys.ts'
+import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
+import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
+import { heuresLisibles } from '#/lib/planning/temps.ts'
+import type { Referentiel } from '#/lib/planning/types.ts'
 import { HelpDialogHeader } from '#/components/shared/HelpDialogHeader.tsx'
 import { HelpGlyph } from '#/components/shared/HelpGlyph.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Dialog, DialogContent } from '#/components/ui/dialog.tsx'
 
-/** Ce que disent les points et pastilles sous chaque jour. */
-export const AIDE_POINTS = [
-  'Sous chaque jour : l’accueil du matin, du soir et de la nuit.',
-  'Vert : au complet. Rouge : il manque quelqu’un. Bleu : quelqu’un en plus. Orange : personne de demandé.',
-  'Journée étoile : un horaire de 7 h, une fois par semaine pour les 39 h.',
-]
+/** Ce que disent les points et pastilles sous chaque jour. La journée
+ * étoile suit les journées des contrats (règles de l'établissement). */
+export function aidePoints(regles: RegleEtablissement): string[] {
+  const avecEtoile = regles.contrats.journees.filter(
+    (j) => j.courtesMax > 0 && j.durees.length > 1,
+  )
+  return [
+    'Sous chaque jour : l’accueil du matin, du soir et de la nuit.',
+    'Vert : au complet. Rouge : il manque quelqu’un. Bleu : quelqu’un en plus. Orange : personne de demandé.',
+    ...avecEtoile.map(
+      (j) =>
+        `Journée étoile : un horaire de ${heuresLisibles(Math.min(...j.durees))}, ${j.courtesMax > 1 ? `${j.courtesMax} fois` : 'une fois'} par semaine pour les ${heuresLisibles(j.minutesHebdo)}.`,
+    ),
+  ]
+}
+
+/** Le corps de la fenêtre, monté à l'ouverture : les règles viennent du
+ * référentiel déjà lu par la vue (cache, aucune lecture de plus). */
+function Contenu({ lignes }: { lignes: readonly string[] }) {
+  const qc = useQueryClient()
+  const regles = lireRegles(
+    qc.getQueryData<Referentiel>(planningKeys.referentiel()),
+  )
+  return (
+    <AidePlanningContenu
+      gestes={[...lignes, ...aidePoints(regles)]}
+      regles={regles}
+    />
+  )
+}
 
 export function AideGestes({ lignes }: { lignes: readonly string[] }) {
   const [ouvert, setOuvert] = useState(false)
@@ -44,7 +74,7 @@ export function AideGestes({ lignes }: { lignes: readonly string[] }) {
           />
           {/* Seul le corps défile : l'en-tête reste en haut. */}
           <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-            <AidePlanningContenu gestes={[...lignes, ...AIDE_POINTS]} />
+            <Contenu lignes={lignes} />
           </div>
         </DialogContent>
       </Dialog>

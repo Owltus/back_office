@@ -2734,6 +2734,7 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   « Règles appliquées » cite le jour (`texteJourEtoile`). Les boutons ★ par jour sont retirés.
   Tests `jourEtoileFiche.test.ts` (vendredi choisi → 7 h le vendredi, sans choix → comme avant,
   congé → l'étoile saute).
+- **Contrôle et aide suivent les règles (étape 8, 2026-11-05)** : « À vérifier » dit une règle impossible (journées sans horaire, deux repos empêchés par la semaine type, relève sans horaires qui se croisent, moments qui se chevauchent ; cibles `regles`, `moments`, `releve`) ; l’aide « ? » lit `lireRegles` (prop `regles`) et dit où se règle chaque règle.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

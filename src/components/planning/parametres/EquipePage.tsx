@@ -86,6 +86,11 @@ export function EquipePage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
     lien,
     !!ref.data,
     (cible) => {
+      // Règles des contrats (point « À vérifier » d'une règle impossible).
+      if (cible === 'regles') {
+        setRegles(true)
+        return true
+      }
       const id = idCible(cible, 'salarie')
       const s = ref.data?.salaries.find((x) => x.id === id)
       if (s)

@@ -45,16 +45,23 @@ vi.mock(
 
 const { AidePlanningContenu, SECTIONS_FONCTIONNEMENT } =
   await import('#/components/planning/AidePlanningContenu.tsx')
+const { lireRegles } = await import('#/lib/planning/reglesEtablissement.ts')
 
 afterEach(cleanup)
 
-function rendre() {
+function rendre(regles?: ReturnType<typeof lireRegles>) {
   return render(
     <TooltipProvider>
-      <AidePlanningContenu gestes={['Clic : modifier le jour']} />
+      <AidePlanningContenu
+        gestes={['Clic : modifier le jour']}
+        regles={regles}
+      />
     </TooltipProvider>,
   )
 }
+
+const texteDe = (id: string) =>
+  document.getElementById(`fonctionnement-${id}`)!.textContent ?? ''
 
 describe('AidePlanningContenu (aide du bouton ?)', () => {
   it('commence par les gestes de la vue ouverte', () => {
@@ -150,6 +157,86 @@ describe('AidePlanningContenu (aide du bouton ?)', () => {
     // Les heures avant la fatigue (décision utilisateur du 2026-11-04).
     expect(rang('Les contrats')).toBeLessThan(rang('La fatigue'))
     expect(rang('Le bien-être')).toBeLessThan(rang('Le confort'))
+  })
+
+  it('les règles de l’établissement par défaut : celles de l’hôtel', () => {
+    rendre()
+    expect(texteDe('contrats')).toContain(
+      '5 jours : 4 journées de 8 h et une journée étoile de 7 h',
+    )
+    expect(texteDe('contrats')).toContain('5 jours de 7 h')
+    expect(texteDe('horaires')).toContain('il commence à 21 h ou plus tard')
+    expect(texteDe('postes')).toContain('ensemble 30 minutes chaque jour')
+    expect(texteDe('generation')).toContain('Deux repos de suite')
+    expect(texteDe('generation')).toContain('au plus 5 jours de travail')
+    expect(texteDe('generation')).toContain(
+      'La passation avec le veilleur aussi',
+    )
+  })
+
+  it('le texte suit un réglage changé', () => {
+    rendre(
+      lireRegles({
+        reglages: {
+          releve_minutes: 45,
+          deux_repos_de_suite: 'souhaite',
+          jours_affiles_conseilles: 4,
+          jour_isole: 'a_eviter',
+          repos_confort: 13 * 60,
+          passation_veilleur: false,
+          nuit_debut: 22 * 60,
+          matin_fin_max: 16 * 60,
+          journees_contrats: [
+            { minutes_hebdo: 35 * 60, durees: [7 * 60], courtes_max: 0 },
+            {
+              minutes_hebdo: 39 * 60,
+              durees: [9 * 60, 7 * 60 + 30],
+              courtes_max: 1,
+            },
+          ],
+          conge_long: 7,
+        },
+        modelesContrat: [],
+      }),
+    )
+    const contrats = texteDe('contrats')
+    expect(contrats).toContain(
+      '5 jours : 4 journées de 9 h et une journée étoile de 7 h 30',
+    )
+    expect(contrats).not.toContain('journées de 8 h et une journée étoile')
+    expect(texteDe('horaires')).toContain('il commence à 22 h ou plus tard')
+    expect(texteDe('horaires')).toContain('finit à 16 h au plus tard')
+    const postes = texteDe('postes')
+    expect(postes).toContain('ensemble 45 minutes chaque jour')
+    expect(postes).toContain('Passation avec le veilleur : pas demandée')
+    const ordre = texteDe('generation')
+    expect(ordre).toContain('Le rythme')
+    expect(ordre).not.toContain('Deux repos de suite pour chacun')
+    expect(ordre).toContain('au plus 4 jours de travail')
+    expect(ordre).toContain('ensemble 45 minutes')
+    expect(ordre).not.toContain('La passation avec le veilleur aussi')
+    expect(ordre).toContain('13 h entre deux services')
+    const bien = texteDe('bien-etre')
+    expect(bien).toContain('Deux repos qui se suivent quand c’est possible')
+    expect(bien).toContain('Au moins 13 h entre la fin')
+    expect(bien).not.toContain('Jamais un jour de travail seul')
+    expect(bien).toContain('est évité quand c’est possible')
+    expect(bien).toContain('au moins 7 jours')
+  })
+
+  it('dit où se règle chaque règle, et que la loi ne se règle pas', () => {
+    rendre()
+    const t = texteDe('reglages')
+    for (const ou of [
+      'Équipe, bouton Règles',
+      'Horaires, partie Moments',
+      'Postes',
+      'Besoins',
+      'Fiche d’une personne',
+    ])
+      expect(t).toContain(ou)
+    expect(t).toContain('La loi ne se règle pas')
+    expect(t).toContain(heuresLisibles(REPOS_QUOTIDIEN))
   })
 
   it('respecte les règles d’écriture de l’app', () => {

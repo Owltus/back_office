@@ -57,8 +57,20 @@ import {
   codesPermis,
 } from '#/lib/planning/eligibilite.ts'
 import { travail } from '#/lib/planning/modele.ts'
-import { contratEtoile, horairesEtoileDuJour } from '#/lib/planning/etoile.ts'
-import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
+import {
+  contratEtoile,
+  horairesEtoileDuJour,
+  travailHoraire,
+} from '#/lib/planning/etoile.ts'
+import { momentPropose } from '#/lib/planning/moment.ts'
+import {
+  dureesImposees,
+  journeesDuContrat,
+  lireRegles,
+  modeleDe,
+} from '#/lib/planning/reglesEtablissement.ts'
+import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
+import { heuresLisibles, hhmm, minutes } from '#/lib/planning/temps.ts'
 import {
   accueilActif,
   chiffreAccueil,
@@ -113,8 +125,9 @@ export function cibleFiche(salarieId: number, partie?: PartieFiche): string {
 /** Où corriger : l'écran, et ce qu'il doit ouvrir (`?ouvrir=`). Cibles :
  * `horaire-<id>`, `poste-<id>`, `salarie-<id>` (`.partie` en plus pour
  * ouvrir la fiche sur une partie, `cibleFiche`), et sur Besoins
- * `poste-<id>`, `soutien-<id>` (le poste, réglage des apprentis) ou
- * `presence` (la vue par cycle). */
+ * `poste-<id>`, `soutien-<id>` (le poste, réglage des apprentis),
+ * `presence` (la vue par cycle) ou `releve` ; `regles` (Équipe : Règles des
+ * contrats) et `moments` (Horaires : limites des moments). */
 export interface LienReglage {
   page: PageReglage
   cible?: string
@@ -277,13 +290,15 @@ function peutTenir(
   s: Salarie,
   b: Besoin,
   horaires: readonly Horaire[] = [],
+  /** Règles de l'établissement : les versions étoile d'un horaire fixé. */
+  regles?: RegleEtablissement,
 ): boolean {
   const jourType = s.semaine_type.at(b.jour)
   if (jourType?.mode === 'repos' || jourType?.mode === 'absence') return false
   const code = b.horaire_id === null ? null : String(b.horaire_id)
   const fiche = {
     shiftsAutorises: codesDeLaFiche(s),
-    shiftImpose: codesImposes(s.semaine_type, horaires),
+    shiftImpose: codesImposes(s.semaine_type, horaires, regles),
   }
   return codeDeLaFiche(fiche, code) && codeImposeRespecte(fiche, b.jour, code)
 }
@@ -520,12 +535,12 @@ export function verifierReglages(
     if (!poste) continue
     const autonomes = tenants(b.poste_id, autonome)
     if (!autonomes.length) continue // déjà dit par « sans-autonome »
-    if (autonomes.some((s) => peutTenir(s, b, r.horaires))) continue
+    if (autonomes.some((s) => peutTenir(s, b, r.horaires, regles))) continue
     const remplacants = [...versionsEtoileDe(ctx, b), ...remplacantsDe(ctx, b)]
     if (
       remplacants.some((h) =>
         autonomes.some((s) =>
-          peutTenir(s, { ...b, horaire_id: h.id }, r.horaires),
+          peutTenir(s, { ...b, horaire_id: h.id }, r.horaires, regles),
         ),
       )
     )
@@ -700,8 +715,8 @@ export function verifierReglages(
           'a-voir',
           'equipe',
           fixe
-            ? `${nom} : sa journée étoile est fixée le ${jour(j)}, mais aucun horaire de 7 h contenu dans ${libelleHoraire(fixe)} n'est permis sur ses postes. Le planning automatique ne pourra pas placer cette personne ce jour-là.`
-            : `${nom} : sa journée étoile est fixée le ${jour(j)}, mais aucun horaire de moins de 8 h n'est permis sur ses postes. Le planning automatique ne pourra pas placer cette personne ce jour-là.`,
+            ? `${nom} : sa journée étoile est fixée le ${jour(j)}, mais aucun horaire plus court contenu dans ${libelleHoraire(fixe)} n'est permis sur ses postes. Le planning automatique ne pourra pas placer cette personne ce jour-là.`
+            : `${nom} : sa journée étoile est fixée le ${jour(j)}, mais aucun horaire de moins de ${heuresLisibles(regles.contrats.journeePleine)} n'est permis sur ses postes. Le planning automatique ne pourra pas placer cette personne ce jour-là.`,
           cibleFiche(s.id, 'horaires'),
         )
       })
@@ -1013,7 +1028,214 @@ export function verifierReglages(
     )
   }
 
+  pointsDesRegles(r, regles, equipe, chiffres, accueil, ajouter)
+
   return ordonnerPoints(points)
+}
+
+type Ajouter = (
+  id: string,
+  gravite: Gravite,
+  ecran: EcranReglage,
+  texte: string,
+  cible?: string,
+  page?: PageReglage,
+) => void
+
+/** « 7 h », « 8 h ou 7 h » : les durées d'un contrat, en mots. */
+function dureesTexte(durees: readonly number[]): string {
+  const l = [...new Set(durees)].sort((a, b) => b - a).map(heuresLisibles)
+  return l.length < 2
+    ? (l[0] ?? '')
+    : `${l.slice(0, -1).join(', ')} ou ${l.at(-1)}`
+}
+
+/** « 30 minutes », « 1 h 30 ». */
+function dureeCourte(minutes: number): string {
+  return minutes < 60 ? `${minutes} minutes` : heuresLisibles(minutes)
+}
+
+/**
+ * Les règles de l'établissement que les réglages rendent impossibles ou
+ * contradictoires (étape 8 du plan `planning-moteur-configurable-
+ * 2026-11-05`). Chaque point mène à l'endroit où on le corrige : le tiroir
+ * Règles des contrats (`?ouvrir=regles`, Équipe), la section Moments
+ * (`moments`, Horaires), la relève (`releve`, Besoins) ou la fiche. La
+ * journée étoile fixée un jour sans horaire court a déjà son point
+ * (`etoile-sans-horaire`). Les règles mêmes ne sont pas réécrites : elles
+ * viennent de `lireRegles`, comme pour le moteur.
+ */
+function pointsDesRegles(
+  r: Referentiel,
+  regles: RegleEtablissement,
+  equipe: readonly Salarie[],
+  chiffres: readonly { jour: number; periode: PeriodePresence }[],
+  accueil: boolean,
+  ajouter: Ajouter,
+) {
+  // ------------------------------------------- journées imposées au calcul
+  const imposees = dureesImposees(regles)
+  const postesOuverts = r.postes.filter((p) => !p.ferme)
+  const sansSolution = new Set<number>()
+  for (const j of regles.contrats.journees) {
+    if (!j.durees.length) continue
+    const concernes = equipe.filter(
+      (s) =>
+        !s.forfait_jours &&
+        modeleDe(regles, s.type_contrat).journeesImposees &&
+        Math.round(Number(s.heures_hebdo) * 60) === j.minutesHebdo &&
+        s.competences.length > 0,
+    )
+    // Sans aucun horaire, le point bloquant des horaires suffit.
+    if (!concernes.length || !r.horaires.length) continue
+    const existe = r.horaires.some((h) => j.durees.includes(travailHoraire(h)))
+    if (existe) continue
+    sansSolution.add(j.minutesHebdo)
+    ajouter(
+      `journees-sans-horaire:contrat-${j.minutesHebdo}`,
+      'a-voir',
+      'equipe',
+      `Les contrats de ${heuresLisibles(j.minutesHebdo)} se font en journées de ${dureesTexte(j.durees)}, mais aucun horaire ne dure ${dureesTexte(j.durees)}. Le planning automatique ne peut pas placer ${concernes.length > 1 ? `ces ${concernes.length} personnes` : 'cette personne'}. Ajoutez un horaire de cette durée ou changez les journées du contrat.`,
+      'regles',
+    )
+  }
+  for (const s of equipe) {
+    if (s.forfait_jours || !modeleDe(regles, s.type_contrat).journeesImposees)
+      continue
+    const minutesHebdo = Math.round(Number(s.heures_hebdo) * 60)
+    const j = journeesDuContrat(regles, minutesHebdo)
+    if (!j || !j.durees.length || sansSolution.has(minutesHebdo)) continue
+    // Une semaine type qui fixe un horaire d'une autre durée décide seule
+    // (`journeesDuCalcul`, regles.ts) : la règle ne s'applique pas.
+    const fixes = codesImposes(s.semaine_type, r.horaires, regles)
+    const decideSeule = fixes.some(([, id]) => {
+      const h = r.horaires.find((x) => String(x.id) === id)
+      return !h || !imposees.has(travailHoraire(h))
+    })
+    if (decideSeule) continue
+    const tenus = postesOuverts.filter((p) =>
+      s.competences.some((c) => c.poste_id === p.id),
+    )
+    const possibles = new Map<number, Horaire>()
+    for (const poste of tenus)
+      for (let jour = 0; jour < 7; jour++)
+        for (const h of codesPermis({
+          personne: s,
+          poste,
+          jour,
+          horaires: r.horaires,
+        }).codes)
+          possibles.set(h.id, h)
+    // Aucun horaire du tout : un autre point le dit déjà (`codes-morts`,
+    // `sans-code`).
+    if (!possibles.size) continue
+    if (
+      [...possibles.values()].some((h) => j.durees.includes(travailHoraire(h)))
+    )
+      continue
+    ajouter(
+      `journees-sans-horaire:${s.id}`,
+      'a-voir',
+      'equipe',
+      `${nomComplet(s)} : son contrat de ${heuresLisibles(minutesHebdo)} se fait en journées de ${dureesTexte(j.durees)}, mais aucun horaire de cette durée n'est permis sur ses postes. Le planning automatique ne peut pas placer cette personne.`,
+      cibleFiche(s.id, 'horaires'),
+    )
+  }
+
+  // ----------------------------------------------- deux repos de suite
+  for (const s of equipe) {
+    const parLaLoi = s.mineur
+    if (!parLaLoi && regles.repos.deuxReposDeSuite !== 'obligatoire') continue
+    if (modeleDe(regles, s.type_contrat).placementManuel) continue
+    const semaine = s.semaine_type
+    // Une semaine type qui fixe deux repos ou plus a décidé elle-même.
+    if (semaine.filter((e) => e.mode === 'repos').length >= 2) continue
+    const travaille = (j: number) => semaine.at(j % 7)?.mode === 'travail'
+    // La règle de l'établissement accepte le dimanche et le lundi d'à côté ;
+    // la loi d'un mineur veut la paire DANS la semaine.
+    const fin = parLaLoi ? 6 : 7
+    let paire = false
+    for (let j = 0; j < fin; j++)
+      if (!travaille(j) && !travaille(j + 1)) paire = true
+    if (paire) continue
+    const jours = [0, 1, 2, 3, 4, 5, 6].filter(travaille)
+    ajouter(
+      `deux-repos-impossibles:${s.id}`,
+      'a-voir',
+      'equipe',
+      `${nomComplet(s)} : sa semaine type le fait travailler le ${listeJours(jours)}. Deux jours de repos de suite sont impossibles, alors que ${parLaLoi ? 'la loi les demande pour un mineur' : "les règles de l'établissement les demandent"}.`,
+      cibleFiche(s.id, 'semaine'),
+    )
+  }
+
+  // ---------------------------------------------------------------- relève
+  const releve = regles.passations.releveMinutes
+  const releveDemandee =
+    accueil &&
+    releve > 0 &&
+    [0, 1, 2, 3, 4, 5, 6].some(
+      (j) =>
+        chiffres.some((c) => c.jour === j && c.periode === 'matin') &&
+        chiffres.some((c) => c.jour === j && c.periode === 'soir'),
+    )
+  if (releveDemandee) {
+    const duJour = r.postes
+      .filter((p) => p.presence && !p.ferme)
+      .flatMap((p) => codesDuPoste(p, r.horaires))
+    const moment = (h: Horaire) => h.periode ?? momentPropose(h, regles.moments)
+    const matins = duJour.filter((h) => moment(h) === 'matin')
+    const soirs = duJour.filter((h) => moment(h) === 'soir')
+    // Sans horaire du matin ou du soir, `cycle-sans-code` le dit déjà.
+    if (matins.length && soirs.length) {
+      const finMatin = Math.max(...matins.map((h) => minutes(h.fin)))
+      const debutSoir = Math.min(...soirs.map((h) => minutes(h.debut)))
+      if (finMatin - debutSoir < releve)
+        ajouter(
+          'releve-impossible',
+          'a-voir',
+          'besoins',
+          `La relève demande ${dureeCourte(releve)} ensemble entre le matin et le soir, mais à l'accueil le matin finit au plus tard à ${hhmm(finMatin)} et le soir commence au plus tôt à ${hhmm(debutSoir)}. Ajoutez des horaires qui se croisent, ou réduisez la relève.`,
+          'releve',
+        )
+    }
+  }
+
+  // --------------------------------------------------------------- moments
+  const m = regles.moments
+  const heure = (x: number) => hhmm(x % 1440)
+  const moment = (id: string, texte: string) =>
+    ajouter(`moments:${id}`, 'a-voir', 'horaires', texte, 'moments')
+  if (m.nuitFin >= m.nuitDebut) {
+    moment(
+      'nuit',
+      `Les limites de la nuit se chevauchent : elle finit à ${heure(m.nuitFin)}, après l'heure où elle commence (${heure(m.nuitDebut)}). Tous les horaires sont rangés la nuit.`,
+    )
+    return
+  }
+  const premierSoir = Math.min(m.matinDebutAvant, m.soirDebut, m.nuitDebut)
+  const finMatin = Math.min(m.matinFinMax, m.soirFin)
+  if (premierSoir <= m.nuitFin || finMatin <= m.nuitFin) {
+    moment(
+      'matin',
+      'Avec ces limites, aucun horaire ne peut être du matin. Revoyez les limites du matin et de la nuit.',
+    )
+    return
+  }
+  if (m.soirDebut < m.matinDebutAvant)
+    moment(
+      'soir-debut',
+      `Les limites du matin et du soir se chevauchent : un horaire qui commence entre ${heure(m.soirDebut)} et ${heure(m.matinDebutAvant)} est rangé au soir, jamais au matin.`,
+    )
+  if (m.soirFin <= m.matinFinMax)
+    moment(
+      'soir-fin',
+      `Les limites du matin et du soir se chevauchent : un horaire qui finit entre ${heure(m.soirFin)} et ${heure(m.matinFinMax)} est rangé au soir, jamais au matin.`,
+    )
+  if (m.nuitDebut <= m.soirDebut)
+    moment(
+      'nuit-soir',
+      `Les limites du soir et de la nuit se chevauchent : un horaire qui commence à ${heure(m.nuitDebut)} ou plus tard est rangé la nuit, et la limite du soir à ${heure(m.soirDebut)} ne sert plus.`,
+    )
 }
 
 /** « 07:30 » → minutes depuis minuit. */

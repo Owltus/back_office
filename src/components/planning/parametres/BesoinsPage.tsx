@@ -92,6 +92,7 @@ import {
 import { heures, libelleHoraire } from '#/lib/planning/affichage.ts'
 import { planningKeys } from '#/lib/planning/keys.ts'
 import { accueilActif, estPosteAccueil } from '#/lib/planning/presence.ts'
+import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
 import { reglerBesoin, reglerConsigne } from '#/lib/planning/service.ts'
 import { JOURS } from '#/lib/planning/types.ts'
 import type { Consigne, Referentiel } from '#/lib/planning/types.ts'
@@ -156,14 +157,19 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
   const historiqueRef = useRef(historique)
   historiqueRef.current = historique
 
-  // Lien d'un point « À vérifier » : un poste (`poste-<id>`, `soutien-<id>`)
-  // ou la présence minimum (`presence`).
+  // Lien d'un point « À vérifier » : un poste (`poste-<id>`, `soutien-<id>`),
+  // la présence minimum (`presence`) ou la relève (`releve`).
   useOuvrirCible(
     lien,
     !!data,
     (cible) => {
       if (cible === 'presence') {
         window.setTimeout(() => allerA('besoins-presence'), 0)
+        return true
+      }
+      // La relève, sous le tableau de l'accueil.
+      if (cible === 'releve') {
+        window.setTimeout(() => allerA('titre-releve'), 0)
         return true
       }
       const id = idCible(cible, 'soutien') ?? idCible(cible, 'poste')
@@ -497,15 +503,15 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
             <HeuresAccueil
               postes={data.postes}
               modifiable={modifiable}
-              duree={data.reglages?.duree_ouverture ?? 60}
+              duree={lireRegles(data).passations.dureeOuverture}
             />
           )}
           {actif && (
             <ReglageReleve
-              minutes={data.reglages?.releve_minutes ?? 30}
-              continuite={data.reglages?.continuite_obligatoire ?? true}
-              veilleur={data.reglages?.passation_veilleur ?? true}
-              tolerance={data.reglages?.equipe_tolerance ?? 30}
+              minutes={lireRegles(data).passations.releveMinutes}
+              continuite={lireRegles(data).passations.continuiteObligatoire}
+              veilleur={lireRegles(data).passations.passationVeilleur}
+              tolerance={lireRegles(data).passations.equipeTolerance}
               modifiable={modifiable}
             />
           )}

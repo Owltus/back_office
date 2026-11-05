@@ -37,13 +37,15 @@ export function lirePlanningSearch(s: Record<string, unknown>): PlanningSearch {
 }
 
 /** Paramètres d'URL des écrans de réglages : `?ouvrir=poste-3` ouvre le
- * réglage visé (lien d'un point « À vérifier », `coherence.ts`). */
+ * réglage visé (lien d'un point « À vérifier », `coherence.ts`), avec la
+ * partie de la fiche en plus (`salarie-3.semaine`, `cibleFiche`). */
 export interface ReglagesSearch {
   ouvrir?: string
 }
 
 export function lireReglagesSearch(s: Record<string, unknown>): ReglagesSearch {
-  return typeof s.ouvrir === 'string' && /^[a-z]+(-\d+)?$/.test(s.ouvrir)
+  return typeof s.ouvrir === 'string' &&
+    /^[a-z]+(-\d+(\.[a-z]+)?)?$/.test(s.ouvrir)
     ? { ouvrir: s.ouvrir }
     : {}
 }

@@ -13,7 +13,10 @@ import { refusDroits } from '#/lib/planning/erreurs.ts'
 import { SEMAINES_EQUITE } from '#/lib/planning/modele.ts'
 import { avecMomentCalcule } from '#/lib/planning/moment.ts'
 import { ORDRE_PERIODES } from '#/lib/planning/presence.ts'
-import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
+import {
+  lireRegles,
+  REGLES_PAR_DEFAUT,
+} from '#/lib/planning/reglesEtablissement.ts'
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import { premierLundiLu } from '#/lib/planning/feries.ts'
 import type { NouveauShift, NouvelleAbsence } from '#/lib/planning/semaine.ts'
@@ -237,7 +240,11 @@ function normaliserReglages(r: Reglages | null): Reglages {
   const sansVides = Object.fromEntries(
     Object.entries(r ?? {}).filter(([, v]) => v !== null && v !== undefined),
   ) as Partial<Reglages>
-  return { ...sansVides, releve_minutes: sansVides.releve_minutes ?? 30 }
+  return {
+    ...sansVides,
+    releve_minutes:
+      sansVides.releve_minutes ?? REGLES_PAR_DEFAUT.passations.releveMinutes,
+  }
 }
 
 /** Réglages généraux du planning (gestion). */

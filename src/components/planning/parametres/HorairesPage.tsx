@@ -220,6 +220,17 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
     lien,
     !!data,
     (cible) => {
+      // Limites des moments (point « À vérifier » qui se chevauchent).
+      if (cible === 'moments') {
+        window.setTimeout(
+          () =>
+            document
+              .getElementById('titre-moments')
+              ?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+          0,
+        )
+        return true
+      }
       const id = idCible(cible, 'horaire')
       if (id === undefined || !data?.horaires.some((h) => h.id === id))
         return false

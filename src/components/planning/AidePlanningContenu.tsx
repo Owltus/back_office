@@ -5,7 +5,11 @@
  *
  * Lecture seule, ouverte à qui voit la page planning. Rien n'est lu en base :
  * les chiffres de la loi viennent de `regles.ts` (seule source des chiffres
- * HCR), ceux du calcul de `modele.ts` et `semaine.ts`. Les pastilles sont les
+ * HCR) ; les règles de l'établissement (journées des contrats, deux repos de
+ * suite, accueil, passations, moments, ordre de décision) viennent de
+ * `lireRegles`, sur le référentiel déjà lu par la vue (prop `regles`,
+ * étape 8 du plan `planning-moteur-configurable-2026-11-05`) : la page suit
+ * un réglage changé. Les pastilles sont les
  * VRAIES cartes de la grille (`CarteShift`, `CarteStatut`) : un changement
  * d'aspect dans la grille se voit ici aussi.
  *
@@ -26,34 +30,28 @@ import { NEUTRE } from '#/components/planning/semaine/edition.ts'
 import type { ContenuStatut } from '#/components/planning/semaine/edition.ts'
 import { SEMAINES_EQUITE } from '#/lib/planning/modele.ts'
 import {
-  CHANGEMENTS_MOMENT_MAX,
-  CONGE_LONG,
-  ECOLE_LENDEMAIN_DEBUT,
-  ECOLE_VEILLE_FIN,
-  EQUIPE_TOLERANCE,
   FORFAIT_JOUR_MAX,
   JOUR_MAX_CATEGORIE,
-  JOURNEE_ETOILE_MIN,
-  JOURNEE_PLEINE,
-  JOURS_AFFILES_CONSEILLES,
-  JOURS_AFFILES_MAX,
   JOURS_TRAVAILLES_MAX,
   JOURS_TRAVAILLES_PREFERES,
   MINEUR_JOUR_MAX,
   MINEUR_REPOS_QUOTIDIEN,
   MINEUR_SEMAINE_MAX,
-  NUITS_AFFILEES_MAX,
-  REPOS_APRES_NUITS,
-  REPOS_CONFORT,
   REPOS_DEUX_SEMAINES,
   REPOS_HEBDO_MIN,
   REPOS_QUOTIDIEN,
   SEMAINE_MAX,
-  SEMAINES_EN_PLUS_ALERTE,
   STAGE_JOUR_MAX,
   TEMPS_PLEIN,
 } from '#/lib/planning/regles.ts'
-import { DUREE_OUVERTURE } from '#/lib/planning/semaine.ts'
+import {
+  joursDuContrat,
+  REGLES_PAR_DEFAUT,
+} from '#/lib/planning/reglesEtablissement.ts'
+import type {
+  JourneesContrat,
+  RegleEtablissement,
+} from '#/lib/planning/reglesEtablissement.ts'
 import { heuresLisibles as h } from '#/lib/planning/temps.ts'
 import { CATEGORIES } from '#/lib/planning/types.ts'
 import type { Horaire } from '#/lib/planning/types.ts'
@@ -70,6 +68,7 @@ export const SECTIONS_FONCTIONNEMENT = [
   { id: 'generation', titre: 'Comment le planning est calculé' },
   { id: 'loi', titre: 'Les règles de la loi' },
   { id: 'bien-etre', titre: 'Le bien-être de l’équipe' },
+  { id: 'reglages', titre: 'Où se règle chaque règle' },
   { id: 'alertes', titre: 'Alertes et places à pourvoir' },
   { id: 'droits', titre: 'Qui peut faire quoi' },
 ] as const
@@ -137,168 +136,198 @@ function CaseVide() {
   )
 }
 
-const STATUTS: ReadonlyArray<{
+/** « 30 minutes », « 1 h 30 ». */
+const duree = (m: number) => (m < 60 ? `${m} minutes` : h(m))
+
+/** « 8 h ou 7 h ». */
+function ou(l: readonly string[]): string {
+  return l.length < 2
+    ? (l[0] ?? '')
+    : `${l.slice(0, -1).join(', ')} ou ${l.at(-1)}`
+}
+
+/** « 5 jours : 4 journées de 8 h et une journée étoile de 7 h », « 5 jours
+ * de 7 h » : les journées d'un contrat, tirées des règles de
+ * l'établissement. */
+export function phraseJournees(
+  R: RegleEtablissement,
+  j: JourneesContrat,
+): string {
+  const jours = joursDuContrat(R, j.minutesHebdo) ?? 0
+  const pleine = Math.max(...j.durees)
+  const courte = Math.min(...j.durees)
+  if (j.courtesMax > 0 && courte < pleine) {
+    const courtes = Math.min(j.courtesMax, jours)
+    const pleines = jours - courtes
+    return `${jours} jours : ${pleines} journées de ${h(pleine)} et ${courtes > 1 ? `${courtes} journées étoile` : 'une journée étoile'} de ${h(courte)}`
+  }
+  return `${jours} jours de ${ou([...new Set(j.durees)].sort((a, b) => b - a).map(h))}`
+}
+
+function statuts(R: RegleEtablissement): ReadonlyArray<{
   nom: string
   pastille: ReactNode
   texte: ReactNode
-}> = [
-  {
-    nom: 'Shift proposé',
-    pastille: <CarteShift c={carte({})} />,
-    texte:
-      'Pointillés, fond pâle. Le calcul l’a proposé. Il peut changer à la prochaine génération. Validez-le pour le garder.',
-  },
-  {
-    nom: 'Shift validé',
-    pastille: <CarteShift c={carte({ epinglee: true })} />,
-    texte:
-      'Trait plein et coche verte. Les générations le gardent tel quel. Vous pouvez encore le changer à la main.',
-  },
-  {
-    nom: 'Semaine verrouillée',
-    pastille: (
-      <div className="relative grid">
-        <CarteShift c={carte({ epinglee: true })} />
-        <Lock
-          className="absolute -top-1.5 -left-1.5 size-3.5 rounded-full bg-card p-0.5 text-muted-foreground"
-          aria-hidden
+}> {
+  return [
+    {
+      nom: 'Shift proposé',
+      pastille: <CarteShift c={carte({})} />,
+      texte:
+        'Pointillés, fond pâle. Le calcul l’a proposé. Il peut changer à la prochaine génération. Validez-le pour le garder.',
+    },
+    {
+      nom: 'Shift validé',
+      pastille: <CarteShift c={carte({ epinglee: true })} />,
+      texte:
+        'Trait plein et coche verte. Les générations le gardent tel quel. Vous pouvez encore le changer à la main.',
+    },
+    {
+      nom: 'Semaine verrouillée',
+      pastille: (
+        <div className="relative grid">
+          <CarteShift c={carte({ epinglee: true })} />
+          <Lock
+            className="absolute -top-1.5 -left-1.5 size-3.5 rounded-full bg-card p-0.5 text-muted-foreground"
+            aria-hidden
+          />
+        </div>
+      ),
+      texte:
+        'Cadenas dans l’en-tête de la semaine. C’est le planning réalisé : plus rien ne bouge, ni à la main ni par le calcul. Seule la gestion verrouille et rouvre une semaine.',
+    },
+    {
+      nom: 'Journée étoile',
+      pastille: (
+        <CarteShift
+          c={carte({
+            debut: ETOILE.debut,
+            fin: ETOILE.fin,
+            duree: 7 * 60,
+            horaire: ETOILE,
+            etoile: true,
+          })}
         />
-      </div>
-    ),
-    texte:
-      'Cadenas dans l’en-tête de la semaine. C’est le planning réalisé : plus rien ne bouge, ni à la main ni par le calcul. Seule la gestion verrouille et rouvre une semaine.',
-  },
-  {
-    nom: 'Journée étoile',
-    pastille: (
-      <CarteShift
-        c={carte({
-          debut: ETOILE.debut,
-          fin: ETOILE.fin,
-          duree: 7 * 60,
-          horaire: ETOILE,
-          etoile: true,
-        })}
-      />
-    ),
-    texte: `Étoile au coin. Pour un contrat de plus de 35 h, un jour par semaine se fait sur un horaire plus court (de ${h(JOURNEE_ETOILE_MIN)} à moins de ${h(JOURNEE_PLEINE)}).`,
-  },
-  {
-    nom: 'Shift en dépannage',
-    pastille: <CarteShift c={carte({ role: 'occasionnel' })} />,
-    texte:
-      'Bouée. La personne tient ce poste en dépannage : elle sait le faire, mais ce n’est pas son poste habituel.',
-  },
-  {
-    nom: 'Shift avec alerte',
-    pastille: (
-      <CarteShift
-        c={carte({
-          alertes: [
-            {
-              regle: 'R-REPOS-QUOTIDIEN',
-              message: 'repos trop court',
-              nature: 'loi',
-            },
-          ],
-        })}
-      />
-    ),
-    texte:
-      'Triangle. Rouge : une règle de la loi n’est pas tenue. Orange : un point d’organisation à regarder. Survolez la carte pour lire la raison.',
-  },
-  {
-    nom: 'Repos de la semaine type',
-    pastille: <CarteStatut s={statut({ fixe: true })} />,
-    texte:
-      'Repos fixé dans la fiche de la personne. Toujours validé. Il se change dans sa fiche, pas dans la grille.',
-  },
-  {
-    nom: 'Repos proposé',
-    pastille: <CarteStatut s={statut({ proposition: true })} />,
-    texte:
-      'Pointillés. Posé par la génération sur les jours libres qui restent. Validez-le comme un shift, ou retirez-le avec Vider la case.',
-  },
-  {
-    nom: 'Repos posé',
-    pastille: (
-      <CarteStatut
-        s={statut({ repos: false, reposPose: true, genre: 'absence' })}
-      />
-    ),
-    texte:
-      'Repos posé à la main sur une date (motif R). Trait plein : validé. Il ne retire aucune heure due.',
-  },
-  {
-    nom: 'Repos sur un jour de congé',
-    pastille: <CarteStatut s={statut({ proposition: true })} />,
-    texte:
-      'Quelqu’un en congé toute la semaine garde ses deux repos. L’app propose Repos sur deux jours de congé en trop. Valider change ces jours de congé en repos.',
-  },
-  {
-    nom: 'Absence',
-    pastille: (
-      <CarteStatut
-        s={statut({
-          nom: 'Congé payé',
-          couleur: '#0ea5e9',
-          repos: false,
-          genre: 'absence',
-        })}
-      />
-    ),
-    texte:
-      'Teintée à la couleur du motif, avec son icône (palmier pour un congé, thermomètre pour une maladie…). Voir Absences, école et repos.',
-  },
-  {
-    nom: 'Jour férié rattrapé (JFR)',
-    pastille: (
-      <CarteStatut
-        s={statut({
-          nom: 'Jour férié rattrapé',
-          couleur: '#c084fc',
-          repos: false,
-          proposition: true,
-          jfr: true,
-          genre: 'absence',
-        })}
-      />
-    ),
-    texte:
-      'Le jour rendu après un jour férié travaillé. Proposé par l’app, puis validé comme un repos. Voir Les jours fériés.',
-  },
-  {
-    nom: 'École',
-    pastille: (
-      <CarteStatut
-        s={statut({
-          nom: 'École - CFA',
-          couleur: '#a855f7',
-          repos: false,
-          genre: 'ecole',
-        })}
-      />
-    ),
-    texte:
-      'Jour d’école d’un apprenti ou d’un stagiaire, pris dans le calendrier de sa fiche. Compté comme une journée de travail complète.',
-  },
-  {
-    nom: 'Hors contrat',
-    pastille: (
-      <CarteStatut
-        s={statut({ nom: 'Hors contrat', fixe: true, genre: 'hors' })}
-      />
-    ),
-    texte:
-      'Avant la date d’entrée ou après la date de sortie de la fiche. Rien ne peut s’y poser.',
-  },
-  {
-    nom: 'Non attribué',
-    pastille: <CaseVide />,
-    texte:
-      'Rien de posé. Ce n’est pas un repos : la case reste vide tant que la semaine n’est pas remplie. Retirer un shift remet la case à vide.',
-  },
-]
+      ),
+      texte: `Étoile au coin. Pour un contrat de plus de ${h(TEMPS_PLEIN)}, un jour par semaine se fait sur un horaire plus court (de ${h(R.contrats.journeeEtoileMin)} à moins de ${h(R.contrats.journeePleine)}).`,
+    },
+    {
+      nom: 'Shift en dépannage',
+      pastille: <CarteShift c={carte({ role: 'occasionnel' })} />,
+      texte:
+        'Bouée. La personne tient ce poste en dépannage : elle sait le faire, mais ce n’est pas son poste habituel.',
+    },
+    {
+      nom: 'Shift avec alerte',
+      pastille: (
+        <CarteShift
+          c={carte({
+            alertes: [
+              {
+                regle: 'R-REPOS-QUOTIDIEN',
+                message: 'repos trop court',
+                nature: 'loi',
+              },
+            ],
+          })}
+        />
+      ),
+      texte:
+        'Triangle. Rouge : une règle de la loi n’est pas tenue. Orange : un point d’organisation à regarder. Survolez la carte pour lire la raison.',
+    },
+    {
+      nom: 'Repos de la semaine type',
+      pastille: <CarteStatut s={statut({ fixe: true })} />,
+      texte:
+        'Repos fixé dans la fiche de la personne. Toujours validé. Il se change dans sa fiche, pas dans la grille.',
+    },
+    {
+      nom: 'Repos proposé',
+      pastille: <CarteStatut s={statut({ proposition: true })} />,
+      texte:
+        'Pointillés. Posé par la génération sur les jours libres qui restent. Validez-le comme un shift, ou retirez-le avec Vider la case.',
+    },
+    {
+      nom: 'Repos posé',
+      pastille: (
+        <CarteStatut
+          s={statut({ repos: false, reposPose: true, genre: 'absence' })}
+        />
+      ),
+      texte:
+        'Repos posé à la main sur une date (motif R). Trait plein : validé. Il ne retire aucune heure due.',
+    },
+    {
+      nom: 'Repos sur un jour de congé',
+      pastille: <CarteStatut s={statut({ proposition: true })} />,
+      texte:
+        'Quelqu’un en congé toute la semaine garde ses deux repos. L’app propose Repos sur deux jours de congé en trop. Valider change ces jours de congé en repos.',
+    },
+    {
+      nom: 'Absence',
+      pastille: (
+        <CarteStatut
+          s={statut({
+            nom: 'Congé payé',
+            couleur: '#0ea5e9',
+            repos: false,
+            genre: 'absence',
+          })}
+        />
+      ),
+      texte:
+        'Teintée à la couleur du motif, avec son icône (palmier pour un congé, thermomètre pour une maladie…). Voir Absences, école et repos.',
+    },
+    {
+      nom: 'Jour férié rattrapé (JFR)',
+      pastille: (
+        <CarteStatut
+          s={statut({
+            nom: 'Jour férié rattrapé',
+            couleur: '#c084fc',
+            repos: false,
+            proposition: true,
+            jfr: true,
+            genre: 'absence',
+          })}
+        />
+      ),
+      texte:
+        'Le jour rendu après un jour férié travaillé. Proposé par l’app, puis validé comme un repos. Voir Les jours fériés.',
+    },
+    {
+      nom: 'École',
+      pastille: (
+        <CarteStatut
+          s={statut({
+            nom: 'École - CFA',
+            couleur: '#a855f7',
+            repos: false,
+            genre: 'ecole',
+          })}
+        />
+      ),
+      texte:
+        'Jour d’école d’un apprenti ou d’un stagiaire, pris dans le calendrier de sa fiche. Compté comme une journée de travail complète.',
+    },
+    {
+      nom: 'Hors contrat',
+      pastille: (
+        <CarteStatut
+          s={statut({ nom: 'Hors contrat', fixe: true, genre: 'hors' })}
+        />
+      ),
+      texte:
+        'Avant la date d’entrée ou après la date de sortie de la fiche. Rien ne peut s’y poser.',
+    },
+    {
+      nom: 'Non attribué',
+      pastille: <CaseVide />,
+      texte:
+        'Rien de posé. Ce n’est pas un repos : la case reste vide tant que la semaine n’est pas remplie. Retirer un shift remet la case à vide.',
+    },
+  ]
+}
 
 // ------------------------------------------------------------ mise en page
 
@@ -424,10 +453,25 @@ function Sommaire() {
  * ouverte, puis tout le fonctionnement de l'application. Lecture seule. */
 export function AidePlanningContenu({
   gestes = [],
+  regles: R = REGLES_PAR_DEFAUT,
 }: {
   /** Les gestes de la vue ouverte (mois ou semaine), en tête. */
   gestes?: readonly string[]
+  /** Les règles de l'établissement (`lireRegles`) ; absent : les défauts. */
+  regles?: RegleEtablissement
 }) {
+  const M = R.moments
+  const P = R.passations
+  const Rp = R.repos
+  const deux = Rp.deuxReposDeSuite
+  const contrats = [...R.contrats.journees].sort(
+    (a, b) => b.minutesHebdo - a.minutesHebdo,
+  )
+  const nomsContrats = contrats.map((j) => h(j.minutesHebdo))
+  const etListe = (l: readonly string[]) =>
+    l.length < 2 ? (l[0] ?? '') : `${l.slice(0, -1).join(', ')} et ${l.at(-1)}`
+  const pleine = R.contrats.journeePleine
+  const rythme = h(Rp.rythmeContratMin)
   return (
     <div className="flex flex-col gap-6">
       <p className="max-w-3xl text-sm text-muted-foreground">
@@ -515,7 +559,7 @@ export function AidePlanningContenu({
         intro="Chaque case est une personne un jour. Elle montre un shift, un repos, une absence, l’école, ou rien. Les pastilles ci-dessous sont celles de la grille."
       >
         <ul className="flex flex-col divide-y">
-          {STATUTS.map((s) => (
+          {statuts(R).map((s) => (
             <li
               key={s.nom}
               className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:gap-4"
@@ -565,19 +609,23 @@ export function AidePlanningContenu({
         <Sous titre="Le moment de l’horaire">
           <p className="text-muted-foreground">
             Chaque horaire a un moment, calculé d’après ses heures. Il ne se
-            règle pas : le calcul ne regarde que les heures, jamais le nom.
+            choisit pas : le calcul ne regarde que les heures, jamais le nom.
+            Les limites ci-dessous se règlent dans Horaires, partie Moments.
           </p>
           <Tableau
             entetes={['Moment', 'Quand']}
             lignes={[
-              ['Nuit', 'il commence à 21 h ou plus tard, ou avant 5 h'],
+              [
+                'Nuit',
+                `il commence à ${h(M.nuitDebut)} ou plus tard, ou avant ${h(M.nuitFin)}`,
+              ],
               [
                 'Soir',
-                'il finit à 21 h ou plus tard, ou après minuit, ou il commence à 15 h ou plus tard',
+                `il finit à ${h(M.soirFin)} ou plus tard, ou après minuit, ou il commence à ${h(M.soirDebut)} ou plus tard`,
               ],
               [
                 'Matin',
-                'il commence avant 9 h et finit à 17 h 45 au plus tard',
+                `il commence avant ${h(M.matinDebutAvant)} et finit à ${h(M.matinFinMax)} au plus tard`,
               ],
               [
                 'Middle',
@@ -588,18 +636,18 @@ export function AidePlanningContenu({
         </Sous>
         <Sous titre="Horaires courts">
           <p className="text-muted-foreground">
-            Un horaire de moins de 7 h de travail est court. Il se range au
-            matin, au middle ou au soir d’après son début. Quand l’app change
-            d’horaire pour tenir une place, un court ne remplace qu’un court.
+            Un horaire de moins de {h(R.contrats.journeeCourte)} de travail est
+            court. Il se range au matin, au middle ou au soir d’après son début.
+            Quand l’app change d’horaire pour tenir une place, un court ne
+            remplace qu’un court.
           </p>
         </Sous>
         <Sous titre="Versions étoile">
           <p className="text-muted-foreground">
-            Un horaire de {h(JOURNEE_PLEINE)} exactement a des versions étoile :
-            les horaires de {h(JOURNEE_ETOILE_MIN)} à moins de{' '}
-            {h(JOURNEE_PLEINE)} qui tiennent dans ses heures. Le moment peut
-            changer. Aucun horaire n’est raccourci : on prend un autre horaire
-            qui existe.
+            Un horaire de {h(pleine)} exactement a des versions étoile : les
+            horaires de {h(R.contrats.journeeEtoileMin)} à moins de {h(pleine)}{' '}
+            qui tiennent dans ses heures. Le moment peut changer. Aucun horaire
+            n’est raccourci : on prend un autre horaire qui existe.
           </p>
           <Exemple>
             07:00–15:45 a pour versions étoile 07:00–14:45, 07:30–15:15 et
@@ -638,9 +686,14 @@ export function AidePlanningContenu({
           <Liste
             items={[
               'D’un veilleur à l’autre : quand la nuit est demandée, l’accueil est tenu sans trou du départ du veilleur au matin jusqu’à l’arrivée du suivant le soir.',
-              `Ouverture : un poste de l’accueil peut avoir une heure d’ouverture (07:00 pour la Réception et le Club). Quelqu’un y est dès cette heure, pendant au moins ${h(DUREE_OUVERTURE)}.`,
-              'Relève : l’équipe du matin et celle du soir sont ensemble un moment chaque jour, le temps réglé sur la page Besoins (30 minutes par défaut).',
-              `Une équipe ensemble : le soir, les personnes arrivent à ${EQUIPE_TOLERANCE} minutes près et partent à ${EQUIPE_TOLERANCE} minutes près, pour que personne ne reste seul. Chacune croise le matin le temps de la relève. Le matin, l’équipe arrive à l’heure d’ouverture du poste, comme dans les plannings faits à la main. Quand il manque du monde, le manque est partagé entre le matin et le soir plutôt que de laisser une personne seule. Une alerte dit quand ce n’est pas possible.`,
+              `Ouverture : un poste de l’accueil peut avoir une heure d’ouverture (07:00 pour la Réception et le Club). Quelqu’un y est dès cette heure, pendant au moins ${duree(P.dureeOuverture)}.`,
+              P.releveMinutes > 0
+                ? `Relève : l’équipe du matin et celle du soir sont ensemble ${duree(P.releveMinutes)} chaque jour (réglé sur la page Besoins).`
+                : 'Relève : aucune n’est demandée. Son temps se règle sur la page Besoins.',
+              P.passationVeilleur
+                ? 'Passation avec le veilleur : le dernier du soir part à son arrivée, le premier du matin arrive avant son départ.'
+                : 'Passation avec le veilleur : pas demandée (réglage de la page Besoins).',
+              `Une équipe ensemble : le soir, les personnes arrivent à ${duree(P.equipeTolerance)} près et partent à ${duree(P.equipeTolerance)} près, pour que personne ne reste seul. Chacune croise le matin le temps de la relève. Le matin, l’équipe arrive à l’heure d’ouverture du poste, comme dans les plannings faits à la main. Quand il manque du monde, le manque est partagé entre le matin et le soir plutôt que de laisser une personne seule. Une alerte dit quand ce n’est pas possible.`,
               'Un apprenti ou un stagiaire compte dans le chiffre de l’accueil, mais n’est jamais seul sur son poste.',
             ]}
           />
@@ -683,13 +736,18 @@ export function AidePlanningContenu({
         <Tableau
           entetes={['Contrat', 'Ce que fait l’app']}
           lignes={[
+            ...contrats.map(
+              (j) =>
+                [
+                  h(j.minutesHebdo),
+                  j.courtesMax > 0 && j.durees.length > 1
+                    ? `${phraseJournees(R, j)}. Le calcul ne pose que ces journées, jamais d’heures en plus. Une étoile fixée dans la fiche tombe ce jour-là. La semaine d’un congé, de l’école ou d’un jour férié rattrapé, la journée étoile saute : toutes les journées sont de ${h(Math.max(...j.durees))}.`
+                    : `${phraseJournees(R, j)}. Le calcul ne pose que ces journées, jamais d’heures en plus. Apprentis et stagiaires compris.`,
+                ] as const,
+            ),
             [
-              '39 h',
-              `5 jours : 4 journées de ${h(JOURNEE_PLEINE)} et une journée étoile de ${h(7 * 60)}. Le calcul ne pose que ces journées, jamais d’heures en plus. Une étoile fixée dans la fiche tombe ce jour-là. La semaine d’un congé, de l’école ou d’un jour férié rattrapé, la journée étoile saute : toutes les journées sont de ${h(JOURNEE_PLEINE)}.`,
-            ],
-            [
-              '35 h',
-              `5 jours de ${h(TEMPS_PLEIN / 5)}. Le calcul ne pose que des journées de ${h(TEMPS_PLEIN / 5)}, jamais d’heures en plus. Apprentis et stagiaires compris.`,
+              'Autre durée',
+              'Aucune journée imposée : le calcul fait au mieux avec les horaires permis.',
             ],
             [
               'Temps partiel',
@@ -721,21 +779,22 @@ export function AidePlanningContenu({
           <p className="text-muted-foreground">
             Chaque semaine, l’app vise les heures du contrat. Un jour d’absence
             qui compte dans les heures, ou un jour d’école, vaut une journée de
-            contrat : {h(JOURNEE_PLEINE)} pour un contrat de plus de 35 h, le
-            contrat divisé par 5 sinon. Une journée de contrat de moins est due
-            : un 39 h avec un congé doit 4 × 8 h = 32 h, un 35 h doit 4 × 7 h =
-            28 h.
+            contrat : {h(pleine)} pour un contrat de plus de {h(TEMPS_PLEIN)},
+            le contrat divisé par 5 sinon. Une journée de contrat de moins est
+            due : un 39 h avec un congé doit 4 × {h(pleine)} = {h(4 * pleine)},
+            un 35 h doit 4 × {h(TEMPS_PLEIN / 5)} = {h((4 * TEMPS_PLEIN) / 5)}.
           </p>
           <Exemple>
-            un 39 h avec deux jours de congé doit 3 × 8 h : sa journée étoile
-            saute. Un 35 h avec deux jours d’école doit 3 × 7 h.
+            un 39 h avec deux jours de congé doit 3 × {h(pleine)} : sa journée
+            étoile saute. Un 35 h avec deux jours d’école doit 3 ×{' '}
+            {h(TEMPS_PLEIN / 5)}.
           </Exemple>
           <p className="text-muted-foreground">
-            Les autres horaires (3 h, 4 h, 5 h, 9 h, 10 h) ne sont posés qu’à la
-            main pour un 35 h ou un 39 h. Un shift posé à la main ou validé
-            n’est jamais refusé, et le reste de la semaine garde ses journées.
-            Une semaine type qui fixe un tel horaire décide seule. Si une place
-            reste vide à cause de ces règles, la page le dit.
+            Les horaires d’une autre durée que ses journées ne sont posés qu’à
+            la main pour un contrat de {ou(nomsContrats)}. Un shift posé à la
+            main ou validé n’est jamais refusé, et le reste de la semaine garde
+            ses journées. Une semaine type qui fixe un tel horaire décide seule.
+            Si une place reste vide à cause de ces règles, la page le dit.
           </p>
         </Sous>
         <Sous titre="Arrivée ou départ en cours de semaine">
@@ -860,12 +919,20 @@ export function AidePlanningContenu({
           </li>
           <li>
             <span className="font-medium text-foreground">
-              Deux repos de suite
+              {deux === 'obligatoire' ? 'Deux repos de suite' : 'Le rythme'}
             </span>{' '}
-            pour chacun, chaque semaine, au plus 5 jours de travail d’affilée,
-            et jamais un jour seul entre deux repos. Une place reste vide plutôt
-            que de les casser, et la page le dit : à vous de compenser. Seuls
-            des shifts déjà posés ou validés peuvent l’empêcher.
+            {etListe([
+              ...(deux === 'obligatoire'
+                ? ['pour chacun, chaque semaine']
+                : []),
+              `au plus ${Rp.joursAffilesConseilles} jours de travail d’affilée (contrat de ${rythme} et plus)`,
+              ...(Rp.jourIsole === 'interdit'
+                ? ['jamais un jour seul entre deux repos']
+                : []),
+            ])}
+            . Une place reste vide plutôt que de les casser, et la page le dit :
+            à vous de compenser. Seuls des shifts déjà posés ou validés peuvent
+            l’empêcher.
           </li>
           <li>
             <span className="font-medium text-foreground">
@@ -873,16 +940,21 @@ export function AidePlanningContenu({
             </span>{' '}
             et le chiffre de l’accueil du matin, du soir et de la nuit. Une
             place ne reste vide que si personne ne peut la tenir sans enfreindre
-            la loi ni perdre ses deux repos de suite.
+            la loi
+            {deux === 'obligatoire' ? ' ni perdre ses deux repos de suite' : ''}
+            .
           </li>
           <li>
             <span className="font-medium text-foreground">
               L’accueil sans trou
             </span>{' '}
-            : personne ne manque entre deux équipes, l’ouverture est tenue. La
-            passation avec le veilleur aussi : le soir reste jusqu’à son
-            arrivée, à la minute près (fin à 23:00 pour une nuit à 23:00), et le
-            matin arrive avant son départ.
+            : personne ne manque entre deux équipes, l’ouverture est tenue
+            {P.continuiteObligatoire
+              ? ', au prix d’une place nécessaire'
+              : ', quand c’est possible'}
+            .
+            {P.passationVeilleur &&
+              ' La passation avec le veilleur aussi : le soir reste jusqu’à son arrivée, à la minute près (fin à 23:00 pour une nuit à 23:00), et le matin arrive avant son départ.'}
           </li>
           <li>
             <span className="font-medium text-foreground">Les contrats</span> :
@@ -890,18 +962,20 @@ export function AidePlanningContenu({
             heures payées doivent être faites. Puis éviter une personne en plus.
           </li>
           <li>
-            <span className="font-medium text-foreground">La fatigue</span> : 12
-            h entre deux services, 2 jours après des nuits avant de reprendre de
-            jour, un week-end libre sur 4 semaines. Elle passe après les heures
-            dues : quand seules des heures en moins la sauveraient, les heures
-            passent devant et une alerte orange le dit. Elle passe avant un 6e
-            jour et les heures au-delà du contrat. Plus de 6 jours d’affilée,
-            jamais.
+            <span className="font-medium text-foreground">La fatigue</span> :{' '}
+            {h(Rp.reposConfort)} entre deux services, {Rp.reposApresNuits} jours
+            après des nuits avant de reprendre de jour, un week-end libre sur{' '}
+            {SEMAINES_EQUITE} semaines. Elle passe après les heures dues : quand
+            seules des heures en moins la sauveraient, les heures passent devant
+            et une alerte orange le dit. Elle passe avant un 6e jour et les
+            heures au-delà du contrat. Plus de {Rp.joursAffilesMax} jours
+            d’affilée, jamais.
           </li>
           <li>
-            <span className="font-medium text-foreground">La relève</span> : une
-            personne du matin et une du soir ensemble chaque jour. Elle passe
-            avant un 6e jour, après les heures dues.
+            <span className="font-medium text-foreground">La relève</span> :{' '}
+            {P.releveMinutes > 0
+              ? `une personne du matin et une du soir ensemble ${duree(P.releveMinutes)} chaque jour. Elle passe avant un 6e jour, après les heures dues.`
+              : 'aucune n’est demandée.'}
           </li>
           <li>
             <span className="font-medium text-foreground">
@@ -1016,15 +1090,19 @@ export function AidePlanningContenu({
 
       <Section
         id="bien-etre"
-        intro="Ce n’est pas parce que l’on peut que l’on doit. Au-delà de la loi, l’app cherche un planning vivable et juste, le même pour tous. Ces règles cèdent devant les places nécessaires, jamais l’inverse, sauf les deux repos de suite. Toutes cèdent devant les heures dues (des heures payées doivent être faites), sauf les 6 jours d’affilée, que le calcul ne dépasse jamais. À heures égales, celles de la fatigue (12 h de repos, repos après des nuits, week-end libre) passent en premier. Quand l’une cède, une alerte orange le dit à la personne qui fait le planning."
+        intro={`Ce n’est pas parce que l’on peut que l’on doit. Au-delà de la loi, l’app cherche un planning vivable et juste, le même pour tous. Ces règles cèdent devant les places nécessaires, jamais l’inverse${deux === 'obligatoire' ? ', sauf les deux repos de suite' : ''}. Toutes cèdent devant les heures dues (des heures payées doivent être faites), sauf les ${Rp.joursAffilesMax} jours d’affilée, que le calcul ne dépasse jamais. À heures égales, celles de la fatigue (${h(Rp.reposConfort)} de repos, repos après des nuits, week-end libre) passent en premier. Quand l’une cède, une alerte orange le dit à la personne qui fait le planning.`}
       >
         <Sous titre="Le repos">
           <Liste
             items={[
               'Deux repos par semaine, même en congé.',
-              'Deux repos qui se suivent, chaque semaine, avant les places nécessaires. Un dimanche libre suivi du lundi libre compte, à cheval sur deux semaines. Une semaine type qui fixe deux repos décide seule.',
-              `${JOURS_AFFILES_CONSEILLES} jours de travail d’affilée au plus pour un contrat de 35 h et plus, semaines voisines comprises (${JOURS_AFFILES_MAX} pour les autres). L’école compte comme du travail.`,
-              `Au moins ${h(REPOS_CONFORT)} entre la fin d’un service et le début du suivant (la loi en demande ${h(REPOS_QUOTIDIEN)}).`,
+              deux === 'obligatoire'
+                ? 'Deux repos qui se suivent, chaque semaine, avant les places nécessaires. Un dimanche libre suivi du lundi libre compte, à cheval sur deux semaines. Une semaine type qui fixe deux repos décide seule.'
+                : deux === 'souhaite'
+                  ? 'Deux repos qui se suivent quand c’est possible : ils cèdent devant les places nécessaires. Un dimanche libre suivi du lundi libre compte. Une semaine type qui fixe deux repos décide seule.'
+                  : 'Deux repos qui se suivent ne sont pas demandés, sauf pour un mineur (la loi).',
+              `${Rp.joursAffilesConseilles} jours de travail d’affilée au plus pour un contrat de ${rythme} et plus, semaines voisines comprises (${Rp.joursAffilesMax} pour les autres). L’école compte comme du travail.`,
+              `Au moins ${h(Rp.reposConfort)} entre la fin d’un service et le début du suivant (la loi en demande ${h(REPOS_QUOTIDIEN)}).`,
               `Un week-end complet libre, samedi et dimanche, au moins une fois sur ${SEMAINES_EQUITE} semaines. Un congé ou un repos compte comme libre ; une maladie, une formation, un sans solde ou l’école, non. La nuit du dimanche au lundi est écrite le dimanche : elle rend le week-end travaillé.`,
               'Un repos fixe, posé ou validé n’est jamais repris par le calcul.',
             ]}
@@ -1033,11 +1111,22 @@ export function AidePlanningContenu({
         <Sous titre="Le rythme">
           <Liste
             items={[
-              `Une semaine stable : au plus ${CHANGEMENTS_MOMENT_MAX} changement de moment (matin, middle, soir, nuit) d’un jour au suivant, et plutôt du matin vers le soir que l’inverse.`,
-              `Pas plus de ${NUITS_AFFILEES_MAX} nuits d’affilée, puis ${REPOS_APRES_NUITS} jours sans travail avant de reprendre de jour.`,
+              `Une semaine stable : au plus ${Rp.changementsMomentMax} changement${Rp.changementsMomentMax > 1 ? 's' : ''} de moment (matin, middle, soir, nuit) d’un jour au suivant, et plutôt du matin vers le soir que l’inverse.`,
+              `Pas plus de ${Rp.nuitsAffileesMax} nuits d’affilée, puis ${Rp.reposApresNuits} jours sans travail avant de reprendre de jour.`,
               'Les mêmes jours de repos que la semaine d’avant, quand c’est possible. Après un week-end travaillé, passer ses repos au samedi et au dimanche est toujours permis : les week-ends tournent.',
-              'Jamais un jour de travail seul entre deux jours sans travail, d’une semaine à l’autre comprise, pour un contrat de 35 h et plus. Une place reste vide plutôt, et la page le dit. Les jours avant une arrivée comptent comme du repos, ceux après un départ comme du travail.',
-              'Un contrat de 35 h ou plus se fait en 5 jours, jamais 39 h en 4 jours de 10 h.',
+              ...(Rp.jourIsole === 'interdit'
+                ? [
+                    `Jamais un jour de travail seul entre deux jours sans travail, d’une semaine à l’autre comprise, pour un contrat de ${rythme} et plus. Une place reste vide plutôt, et la page le dit. Les jours avant une arrivée comptent comme du repos, ceux après un départ comme du travail.`,
+                  ]
+                : Rp.jourIsole === 'a_eviter'
+                  ? [
+                      'Un jour de travail seul entre deux jours sans travail est évité quand c’est possible, et une alerte orange le dit.',
+                    ]
+                  : []),
+              ...contrats.map(
+                (j) =>
+                  `Un contrat de ${h(j.minutesHebdo)} se fait en ${phraseJournees(R, j)}.`,
+              ),
             ]}
           />
         </Sous>
@@ -1047,7 +1136,7 @@ export function AidePlanningContenu({
               `Partage des week-ends, des soirs et des matins tôt, sur les ${SEMAINES_EQUITE} dernières semaines, entre tout l’accueil (Réception et Club, apprentis compris), à la part de contrat de chacun. Une semaine d’absence ne met personne en retard.`,
               'Le week-end libre passe avant la semaine type : un samedi ou un dimanche fixé en Travaille dans la fiche est libéré une fois sur 4 semaines, et les repos fixes de cette semaine-là peuvent bouger. Une alerte le dit.',
               'Le calcul ne place jamais un extra : il faut d’abord l’appeler. Une place que l’équipe ne peut pas tenir reste vide, et les ronds et triangles du mois le montrent en rouge.',
-              `Les heures au-delà du contrat vont d’abord à qui en a fait le moins sur les ${SEMAINES_EQUITE} dernières semaines. Au-delà du contrat ${SEMAINES_EN_PLUS_ALERTE} semaines sur 4 : une alerte.`,
+              `Les heures au-delà du contrat vont d’abord à qui en a fait le moins sur les ${SEMAINES_EQUITE} dernières semaines. Au-delà du contrat ${R.heures.semainesEnPlusAlerte} semaines sur ${SEMAINES_EQUITE} : une alerte.`,
               'Les jours fériés travaillés sont rattrapés dans les semaines qui suivent, même sur un jour habituel de la semaine type.',
             ]}
           />
@@ -1055,8 +1144,8 @@ export function AidePlanningContenu({
         <Sous titre="La vie personnelle">
           <Liste
             items={[
-              `Après un congé d’au moins ${CONGE_LONG} jours, une semaine de retour en douceur : pas de 6e jour, pas de repos court, et plutôt pas de reprise un samedi ou un dimanche.`,
-              `École des apprentis et stagiaires : pas de service qui finit après ${h(ECOLE_VEILLE_FIN)} la veille, ni qui commence avant ${h(ECOLE_LENDEMAIN_DEBUT)} le lendemain.`,
+              `Après un congé d’au moins ${R.conges.congeLong} jours, une semaine de retour en douceur : pas de 6e jour, pas de repos court, et plutôt pas de reprise un samedi ou un dimanche.`,
+              `École des apprentis et stagiaires : pas de service qui finit après ${h(R.ecole.veilleFin)} la veille, ni qui commence avant ${h(R.ecole.lendemainDebut)} le lendemain.`,
               'Les jours habituels de la semaine type sont préférés.',
             ]}
           />
@@ -1070,6 +1159,47 @@ export function AidePlanningContenu({
         <p className="text-muted-foreground">
           Pas encore appliqué : le partage des fêtes d’une année sur l’autre
           (Noël, jour de l’An), faute d’un an d’historique.
+        </p>
+      </Section>
+
+      <Section
+        id="reglages"
+        intro="Les règles de l’établissement ont pour valeur de départ celles de l’hôtel. La gestion les change, chacune à un seul endroit. Cette aide suit les réglages."
+      >
+        <Tableau
+          entetes={['Où', 'Ce qui s’y règle']}
+          lignes={[
+            [
+              'Équipe, bouton Règles',
+              'Les journées de chaque contrat, les types de contrat, les deux repos de suite, les jours d’affilée, le jour seul, le repos conseillé entre deux services, les changements de moment, les nuits, l’école et le retour de congé.',
+            ],
+            [
+              'Horaires, partie Moments',
+              'Les limites du matin, du soir et de la nuit, qui rangent chaque horaire.',
+            ],
+            [
+              'Postes',
+              'L’accueil, l’importance, l’ouverture et la fermeture, les jours fériés chômés le jour même, et le poste fermé.',
+            ],
+            [
+              'Besoins',
+              'Le tableau de l’accueil, chaque besoin obligatoire ou souhaité et son niveau, la relève, la passation avec le veilleur et l’équipe du soir ensemble.',
+            ],
+            [
+              'Fiche d’une personne',
+              'Ses postes, ses horaires permis, sa semaine type, ses repos fixes, le jour de sa journée étoile et son école.',
+            ],
+          ]}
+        />
+        <p className="text-muted-foreground">
+          La loi ne se règle pas : {h(REPOS_QUOTIDIEN)} de repos entre deux
+          services, {h(SEMAINE_MAX)} par semaine au plus, {JOURS_TRAVAILLES_MAX}{' '}
+          jours de travail par semaine au plus, les règles des mineurs. Voir Les
+          règles de la loi.
+        </p>
+        <p className="text-muted-foreground">
+          Une règle que les réglages rendent impossible est dite dans À
+          vérifier, avec le lien vers l’endroit où la corriger.
         </p>
       </Section>
 

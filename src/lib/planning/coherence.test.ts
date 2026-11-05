@@ -371,7 +371,8 @@ describe('verifierReglages', () => {
     r.salaries.push(
       salarie(13, {
         type_contrat: 'apprenti',
-        heures_hebdo: 35,
+        // 39 h : aucun horaire de 7 h ici (journées du contrat, étape 8).
+        heures_hebdo: 39,
         competences: [{ poste_id: 1, niveau: 'soutien' }],
       }),
     )
@@ -493,7 +494,7 @@ describe('verifierReglages', () => {
     r.postes.push(poste(2, 'Bar'))
     r.salaries.push(
       salarie(13, {
-        heures_hebdo: 35,
+        heures_hebdo: 39,
         competences: [{ poste_id: 2, niveau: 'titulaire' }],
         shifts_autorises: [M],
       }),
@@ -1219,7 +1220,8 @@ describe("verifierReglages, tableau de l'accueil", () => {
         salarie(13, { competences: [{ poste_id: 3, niveau: 'titulaire' }] }),
         salarie(14, {
           type_contrat: 'apprenti',
-          heures_hebdo: 35,
+          // 39 h : aucun horaire de 7 h ici (journées du contrat, étape 8).
+          heures_hebdo: 39,
           competences: [{ poste_id: 1, niveau: 'soutien' }],
         }),
         salarie(15, {
@@ -1238,6 +1240,9 @@ describe("verifierReglages, tableau de l'accueil", () => {
         { id: 3, jour: 0, periode: 'nuit', minimum: 1, maximum: 1 },
       ],
       verrous: [],
+      // Le matin finit à 15:00 quand le soir commence : aucune relève
+      // possible, qui a son propre test (étape 8).
+      reglages: { releve_minutes: 0 },
     }
   }
   const chiffre = (r: Referentiel, i: number, n: number) => {
@@ -1604,5 +1609,162 @@ describe('journée étoile fixée sans horaire de 7 h (2026-11-02)', () => {
     expect(ids(verifierReglages(trenteCinq))).not.toContain(
       'etoile-sans-horaire:10:0',
     )
+  })
+})
+
+describe("règles de l'établissement impossibles (étape 8, 2026-11-05)", () => {
+  const SEPT = horaire(7, 'M7', '07:00', '14:00', 'matin')
+  const trenteCinq = (r: Referentiel) => {
+    r.salaries.push(salarie(13, { heures_hebdo: 35 }))
+    return r
+  }
+
+  it('contrat sans aucun horaire de sa durée : un point vers Règles des contrats', () => {
+    const r = trenteCinq(propre())
+    expect(seul(r)).toMatchObject({
+      id: 'journees-sans-horaire:contrat-2100',
+      gravite: 'a-voir',
+      ecran: 'equipe',
+      lien: { page: '/planning/equipe', cible: 'regles' },
+    })
+    expect(seul(r).texte).toContain('journées de 7 h')
+    // Corrigé par un horaire de 7 h…
+    const corrige = trenteCinq(propre())
+    corrige.horaires.push(SEPT)
+    expect(verifierReglages(corrige)).toEqual([])
+    // … ou par les journées du contrat.
+    const regle = trenteCinq(propre())
+    regle.reglages = {
+      releve_minutes: 30,
+      journees_contrats: [
+        { minutes_hebdo: 35 * 60, durees: [8 * 60], courtes_max: 0 },
+      ],
+    }
+    expect(verifierReglages(regle)).toEqual([])
+  })
+
+  it('horaire de la bonne durée, mais pas sur ses postes : sa fiche', () => {
+    const r = trenteCinq(propre())
+    r.horaires.push(SEPT)
+    r.postes[0].horaires_autorises = [M, S]
+    expect(seul(r)).toMatchObject({
+      id: 'journees-sans-horaire:13',
+      lien: { page: '/planning/equipe', cible: 'salarie-13.horaires' },
+    })
+    r.postes[0].horaires_autorises = [M, S, SEPT.id]
+    expect(verifierReglages(r)).toEqual([])
+    // Forfait jours : pas de journées imposées.
+    r.postes[0].horaires_autorises = [M, S]
+    r.salaries[3].forfait_jours = true
+    expect(verifierReglages(r)).toEqual([])
+  })
+
+  const travaillePairs = (r: Referentiel, id: number) => {
+    const s = r.salaries.find((x) => x.id === id)!
+    for (const j of [0, 2, 4, 6]) s.semaine_type[j] = { mode: 'travail' }
+    return s
+  }
+
+  it('deux repos de suite obligatoires, semaine type qui les empêche : sa semaine type', () => {
+    const r = propre()
+    const s = travaillePairs(r, 10)
+    expect(seul(r)).toMatchObject({
+      id: 'deux-repos-impossibles:10',
+      ecran: 'equipe',
+      lien: { page: '/planning/equipe', cible: 'salarie-10.semaine' },
+    })
+    expect(seul(r).texte).toContain('lundi, mercredi, vendredi et dimanche')
+    // Mercredi libre : mardi et mercredi font la paire.
+    s.semaine_type[2] = { mode: 'auto' }
+    expect(verifierReglages(r)).toEqual([])
+  })
+
+  it('deux repos de suite : la règle suit son réglage, la loi reste pour un mineur', () => {
+    const r = propre()
+    const s = travaillePairs(r, 10)
+    r.reglages = { releve_minutes: 30, deux_repos_de_suite: 'souhaite' }
+    expect(verifierReglages(r)).toEqual([])
+    s.mineur = true
+    expect(ids(verifierReglages(r))).toContain('deux-repos-impossibles:10')
+    // Deux repos fixés : la semaine type a décidé.
+    s.mineur = false
+    r.reglages = undefined
+    s.semaine_type[1] = { mode: 'repos' }
+    s.semaine_type[3] = { mode: 'repos' }
+    expect(ids(verifierReglages(r))).not.toContain('deux-repos-impossibles:10')
+  })
+
+  /** Réception de l'accueil, un matin et un soir le lundi. */
+  function accueilReleve(): Referentiel {
+    return {
+      ...propre(),
+      postes: [poste(1, 'Réception', { presence: true })],
+      besoins: [],
+      consignes: [
+        { id: 1, jour: 0, periode: 'matin', minimum: 1, maximum: 1 },
+        { id: 2, jour: 0, periode: 'soir', minimum: 1, maximum: 1 },
+      ],
+    }
+  }
+  const releve = (r: Referentiel) =>
+    verifierReglages(r).filter((x) => x.id === 'releve-impossible')
+
+  it('relève demandée sans horaires du matin et du soir qui se croisent', () => {
+    const r = accueilReleve()
+    // Tous les horaires du poste : le matin finit à 17:00 (J), le soir
+    // commence à 15:00 (S). Ils se croisent.
+    expect(releve(r)).toEqual([])
+    r.postes[0].horaires_autorises = [M, S]
+    const [p] = releve(r)
+    expect(p).toMatchObject({
+      ecran: 'besoins',
+      lien: { page: '/planning/besoins', cible: 'releve' },
+    })
+    expect(p.texte).toContain('30 minutes')
+    expect(p.texte).toContain('15:00')
+    // Relève réglée à 0 : rien à dire.
+    r.reglages = { releve_minutes: 0 }
+    expect(releve(r)).toEqual([])
+    // Un horaire du soir qui commence 30 minutes avant la fin du matin.
+    r.reglages = undefined
+    r.horaires.push(horaire(8, 'S2', '14:30', '23:00', 'soir'))
+    r.postes[0].horaires_autorises = [M, S, 8]
+    expect(releve(r)).toEqual([])
+  })
+
+  const moments = (r: Referentiel) =>
+    verifierReglages(r)
+      .filter((x) => x.id.startsWith('moments:'))
+      .map((x) => x.id)
+  const avecMoments = (m: Partial<NonNullable<Referentiel['reglages']>>) => {
+    const r = propre()
+    r.reglages = { releve_minutes: 30, ...m }
+    return r
+  }
+
+  it('limites des moments qui se chevauchent : un point vers Moments', () => {
+    expect(moments(propre())).toEqual([])
+    const r = avecMoments({ soir_debut: 8 * 60 })
+    expect(moments(r)).toEqual(['moments:soir-debut'])
+    expect(
+      verifierReglages(r).find((x) => x.id === 'moments:soir-debut'),
+    ).toMatchObject({
+      ecran: 'horaires',
+      lien: { page: '/planning/horaires', cible: 'moments' },
+    })
+    expect(moments(avecMoments({ soir_fin: 17 * 60 }))).toEqual([
+      'moments:soir-fin',
+    ])
+    expect(moments(avecMoments({ nuit_debut: 14 * 60 }))).toEqual([
+      'moments:nuit-soir',
+    ])
+    expect(moments(avecMoments({ nuit_fin: 22 * 60 }))).toEqual([
+      'moments:nuit',
+    ])
+    expect(moments(avecMoments({ matin_debut_avant: 4 * 60 }))).toEqual([
+      'moments:matin',
+    ])
+    // Corrigé : les limites par défaut.
+    expect(moments(avecMoments({}))).toEqual([])
   })
 })
