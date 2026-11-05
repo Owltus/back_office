@@ -31,6 +31,7 @@ import {
   passationVeilleurActive,
   REGLES_PAR_DEFAUT,
 } from '#/lib/planning/reglesEtablissement.ts'
+import type { ModeleContrat, Reglages } from '#/lib/planning/types.ts'
 
 const H = 60
 
@@ -120,6 +121,104 @@ describe('lireRegles', () => {
     expect(
       lireRegles({ reglages: { releve_minutes: 0 } }).passations.releveMinutes,
     ).toBe(0)
+  })
+
+  it('les défauts de la base (migration 20261105100000) = REGLES_PAR_DEFAUT', () => {
+    // Recopiés À LA MAIN de la migration : un défaut changé d'un seul côté
+    // fait échouer ce test.
+    const reglages: Reglages = {
+      releve_minutes: 30,
+      deux_repos_de_suite: 'obligatoire',
+      jours_affiles_max: 6,
+      jours_affiles_conseilles: 5,
+      jour_isole: 'interdit',
+      rythme_contrat_min: 2100,
+      repos_confort: 720,
+      changements_moment_max: 1,
+      moment_arriere_jours: 2,
+      nuits_affilees_max: 5,
+      repos_apres_nuits: 2,
+      continuite_obligatoire: false,
+      passation_veilleur: true,
+      equipe_tolerance: 30,
+      duree_ouverture: 60,
+      nuit_debut: 1260,
+      nuit_fin: 300,
+      soir_fin: 1260,
+      soir_debut: 900,
+      matin_debut_avant: 540,
+      matin_fin_max: 1065,
+      libre_matin_avant: 750,
+      personnes_nuit: 1,
+      ecole_veille_fin: 1260,
+      ecole_lendemain_debut: 480,
+      conge_long: 5,
+      semaines_en_plus_alerte: 3,
+      journees_contrats: [
+        { minutes_hebdo: 2100, durees: [420], courtes_max: 0 },
+        { minutes_hebdo: 2340, durees: [480, 420], courtes_max: 1 },
+      ],
+      journee_pleine: 480,
+      journee_courte: 420,
+      journee_etoile_min: 420,
+      journees_courtes_max: 1,
+    }
+    const ligne = (
+      type_contrat: ModeleContrat['type_contrat'],
+      v: [boolean, boolean, boolean, boolean, boolean, boolean, boolean],
+    ): ModeleContrat => ({
+      type_contrat,
+      journees_imposees: v[0],
+      journee_etoile: v[1],
+      placement_manuel: v[2],
+      contrat_indicatif: v[3],
+      ferie_rattrape: v[4],
+      feries_jour_meme: v[5],
+      alternance: v[6],
+    })
+    const modelesContrat = [
+      ligne('cdi', [true, true, false, false, true, false, false]),
+      ligne('cdd', [true, true, false, false, true, false, false]),
+      ligne('extra', [false, false, true, true, false, false, false]),
+      ligne('stagiaire', [true, true, false, false, false, true, true]),
+      ligne('apprenti', [true, true, false, false, true, false, true]),
+    ]
+    expect(lireRegles({ reglages, modelesContrat })).toEqual(REGLES_PAR_DEFAUT)
+  })
+
+  it('une règle réglée en base est lue, les autres gardent leur défaut', () => {
+    const r = lireRegles({
+      reglages: { releve_minutes: 30, personnes_nuit: 2, jour_isole: 'aucune' },
+      modelesContrat: [
+        {
+          type_contrat: 'cdd',
+          journees_imposees: false,
+          journee_etoile: true,
+          placement_manuel: true,
+          contrat_indicatif: false,
+          ferie_rattrape: true,
+          feries_jour_meme: false,
+          alternance: false,
+        },
+      ],
+    })
+    expect(r.accueil.personnesNuit).toBe(2)
+    expect(r.repos.jourIsole).toBe('aucune')
+    expect(r.repos.joursAffilesMax).toBe(6)
+    expect(r.modeles.cdd.placementManuel).toBe(true)
+    expect(r.modeles.cdi).toEqual(REGLES_PAR_DEFAUT.modeles.cdi)
+    expect(REGLES_PAR_DEFAUT.modeles.cdd.placementManuel).toBe(false)
+  })
+
+  it('modèles par défaut : le comportement codé aujourd’hui', () => {
+    const m = REGLES_PAR_DEFAUT.modeles
+    expect(m.extra.placementManuel).toBe(true)
+    expect(m.extra.contratIndicatif).toBe(true)
+    expect(m.extra.ferieRattrape).toBe(false)
+    expect(m.stagiaire.ferieRattrape).toBe(false)
+    expect(m.stagiaire.feriesJourMeme).toBe(true)
+    expect(m.apprenti.alternance && m.stagiaire.alternance).toBe(true)
+    expect(m.cdi.ferieRattrape && m.cdd.ferieRattrape).toBe(true)
   })
 
   it('ne modifie jamais les défauts', () => {

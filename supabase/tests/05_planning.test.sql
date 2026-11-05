@@ -140,7 +140,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':J', (select j from t_ids)::text);
 $$;
 
-select plan(83);
+select plan(106);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -321,6 +321,70 @@ select is(pg_temp.essai('gestion', array[
 select is(pg_temp.essai('gestion', array[
   pg_temp.q('update public.planning_postes set ouverture = ''7h'' where id = :PA')]),
   'err=23514', 'ouverture : une heure au format HH:MM seulement');
+
+-- ------------------- règles de l'établissement (2026-11-05, migration 20261105100000) ---
+select is(pg_temp.essai('lecture', array['select deux_repos_de_suite || ''/'' || personnes_nuit from public.planning_reglages where id = 1']),
+  (select deux_repos_de_suite || '/' || personnes_nuit from public.planning_reglages where id = 1),
+  'règles : la lecture lit les règles de l''établissement');
+select is(pg_temp.essai('ecriture', array['update public.planning_reglages set personnes_nuit = 2 where id = 1']),
+  '0', 'règles : l''écriture ne les change pas (gestion seule)');
+select is(pg_temp.essai('gestion', array[
+  'update public.planning_reglages set personnes_nuit = 2, continuite_obligatoire = true where id = 1',
+  'select personnes_nuit || ''/'' || continuite_obligatoire from public.planning_reglages where id = 1']),
+  '2/true', 'règles : la gestion les règle');
+select is(pg_temp.essai('gestion', array['update public.planning_reglages set repos_confort = 600 where id = 1']),
+  'err=23514', 'règles : jamais un repos entre deux services sous les 11 h de la loi');
+select is(pg_temp.essai('gestion', array['update public.planning_reglages set jours_affiles_max = 7 where id = 1']),
+  'err=23514', 'règles : jamais plus de 6 jours d''affilée (la loi)');
+select is(pg_temp.essai('gestion', array['update public.planning_reglages set jours_affiles_conseilles = 6, jours_affiles_max = 5 where id = 1']),
+  'err=23514', 'règles : les jours conseillés ne dépassent pas le maximum');
+select is(pg_temp.essai('gestion', array['update public.planning_reglages set deux_repos_de_suite = ''parfois'' where id = 1']),
+  'err=23514', 'règles : deux repos de suite obligatoire, souhaité ou aucune');
+select is(pg_temp.essai('gestion', array['update public.planning_reglages set journees_contrats = ''[{"minutes_hebdo":2100}]'' where id = 1']),
+  'err=23514', 'règles : une journée imposée sans durée est refusée');
+select is(pg_temp.essai('gestion', array['update public.planning_reglages set journees_contrats = ''[{"minutes_hebdo":2100,"durees":[420],"courtes_max":0},{"minutes_hebdo":2100,"durees":[480],"courtes_max":0}]'' where id = 1']),
+  'err=23514', 'règles : deux journées imposées pour la même durée de contrat sont refusées');
+select is(pg_temp.essai('gestion', array[
+  'update public.planning_reglages set journees_contrats = ''[{"minutes_hebdo":1800,"durees":[360],"courtes_max":0}]'' where id = 1',
+  'select jsonb_array_length(journees_contrats)::text from public.planning_reglages where id = 1']),
+  '1', 'règles : la gestion règle les journées imposées');
+
+select is(pg_temp.essai('aucun', array['select count(*) from public.planning_modeles_contrat']),
+  '0', 'modèles de contrat : aucun ne les lit');
+select is(pg_temp.essai('lecture', array['select count(*) from public.planning_modeles_contrat']),
+  (select count(*)::text from public.planning_modeles_contrat), 'modèles de contrat : la lecture les lit tous');
+select is(pg_temp.essai('lecture', array['select placement_manuel::text from public.planning_modeles_contrat where type_contrat = ''extra''']),
+  (select placement_manuel::text from public.planning_modeles_contrat where type_contrat = 'extra'),
+  'modèles de contrat : la lecture lit le placement à la main de l''extra');
+select is(pg_temp.essai('ecriture', array['update public.planning_modeles_contrat set alternance = true where type_contrat = ''cdi''']),
+  '0', 'modèles de contrat : l''écriture ne les change pas');
+select is(pg_temp.essai('ecriture', array['delete from public.planning_modeles_contrat where type_contrat = ''cdi''']),
+  '0', 'modèles de contrat : l''écriture n''en supprime aucun');
+select is(pg_temp.essai('gestion', array[
+  'update public.planning_modeles_contrat set placement_manuel = true where type_contrat = ''cdd''',
+  'select placement_manuel::text from public.planning_modeles_contrat where type_contrat = ''cdd''']),
+  'true', 'modèles de contrat : la gestion les règle');
+select is(pg_temp.essai('gestion', array['insert into public.planning_modeles_contrat (type_contrat) values (''interim'')']),
+  'err=23514', 'modèles de contrat : un type de contrat inconnu est refusé');
+select is(pg_temp.essai('gestion', array['update public.planning_modeles_contrat set ferie_rattrape = true, feries_jour_meme = true where type_contrat = ''cdi''']),
+  'err=23514', 'modèles de contrat : jamais un jour férié rattrapé ET pris le jour même');
+
+select is(pg_temp.essai('gestion', array[
+  pg_temp.q('update public.planning_postes set importance = ''vital'' where id = :PA')]),
+  'err=23514', 'importance : indispensable, important ou si possible');
+select is(pg_temp.essai('ecriture', array[
+  pg_temp.q('update public.planning_postes set importance = ''si_possible'' where id = :PA')]),
+  '0', 'importance : l''écriture ne la change pas');
+select is(pg_temp.essai('gestion', array[
+  pg_temp.q('update public.planning_postes set fermeture = ''23h'' where id = :PA')]),
+  'err=23514', 'fermeture : une heure au format HH:MM seulement');
+select is(pg_temp.essai('gestion', array[
+  pg_temp.q('insert into public.planning_besoins (poste_id, jour, debut, fin, effectif) values (:PA, 5, ''09:00'', ''10:00'', 1)'),
+  pg_temp.q('select obligatoire || ''/'' || niveau_min from public.planning_besoins where poste_id = :PA and jour = 5 and debut = ''09:00''')]),
+  'true/depannage', 'besoin : obligatoire, un dépannage suffit, par défaut');
+select is(pg_temp.essai('gestion', array[
+  pg_temp.q('insert into public.planning_besoins (poste_id, jour, debut, fin, effectif, niveau_min) values (:PA, 5, ''09:00'', ''10:00'', 1, ''soutien'')')]),
+  'err=23514', 'besoin : niveau demandé titulaire ou dépannage');
 
 -- ------------------------------------ consignes de présence (2026-10-28) ---
 select is(pg_temp.essai('aucun', array['select count(*) from public.planning_consignes']),

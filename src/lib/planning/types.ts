@@ -14,6 +14,14 @@ export type NatureMotif = 'absence' | 'ecole' | 'repos'
 export type Categorie =
   'reception' | 'veille_nuit' | 'cuisine' | 'administratif_hors_site' | 'autre'
 export type TypeContrat = 'cdi' | 'cdd' | 'extra' | 'stagiaire' | 'apprenti'
+/** Importance d'un poste (D11 du 2026-11-05). */
+export type Importance = 'indispensable' | 'important' | 'si_possible'
+/** Force d'une règle de l'établissement (colonne texte en base). */
+export type ForceRegle = 'obligatoire' | 'souhaite' | 'aucune'
+export type JourIsole = 'interdit' | 'a_eviter' | 'aucune'
+/** Niveau demandé par un besoin (étape 7) : titulaire exigé, ou dépannage
+ * accepté (aujourd'hui). */
+export type NiveauDemande = 'titulaire' | 'depannage'
 /** Moment d'un horaire (matin, middle, soir, nuit). Plus de « court »
  * depuis le 2026-10-31 : un horaire court se range d'après son début. */
 export type Periode = 'matin' | 'middle' | 'soir' | 'nuit'
@@ -64,12 +72,81 @@ export interface Poste {
    * direction, adjoints, technique ; décision utilisateur du 2026-11-04).
    * Vaut pour qui a ce poste en PREMIER poste de titulaire. Absent : faux. */
   feries_chomes?: boolean
+  /** Importance du poste quand il manque du monde (D11, 2026-11-05) :
+   * « si possible » reste vide en premier. Absent : important. */
+  importance?: Importance
+  /** Heure de fermeture (HH:MM) : ce poste est tenu jusqu'à cette heure
+   * chaque soir (2026-11-05, pas encore lue par le calcul). Null : aucune. */
+  fermeture?: string | null
 }
 
-/** Réglages généraux du planning (table `planning_reglages`, une ligne). */
+/** Une journée imposée au calcul pour une durée de contrat (colonne
+ * `planning_reglages.journees_contrats`). */
+export interface JourneesContratLigne {
+  minutes_hebdo: number
+  durees: number[]
+  courtes_max: number
+}
+
+/** Réglages généraux du planning (table `planning_reglages`, une ligne) : les
+ * RÈGLES DE L'ÉTABLISSEMENT globales (2026-11-05), lues par `lireRegles`.
+ * Durées et heures en minutes (heures : depuis minuit). Seule la relève est
+ * obligatoire : un champ absent (données de test, base pas encore migrée)
+ * reprend `REGLES_PAR_DEFAUT`. */
 export interface Reglages {
   /** Temps passé ensemble par l'équipe du matin et celle de l'après-midi. */
   releve_minutes: number
+  deux_repos_de_suite?: ForceRegle
+  jours_affiles_max?: number
+  jours_affiles_conseilles?: number
+  jour_isole?: JourIsole
+  rythme_contrat_min?: number
+  repos_confort?: number
+  changements_moment_max?: number
+  moment_arriere_jours?: number
+  nuits_affilees_max?: number
+  repos_apres_nuits?: number
+  continuite_obligatoire?: boolean
+  passation_veilleur?: boolean
+  equipe_tolerance?: number
+  duree_ouverture?: number
+  nuit_debut?: number
+  nuit_fin?: number
+  soir_fin?: number
+  soir_debut?: number
+  matin_debut_avant?: number
+  matin_fin_max?: number
+  libre_matin_avant?: number
+  personnes_nuit?: number
+  ecole_veille_fin?: number
+  ecole_lendemain_debut?: number
+  conge_long?: number
+  semaines_en_plus_alerte?: number
+  journees_contrats?: JourneesContratLigne[]
+  journee_pleine?: number
+  journee_courte?: number
+  journee_etoile_min?: number
+  journees_courtes_max?: number
+}
+
+/** Règles d'un type de contrat (table `planning_modeles_contrat`, une ligne
+ * par type, 2026-11-05). */
+export interface ModeleContrat {
+  type_contrat: TypeContrat
+  /** Le calcul ne pose que les journées de `journees_contrats`. */
+  journees_imposees: boolean
+  /** Au-delà de 35 h, une journée étoile chaque semaine. */
+  journee_etoile: boolean
+  /** Jamais placé par le calcul (à appeler, posé à la main). */
+  placement_manuel: boolean
+  /** Heures du contrat indicatives (aucune heure due). */
+  contrat_indicatif: boolean
+  /** Un jour férié travaillé ouvre un jour férié rattrapé, après un an. */
+  ferie_rattrape: boolean
+  /** Jours fériés pris le jour même. */
+  feries_jour_meme: boolean
+  /** Alternance (école, CFA). */
+  alternance: boolean
 }
 
 export interface Groupe {
@@ -146,6 +223,11 @@ export interface Besoin {
   effectif: number // personnes autonomes requises
   soutien: number // places de renfort pour les profils « soutien »
   renfort: number // places en plus, facultatives
+  /** Besoin obligatoire (vrai) ou souhaité (2026-11-05, pas encore lu par
+   * le calcul). Absent : obligatoire. */
+  obligatoire?: boolean
+  /** Niveau demandé (2026-11-05, pas encore lu). Absent : dépannage. */
+  niveau_min?: NiveauDemande
 }
 
 export interface Affectation {
@@ -175,6 +257,9 @@ export interface Referentiel {
   verrous: string[]
   /** Réglages généraux ; absents (données de test) : aucune relève. */
   reglages?: Reglages
+  /** Règles par type de contrat ; absentes (données de test) : les
+   * défauts (`REGLES_PAR_DEFAUT`). */
+  modelesContrat?: ModeleContrat[]
 }
 
 export const CATEGORIES: ReadonlyArray<{

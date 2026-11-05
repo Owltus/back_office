@@ -23,6 +23,7 @@ import type {
   Consigne,
   Groupe,
   Horaire,
+  ModeleContrat,
   Motif,
   Poste,
   Referentiel,
@@ -34,16 +35,63 @@ import { supabase } from '#/lib/supabase.ts'
 const COL_HORAIRE = 'id, nom, debut, fin, couleur, pause, periode'
 const COL_MOTIF = 'id, code, nom, couleur, decompte, nature'
 const COL_POSTE =
-  'id, nom, categorie, couleur, horaires_autorises, presence, accueil_nuit, ferme, ouverture, ordre, feries_chomes'
+  'id, nom, categorie, couleur, horaires_autorises, presence, accueil_nuit, ferme, ouverture, ordre, feries_chomes, importance, fermeture'
 const COL_CONSIGNE = 'id, jour, periode, minimum, maximum'
 const COL_GROUPE = 'id, nom, ordre, postes_autorises'
 const COL_SALARIE =
   'id, prenom, nom, groupe_id, type_contrat, heures_hebdo, forfait_jours, mineur, competences, semaine_type, shifts_autorises, date_entree, date_sortie, actif, suite_de'
 const COL_BESOIN =
-  'id, poste_id, jour, horaire_id, debut, fin, effectif, soutien, renfort'
+  'id, poste_id, jour, horaire_id, debut, fin, effectif, soutien, renfort, obligatoire, niveau_min'
 const COL_AFFECTATION =
   'id, lundi, salarie_id, poste_id, jour, horaire_id, debut, fin, epinglee, pause, updated_at'
 const COL_ABSENCE = 'id, salarie_id, jour, motif_id, epinglee'
+/** Les règles de l'établissement (2026-11-05) : une colonne oubliée ici
+ * n'est jamais lue ni écrite. */
+const CHAMPS_REGLAGES = [
+  'releve_minutes',
+  'deux_repos_de_suite',
+  'jours_affiles_max',
+  'jours_affiles_conseilles',
+  'jour_isole',
+  'rythme_contrat_min',
+  'repos_confort',
+  'changements_moment_max',
+  'moment_arriere_jours',
+  'nuits_affilees_max',
+  'repos_apres_nuits',
+  'continuite_obligatoire',
+  'passation_veilleur',
+  'equipe_tolerance',
+  'duree_ouverture',
+  'nuit_debut',
+  'nuit_fin',
+  'soir_fin',
+  'soir_debut',
+  'matin_debut_avant',
+  'matin_fin_max',
+  'libre_matin_avant',
+  'personnes_nuit',
+  'ecole_veille_fin',
+  'ecole_lendemain_debut',
+  'conge_long',
+  'semaines_en_plus_alerte',
+  'journees_contrats',
+  'journee_pleine',
+  'journee_courte',
+  'journee_etoile_min',
+  'journees_courtes_max',
+] as const satisfies ReadonlyArray<keyof Reglages>
+const COL_REGLAGES = CHAMPS_REGLAGES.join(', ')
+const CHAMPS_MODELE = [
+  'journees_imposees',
+  'journee_etoile',
+  'placement_manuel',
+  'contrat_indicatif',
+  'ferie_rattrape',
+  'feries_jour_meme',
+  'alternance',
+] as const satisfies ReadonlyArray<keyof ModeleContrat>
+const COL_MODELE_CONTRAT = ['type_contrat', ...CHAMPS_MODELE].join(', ')
 
 function verifier<T>(r: { data: T | null; error: unknown }): T {
   if (r.error) throw r.error
@@ -100,6 +148,7 @@ export async function fetchReferentiel(): Promise<Referentiel> {
     consignes,
     verrous,
     reglages,
+    modeles,
   ] = await Promise.all([
     supabase
       .from('planning_horaires')
@@ -135,9 +184,13 @@ export async function fetchReferentiel(): Promise<Referentiel> {
       .order('lundi'),
     supabase
       .from('planning_reglages')
-      .select('releve_minutes')
+      .select(COL_REGLAGES)
       .eq('id', 1)
       .maybeSingle(),
+    supabase
+      .from('planning_modeles_contrat')
+      .select(COL_MODELE_CONTRAT)
+      .order('type_contrat'),
   ])
   return {
     // Le moment se déduit des heures (2026-11-05), quoi que dise la base.
@@ -163,13 +216,20 @@ export async function fetchReferentiel(): Promise<Referentiel> {
     verrous: (verifier(verrous) as Array<{ lundi: string }>).map(
       (v) => v.lundi,
     ),
-    // La ligne manque (base pas encore migrée) : la relève par défaut.
-    reglages: {
-      releve_minutes:
-        (verifier(reglages) as { releve_minutes: number } | null)
-          ?.releve_minutes ?? 30,
-    },
+    // La ligne manque (base pas encore migrée) : la relève par défaut ;
+    // les autres règles absentes reprennent leurs défauts (`lireRegles`).
+    reglages: normaliserReglages(
+      verifier(reglages) as unknown as Reglages | null,
+    ),
+    modelesContrat: verifier(modeles) as unknown as ModeleContrat[],
   }
+}
+
+function normaliserReglages(r: Reglages | null): Reglages {
+  const sansVides = Object.fromEntries(
+    Object.entries(r ?? {}).filter(([, v]) => v !== null && v !== undefined),
+  ) as Partial<Reglages>
+  return { ...sansVides, releve_minutes: sansVides.releve_minutes ?? 30 }
 }
 
 /** Réglages généraux du planning (gestion). */
@@ -177,9 +237,29 @@ export async function enregistrerReglages(r: Reglages): Promise<void> {
   auMoinsUne(
     await supabase
       .from('planning_reglages')
-      .update({ releve_minutes: r.releve_minutes })
+      .update(
+        Object.fromEntries(
+          CHAMPS_REGLAGES.filter((c) => r[c] !== undefined).map((c) => [
+            c,
+            r[c],
+          ]),
+        ),
+      )
       .eq('id', 1)
       .select('id'),
+  )
+}
+
+/** Règles d'un type de contrat (gestion). 0 ligne : refus des droits. */
+export async function enregistrerModeleContrat(
+  m: ModeleContrat,
+): Promise<void> {
+  auMoinsUne(
+    await supabase
+      .from('planning_modeles_contrat')
+      .update(Object.fromEntries(CHAMPS_MODELE.map((c) => [c, m[c]])))
+      .eq('type_contrat', m.type_contrat)
+      .select('type_contrat'),
   )
 }
 

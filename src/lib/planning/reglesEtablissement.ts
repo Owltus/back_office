@@ -14,7 +14,12 @@
  * ne les a pas branchés sur `lireRegles`.
  */
 
-import type { Referentiel } from '#/lib/planning/types.ts'
+import type {
+  ModeleContrat,
+  Referentiel,
+  Reglages,
+  TypeContrat,
+} from '#/lib/planning/types.ts'
 
 const H = 60
 
@@ -29,6 +34,24 @@ export interface JourneesContrat {
   durees: readonly number[]
   /** Journées courtes (étoile) au plus par semaine. */
   courtesMax: number
+}
+
+/** Les règles d'un type de contrat (`planning_modeles_contrat`). */
+export interface ModeleContratRegle {
+  /** Le calcul ne pose que les journées de `contrats.journees`. */
+  journeesImposees: boolean
+  /** Au-delà de 35 h, une journée étoile chaque semaine. */
+  journeeEtoile: boolean
+  /** Jamais placé par le calcul (à appeler, posé à la main). */
+  placementManuel: boolean
+  /** Heures du contrat indicatives (aucune heure due). */
+  contratIndicatif: boolean
+  /** Un jour férié travaillé ouvre un jour férié rattrapé, après un an. */
+  ferieRattrape: boolean
+  /** Jours fériés pris le jour même. */
+  feriesJourMeme: boolean
+  /** Alternance (école, CFA). */
+  alternance: boolean
 }
 
 export interface RegleEtablissement {
@@ -125,6 +148,20 @@ export interface RegleEtablissement {
     /** Semaines au-delà du contrat (sur 4) avant l'alerte. */
     semainesEnPlusAlerte: number
   }
+  /** Règles propres à chaque type de contrat. */
+  modeles: Readonly<Record<TypeContrat, ModeleContratRegle>>
+}
+
+/** Un salarié « ordinaire » (CDI, CDD) : rattrapage des jours fériés après
+ * un an, journées imposées, journée étoile au-delà de 35 h. */
+const MODELE_ORDINAIRE: ModeleContratRegle = {
+  journeesImposees: true,
+  journeeEtoile: true,
+  placementManuel: false,
+  contratIndicatif: false,
+  ferieRattrape: true,
+  feriesJourMeme: false,
+  alternance: false,
 }
 
 /** L'hôtel d'aujourd'hui, chiffre pour chiffre (B3). */
@@ -171,23 +208,116 @@ export const REGLES_PAR_DEFAUT: RegleEtablissement = {
   ecole: { veilleFin: 21 * H, lendemainDebut: 8 * H },
   conges: { congeLong: 5 },
   heures: { semainesEnPlusAlerte: 3 },
+  // Mêmes lignes que la migration 20261105100000.
+  modeles: {
+    cdi: MODELE_ORDINAIRE,
+    cdd: MODELE_ORDINAIRE,
+    extra: {
+      ...MODELE_ORDINAIRE,
+      journeesImposees: false,
+      journeeEtoile: false,
+      placementManuel: true,
+      contratIndicatif: true,
+      ferieRattrape: false,
+    },
+    stagiaire: {
+      ...MODELE_ORDINAIRE,
+      ferieRattrape: false,
+      feriesJourMeme: true,
+      alternance: true,
+    },
+    apprenti: { ...MODELE_ORDINAIRE, alternance: true },
+  },
 }
 
 /** Les règles de l'établissement d'un référentiel : la SEULE fabrique.
  * Ce que la base ne porte pas (données de test, réglage absent) reprend la
  * valeur par défaut. */
 export function lireRegles(
-  referentiel?: Pick<Referentiel, 'reglages'> | null,
+  referentiel?: Pick<Referentiel, 'reglages' | 'modelesContrat'> | null,
 ): RegleEtablissement {
-  const r = referentiel?.reglages
+  const r: Partial<Reglages> = referentiel?.reglages ?? {}
+  const d = REGLES_PAR_DEFAUT
   return {
-    ...REGLES_PAR_DEFAUT,
-    passations: {
-      ...REGLES_PAR_DEFAUT.passations,
-      releveMinutes:
-        r?.releve_minutes ?? REGLES_PAR_DEFAUT.passations.releveMinutes,
+    contrats: {
+      journees: r.journees_contrats
+        ? r.journees_contrats.map((j) => ({
+            minutesHebdo: j.minutes_hebdo,
+            durees: [...j.durees],
+            courtesMax: j.courtes_max,
+          }))
+        : d.contrats.journees,
+      journeePleine: r.journee_pleine ?? d.contrats.journeePleine,
+      journeeCourte: r.journee_courte ?? d.contrats.journeeCourte,
+      journeeEtoileMin: r.journee_etoile_min ?? d.contrats.journeeEtoileMin,
+      journeesCourtesMax:
+        r.journees_courtes_max ?? d.contrats.journeesCourtesMax,
     },
+    repos: {
+      deuxReposDeSuite: r.deux_repos_de_suite ?? d.repos.deuxReposDeSuite,
+      joursAffilesMax: r.jours_affiles_max ?? d.repos.joursAffilesMax,
+      joursAffilesConseilles:
+        r.jours_affiles_conseilles ?? d.repos.joursAffilesConseilles,
+      jourIsole: r.jour_isole ?? d.repos.jourIsole,
+      rythmeContratMin: r.rythme_contrat_min ?? d.repos.rythmeContratMin,
+      reposConfort: r.repos_confort ?? d.repos.reposConfort,
+      changementsMomentMax:
+        r.changements_moment_max ?? d.repos.changementsMomentMax,
+      momentArriereJours: r.moment_arriere_jours ?? d.repos.momentArriereJours,
+      nuitsAffileesMax: r.nuits_affilees_max ?? d.repos.nuitsAffileesMax,
+      reposApresNuits: r.repos_apres_nuits ?? d.repos.reposApresNuits,
+    },
+    passations: {
+      releveMinutes: r.releve_minutes ?? d.passations.releveMinutes,
+      continuiteObligatoire:
+        r.continuite_obligatoire ?? d.passations.continuiteObligatoire,
+      passationVeilleur: r.passation_veilleur ?? d.passations.passationVeilleur,
+      equipeTolerance: r.equipe_tolerance ?? d.passations.equipeTolerance,
+      dureeOuverture: r.duree_ouverture ?? d.passations.dureeOuverture,
+    },
+    moments: {
+      nuitDebut: r.nuit_debut ?? d.moments.nuitDebut,
+      nuitFin: r.nuit_fin ?? d.moments.nuitFin,
+      soirFin: r.soir_fin ?? d.moments.soirFin,
+      soirDebut: r.soir_debut ?? d.moments.soirDebut,
+      matinDebutAvant: r.matin_debut_avant ?? d.moments.matinDebutAvant,
+      matinFinMax: r.matin_fin_max ?? d.moments.matinFinMax,
+      libreMatinAvant: r.libre_matin_avant ?? d.moments.libreMatinAvant,
+    },
+    accueil: {
+      personnesNuit: r.personnes_nuit ?? d.accueil.personnesNuit,
+    },
+    ecole: {
+      veilleFin: r.ecole_veille_fin ?? d.ecole.veilleFin,
+      lendemainDebut: r.ecole_lendemain_debut ?? d.ecole.lendemainDebut,
+    },
+    conges: { congeLong: r.conge_long ?? d.conges.congeLong },
+    heures: {
+      semainesEnPlusAlerte:
+        r.semaines_en_plus_alerte ?? d.heures.semainesEnPlusAlerte,
+    },
+    modeles: lireModeles(referentiel?.modelesContrat),
   }
+}
+
+/** Les modèles de contrat de la base ; un type absent garde son défaut. */
+function lireModeles(
+  lignes: readonly ModeleContrat[] | undefined,
+): Readonly<Record<TypeContrat, ModeleContratRegle>> {
+  const r = { ...REGLES_PAR_DEFAUT.modeles }
+  for (const m of lignes ?? []) {
+    if (!(m.type_contrat in r)) continue
+    r[m.type_contrat] = {
+      journeesImposees: m.journees_imposees,
+      journeeEtoile: m.journee_etoile,
+      placementManuel: m.placement_manuel,
+      contratIndicatif: m.contrat_indicatif,
+      ferieRattrape: m.ferie_rattrape,
+      feriesJourMeme: m.feries_jour_meme,
+      alternance: m.alternance,
+    }
+  }
+  return r
 }
 
 /** Les journées imposées au calcul pour un contrat de cette durée, ou null

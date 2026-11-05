@@ -128,7 +128,7 @@ select is(
                             'classeur_niveau','classeur_lecture_ligne','classeur_lecture_ok',
                             'classeur_chapter_read_ok','classeur_gestion_ok',
                             -- aides de la page Planning (2026-10-27) : pures, ou lecture des verrous
-                            'planning_aujourdhui','planning_competences_ok','planning_depuis','planning_etat','planning_heure_ok','planning_hhmm','planning_horaire_de','planning_lundi','planning_minutes','planning_niveau','planning_presence','planning_semaine_type_ok','planning_verrouillee')
+                            'planning_aujourdhui','planning_competences_ok','planning_depuis','planning_etat','planning_heure_ok','planning_hhmm','planning_horaire_de','planning_journees_ok','planning_lundi','planning_minutes','planning_niveau','planning_presence','planning_semaine_type_ok','planning_verrouillee')
       and not exists (select 1 from pg_proc p
                        where p.pronamespace = 'public'::regnamespace and p.proname = q.proname
                          and not p.prosecdef

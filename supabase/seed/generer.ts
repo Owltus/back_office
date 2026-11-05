@@ -2488,6 +2488,26 @@ const PL_GROUPES: ReadonlyArray<readonly [string, string, readonly string[]]> =
     ['apprenti', 'Apprentis', ['Réception', 'Club']],
     ['stagiaire', 'Stagiaires', ['Réception', 'Club']],
   ]
+/** Importance d'un poste fictif : MÊME règle que la migration
+ * 20261105100000 (qui ne touche que les postes déjà en base, avant le seed).
+ * Accueil (jour ou nuit) : indispensable ; administratif, aucun besoin, ou
+ * tenu seulement par des cadres au forfait jours : si possible ; sinon
+ * important. */
+function plImportance(nom: string, categorie: string): string {
+  if (PL_PRESENCE.has(nom) || categorie === 'veille_nuit')
+    return 'indispensable'
+  const titulaires = PL_STAFF.filter(
+    ([, , , , , comp]) => comp[nom] && comp[nom] !== 'soutien',
+  )
+  if (
+    categorie === 'administratif_hors_site' ||
+    !PL_BESOINS.some(([poste]) => poste === nom) ||
+    (titulaires.length > 0 &&
+      titulaires.every(([, , , , , , opt]) => opt.forfait))
+  )
+    return 'si_possible'
+  return 'important'
+}
 interface PlOptions {
   forfait?: boolean
   repos?: number[]
@@ -2678,6 +2698,7 @@ function genererPlanning(f: Fenetre, tables: Table[], apres: string[]): void {
     'presence',
     'accueil_nuit',
     'ouverture',
+    'importance',
   ])
   postes.identiteForcee = true
   const idPoste = new Map<string, number>()
@@ -2696,6 +2717,7 @@ function genererPlanning(f: Fenetre, tables: Table[], apres: string[]): void {
       categorie === 'veille_nuit',
       // Réception et Club tenus dès 07:00 (2026-11-01).
       PL_PRESENCE.has(nom) ? '07:00' : null,
+      plImportance(nom, categorie),
     ])
   })
   const groupes = table('public.planning_groupes', [
