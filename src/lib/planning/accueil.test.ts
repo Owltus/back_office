@@ -615,6 +615,37 @@ describe('le surplus : en dernier recours pour des heures dues (D8)', () => {
 
 // --------------------------------------------------------------- trous
 
+describe('affinage : les mêmes horaires dans la semaine (2026-11-05)', () => {
+  // Oracle : les 18 semaines faites à la main, où chacun garde son heure
+  // d'arrivée d'un jour au suivant. Deux soirs de même longueur, qui tiennent
+  // tous deux le soir, chaque jour : à coût égal, le hasard les mélangeait.
+  const p = (graine: number) =>
+    probleme({
+      salaries: [sal('a')],
+      creneaux: [0, 1, 2].flatMap((j) => [
+        cand(`t${j}`, 'rec', j, 14.5, 22.25, ['soir'], {
+          moment: 'soir',
+          typeShift: 'S1',
+        }),
+        cand(`u${j}`, 'rec', j, 15, 22.75, ['soir'], {
+          moment: 'soir',
+          typeShift: 'S2',
+        }),
+      ]),
+      consignes: [0, 1, 2].map((j) => chiffre(j, 'soir', 1)),
+      nbJours: 3,
+      graine,
+    })
+  it('accepté : quelle que soit la graine, un seul horaire pour les trois soirs', () => {
+    for (const graine of [1, 2, 3, 4, 5, 6]) {
+      const r = gen(p(graine))
+      expect(r.affectations).toHaveLength(3)
+      const horaires = new Set(r.affectations.map((x) => x.creneauId[0]))
+      expect(horaires.size).toBe(1)
+    }
+  })
+})
+
 describe('personne seule à l’accueil (2026-11-05)', () => {
   // Oracle : banc des 18 semaines faites à la main. Quand l'équipe ne
   // suffit pas (3 le matin, 2 le soir, 4 personnes), « 2 et 2 » vaut mieux
