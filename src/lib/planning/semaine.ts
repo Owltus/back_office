@@ -870,17 +870,20 @@ export function equiteDe(
   },
 ): { soir: boolean; matinTot: boolean; moment: Periode | null } {
   const h = x.horaire_id !== null ? ctx.horaires.get(x.horaire_id) : undefined
-  const periode = periodeShift(h, x.debut)
+  // Semaine stable et nuits (règles 6 et 7 du PRD) : le moment de
+  // l'horaire, sinon l'heure de début ; un horaire sans moment : aucun.
+  // Horaire libre (sans horaire) : ses heures, comme un horaire
+  // (`momentPropose`, 2026-11-05) ; sans fin connue, l'heure de début.
+  const moment = h ? h.periode : momentLibre(x.debut, x.fin)
+  // L'équité lit le MÊME moment (relecture du 2026-11-05 : un 21:30-07:00
+  // libre était une nuit pour les nuits et un soir pour l'équité).
+  const periode = periodeShift(h ?? { periode: moment }, x.debut)
   const tot = debutsMatinTot(ctx).get(x.poste_id)
   return {
     soir: periode === 'soir',
     matinTot:
       periode === 'matin' && tot !== undefined && minutes(x.debut) <= tot,
-    // Semaine stable et nuits (règles 6 et 7 du PRD) : le moment de
-    // l'horaire, sinon l'heure de début ; un horaire sans moment : aucun.
-    // Horaire libre (sans horaire) : ses heures, comme un horaire
-    // (`momentPropose`, 2026-11-05) ; sans fin connue, l'heure de début.
-    moment: h ? h.periode : momentLibre(x.debut, x.fin),
+    moment,
   }
 }
 

@@ -640,6 +640,40 @@ describe('personne seule à l’accueil (2026-11-05)', () => {
     expect(soirs(r)).toBe(2)
   })
 
+  it('le veilleur seul ne se paie pas (relecture du 2026-11-05)', () => {
+    // Le premier veilleur possible arrive à 22:30 ; un autre horaire de nuit
+    // commence à minuit, si bien que la journée de l'accueil va jusqu'à
+    // minuit. Après 22:30, un veilleur seul est la règle : aucune contrainte
+    // « personne seule » de plus que sans l'horaire de minuit.
+    const q = (avecMinuit: boolean) =>
+      probleme({
+        salaries: [
+          sal('a'),
+          sal('b'),
+          sal('v', { postes: new Set(['veille']) }),
+        ],
+        creneaux: [
+          cand('m', 'rec', 0, 7, 15.75, ['matin']),
+          cand('s', 'club', 0, 14, 22.75, ['soir']),
+          cand('n1', 'veille', 0, 22.5, 31, ['nuit']),
+          ...(avecMinuit ? [cand('n0', 'veille', 0, 24, 31, ['nuit'])] : []),
+        ],
+        consignes: [
+          chiffre(0, 'matin', 1),
+          chiffre(0, 'soir', 1),
+          chiffre(0, 'nuit', 1),
+        ],
+        nbJours: 1,
+      })
+    const seuls = (avecMinuit: boolean) =>
+      construire(q(avecMinuit))
+        .modele.lp()
+        .split('\n')
+        .filter((l) => / >= 2$/.test(l)).length
+    expect(seuls(false)).toBeGreaterThan(0)
+    expect(seuls(true)).toBe(seuls(false))
+  })
+
   it('refusé : jamais au prix d’une place, le chiffre reste le plafond', () => {
     // Assez de monde : le chiffre exact, sans personne en plus pour éviter
     // d'être seul ailleurs.

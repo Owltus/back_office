@@ -23,6 +23,7 @@ import {
   analyser,
   besoinsValides,
   contexte,
+  equiteDe,
   correspondances,
   creneauBesoin,
   creneauRemplacant,
@@ -2146,6 +2147,23 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
       ),
       { numRuns: 300 },
     )
+  })
+
+  it('un horaire libre : le même moment pour les nuits et pour l’équité (2026-11-05)', () => {
+    const ctx = contexte(donnees([], []))
+    const libre = (debut: string, fin: string) =>
+      equiteDe(ctx, { poste_id: ACCUEIL, horaire_id: null, debut, fin })
+    // 21:30-07:00 : une nuit, pas un soir de l'équité.
+    expect(libre('21:30', '07:00')).toMatchObject({
+      moment: 'nuit',
+      soir: false,
+    })
+    // 06:00-21:00 : un soir (il finit à 21 h), jamais un matin tôt.
+    expect(libre('06:00', '21:00')).toMatchObject({
+      moment: 'soir',
+      soir: true,
+      matinTot: false,
+    })
   })
 
   it('Martin V3-I : recompte par cycle = oracle à la main (middle jamais, soutien compté)', () => {

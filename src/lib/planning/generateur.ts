@@ -3023,6 +3023,17 @@ function trousEntreEquipes(
         nuitDeLaVeille(candidats, jourDe, jour, nuitDemandee),
       )
       if (!plage) continue
+      // Personne seule : jusqu'à l'arrivée possible la plus TÔT du veilleur
+      // (relecture du 2026-11-05) ; ensuite, un veilleur seul est la règle
+      // (un seul veilleur la nuit), il ne se paie pas.
+      const nuitsDuJour = demandes.has('nuit')
+        ? candidats.filter(
+            (c) => jourDe(c) === jour && c.presence.includes('nuit'),
+          )
+        : []
+      const finSeul = nuitsDuJour.length
+        ? Math.min(...nuitsDuJour.map((c) => c.debut))
+        : plage.fin
       r.push(
         ...variablesTrous(
           m,
@@ -3036,6 +3047,7 @@ function trousEntreEquipes(
           tenus,
           POIDS_TROU_QUART,
           POIDS_SEUL_QUART,
+          finSeul,
         ),
       )
     }
@@ -3480,6 +3492,7 @@ function variablesTrous(
   tenus: Creneau[],
   poidsQuart = POIDS_TROU_QUART,
   poidsSeul = 0,
+  finSeul = Infinity,
 ): Array<Trou & { v: string }> {
   const r: Array<Trou & { v: string }> = []
   const presents = tenus.filter((c) => c.debut < fin && c.fin > debut)
@@ -3517,8 +3530,10 @@ function variablesTrous(
     m.ajoute([...termes, [1, v]], '>=', 1)
     m.cout(Math.round((poidsQuart * (suite.fin - suite.debut)) / QUART), v)
     r.push({ poste, jour, debut: suite.debut, fin: suite.fin, v })
-    // Personne seule (`POIDS_SEUL_QUART`) : au moins deux, ou payer.
-    if (poidsSeul > 0) {
+    // Personne seule (`POIDS_SEUL_QUART`) : au moins deux, ou payer ; pas
+    // après `finSeul` (le veilleur seul). Les suites suivent les débuts des
+    // créneaux : une suite s'arrête à l'arrivée d'un veilleur.
+    if (poidsSeul > 0 && suite.fin <= finSeul) {
       const seul = m.continu(0, 1)
       m.ajoute([...termes, [1, v], [1, seul]], '>=', 2)
       m.cout(Math.round((poidsSeul * (suite.fin - suite.debut)) / QUART), seul)
