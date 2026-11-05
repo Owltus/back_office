@@ -5,6 +5,7 @@
  * des étiquettes.
  */
 
+import { REGLES_PAR_DEFAUT } from '#/lib/planning/reglesEtablissement.ts'
 import { minutes } from '#/lib/planning/temps.ts'
 import type { Horaire, Periode } from '#/lib/planning/types.ts'
 
@@ -29,11 +30,12 @@ import type { Horaire, Periode } from '#/lib/planning/types.ts'
 export function momentPropose(
   h: Pick<Horaire, 'debut' | 'fin' | 'pause'>,
 ): Periode {
+  const l = REGLES_PAR_DEFAUT.moments
   const debut = minutes(h.debut)
   const fin = minutes(h.fin)
-  if (debut >= 21 * 60 || debut < 5 * 60) return 'nuit'
-  if (fin <= debut || fin >= 21 * 60 || debut >= 15 * 60) return 'soir'
-  if (debut < 9 * 60 && fin <= 17 * 60 + 45) return 'matin'
+  if (debut >= l.nuitDebut || debut < l.nuitFin) return 'nuit'
+  if (fin <= debut || fin >= l.soirFin || debut >= l.soirDebut) return 'soir'
+  if (debut < l.matinDebutAvant && fin <= l.matinFinMax) return 'matin'
   return 'middle'
 }
 

@@ -19,6 +19,10 @@ import {
 } from '#/lib/planning/cycles.ts'
 import type { PresencePoste } from '#/lib/planning/cycles.ts'
 import {
+  lireRegles,
+  REGLES_PAR_DEFAUT,
+} from '#/lib/planning/reglesEtablissement.ts'
+import {
   codePrevuAuPoste,
   codesDeLaFiche,
   codesDuPoste,
@@ -1129,7 +1133,7 @@ export function candidatsAccueil(ctx: Contexte, depuis = 0): Creneau[] {
 }
 
 /** Durée tenue à l'ouverture d'un poste de l'accueil : la première heure. */
-export const DUREE_OUVERTURE = 60
+export const DUREE_OUVERTURE = REGLES_PAR_DEFAUT.passations.dureeOuverture
 
 /** L'ouverture de chaque poste de l'accueil qui a une heure d'ouverture
  * (2026-11-01, « à 7 h, quelqu'un en réception et quelqu'un au club ») :
@@ -2705,7 +2709,9 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
     creneaux: [...p.creneaux, ...candidatsDuMoment],
     consignes: chiffresAccueil(ctx),
     ouvertures: ouverturesAccueil(ctx),
-    releveMinutes: accueil ? (d.referentiel.reglages?.releve_minutes ?? 0) : 0,
+    releveMinutes: accueil
+      ? lireRegles(d.referentiel).passations.releveMinutes
+      : 0,
   }
   const ouverturesVides: TrouOut[] = ouverturesManquees(pReglages, affs).map(
     (t) => ({
@@ -3190,7 +3196,7 @@ export function preparerGeneration(
       ? { suivante: esquisseSuivante(d2, ctx, salaries, besoins) }
       : {}),
     releveMinutes: accueilEnService(ctx)
-      ? (d.referentiel.reglages?.releve_minutes ?? 0)
+      ? lireRegles(d.referentiel).passations.releveMinutes
       : 0,
     // Passation du lundi matin avec le veilleur du dimanche d'avant.
     veilleDuLundi: veilleDuLundiDe(d, lundi),

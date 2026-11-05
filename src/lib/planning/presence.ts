@@ -8,7 +8,7 @@
  * - matin, soir : seulement sur un poste qui compte dans la présence
  *   (`Poste.presence`, Réception et Club à l'hôtel) ;
  * - nuit : un horaire de famille `nuit`, ou un horaire libre qui commence la
- *   nuit (22 h à 5 h), sur un poste qui a au moins un horaire de nuit
+ *   nuit (21 h à 5 h), sur un poste qui a au moins un horaire de nuit
  *   (`nuitComptee`, calculé par l'appelant), que le poste soit coché
  *   « présence » ou non (D15 : la Réception et le Club n'ont pas de code de
  *   nuit, c'est la Veille de nuit qui fait le minimum de nuit) ;
@@ -33,6 +33,7 @@
  */
 
 import { momentPropose } from '#/lib/planning/moment.ts'
+import { REGLES_PAR_DEFAUT } from '#/lib/planning/reglesEtablissement.ts'
 import { minutes } from '#/lib/planning/temps.ts'
 import type {
   Besoin,
@@ -59,11 +60,13 @@ export function momentLibre(debut: string, fin?: string): Periode {
     : momentPropose({ debut, fin, pause: 0 })
 }
 
-/** Période d'un horaire libre : nuit de 22 h à 5 h, matin avant 12 h 30. */
+/** Période d'un horaire libre sans fin connue : nuit aux mêmes limites que
+ * `momentPropose` (21 h à 5 h), matin avant 12 h 30. */
 export function periodeLibre(debut: string): 'matin' | 'soir' | 'nuit' {
+  const l = REGLES_PAR_DEFAUT.moments
   const m = minutes(debut)
-  if (m >= 22 * 60 || m < 5 * 60) return 'nuit'
-  return m < 12 * 60 + 30 ? 'matin' : 'soir'
+  if (m >= l.nuitDebut || m < l.nuitFin) return 'nuit'
+  return m < l.libreMatinAvant ? 'matin' : 'soir'
 }
 
 /** Le poste a-t-il des horaires de NUIT (D15) ? Seulement s'il les liste

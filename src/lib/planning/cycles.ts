@@ -9,7 +9,7 @@
  * Cycle = le moment de l'horaire (`Horaire.periode`, migration du
  * 2026-10-28). Sans horaire (horaire spécifique), ou pour un horaire sans
  * moment, il se déduit de l'heure de début
- * comme un horaire libre (`periodeLibre`, `presence.ts`) : nuit de 22 h à
+ * comme un horaire libre (`periodeLibre`, `presence.ts`) : nuit de 21 h à
  * 5 h, matin avant 12 h 30, soir ensuite.
  *
  * Un middle reste un middle (D11, D12) : il ne remplace qu'un middle et ne
