@@ -181,8 +181,9 @@ import type {
  *   + POIDS_MINEUR_FERIE                                        un mineur un jour férié
  *   + `coutExtra` (si `c` est un candidat de l'accueil)          un extra
  *   + le plus cher des surplus                                  une personne en plus d'un autre moment
- *                                                               (un middle compte matin et soir)
  *   + EQUITE_MAX_PAR_SHIFT                                      équité, au pire
+ *   + POIDS_ARRIVEE_MATIN_MINUTE × ARRIVEE_MATIN_MAX            arriver après l'ouverture
+ *     (un matin de l'accueil)
  *   + POIDS_DEJA_PROPOSE + BRUIT_MAX                            rebattre, hasard
  *   + `pireJfr` (s'il y a un JFR à placer dans la semaine)       le JFR perdu ce jour-là,
  *                                                               sa préférence, et les heures
@@ -764,6 +765,10 @@ export function pireCoutRemplir(
     POIDS_MINEUR_FERIE +
     presenceLaPlusChere +
     EQUITE_MAX_PAR_SHIFT +
+    // Arriver après l'ouverture (2026-11-05), au plus.
+    (c.moment === 'matin' && c.accueil
+      ? POIDS_ARRIVEE_MATIN_MINUTE * ARRIVEE_MATIN_MAX
+      : 0) +
     POIDS_DEJA_PROPOSE +
     BRUIT_MAX
   )

@@ -8,8 +8,8 @@
  * clair ») : vert, conforme ; rouge, il manque du monde ; bleu, plus que le
  * nombre demandé. Le mois montre TOUJOURS trois points (matin, soir, nuit) :
  * un moment où rien n'est demandé est un rond vide. Depuis le tableau de
- * l'accueil (2026-11-01) : un nombre exact, un middle compte le matin et le
- * soir, la nuit est celle des veilleurs.
+ * l'accueil (2026-11-01) : un nombre exact, un middle ne compte nulle part
+ * (2026-11-05), la nuit est celle des veilleurs.
  */
 
 import { Moon, Sun, Sunset } from 'lucide-react'
