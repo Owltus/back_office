@@ -630,6 +630,10 @@ sur le mois (deux personnes, une journée chacune).
   l'arrivée possible la plus tôt du veilleur (un veilleur seul est la règle). Moments avec une
   personne seule (9 heures par jour, 126 jours, 3 graines) : 121 en moyenne → 99 ; chaque
   semaine recalculée seule sur le passé réel : 118 → 102 (157 à la main, sur 119 jours).
+- **Affinage en deux temps** (même nuit, `affiner`) : après le calcul, un second calcul
+  minuscule ne choisit plus que l'horaire précis de chaque shift de l'accueil dans son moment,
+  pour garder les mêmes horaires dans la semaine, sans dépasser le coût du calcul de plus de 600.
+  Heure d'arrivée changée d'un jour au suivant : 34 % → 28 % (23 % à la main).
 - **Écartés après mesure.** Les habitudes de chacun (préférer les horaires qu'une personne fait
   d'ordinaire) : comptées d'un moment à l'autre, elles s'entretenaient et vidaient les soirs
   (6 à 30 soirs seuls selon la graine) ; limitées à un moment, aucun gain mesurable.

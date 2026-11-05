@@ -2660,8 +2660,16 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   première sans historique atteint parfois 60 s) ; une recherche locale ou
   un recuit ne peuvent pas battre un optimum prouvé sur le même objectif,
   CP-SAT n'existe pas dans le navigateur, et les écarts aux humains
-  venaient des RÈGLES de l'objectif, pas de la résolution. Piste non faite :
-  proposer plusieurs plannings de même coût (graines) au choix.
+  venaient des RÈGLES de l'objectif, pas de la résolution. ALGORITHME
+  AJOUTÉ : AFFINAGE en deux temps (« fixer puis optimiser », `affiner`,
+  generateur.ts) : après l'optimum, qui / quel jour / quel poste / quel
+  moment figés, un second calcul minuscule ne choisit plus que l'horaire
+  précis à l'accueil pour garder les mêmes horaires dans la semaine
+  (`POIDS_AFFINAGE_HORAIRE`), objectif d'origine borné à l'optimum +
+  `AFFINAGE_TOLERANCE` (600), gardé seulement s'il est prouvé optimal,
+  plafonné à `AFFINAGE_PLAFOND_S` ; heure d'arrivée changée 34 → 28 % (23 %
+  à la main), même couverture et même temps. Piste non faite (décision
+  produit) : proposer plusieurs plannings de même coût au choix.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 
