@@ -623,6 +623,16 @@ sur le mois (deux personnes, une journée chacune).
   infractions ; le moteur : 2 trous, 0 infraction). Écarté : garder le même horaire toute la
   semaine (31 % → 25 % de changements d'heure d'arrivée, 22 % à la main) triplait le temps de
   calcul et dégradait les soirs.
+- **Personne seule à l'accueil** (même nuit) : quand l'équipe ne suffit pas pour les chiffres
+  (3 le matin, 2 le soir), le calcul mettait le manque au hasard (« 3 et 1 » plutôt que « 2 et
+  2 ») : de 6 à 30 soirs avec une personne seule selon la graine. Chaque quart d'heure de la
+  journée de l'accueil avec une seule personne coûte un peu (`POIDS_SEUL_QUART`), jusqu'à
+  l'arrivée possible la plus tôt du veilleur (un veilleur seul est la règle). Moments avec une
+  personne seule (9 heures par jour, 126 jours, 3 graines) : 121 en moyenne → 99 ; chaque
+  semaine recalculée seule sur le passé réel : 118 → 102 (157 à la main, sur 119 jours).
+- **Écartés après mesure.** Les habitudes de chacun (préférer les horaires qu'une personne fait
+  d'ordinaire) : comptées d'un moment à l'autre, elles s'entretenaient et vidaient les soirs
+  (6 à 30 soirs seuls selon la graine) ; limitées à un moment, aucun gain mesurable.
 - **Statut.** EN PLACE (local, non livré) le 2026-11-05.
 
 ### Tableau récapitulatif
@@ -647,7 +657,7 @@ sur le mois (deux personnes, une journée chacune).
 | 16  | Jour férié rattrapé (JFR)           | en place (local, non livré) | `feries.ts`, `droitAuRattrapage`, `POIDS_JFR_EN_ATTENTE`, alerte JOUR-FERIE          |
 | 17  | Équipe ensemble (soir, relève)      | en place (local, non livré) | `equipesSynchro`, `EQUIPE_TOLERANCE`, `POIDS_RELEVE_CHACUN`, `equipesDesynchro`      |
 | 18  | Journées de 7 h / 8 h (35 h, 39 h)  | DUR (35 h et 39 h)          | `journeesDuCalcul`, `etoileSacrifiee`, `journeeDe`, JOURNEE-TYPE, HEURES-FAITES      |
-| 19  | Middle coup de main, matin ensemble | en place (local, non livré) | `moment.ts`, `momentsAccueil`, `momentLibre`, `coutArriveeMatin`                     |
+| 19  | Middle coup de main, matin ensemble | en place (local, non livré) | `moment.ts`, `momentsAccueil`, `momentLibre`, `coutArriveeMatin`, `POIDS_SEUL_QUART` |
 
 Le code des règles 1, 3, 4, 6, 7, 8, 12, 13 et 14 date du 2026-11-02 : en place en local, pas
 encore livré. Relecture du 2026-11-03 (banc de 7 scénarios réels, en mémoire) : règles 1, 4, 8, 9,

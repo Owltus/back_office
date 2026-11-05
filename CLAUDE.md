@@ -2643,9 +2643,25 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   10 places à pourvoir annoncées au lieu d'être masquées par des middles
   comptés deux fois. ⚠ Un banc de l'historique doit remettre `actif` aux
   contrats finis depuis (CDD, stagiaires de l'été), sinon l'été manque de
-  monde. Écarté après mesure : « même horaire toute la semaine » (temps de
-  calcul × 3). L'algorithme (MIP HiGHS) reste : chaque semaine atteint
-  l'optimum en quelques secondes, les écarts venaient des règles.
+  monde. Suite de la nuit (relances du but) : PERSONNE SEULE à l'accueil
+  (`POIDS_SEUL_QUART`, variable à côté du trou, jusqu'à l'arrivée possible
+  la plus tôt du veilleur, `finSeul`) : le manque se partage (« 2 et 2 »
+  plutôt que « 3 et 1 ») ; moments seuls 121 → 99 en moyenne sur 3
+  graines. Écartés après mesure : « même horaire toute la semaine » (temps
+  de calcul × 3), HABITUDES de chacun (comptées d'un moment à l'autre, elles
+  s'auto-entretiennent et vident les soirs ; par moment, aucun gain).
+  ⚠ Un banc doit tourner sur PLUSIEURS GRAINES : d'une graine à l'autre, les
+  soirs avec une personne seule allaient de 6 à 30 (beaucoup de plannings
+  de même coût) ; une seule graine fait conclure à tort. Mode « passé
+  réel » (chaque semaine recalculée seule sur les vraies semaines d'avant,
+  comme dans l'app) : 81 % des jours travaillés ou libres comme à la main,
+  64 % au même moment. ALGORITHME étudié et gardé : le MIP HiGHS prouve
+  l'optimum en quelques secondes sur presque toutes les semaines (la
+  première sans historique atteint parfois 60 s) ; une recherche locale ou
+  un recuit ne peuvent pas battre un optimum prouvé sur le même objectif,
+  CP-SAT n'existe pas dans le navigateur, et les écarts aux humains
+  venaient des RÈGLES de l'objectif, pas de la résolution. Piste non faite :
+  proposer plusieurs plannings de même coût (graines) au choix.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 
