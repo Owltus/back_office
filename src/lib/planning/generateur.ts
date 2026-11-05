@@ -3797,6 +3797,8 @@ function resoudreUneFois(
  * temps ; sinon (ou si l'affinage échoue), le planning du calcul tel quel.
  */
 export const AFFINAGE_TOLERANCE = 600
+/** Temps au plus de l'affinage (secondes), et jamais plus du quart du budget. */
+export const AFFINAGE_PLAFOND_S = 10
 export const POIDS_AFFINAGE_HORAIRE = 100
 function affiner(
   p: Probleme,
@@ -3830,11 +3832,20 @@ function affiner(
       g.moment === c.moment
     )
   }
-  const r2 = resoudreUneFois(p, highs, echeance, Number.POSITIVE_INFINITY, p, {
-    permis,
-    borne: r.objectif + AFFINAGE_TOLERANCE,
-  })
-  return r2.statut === 'inconnu' ? r : { ...r2, objectif: r.objectif }
+  // La borne contient le bruit de la graine du calcul (0 à 3 par variable) :
+  // la marge réelle peut dépasser AFFINAGE_TOLERANCE de ce bruit, toujours
+  // sous une règle morale.
+  const r2 = resoudreUneFois(
+    p,
+    highs,
+    echeance,
+    Math.min(AFFINAGE_PLAFOND_S, p.tempsMaxSecondes / 4),
+    p,
+    { permis, borne: r.objectif + AFFINAGE_TOLERANCE },
+  )
+  // Seulement un affinage PROUVÉ (relecture du 2026-11-05) : arrêté au temps
+  // limite, il pourrait coûter la marge sans rien gagner.
+  return r2.statut === 'optimal' ? { ...r2, objectif: r.objectif } : r
 }
 
 /** Ce qui reste à tenir et qu'un remplaçant pourrait tenir : places

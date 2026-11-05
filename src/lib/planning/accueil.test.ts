@@ -636,6 +636,33 @@ describe('affinage : les mêmes horaires dans la semaine (2026-11-05)', () => {
       nbJours: 3,
       graine,
     })
+  it('refusé : un affinage arrêté au temps limite ne remplace pas l’optimum', () => {
+    let appels = 0
+    const lps: string[] = []
+    const faux: Highs = {
+      solve: (lp, o) => {
+        lps.push(lp)
+        const r = highs.solve(lp, o)
+        return appels++ === 1 ? { ...r, Status: 'Time limit reached' } : r
+      },
+    }
+    for (const graine of [1, 2, 3, 4, 5, 6]) {
+      appels = 0
+      const avant = generer(p(graine), faux)
+      expect(appels).toBe(2)
+      // Le calcul seul (sans affinage) rend la même chose : rien n'a changé.
+      const seul = generer(p(graine), {
+        solve: (lp, o) => {
+          const r = highs.solve(lp, o)
+          return lp === lps[0] ? r : { ...r, Status: 'Time limit reached' }
+        },
+      })
+      expect(avant.statut).toBe('optimal')
+      expect(qui(avant)).toEqual(qui(seul))
+      lps.length = 0
+    }
+  })
+
   it('accepté : quelle que soit la graine, un seul horaire pour les trois soirs', () => {
     for (const graine of [1, 2, 3, 4, 5, 6]) {
       const r = gen(p(graine))
