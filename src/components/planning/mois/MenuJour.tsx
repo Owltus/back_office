@@ -94,7 +94,8 @@ export function MenuJour({
   ouverture: OuvertureMenu
   titre: string
   personne: Salarie
-  referentiel: Pick<Referentiel, 'horaires' | 'postes' | 'motifs'>
+  referentiel: Pick<Referentiel, 'horaires' | 'postes' | 'motifs'> &
+    Partial<Pick<Referentiel, 'reglages' | 'modelesContrat'>>
   /** Jour de la case dans sa semaine (0 = lundi). */
   jour: number
   /** La semaine de la case et ses voisines (codes permis, coupure de repos). */

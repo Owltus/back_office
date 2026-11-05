@@ -140,7 +140,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':J', (select j from t_ids)::text);
 $$;
 
-select plan(106);
+select plan(108);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -338,6 +338,12 @@ select is(pg_temp.essai('gestion', array['update public.planning_reglages set jo
   'err=23514', 'règles : jamais plus de 6 jours d''affilée (la loi)');
 select is(pg_temp.essai('gestion', array['update public.planning_reglages set jours_affiles_conseilles = 6, jours_affiles_max = 5 where id = 1']),
   'err=23514', 'règles : les jours conseillés ne dépassent pas le maximum');
+select is(pg_temp.essai('gestion', array['update public.planning_reglages set jour_isole = ''interdit'', jours_affiles_conseilles = 1 where id = 1']),
+  'err=23514', 'règles : jour seul interdit avec un seul jour d''affilée conseillé est refusé');
+select is(pg_temp.essai('gestion', array[
+  'update public.planning_reglages set jour_isole = ''a_eviter'', jours_affiles_conseilles = 1 where id = 1',
+  'select jour_isole || ''/'' || jours_affiles_conseilles from public.planning_reglages where id = 1']),
+  'a_eviter/1', 'règles : un seul jour d''affilée avec le jour seul à éviter est permis');
 select is(pg_temp.essai('gestion', array['update public.planning_reglages set deux_repos_de_suite = ''parfois'' where id = 1']),
   'err=23514', 'règles : deux repos de suite obligatoire, souhaité ou aucune');
 select is(pg_temp.essai('gestion', array['update public.planning_reglages set journees_contrats = ''[{"minutes_hebdo":2100}]'' where id = 1']),

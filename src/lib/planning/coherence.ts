@@ -250,6 +250,7 @@ export function besoinsPresence(r: Referentiel): Map<string, number> {
     new Map(r.postes.map((p) => [p.id, p])),
     new Map(r.horaires.map((h) => [h.id, h])),
     postesAvecNuit(r),
+    lireRegles(r).moments,
   )
 }
 
@@ -278,9 +279,12 @@ export function momentsAccueilDemandes(r: Referentiel): number {
 const autonome = (n: string) => n === 'titulaire' || n === 'occasionnel'
 
 /** Son contrat ne mesure pas ses heures : forfait jours (décompte en
- * jours), extra (placé à la main, au besoin), ou 0 h. */
-const contratIndicatif = (s: Salarie) =>
-  s.forfait_jours || s.type_contrat === 'extra' || !(Number(s.heures_hebdo) > 0)
+ * jours), heures indicatives d'après le modèle de son type de contrat
+ * (l'extra, aux défauts), ou 0 h. Même règle que le moteur. */
+const contratIndicatif = (s: Salarie, regles: RegleEtablissement) =>
+  s.forfait_jours ||
+  modeleDe(regles, s.type_contrat).contratIndicatif ||
+  !(Number(s.heures_hebdo) > 0)
 
 /** La personne peut-elle tenir ce besoin (poste, jour, code) d'après sa
  * fiche et sa semaine type ? Le poste est déjà vérifié par `besoinsValides`.
@@ -647,6 +651,7 @@ export function verifierReglages(
               poste,
               jour: j,
               horaires: r.horaires,
+              regles,
             }).codes.some((x) => x.id === h.id),
         )
         .map(({ poste }) => poste.id)
@@ -703,6 +708,7 @@ export function verifierReglages(
                 poste,
                 jour: j,
                 horaires: r.horaires,
+                regles,
               }).codes,
               fixe,
               Math.round(Number(s.heures_hebdo) * 60),
@@ -738,7 +744,9 @@ export function verifierReglages(
   const nonJuges = new Set(
     r.postes
       .filter((p) =>
-        tenants(p.id, (n) => n === 'titulaire').some(contratIndicatif),
+        tenants(p.id, (n) => n === 'titulaire').some((s) =>
+          contratIndicatif(s, regles),
+        ),
       )
       .map((p) => p.id),
   )
@@ -764,7 +772,7 @@ export function verifierReglages(
   const totalContrat = equipe
     .filter(
       (s) =>
-        !contratIndicatif(s) &&
+        !contratIndicatif(s, regles) &&
         s.competences.some((c) => c.niveau === 'titulaire'),
     )
     .reduce((t, s) => t + minutesContrat(s), 0)
@@ -865,7 +873,7 @@ export function verifierReglages(
     const contrats = equipe
       .filter(
         (s) =>
-          !contratIndicatif(s) &&
+          !contratIndicatif(s, regles) &&
           s.competences.some(
             (k) =>
               deLAccueil(k) &&
@@ -926,6 +934,7 @@ export function verifierReglages(
           poste,
           jour: c.jour,
           horaires: r.horaires,
+          regles,
         }).codes.some((h) => String(h.id) === x.typeShift)
         if (!permis) continue
         peut = true
@@ -1124,6 +1133,7 @@ function pointsDesRegles(
           poste,
           jour,
           horaires: r.horaires,
+          regles,
         }).codes)
           possibles.set(h.id, h)
     // Aucun horaire du tout : un autre point le dit déjà (`codes-morts`,
@@ -1139,6 +1149,23 @@ function pointsDesRegles(
       'equipe',
       `${nomComplet(s)} : son contrat de ${heuresLisibles(minutesHebdo)} se fait en journées de ${dureesTexte(j.durees)}, mais aucun horaire de cette durée n'est permis sur ses postes. Le planning automatique ne peut pas placer cette personne.`,
       cibleFiche(s.id, 'horaires'),
+    )
+  }
+
+  // ------------------------------- jour seul interdit, un jour d'affilée
+  // Un seul jour d'affilée et aucun jour seul : aucun jour n'est plaçable
+  // pour un contrat au rythme humain (relecture du 2026-11-05). L'écran et
+  // la base le refusent désormais ; une base plus ancienne peut l'avoir.
+  if (
+    regles.repos.jourIsole === 'interdit' &&
+    regles.repos.joursAffilesConseilles < 2
+  ) {
+    ajouter(
+      'jours-affiles-un-seul',
+      'bloquant',
+      'equipe',
+      `Un seul jour de travail d'affilée est conseillé, et un jour de travail seul est interdit : le planning automatique ne peut placer aucun contrat de ${heuresLisibles(regles.repos.rythmeContratMin)} et plus. Conseillez au moins 2 jours d'affilée, ou passez le jour de travail seul à À éviter.`,
+      'regles',
     )
   }
 

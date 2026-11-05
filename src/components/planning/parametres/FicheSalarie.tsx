@@ -93,6 +93,7 @@ import {
 import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { messageErreur } from '#/lib/planning/erreurs.ts'
 import { planningKeys } from '#/lib/planning/keys.ts'
+import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
 import { estEcole } from '#/lib/planning/semaine.ts'
 import {
   enregistrerSalarie,
@@ -341,7 +342,7 @@ function CorpsFiche({
   const maj = (f: (x: Brouillon) => Brouillon) => setB((x) => f(x))
 
   const ecole = referentiel.motifs.find(estEcole)
-  const alternance = enAlternance(b.type_contrat)
+  const alternance = enAlternance(b.type_contrat, lireRegles(referentiel))
   const groupe = referentiel.groupes.find((g) => g.id === b.groupe_id)
   const desactive = !gerer || enCours
   const erreur = erreurBrouillon(b)

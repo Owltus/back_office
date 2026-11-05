@@ -32,6 +32,7 @@ import type {
   Voisin,
 } from '#/lib/planning/eligibilite.ts'
 import type { OuvertureSpecifique } from '#/components/planning/HoraireSpecifique.tsx'
+import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
 import { estEcole } from '#/lib/planning/semaine.ts'
 import type { SemaineOut, ShiftOut } from '#/lib/planning/semaine.ts'
 import { JOURS } from '#/lib/planning/types.ts'
@@ -104,7 +105,8 @@ export function actuelNonPermis(
 }
 
 interface EntreeCase {
-  referentiel: Pick<Referentiel, 'horaires' | 'postes' | 'motifs'>
+  referentiel: Pick<Referentiel, 'horaires' | 'postes' | 'motifs'> &
+    Partial<Pick<Referentiel, 'reglages' | 'modelesContrat'>>
   personne: Salarie
   posteId: number | undefined
   jour: number
@@ -138,6 +140,7 @@ function entreeDeLaCase({
     },
     lundi: semaine?.lundi,
     voisins: voisinsDe(source, personne.id, jour, sauf),
+    regles: lireRegles(referentiel),
   }
 }
 
@@ -334,7 +337,7 @@ export function rubriquesDeLaCase({
   sauf,
   garderActuel = false,
 }: {
-  referentiel: Pick<Referentiel, 'horaires' | 'postes' | 'motifs'>
+  referentiel: EntreeCase['referentiel']
   personne: Salarie
   jour: number
   source: SourceCase

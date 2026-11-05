@@ -177,7 +177,11 @@ export function SectionCompetences({
           valeur=""
           placeholder={`+ Ajouter un poste${groupe?.postes_autorises.length ? ` (prévus pour ${groupe.nom})` : ''}`}
           onChange={(v) =>
-            v && regler(Number(v), niveauParDefaut(b.type_contrat))
+            v &&
+            regler(
+              Number(v),
+              niveauParDefaut(b.type_contrat, lireRegles(referentiel)),
+            )
           }
           groupes={[
             {
@@ -340,7 +344,7 @@ export function SectionSemaineType({
 
   // Seulement ce que la règle unique permet ce jour-là sur ses postes.
   const possibles = (jour: number) =>
-    codesSemaineType(b, postes, horaires, jour)
+    codesSemaineType(b, postes, horaires, jour, regles)
   return (
     <Section
       titre="Semaine type"

@@ -107,6 +107,43 @@ describe('Règles des contrats', () => {
   })
 })
 
+describe('Règles des contrats : relecture adverse du 2026-11-05', () => {
+  it('1. « Heures indicatives » n’est offert qu’au type extra', () => {
+    tiroir()
+    // CDI par défaut : la case n'est pas là.
+    expect(
+      screen.queryByRole('switch', { name: /Heures indicatives/ }),
+    ).toBeNull()
+    fireEvent.click(screen.getByRole('radio', { name: 'Extra' }))
+    expect(
+      screen.getByRole('switch', { name: /Heures indicatives/ }),
+    ).toBeTruthy()
+  })
+
+  it('8. second temps en échec : l’écran le dit et garde la saisie', async () => {
+    service.enregistrerModeleContrat.mockRejectedValue(new Error('panne'))
+    tiroir()
+    fireEvent.click(screen.getByRole('radio', { name: 'Souhaité' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Extra' }))
+    fireEvent.click(screen.getByRole('switch', { name: /Journée étoile/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+    const alerte = await screen.findByRole('alert')
+    expect(alerte.textContent).toMatch(/types de contrat/)
+    expect(alerte.textContent).toMatch(/pas été enregistr/)
+    // Le brouillon reste : la saisie est encore là, Enregistrer encore actif.
+    expect(
+      screen
+        .getByRole('switch', { name: /Journée étoile/ })
+        .getAttribute('aria-checked'),
+    ).toBe('true')
+    expect(
+      screen
+        .getByRole('button', { name: 'Enregistrer' })
+        .hasAttribute('disabled'),
+    ).toBe(false)
+  })
+})
+
 describe('Moments', () => {
   it('aperçu avant l’envoi, puis limites et moments des horaires', async () => {
     monter(<SectionMoments referentiel={ref} modifiable />)

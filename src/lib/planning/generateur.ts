@@ -46,7 +46,6 @@ import {
   travail,
 } from '#/lib/planning/modele.ts'
 import {
-  RYTHME_CONTRAT_MIN,
   jourIsoleDe,
   rythmeHumain,
   apresContrat,
@@ -346,7 +345,6 @@ export function pireJfr(reductionMax: number): number {
     ? POIDS_JFR_EN_ATTENTE + POIDS_JFR_COLLE + POIDS_SOUS_CONTRAT * reductionMax
     : 0
 }
-export { RYTHME_CONTRAT_MIN }
 /** Horizon glissant (2026-11-04) : une personne qui manque un jour de la
  * semaine SUIVANTE esquissée (une place qui y resterait vide). Au-dessus du
  * week-end libre et des heures d'un shift de 12 h (les places passent avant

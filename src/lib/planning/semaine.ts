@@ -1166,9 +1166,6 @@ export function candidatsAccueil(ctx: Contexte, depuis = 0): Creneau[] {
   return r
 }
 
-/** Durée tenue à l'ouverture d'un poste de l'accueil : la première heure. */
-export const DUREE_OUVERTURE = REGLES_PAR_DEFAUT.passations.dureeOuverture
-
 /** L'ouverture de chaque poste de l'accueil qui a une heure d'ouverture
  * (2026-11-01, « à 7 h, quelqu'un en réception et quelqu'un au club ») :
  * chaque jour où le matin est demandé, de l'heure d'ouverture à une heure

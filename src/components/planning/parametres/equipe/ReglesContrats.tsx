@@ -174,12 +174,16 @@ export function ReglesContrats({
   } = useBrouillon<SaisieReglesContrats>(enregistre)
   const [type, setType] = useState<TypeContrat>('cdi')
   const [envoi, setEnvoi] = useState(false)
+  /** Enregistrement en deux temps (réglages, puis types de contrat) : le
+   * second a échoué, le premier est fait. Dit tant que la saisie reste. */
+  const [partiel, setPartiel] = useState(false)
   const erreurs = erreursSaisie(b)
   const avertissements = avertissementsSaisie(b)
   const off = !gerer || envoi
 
   const fermer = () => {
     annuler()
+    setPartiel(false)
     onFermer()
   }
   const changerLigne = (cle: string, maj: Partial<LigneJournees>) =>
@@ -197,16 +201,22 @@ export function ReglesContrats({
   const enregistrer = async () => {
     if (!gerer || envoi || erreurs.length) return
     setEnvoi(true)
+    let reglagesFaits = false
     const r = await ecrire(async () => {
       await enregistrerReglages(reglagesDepuis(b))
+      reglagesFaits = true
       for (const m of modelesChanges(enregistre, b))
         await enregistrerModeleContrat(m)
     }, "Les règles des contrats n'ont pas pu être enregistrées")
     setEnvoi(false)
+    setPartiel(!r.ok && reglagesFaits)
     if (r.ok) {
       adopter(b)
       notifier('Règles des contrats enregistrées')
-    } else notifier(r.message, 'danger')
+    } else if (reglagesFaits)
+      // Rien n'est adopté : la saisie reste à l'écran, à renvoyer.
+      notifier(MESSAGE_PARTIEL, 'danger')
+    else notifier(r.message, 'danger')
   }
 
   return (
@@ -449,21 +459,27 @@ export function ReglesContrats({
                     Posé à la main seulement
                   </Interrupteur>
                 </Effet>
-                <Effet
-                  texte={
-                    modele.contrat_indicatif
-                      ? 'Aucune heure due : le planning ne cherche pas à remplir le contrat.'
-                      : 'Les heures du contrat sont dues chaque semaine.'
-                  }
-                >
-                  <Interrupteur
-                    coche={modele.contrat_indicatif}
-                    disabled={off}
-                    onChange={(v) => changerModele({ contrat_indicatif: v })}
+                {/* Un extra seulement : il n'a pas de durée contractuelle.
+                    Tout autre contrat suit la loi du temps partiel (B1).
+                    Une base qui l'aurait coché ailleurs le montre, pour
+                    pouvoir le décocher. */}
+                {(type === 'extra' || modele.contrat_indicatif) && (
+                  <Effet
+                    texte={
+                      modele.contrat_indicatif
+                        ? 'Aucune heure due : le planning ne cherche pas à remplir le contrat.'
+                        : 'Les heures du contrat sont dues chaque semaine.'
+                    }
                   >
-                    Heures indicatives
-                  </Interrupteur>
-                </Effet>
+                    <Interrupteur
+                      coche={modele.contrat_indicatif}
+                      disabled={off}
+                      onChange={(v) => changerModele({ contrat_indicatif: v })}
+                    >
+                      Heures indicatives
+                    </Interrupteur>
+                  </Effet>
+                )}
                 <Effet
                   texte={
                     modele.alternance
@@ -541,7 +557,9 @@ export function ReglesContrats({
               <Compteur
                 etiquette="Jours d'affilée conseillés"
                 valeur={b.jours_affiles_conseilles}
-                min={1}
+                // Jour seul interdit : 2 au moins, sinon aucun jour n'est
+                // plaçable (même CHECK en base).
+                min={b.jour_isole === 'interdit' ? 2 : 1}
                 max={b.jours_affiles_max}
                 disabled={off}
                 onChange={(v) => changer({ jours_affiles_conseilles: v })}
@@ -727,6 +745,11 @@ export function ReglesContrats({
         </div>
 
         <SheetFooter className="flex-col items-stretch gap-2 border-t">
+          {partiel && modifie && (
+            <p role="alert" className="text-xs text-destructive">
+              {MESSAGE_PARTIEL}
+            </p>
+          )}
           <ErreursSaisie erreurs={erreurs} />
           {avertissements.length > 0 && (
             <ul className="flex flex-col gap-0.5 text-xs text-amber-600 dark:text-amber-400">
@@ -765,6 +788,9 @@ export function ReglesContrats({
     </Sheet>
   )
 }
+
+const MESSAGE_PARTIEL =
+  "Les réglages de repos et de journées sont enregistrés, mais les règles des types de contrat n'ont pas été enregistrées. Vos modifications restent à l'écran : enregistrez à nouveau."
 
 function Effet({ texte, children }: { texte: string; children: ReactNode }) {
   return (

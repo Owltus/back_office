@@ -238,7 +238,10 @@ export function plafondHebdo(f: Fiche): number {
   }
   if (f.forfaitJours) return FORFAIT_SEMAINE_MAX
   // Un extra n'a pas de durée contractuelle (À VÉRIFIER) : le plafond absolu.
-  if (modeleFiche(f).contratIndicatif) return SEMAINE_MAX
+  // Tout autre contrat suit la loi du temps partiel, heures indicatives ou
+  // non (relecture du 2026-11-05 : « Heures indicatives » sur un CDI de
+  // 24 h ouvrait 48 h). La loi n'est jamais réglable (B1).
+  if (f.typeContrat === 'extra') return SEMAINE_MAX
   return plafondTempsPartiel(f)
 }
 

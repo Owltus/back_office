@@ -16,6 +16,7 @@ import { contratEtoile } from '#/lib/planning/etoile.ts'
 import type { Fiche } from '#/lib/planning/regles.ts'
 import {
   aJourneeCourteImposee,
+  modeleDe,
   REGLES_PAR_DEFAUT,
 } from '#/lib/planning/reglesEtablissement.ts'
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
@@ -55,9 +56,12 @@ export interface Brouillon extends Omit<Salarie, 'id'> {
 
 export type ValeursSalarie = Omit<Salarie, 'id'>
 
-export const ALTERNANCE: ReadonlyArray<TypeContrat> = ['apprenti', 'stagiaire']
-export const enAlternance = (contrat: TypeContrat) =>
-  ALTERNANCE.includes(contrat)
+/** Le type de contrat est en alternance (calendrier d'école) : la règle
+ * « Alternance » de son modèle (`Règles des contrats`), comme le moteur. */
+export const enAlternance = (
+  contrat: TypeContrat,
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
+) => modeleDe(regles, contrat).alternance
 
 /** Un jour de semaine type neutre. */
 export const JOUR_LIBRE: JourType = {
@@ -306,8 +310,10 @@ export function filtrerJours(
 // ------------------------------------------------------- règles d'édition
 
 /** Niveau proposé à l'ajout d'un poste. */
-export const niveauParDefaut = (contrat: TypeContrat): Niveau =>
-  enAlternance(contrat) ? 'soutien' : 'titulaire'
+export const niveauParDefaut = (
+  contrat: TypeContrat,
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
+): Niveau => (enAlternance(contrat, regles) ? 'soutien' : 'titulaire')
 
 /** Journée étoile possible : au-delà de 35 h payé à l'heure, pour un
  * contrat dont le modèle a une journée étoile (`contratEtoile`, la même

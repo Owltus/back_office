@@ -468,6 +468,20 @@ export function AidePlanningContenu({
     (a, b) => b.minutesHebdo - a.minutesHebdo,
   )
   const nomsContrats = contrats.map((j) => h(j.minutesHebdo))
+  // Repos obligé : le plafond de jours d'affilée (`reposObliges`).
+  const affiles =
+    Rp.joursAffilesConseilles < Rp.joursAffilesMax
+      ? `plus de ${Rp.joursAffilesConseilles} jours d’affilée pour un contrat de ${h(Rp.rythmeContratMin)} et plus, ${Rp.joursAffilesMax} sinon`
+      : `plus de ${Rp.joursAffilesMax} jours d’affilée`
+  // Une journée de contrat de moins : la plus courte (la journée étoile
+  // saute la première, `etoileSacrifiee`).
+  const moinsUneJournee = contrats
+    .filter((j) => j.durees.length)
+    .map(
+      (j, i) =>
+        `${h(j.minutesHebdo)} ${i === 0 ? 'passent ' : ''}à ${h(j.minutesHebdo - Math.min(...j.durees))}`,
+    )
+    .join(', ')
   const etListe = (l: readonly string[]) =>
     l.length < 2 ? (l[0] ?? '') : `${l.slice(0, -1).join(', ')} et ${l.at(-1)}`
   const pleine = R.contrats.journeePleine
@@ -870,7 +884,7 @@ export function AidePlanningContenu({
             items={[
               'Deux repos par semaine pour chacun. Un jour hors contrat en retire un, deux jours hors contrat les retirent tous les deux.',
               'Une case vide reste vide : l’app ne devine aucun repos. La génération pose les repos en proposition ; à la main, on les pose d’un clic droit. Un repos posé, proposé ou validé, se retire avec Vider la case.',
-              'Repos obligé : un jour où la personne ne peut pas travailler (plus de 6 jours d’affilée, plus de jours que permis dans la semaine, ou moins de 11 h de repos entre deux services). Il s’affiche Repos, en proposition, et la raison apparaît au survol.',
+              `Repos obligé : un jour où la personne ne peut pas travailler (${affiles}, plus de jours que permis dans la semaine, ou moins de ${h(REPOS_QUOTIDIEN)} de repos entre deux services). Il s’affiche Repos, en proposition, et la raison apparaît au survol.`,
               'En congé toute la semaine, deux jours de congé deviennent des repos proposés : les jours de congé ne sont pas des jours de repos.',
               'Apprentis et stagiaires : leur ligne reste vide, sauf l’école, tant que la semaine n’est pas remplie.',
               'Un repos proposé part avec les propositions quand on recalcule ou qu’on efface.',
@@ -894,7 +908,7 @@ export function AidePlanningContenu({
             'Un mineur n’est pas placé un jour férié si on peut l’éviter. La loi le permet en hôtellerie, mais le calcul l’évite, et une alerte le signale s’il y travaille.',
             'Le JFR est proposé dès la semaine qui suit le jour férié, au plus un par semaine. Tant qu’il n’est pas rendu, il reste dû : une alerte le rappelle et l’app le propose à nouveau chaque semaine.',
             'La direction au forfait jours reçoit aussi son JFR : ce jour-là, sa place disparaît, comme quand elle est absente.',
-            'Il se valide comme un repos : pointillés tant qu’il est proposé, trait plein une fois validé. Comme un congé, une journée de contrat de moins est due dans sa semaine : 39 h passent à 32 h, 35 h à 28 h.',
+            `Il se valide comme un repos : pointillés tant qu’il est proposé, trait plein une fois validé. Comme un congé, une journée de contrat de moins est due dans sa semaine${moinsUneJournee ? ` : ${moinsUneJournee}` : ''}.`,
           ]}
         />
         <Exemple>

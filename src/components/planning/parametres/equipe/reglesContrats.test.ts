@@ -133,3 +133,22 @@ describe('phrases', () => {
     )
   })
 })
+
+describe('relecture adverse du 2026-11-05', () => {
+  it('3. journée pleine de 6 h : la journée courte suit, la base l’accepte', () => {
+    const s = { ...saisieDepuis(vide), journee_pleine: 6 * H }
+    s.journee_etoile_min = 5 * H
+    const r = reglagesDepuis(s)
+    // CHECK de la base : journee_courte <= journee_pleine.
+    expect(r.journee_courte).toBeDefined()
+    expect(r.journee_courte!).toBeLessThanOrEqual(r.journee_pleine!)
+    // Sans geste, la journée courte lue est renvoyée telle quelle.
+    expect(reglagesDepuis(saisieDepuis(vide)).journee_courte).toBe(7 * H)
+  })
+
+  it('4. un seul jour d’affilée conseillé avec le jour seul interdit : refusé', () => {
+    const s = { ...saisieDepuis(vide), jours_affiles_conseilles: 1 }
+    expect(erreursSaisie(s).join(' ')).toMatch(/au moins 2 jours d'affilée/)
+    expect(erreursSaisie({ ...s, jour_isole: 'a_eviter' })).toEqual([])
+  })
+})

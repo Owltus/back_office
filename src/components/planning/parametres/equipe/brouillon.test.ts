@@ -228,3 +228,34 @@ describe('mineur : apprenti ou stagiaire seulement (2026-11-01)', () => {
     expect([...CONTRATS_MINEUR].sort()).toEqual(['apprenti', 'stagiaire'])
   })
 })
+
+describe('alternance : le modèle du type de contrat décide (relecture du 2026-11-05)', () => {
+  it('aux défauts : apprenti et stagiaire, niveau soutien', async () => {
+    const { enAlternance, niveauParDefaut } =
+      await import('#/components/planning/parametres/equipe/brouillon.ts')
+    expect(enAlternance('apprenti')).toBe(true)
+    expect(enAlternance('cdd')).toBe(false)
+    expect(niveauParDefaut('stagiaire')).toBe('soutien')
+    expect(niveauParDefaut('cdi')).toBe('titulaire')
+  })
+
+  it('alternance cochée pour le CDD, décochée pour le stagiaire', async () => {
+    const { enAlternance, niveauParDefaut } =
+      await import('#/components/planning/parametres/equipe/brouillon.ts')
+    const { lireRegles, REGLES_PAR_DEFAUT } =
+      await import('#/lib/planning/reglesEtablissement.ts')
+    const m = REGLES_PAR_DEFAUT.modeles
+    const regles = {
+      ...lireRegles(null),
+      modeles: {
+        ...m,
+        cdd: { ...m.cdd, alternance: true },
+        stagiaire: { ...m.stagiaire, alternance: false },
+      },
+    }
+    expect(enAlternance('cdd', regles)).toBe(true)
+    expect(enAlternance('stagiaire', regles)).toBe(false)
+    expect(niveauParDefaut('cdd', regles)).toBe('soutien')
+    expect(niveauParDefaut('stagiaire', regles)).toBe('titulaire')
+  })
+})

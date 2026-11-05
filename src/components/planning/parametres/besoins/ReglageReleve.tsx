@@ -62,10 +62,8 @@ export function ReglageReleve({
     setEnvoi(true)
     const r = await ecrire(
       () =>
-        enregistrerReglages({
-          releve_minutes: minutes,
-          continuite_obligatoire: v,
-        }),
+        // La seule case : la relève lue par la page peut être périmée.
+        enregistrerReglages({ continuite_obligatoire: v }),
       "La passation n'a pas pu être enregistrée",
     )
     setEnvoi(false)

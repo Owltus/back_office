@@ -116,6 +116,24 @@ describe('AidePlanningContenu (aide du bouton ?)', () => {
     ).toBeTruthy()
   })
 
+  it('repos obligé et JFR : les chiffres viennent des règles (relecture du 2026-11-05)', () => {
+    const d = lireRegles(null)
+    rendre({
+      ...d,
+      repos: { ...d.repos, joursAffilesMax: 6, joursAffilesConseilles: 4 },
+      contrats: {
+        ...d.contrats,
+        journees: [{ minutesHebdo: 32 * 60, durees: [8 * 60], courtesMax: 0 }],
+      },
+    })
+    const absences = texteDe('absences')
+    expect(absences).toContain('plus de 4 jours d’affilée')
+    expect(absences).not.toContain('plus de 6 jours d’affilée')
+    const feries = texteDe('feries')
+    expect(feries).toContain('32 h passent à 24 h')
+    expect(feries).not.toContain('39 h passent à 32 h')
+  })
+
   it('cite les chiffres de la loi depuis regles.ts', () => {
     rendre()
     const loi = document.getElementById('fonctionnement-loi')!

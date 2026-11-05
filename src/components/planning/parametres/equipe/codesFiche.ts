@@ -15,6 +15,7 @@ import {
   codesDuPoste,
   codesPermis,
 } from '#/lib/planning/eligibilite.ts'
+import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import type { Horaire, Poste, Salarie } from '#/lib/planning/types.ts'
 
 type Fiche = Pick<Salarie, 'competences' | 'shifts_autorises'>
@@ -89,6 +90,8 @@ export function codesSemaineType(
   postes: Poste[],
   horaires: Horaire[],
   jour: number,
+  /** Règles de l'établissement (`lireRegles`) ; absentes : les défauts. */
+  regles?: RegleEtablissement,
 ): Horaire[] {
   const personne = {
     ...b,
@@ -99,7 +102,9 @@ export function codesSemaineType(
   const tenus = postesTenus(b, postes)
   const ids = new Set(
     (tenus.length ? tenus : [undefined]).flatMap((poste) =>
-      codesPermis({ personne, poste, jour, horaires }).codes.map((h) => h.id),
+      codesPermis({ personne, poste, jour, horaires, regles }).codes.map(
+        (h) => h.id,
+      ),
     ),
   )
   return horaires.filter((h) => ids.has(h.id))

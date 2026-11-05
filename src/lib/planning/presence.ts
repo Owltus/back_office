@@ -202,6 +202,9 @@ export function sommeBesoinsPresence(
   postes: ReadonlyMap<number, Pick<Poste, 'presence'>>,
   horaires: ReadonlyMap<number, Pick<Horaire, 'periode'>>,
   postesAvecNuit?: ReadonlySet<number>,
+  /** Limites des moments (`lireRegles(r).moments`) : un besoin sans horaire
+   * se range d'après son heure de début. */
+  l: RegleEtablissement['moments'] = REGLES_PAR_DEFAUT.moments,
 ): Map<string, number> {
   const somme = new Map<string, number>()
   for (const b of besoins) {
@@ -211,6 +214,7 @@ export function sommeBesoinsPresence(
       b.horaire_id !== null ? horaires.get(b.horaire_id) : undefined,
       b.debut,
       postesAvecNuit?.has(b.poste_id) ?? false,
+      l,
     )
     if (!periode) continue
     const cle = clePresence(b.jour, periode)

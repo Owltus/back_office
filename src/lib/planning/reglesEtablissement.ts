@@ -237,7 +237,9 @@ export const REGLES_PAR_DEFAUT: RegleEtablissement = {
  * Ce que la base ne porte pas (données de test, réglage absent) reprend la
  * valeur par défaut. */
 export function lireRegles(
-  referentiel?: Pick<Referentiel, 'reglages' | 'modelesContrat'> | null,
+  referentiel?: Partial<
+    Pick<Referentiel, 'reglages' | 'modelesContrat'>
+  > | null,
 ): RegleEtablissement {
   const r: Partial<Reglages> = referentiel?.reglages ?? {}
   const d = REGLES_PAR_DEFAUT

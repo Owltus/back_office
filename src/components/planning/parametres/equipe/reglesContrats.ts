@@ -46,6 +46,10 @@ export interface SaisieReglesContrats {
   journees: LigneJournees[]
   journee_pleine: number
   journee_etoile_min: number
+  /** Seuil d'un horaire court (`estCourt`), pas réglé ici : renvoyé tel
+   * quel, ramené à la journée pleine si elle passe dessous (CHECK de la
+   * base `journee_courte <= journee_pleine`). */
+  journee_courte: number
   deux_repos_de_suite: ForceRegle
   jours_affiles_max: number
   jours_affiles_conseilles: number
@@ -133,6 +137,7 @@ export function saisieDepuis(
     journees: r.contrats.journees.map(ligneDe),
     journee_pleine: r.contrats.journeePleine,
     journee_etoile_min: r.contrats.journeeEtoileMin,
+    journee_courte: r.contrats.journeeCourte,
     deux_repos_de_suite: r.repos.deuxReposDeSuite,
     jours_affiles_max: r.repos.joursAffilesMax,
     jours_affiles_conseilles: r.repos.joursAffilesConseilles,
@@ -170,6 +175,7 @@ export function reglagesDepuis(s: SaisieReglesContrats): Partial<Reglages> {
       .map((l) => journeesDeLaLigne(l, s.journee_pleine)),
     journee_pleine: s.journee_pleine,
     journee_etoile_min: s.journee_etoile_min,
+    journee_courte: Math.min(s.journee_courte, s.journee_pleine),
     deux_repos_de_suite: s.deux_repos_de_suite,
     jours_affiles_max: s.jours_affiles_max,
     jours_affiles_conseilles: s.jours_affiles_conseilles,
@@ -288,6 +294,12 @@ export function erreursSaisie(s: SaisieReglesContrats): string[] {
   if (s.jours_affiles_conseilles > s.jours_affiles_max)
     erreurs.push(
       "Les jours d'affilée conseillés ne dépassent pas le plafond de jours d'affilée.",
+    )
+  // Un seul jour d'affilée sans jour seul : aucun jour plaçable (CHECK de la
+  // base, migration 20261105120000).
+  if (s.jour_isole === 'interdit' && s.jours_affiles_conseilles < 2)
+    erreurs.push(
+      "Avec un jour de travail seul interdit, conseillez au moins 2 jours d'affilée : sinon le planning ne peut placer personne.",
     )
   for (const m of s.modeles)
     if (m.ferie_rattrape && m.feries_jour_meme)

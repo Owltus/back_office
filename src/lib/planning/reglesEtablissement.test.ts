@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 
-import { DUREE_OUVERTURE } from '#/lib/planning/semaine.ts'
 import { momentPropose } from '#/lib/planning/moment.ts'
 import { periodeLibre } from '#/lib/planning/presence.ts'
 import {
@@ -58,7 +57,6 @@ describe('REGLES_PAR_DEFAUT : l’hôtel d’aujourd’hui, chiffre pour chiffre
     ['JOURNEE_COURTE', JOURNEE_COURTE, 7 * H],
     ['CONTRAT_35H', CONTRAT_35H, 35 * H],
     ['CONTRAT_39H', CONTRAT_39H, 39 * H],
-    ['DUREE_OUVERTURE', DUREE_OUVERTURE, 60],
   ])('%s', (_nom, valeur, attendu) => {
     expect(valeur).toBe(attendu)
   })
@@ -68,6 +66,7 @@ describe('REGLES_PAR_DEFAUT : l’hôtel d’aujourd’hui, chiffre pour chiffre
     expect(r.repos.deuxReposDeSuite).toBe('obligatoire')
     expect(r.repos.jourIsole).toBe('interdit')
     expect(r.passations.releveMinutes).toBe(30)
+    expect(r.passations.dureeOuverture).toBe(60)
     expect(r.passations.passationVeilleur).toBe(true)
     // D8 (2026-11-05) : la continuité entre équipes est obligatoire.
     expect(r.passations.continuiteObligatoire).toBe(true)

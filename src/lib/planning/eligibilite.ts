@@ -225,6 +225,9 @@ export interface EntreeCodesPermis<T> {
    * posés les autres jours (seuls la veille et le lendemain comptent). */
   lundi?: string
   voisins?: readonly Voisin[]
+  /** Règles de l'établissement (`lireRegles`) : versions étoile d'un horaire
+   * fixé, contrat à journée étoile. Absentes : les défauts. */
+  regles?: RegleEtablissement
 }
 
 /**
@@ -253,7 +256,7 @@ export function codesPermis<T extends HoraireEtoile>(
 
   const fiche = {
     shiftsAutorises: codesDeLaFiche(e.personne),
-    shiftImpose: codesImposes(e.personne.semaine_type, e.horaires),
+    shiftImpose: codesImposes(e.personne.semaine_type, e.horaires, e.regles),
   }
   const communs = codesDuPoste(e.poste, e.horaires).filter((h) =>
     codeDeLaFiche(fiche, String(h.id)),
@@ -340,7 +343,7 @@ export function rubriqueEtoile<T extends HoraireEtoile>(
     horaireId: number | null
   },
 ): RubriqueEtoile<T> | null {
-  if (!contratEtoile(e.personne) || e.horaireId === null) return null
+  if (!contratEtoile(e.personne, e.regles) || e.horaireId === null) return null
   const h = e.horaires.find((x) => x.id === e.horaireId)
   if (!h) return null
   const permis = codesPermis(e)
@@ -351,7 +354,7 @@ export function rubriqueEtoile<T extends HoraireEtoile>(
       const ecarte = permis.ecartes.find((c) => c.horaire.id === x.id)
       return ecarte ? [{ horaire: x, alerte: ecarte.texte }] : []
     })
-  const versions = choix(versionsEtoile(h, e.horaires))
-  const normales = choix(horairesNormaux(h, e.horaires))
+  const versions = choix(versionsEtoile(h, e.horaires, e.regles))
+  const normales = choix(horairesNormaux(h, e.horaires, e.regles))
   return versions.length || normales.length ? { versions, normales } : null
 }
