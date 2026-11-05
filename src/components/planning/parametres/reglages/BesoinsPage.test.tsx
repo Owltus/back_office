@@ -36,6 +36,7 @@ const service = vi.hoisted(() => ({
   reglerConsigne: vi.fn(),
   reglerHeuresPoste: vi.fn(),
   enregistrerReglages: vi.fn(),
+  enregistrerMomentsHoraires: vi.fn(),
 }))
 
 vi.mock('#/lib/supabase.ts', () => ({ supabase: {} }))
@@ -90,6 +91,7 @@ beforeEach(() => {
   service.reglerConsigne.mockReset().mockResolvedValue(undefined)
   service.reglerHeuresPoste.mockReset().mockResolvedValue(undefined)
   service.enregistrerReglages.mockReset().mockResolvedValue(undefined)
+  service.enregistrerMomentsHoraires.mockReset().mockResolvedValue(undefined)
   baseSimulee()
 })
 afterEach(cleanup)
@@ -463,7 +465,7 @@ describe('Besoins', () => {
       )
       const region = screen.getByRole('region', { name: 'Accueil' })
       expect(region.textContent).toContain('Réception et Club ensemble')
-      expect(region.textContent).toContain('La nuit : Veille de nuit.')
+      expect(region.textContent).toContain('Nuit : Veille de nuit.')
       expect(caseAccueil('5:matin')?.textContent).toBe('3')
       expect(caseAccueil('5:matin')?.getAttribute('aria-label')).toBe(
         'Matin, samedi : 3 personnes.',
@@ -589,31 +591,77 @@ describe('Besoins', () => {
       ).toBe(false)
     })
 
-    it('l’ordre de décision est écrit d’après l’importance des postes', () => {
-      // Oracle : D11, « quand il manque du monde, Si possible reste vide en
-      // premier » ; le texte n'est plus figé.
+    it('l’ordre de décision est écrit d’après le réglage indispensable', () => {
+      // Oracle : décision utilisateur du 2026-11-05, « soit un poste est
+      // important, soit il ne l'est pas » ; le texte n'est plus figé.
       const ref = etat.referentiel as Referentiel
       const texte = () =>
         document.querySelector('[data-ordre-decision]')?.textContent ?? ''
       monter(<BesoinsPage />)
-      expect(texte()).toContain('Tous les postes ont la même importance')
+      expect(texte()).toContain("Aucun poste n'est plus indispensable")
       cleanup()
       for (const p of ref.postes)
-        p.importance =
-          p.nom === 'Direction'
-            ? 'si_possible'
-            : p.nom === 'Réception'
-              ? 'indispensable'
-              : 'important'
+        p.importance = p.nom === 'Réception' ? 'indispensable' : 'si_possible'
       monter(<BesoinsPage />)
       expect(texte()).toMatch(
-        /d'abord les besoins souhaités, puis les postes Si possible \(Direction\), puis les postes Important \([^)]*Club[^)]*\), et les postes Indispensable \(Réception\) en dernier\./,
+        /d'abord les besoins souhaités, puis les autres postes \([^)]*Direction[^)]*\), et les postes indispensables \(Réception\) en dernier\./,
       )
       expect(texte()).not.toMatch(/[«»—]/)
-      // L'onglet dit l'importance de son poste.
+      // Plus aucun rappel de trois niveaux.
+      expect(document.body.textContent).not.toMatch(/Si possible|Important\b/)
+    })
+
+    it('chaque poste dans la section de son réglage ; un poste neuf aussi', () => {
+      // Oracle : « imaginons demain je crée des nouveaux postes, je n'ai pas
+      // envie de devoir refabriquer un moteur ».
+      const ref = etat.referentiel as Referentiel
+      for (const p of ref.postes)
+        p.importance = p.nom === 'Réception' ? 'indispensable' : 'si_possible'
+      ref.postes.push({
+        ...ref.postes[0],
+        id: 9999,
+        nom: 'Zéphyr',
+        importance: 'indispensable',
+      })
+      monter(<BesoinsPage />)
+      const indispensables = within(
+        screen.getByRole('region', { name: 'Postes indispensables' }),
+      )
+      const autres = within(
+        screen.getByRole('region', { name: 'Autres postes, tenus au mieux' }),
+      )
+      const noms = (r: typeof autres) =>
+        r.getAllByRole('tab').map((t) => t.textContent?.replace(/\d.*$/, ''))
+      expect(noms(indispensables)).toEqual(['Réception', 'Zéphyr'])
+      expect(noms(autres)).not.toContain('Réception')
+      expect(noms(autres)).toContain('Direction')
+      // Deux grilles : une par section.
       expect(
-        document.querySelector('[data-importance]')?.textContent,
-      ).toContain('Importance : Si possible.')
+        screen.getAllByRole('table', { name: /^Besoins du poste/ }),
+      ).toHaveLength(2)
+    })
+
+    it('moments : réglés depuis Besoins, aperçu puis Enregistrer', async () => {
+      // Oracle : « migrer la partie Moments dans Besoins ».
+      monter(<BesoinsPage />)
+      const region = within(screen.getByRole('region', { name: 'Moments' }))
+      // Rien à enregistrer tant qu'aucune limite ne change.
+      expect(region.queryByRole('button', { name: 'Enregistrer' })).toBeNull()
+      const champ = region.getByRole('textbox', { name: 'La nuit commence à' })
+      fireEvent.change(champ, { target: { value: '23:30' } })
+      fireEvent.blur(champ)
+      expect(
+        await region.findByRole('list', {
+          name: 'Horaires qui changeraient de moment',
+        }),
+      ).toBeTruthy()
+      expect(service.enregistrerReglages).not.toHaveBeenCalled()
+      fireEvent.click(region.getByRole('button', { name: 'Enregistrer' }))
+      await waitFor(() =>
+        expect(service.enregistrerReglages).toHaveBeenCalledWith(
+          expect.objectContaining({ nuit_debut: 23 * 60 + 30 }),
+        ),
+      )
     })
 
     it('ouverture et fermeture de l’accueil : réglées ici, par Enregistrer', async () => {

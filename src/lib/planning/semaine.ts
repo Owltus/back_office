@@ -910,14 +910,14 @@ function muralDe(jour: number, debut: string, fin: string, pause: number) {
 
 /** Importance du poste (D11) et niveau demandé par le besoin (2026-11-05) :
  * ce que le créneau porte pour le calcul et le vérificateur. Poste inconnu
- * ou champ absent : important, obligatoire, dépannage accepté. */
+ * ou champ absent : non indispensable, obligatoire, dépannage accepté. */
 function niveauxDe(
   ctx: Pick<Contexte, 'postes'>,
   posteId: number,
   b?: Pick<Besoin, 'obligatoire' | 'niveau_min'>,
 ): Pick<Creneau, 'importance' | 'souhaite' | 'titulaireSeul'> {
   return {
-    importance: ctx.postes.get(posteId)?.importance ?? 'important',
+    importance: ctx.postes.get(posteId)?.importance ?? 'si_possible',
     souhaite: b?.obligatoire === false,
     titulaireSeul: b?.niveau_min === 'titulaire',
   }

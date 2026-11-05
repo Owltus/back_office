@@ -140,7 +140,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':J', (select j from t_ids)::text);
 $$;
 
-select plan(108);
+select plan(109);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -381,6 +381,10 @@ select is(pg_temp.essai('gestion', array[
 select is(pg_temp.essai('ecriture', array[
   pg_temp.q('update public.planning_postes set importance = ''si_possible'' where id = :PA')]),
   '0', 'importance : l''écriture ne la change pas');
+select is((select column_default from information_schema.columns
+            where table_schema = 'public' and table_name = 'planning_postes'
+              and column_name = 'importance'),
+  '''si_possible''::text', 'importance : un poste neuf n''est pas indispensable');
 select is(pg_temp.essai('gestion', array[
   pg_temp.q('update public.planning_postes set fermeture = ''23h'' where id = :PA')]),
   'err=23514', 'fermeture : une heure au format HH:MM seulement');

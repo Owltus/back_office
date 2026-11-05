@@ -5,11 +5,13 @@ import { verifierReglages } from '#/lib/planning/coherence.ts'
 import {
   generer,
   paliersPlaces,
-  RANG_IMPORTANT,
+  RANG_AUTRE,
+  rangPlace,
 } from '#/lib/planning/generateur.ts'
 import type { Highs } from '#/lib/planning/generateur.ts'
 import {
   creneau,
+  estIndispensable,
   probleme,
   rangImportance,
   salarieSolveur,
@@ -19,6 +21,7 @@ import { raisonClaire } from '#/lib/planning/raisonsPlaces.ts'
 import {
   analyser,
   contexte,
+  creneauBesoin,
   fermeturesAccueil,
 } from '#/lib/planning/semaine.ts'
 import type { DonneesSemaine } from '#/lib/planning/semaine.ts'
@@ -87,7 +90,7 @@ const personne = (
 const tenus = (r: ReturnType<typeof generer>) =>
   r.affectations.map((a) => a.creneauId).sort()
 
-describe('importance des postes (D11)', () => {
+describe('importance des postes : oui / non (D11, 2026-11-05)', () => {
   // Une seule personne sans heures dues, deux places à la même heure : la
   // place de « a » est plus longue, donc plus chère à laisser vide. Sans
   // importance, le calcul la prend.
@@ -105,40 +108,90 @@ describe('importance des postes (D11)', () => {
       highs,
     )
 
-  it('à importance égale : la place la plus chère à laisser vide', () => {
-    expect(tenus(resoudre(places('important', 'important')))).toEqual(['a'])
+  it('deux réglages seulement ; l’ancienne valeur « important » se lit non', () => {
+    expect(estIndispensable('indispensable')).toBe(true)
+    expect(estIndispensable('si_possible')).toBe(false)
+    expect(estIndispensable('important')).toBe(false)
+    expect(estIndispensable(undefined)).toBe(false)
+    expect(rangImportance('important')).toBe(rangImportance('si_possible'))
+    expect(rangImportance('indispensable')).toBeGreaterThan(RANG_AUTRE)
   })
-  it('« Si possible » reste vide avant « Indispensable »', () => {
+  it('à réglage égal : la place la plus chère à laisser vide', () => {
+    expect(tenus(resoudre(places('si_possible', 'si_possible')))).toEqual(['a'])
+    expect(tenus(resoudre(places('indispensable', 'indispensable')))).toEqual([
+      'a',
+    ])
+    // L'ancienne valeur ne fait plus un palier à part.
+    expect(tenus(resoudre(places('important', 'si_possible')))).toEqual(['a'])
+  })
+  it('un poste indispensable est rempli avant un poste qui ne l’est pas', () => {
     const r = resoudre(places('si_possible', 'indispensable'))
     expect(tenus(r)).toEqual(['b'])
     expect(r.manques.map((m) => m.creneauId)).toEqual(['a'])
+    // Refusé dans l'autre sens : « a » indispensable passe devant.
+    expect(tenus(resoudre(places('indispensable', 'si_possible')))).toEqual([
+      'a',
+    ])
   })
-  it('« Important » reste vide avant « Indispensable », « Si possible » avant « Important »', () => {
-    expect(tenus(resoudre(places('important', 'indispensable')))).toEqual(['b'])
-    expect(tenus(resoudre(places('si_possible', 'important')))).toEqual(['b'])
-  })
-  it('une place « Si possible » est tenue dès que quelqu’un peut la tenir', () => {
+  it('une place non indispensable est tenue dès que quelqu’un peut la tenir', () => {
     const r = resoudre(places('si_possible', 'indispensable'), 2)
     expect(tenus(r)).toEqual(['a', 'b'])
     expect(r.manques).toEqual([])
   })
   it('paliers : un seul palier = aucun décalage, sinon un pas au-dessus du plus cher', () => {
-    const seul = paliersPlaces(places('important', 'important'), [], () => 7)
+    const seul = paliersPlaces(places('important', 'si_possible'), [], () => 7)
     expect(seul.pas).toBe(0)
-    expect(seul.decalage(RANG_IMPORTANT)).toBe(0)
+    expect(seul.presents).toEqual([RANG_AUTRE])
+    expect(seul.decalage(RANG_AUTRE)).toBe(0)
     const deux = paliersPlaces(
       places('si_possible', 'indispensable'),
       [{ cle: 'z', plus: 10, rang: rangImportance('indispensable') }],
       (c) => (c.id === 'a' ? 100 : 50),
     )
-    expect(deux.presents).toEqual([1, 3])
+    expect(deux.presents).toEqual([1, 2])
     expect(deux.pas).toBe(100 + 2 * 10 + 1)
     expect(deux.decalage(1)).toBe(0)
-    expect(deux.decalage(3)).toBe(deux.pas)
+    expect(deux.decalage(2)).toBe(deux.pas)
     // Passation au palier le plus haut : décalée, et la nuit la paie deux fois.
-    expect(deux.passation(3)).toBe(deux.pas)
-    expect(deux.extraNuit(3)).toBe(10 + deux.pas)
+    expect(deux.passation(2)).toBe(deux.pas)
+    expect(deux.extraNuit(2)).toBe(10 + deux.pas)
     expect(deux.extraNuit(1)).toBe(10)
+  })
+  it('un poste neuf indispensable, au nom quelconque, est traité comme la Réception', () => {
+    // Aucun nom ni id de poste dans le moteur : seul le réglage compte.
+    const ZEPHYR = 9
+    const postes: Poste[] = [
+      { ...POSTES[0] },
+      {
+        id: ZEPHYR,
+        nom: 'Zéphyr',
+        categorie: 'autre',
+        couleur: '#333',
+        horaires_autorises: [1, 2],
+        presence: false,
+        importance: 'indispensable',
+      },
+      { ...POSTES[1], importance: 'si_possible' },
+    ]
+    const ctx = contexte(donnees([], [], [], postes))
+    const z = creneauBesoin(ctx, besoin(1, { poste_id: ZEPHYR }))
+    const t = creneauBesoin(ctx, besoin(2, { poste_id: TECH }))
+    const reception = creneauBesoin(
+      contexte(
+        donnees([], [], [], [{ ...POSTES[0], importance: 'indispensable' }]),
+      ),
+      besoin(3, { poste_id: ACCUEIL }),
+    )
+    expect(z.importance).toBe('indispensable')
+    expect(rangPlace(z)).toBe(rangPlace(reception))
+    expect(rangPlace(t)).toBeLessThan(rangPlace(z))
+    // Au calcul : une seule personne, Zéphyr (plus court) passe devant
+    // Technique (plus long, plus cher à laisser vide sans importance).
+    const r = resoudre([
+      { ...t, id: 't', poste: 'a', debut: 9 * H, fin: 17 * H, jourPlanning: 0 },
+      { ...z, id: 'z', poste: 'b', debut: 9 * H, fin: 13 * H, jourPlanning: 0 },
+    ])
+    expect(tenus(r)).toEqual(['z'])
   })
 })
 

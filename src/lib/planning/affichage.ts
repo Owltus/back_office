@@ -243,7 +243,8 @@ export function postesTenus(
     .join(' · ')
 }
 
-/** Libellé métier de la colonne staff : « Night », « Hôtelier », ou le poste. */
+/** Libellé métier de la colonne staff : « Veilleur », « Hôtelier » (poste de
+ * la réception ou de l'accueil), ou le poste. Aucun nom de poste en dur. */
 export function metier(
   s: Pick<Salarie, 'competences'>,
   postes: Poste[],
@@ -256,7 +257,7 @@ export function metier(
     .map((p) =>
       p.categorie === 'veille_nuit'
         ? 'Veilleur'
-        : p.categorie === 'reception' || p.nom === 'Club'
+        : p.categorie === 'reception' || p.presence
           ? 'Hôtelier'
           : p.nom,
     )

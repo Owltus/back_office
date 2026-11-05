@@ -2488,25 +2488,13 @@ const PL_GROUPES: ReadonlyArray<readonly [string, string, readonly string[]]> =
     ['apprenti', 'Apprentis', ['Réception', 'Club']],
     ['stagiaire', 'Stagiaires', ['Réception', 'Club']],
   ]
-/** Importance d'un poste fictif : MÊME règle que la migration
- * 20261105100000 (qui ne touche que les postes déjà en base, avant le seed).
- * Accueil (jour ou nuit) : indispensable ; administratif, aucun besoin, ou
- * tenu seulement par des cadres au forfait jours : si possible ; sinon
- * important. */
+/** Importance d'un poste fictif, OUI / NON (décision utilisateur du
+ * 2026-11-05) : les postes de l'accueil, jour et nuit, sont indispensables ;
+ * les autres (direction, supervision, technique) ne le sont pas. */
 function plImportance(nom: string, categorie: string): string {
-  if (PL_PRESENCE.has(nom) || categorie === 'veille_nuit')
-    return 'indispensable'
-  const titulaires = PL_STAFF.filter(
-    ([, , , , , comp]) => comp[nom] && comp[nom] !== 'soutien',
-  )
-  if (
-    categorie === 'administratif_hors_site' ||
-    !PL_BESOINS.some(([poste]) => poste === nom) ||
-    (titulaires.length > 0 &&
-      titulaires.every(([, , , , , , opt]) => opt.forfait))
-  )
-    return 'si_possible'
-  return 'important'
+  return PL_PRESENCE.has(nom) || categorie === 'veille_nuit'
+    ? 'indispensable'
+    : 'si_possible'
 }
 interface PlOptions {
   forfait?: boolean

@@ -102,17 +102,21 @@ export function EnTeteSection({
   texte,
   actions,
   niveau = 2,
+  id,
 }: {
   titre: string
   texte?: ReactNode
   actions?: ReactNode
   niveau?: 2 | 3
+  /** Id du titre (nom accessible de sa section, `aria-labelledby`). */
+  id?: string
 }) {
   const Titre = niveau === 2 ? 'h2' : 'h3'
   return (
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div className="max-w-3xl min-w-0">
         <Titre
+          id={id}
           className={
             niveau === 2 ? 'text-lg font-semibold' : 'text-base font-semibold'
           }

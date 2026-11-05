@@ -61,7 +61,6 @@ import {
 } from '#/components/ui/select.tsx'
 import { Switch } from '#/components/ui/switch.tsx'
 import { Segmente } from '#/components/planning/parametres/equipe/Segmente.tsx'
-import { phraseHeures } from '#/components/planning/parametres/besoins/HeuresAccueil.tsx'
 import { tientLaNuit } from '#/lib/planning/presence.ts'
 import { dureeHoraire, heures } from '#/lib/planning/affichage.ts'
 import { JOUR_MAX_CATEGORIE } from '#/lib/planning/regles.ts'
@@ -72,21 +71,12 @@ import {
 } from '#/lib/planning/service.ts'
 import { Tip } from '#/components/shared/Tip.tsx'
 import {
-  AIDE_IMPORTANCE,
-  LIBELLES_IMPORTANCE,
+  AIDE_INDISPENSABLE,
+  AIDE_NON_INDISPENSABLE,
 } from '#/components/planning/parametres/besoins/ordreDecision.ts'
+import { estIndispensable } from '#/lib/planning/modele.ts'
 import { CATEGORIES } from '#/lib/planning/types.ts'
-import type { Importance, Poste, Referentiel } from '#/lib/planning/types.ts'
-
-/** Importance du poste (D11 du 2026-11-05), de la plus haute à la plus
- * basse. */
-const OPTIONS_IMPORTANCE: ReadonlyArray<{
-  valeur: Importance
-  libelle: string
-}> = (['indispensable', 'important', 'si_possible'] as const).map((valeur) => ({
-  valeur,
-  libelle: LIBELLES_IMPORTANCE[valeur],
-}))
+import type { Poste, Referentiel } from '#/lib/planning/types.ts'
 
 const saisieDe = (p: Poste): SaisiePoste => ({
   nom: p.nom,
@@ -98,7 +88,8 @@ const saisieDe = (p: Poste): SaisiePoste => ({
   ferme: p.ferme ?? false,
   ouverture: p.ouverture ?? null,
   feries_chomes: p.feries_chomes ?? false,
-  importance: p.importance ?? 'important',
+  // Oui / non (2026-11-05) : l'ancienne valeur « important » se lit non.
+  importance: estIndispensable(p.importance) ? 'indispensable' : 'si_possible',
   fermeture: p.fermeture ?? null,
 })
 
@@ -178,7 +169,7 @@ export function PostesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
       ferme: false,
       ouverture: null,
       feries_chomes: false,
-      importance: 'important',
+      importance: 'si_possible',
       fermeture: null,
     })
   }
@@ -498,56 +489,30 @@ function CartePoste({
         </span>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium">Importance</span>
-        <Segmente<Importance>
-          label="Importance"
-          valeur={p.importance ?? 'important'}
-          options={OPTIONS_IMPORTANCE}
+      <label className="flex items-start gap-2 text-sm">
+        <Switch
+          checked={estIndispensable(p.importance)}
           disabled={!modifiable}
-          onChange={(importance) => changer({ importance })}
+          onCheckedChange={(oui) =>
+            changer({ importance: oui ? 'indispensable' : 'si_possible' })
+          }
+          aria-label="Indispensable au fonctionnement"
+          className="mt-0.5"
         />
-        <span className="text-xs text-muted-foreground">
-          {AIDE_IMPORTANCE[p.importance ?? 'important']}
+        <span className="flex flex-col gap-0.5">
+          <span className="font-medium">Indispensable au fonctionnement</span>
+          <span className="text-xs text-muted-foreground">
+            {estIndispensable(p.importance)
+              ? AIDE_INDISPENSABLE
+              : AIDE_NON_INDISPENSABLE}
+          </span>
         </span>
-      </div>
+      </label>
 
       {p.presence && (
-        <div className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium">Ouverture et fermeture</span>
-          <div className="flex flex-wrap items-end gap-3">
-            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-              Ouverture
-              <Input
-                id={`${idNom}-ouverture`}
-                type="time"
-                step={900}
-                className="w-32"
-                aria-label="Ouverture"
-                value={p.ouverture ?? ''}
-                disabled={!modifiable}
-                onChange={(e) => changer({ ouverture: e.target.value || null })}
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-              Fermeture
-              <Input
-                id={`${idNom}-fermeture`}
-                type="time"
-                step={900}
-                className="w-32"
-                aria-label="Fermeture"
-                value={p.fermeture ?? ''}
-                disabled={!modifiable}
-                onChange={(e) => changer({ fermeture: e.target.value || null })}
-              />
-            </label>
-          </div>
-          <span className="text-xs text-muted-foreground">
-            {phraseHeures(p.ouverture ?? null, p.fermeture ?? null)} Pendant au
-            moins une heure, les jours où le matin ou le soir est demandé.
-          </span>
-        </div>
+        <p className="text-xs text-muted-foreground">
+          L'ouverture et la fermeture se règlent dans Besoins.
+        </p>
       )}
 
       <label className="flex items-start gap-2 text-sm">

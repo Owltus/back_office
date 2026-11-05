@@ -14,6 +14,7 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { Moon, Plus, Trash2 } from 'lucide-react'
 
 import {
@@ -38,7 +39,6 @@ import {
   useOuvrirCible,
 } from '#/components/planning/parametres/reglages/ouvrirCible.ts'
 import type { PropsOuvrir } from '#/components/planning/parametres/reglages/ouvrirCible.ts'
-import { SectionMoments } from '#/components/planning/parametres/reglages/SectionMoments.tsx'
 import {
   CadreReglages,
   EnTeteSection,
@@ -220,17 +220,6 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
     lien,
     !!data,
     (cible) => {
-      // Limites des moments (point « À vérifier » qui se chevauchent).
-      if (cible === 'moments') {
-        window.setTimeout(
-          () =>
-            document
-              .getElementById('titre-moments')
-              ?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
-          0,
-        )
-        return true
-      }
       const id = idCible(cible, 'horaire')
       if (id === undefined || !data?.horaires.some((h) => h.id === id))
         return false
@@ -322,7 +311,19 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
             </div>
           </section>
 
-          <SectionMoments referentiel={data} modifiable={modifiable} />
+          {/* Les limites des moments se règlent dans Besoins depuis le
+              2026-11-05 (demande utilisateur). */}
+          <p data-moments className="-mt-2 text-sm text-muted-foreground">
+            Le moment se calcule d'après les heures. Les limites se règlent dans{' '}
+            <Link
+              to="/planning/besoins"
+              search={{ ouvrir: 'moments' }}
+              className="font-medium text-foreground underline underline-offset-4 hover:text-primary"
+            >
+              Besoins
+            </Link>
+            .
+          </p>
 
           <section
             className="flex flex-col gap-4"

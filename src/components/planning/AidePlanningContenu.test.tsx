@@ -247,12 +247,13 @@ describe('AidePlanningContenu (aide du bouton ?)', () => {
     const t = texteDe('reglages')
     for (const ou of [
       'Équipe, bouton Règles',
-      'Horaires, partie Moments',
+      'Besoins, partie Moments',
       'Postes',
       'Besoins',
       'Fiche d’une personne',
     ])
       expect(t).toContain(ou)
+    expect(t).not.toContain('Horaires, partie Moments')
     expect(t).toContain('La loi ne se règle pas')
     expect(t).toContain(heuresLisibles(REPOS_QUOTIDIEN))
   })

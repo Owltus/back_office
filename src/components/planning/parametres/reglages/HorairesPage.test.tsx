@@ -8,6 +8,8 @@ import {
   within,
 } from '@testing-library/react'
 
+import type { ReactNode } from 'react'
+
 import { REGLES_PAR_DEFAUT } from '#/lib/planning/reglesEtablissement.ts'
 import type { Referentiel } from '#/lib/planning/types.ts'
 
@@ -47,6 +49,27 @@ vi.mock('#/lib/planning/service.ts', () => service)
 vi.mock('#/components/planning/EnTeteParametres.tsx', () => ({
   MenuParametres: () => null,
   RetourPlanning: () => null,
+}))
+// Le lien vers Besoins (partie Moments) : une ancre, sans routeur.
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({
+    to,
+    search,
+    children,
+    className,
+  }: {
+    to: string
+    search?: { ouvrir?: string }
+    children: ReactNode
+    className?: string
+  }) => (
+    <a
+      href={`${to}${search?.ouvrir ? `?ouvrir=${search.ouvrir}` : ''}`}
+      className={className}
+    >
+      {children}
+    </a>
+  ),
 }))
 vi.mock('#/components/planning/hooks/usePlanning.ts', async () => {
   const { messageErreur } = await import('#/lib/planning/erreurs.ts')
@@ -136,6 +159,19 @@ describe('Horaires et absences', () => {
     for (const b of screen.getAllByRole('button', { name: /^Couleur/ })) {
       expect((b as HTMLButtonElement).disabled).toBe(true)
     }
+  })
+
+  it('les moments ne se règlent plus ici : un lien vers Besoins', () => {
+    // Oracle : « migrer la partie Moments dans Besoins » (2026-11-05).
+    monter(<HorairesPage />)
+    expect(
+      screen.queryByRole('textbox', { name: 'La nuit commence à' }),
+    ).toBeNull()
+    const lien = screen.getByRole('link', { name: 'Besoins' })
+    expect(lien.getAttribute('href')).toBe('/planning/besoins?ouvrir=moments')
+    expect(document.querySelector('[data-moments]')?.textContent).toContain(
+      "Le moment se calcule d'après les heures.",
+    )
   })
 
   it("rien ne part à la frappe ; Enregistrer envoie l'horaire complet, sans code", async () => {

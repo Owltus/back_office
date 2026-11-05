@@ -132,17 +132,24 @@ describe('Postes', () => {
     fireEvent.click(
       r.getByRole('switch', { name: 'Jours fériés chômés le jour même' }),
     )
-    // Importance (D11) et fermeture (2026-11-05), à côté de l'ouverture.
-    fireEvent.click(r.getByRole('radio', { name: 'Indispensable' }))
+    // Indispensable au fonctionnement : oui / non (décision utilisateur du
+    // 2026-11-05) ; plus de choix à trois niveaux.
+    expect(r.queryByRole('radio', { name: 'Important' })).toBeNull()
+    const indispensable = r.getByRole('switch', {
+      name: 'Indispensable au fonctionnement',
+    })
+    expect(indispensable.getAttribute('aria-checked')).toBe('false')
+    fireEvent.click(indispensable)
     expect(
       r.getByText(
-        'Quand il manque du monde, ses places restent vides en dernier.',
+        "Si ce poste manque, l'hôtel ne peut pas tourner. Le planning le remplit en premier.",
       ),
     ).toBeTruthy()
-    fireEvent.change(r.getByLabelText('Fermeture'), {
-      target: { value: '23:00' },
-    })
-    expect(r.getByText(/jusqu'à 23:00 chaque soir/)).toBeTruthy()
+    // Ouverture et fermeture : un seul endroit, la page Besoins.
+    expect(r.queryByLabelText('Fermeture')).toBeNull()
+    expect(
+      r.getByText("L'ouverture et la fermeture se règlent dans Besoins."),
+    ).toBeTruthy()
     expect(service.enregistrerPoste).not.toHaveBeenCalled()
     fireEvent.click(r.getByRole('button', { name: 'Enregistrer' }))
     await waitFor(() =>
@@ -159,7 +166,7 @@ describe('Postes', () => {
           ouverture: null,
           feries_chomes: true,
           importance: 'indispensable',
-          fermeture: '23:00',
+          fermeture: null,
         },
         2,
       ),

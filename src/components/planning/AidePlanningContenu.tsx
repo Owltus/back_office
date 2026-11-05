@@ -624,7 +624,7 @@ export function AidePlanningContenu({
           <p className="text-muted-foreground">
             Chaque horaire a un moment, calculé d’après ses heures. Il ne se
             choisit pas : le calcul ne regarde que les heures, jamais le nom.
-            Les limites ci-dessous se règlent dans Horaires, partie Moments.
+            Les limites ci-dessous se règlent dans Besoins, partie Moments.
           </p>
           <Tableau
             entetes={['Moment', 'Quand']}
@@ -1188,16 +1188,16 @@ export function AidePlanningContenu({
               'Les journées de chaque contrat, les types de contrat, les deux repos de suite, les jours d’affilée, le jour seul, le repos conseillé entre deux services, les changements de moment, les nuits, l’école et le retour de congé.',
             ],
             [
-              'Horaires, partie Moments',
-              'Les limites du matin, du soir et de la nuit, qui rangent chaque horaire.',
-            ],
-            [
               'Postes',
-              'L’accueil, l’importance, l’ouverture et la fermeture, les jours fériés chômés le jour même, et le poste fermé.',
+              'L’accueil, le poste indispensable au fonctionnement ou non, les jours fériés chômés le jour même, et le poste fermé.',
             ],
             [
               'Besoins',
-              'Le tableau de l’accueil, chaque besoin obligatoire ou souhaité et son niveau, la relève, la passation avec le veilleur et l’équipe du soir ensemble.',
+              'Le tableau de l’accueil, chaque besoin obligatoire ou souhaité et son niveau, l’ouverture et la fermeture, la relève, la passation avec le veilleur, l’équipe du soir ensemble.',
+            ],
+            [
+              'Besoins, partie Moments',
+              'Les limites du matin, du soir et de la nuit, qui rangent chaque horaire.',
             ],
             [
               'Fiche d’une personne',

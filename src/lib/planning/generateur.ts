@@ -121,8 +121,8 @@ import type {
  *       de moins que le chiffre d'un moment de l'accueil, matin, soir ou
  *       nuit (`coutManqueMinimum`, même dérivation, extra compris, D7).
  *       Entre places, l'IMPORTANCE du poste et le besoin souhaité décident
- *       (`paliersPlaces`, D11 du 2026-11-05) : souhaité < Si possible <
- *       Important < Indispensable.
+ *       (`paliersPlaces`, D11 du 2026-11-05, oui / non) : souhaité <
+ *       poste non indispensable < poste indispensable.
  *   P2  un trou (entre deux équipes d'un poste à part compté, ou sur
  *       l'accueil entier, D15) : `POIDS_TROU_QUART` par quart d'heure (D10).
  *   P3  les contrats : heures dues (`POIDS_SOUS_CONTRAT`) > une personne en
@@ -863,14 +863,16 @@ export function coutManqueMinimum(
 }
 
 /*
- * IMPORTANCE DES POSTES (D11 du 2026-11-05 : « quand il manque du monde,
- * Si possible reste vide en premier ») et BESOINS SOUHAITÉS (D4). Chaque
+ * IMPORTANCE DES POSTES (D11, OUI / NON depuis la décision utilisateur du
+ * 2026-11-05 : « soit un poste est important, soit il ne l'est pas ») et
+ * BESOINS SOUHAITÉS (D4). Aucun poste n'est nommé ici : seul compte le
+ * réglage « indispensable » de chaque poste. Chaque
  * place nécessaire (P1 : une place, un manque de l'accueil, un trou entre
  * deux équipes, une passation avec le veilleur) appartient à un PALIER :
  *   0  un besoin souhaité (`obligatoire = false`), quel que soit son poste ;
- *   1  une place d'un poste « Si possible » ;
- *   2  « Important » (le défaut d'un poste) ;
- *   3  « Indispensable ».
+ *   1  une place d'un poste non indispensable (l'ancienne valeur
+ *      « important » compte ici) ;
+ *   2  une place d'un poste indispensable.
  * Le palier d'un manque ou d'un trou est le plus haut des postes qui le
  * tiendraient ; celui d'une passation, le plus bas de ses nuits. Son prix
  * reste le prix DÉRIVÉ d'aujourd'hui (`coutPlaceVide` : une place n'est
@@ -879,8 +881,8 @@ export function coutManqueMinimum(
  * dépasse le prix le plus cher d'une place d'un palier plus bas, surplus
  * de nuit compris. Donc, à une personne près, une place d'un palier plus
  * bas reste vide avant toute place d'un palier plus haut, et à palier égal
- * rien ne change. Une semaine où un seul palier est présent (le cas de
- * tous les postes « Important », ou d'un hôtel qui n'a rien réglé) a un
+ * rien ne change. Une semaine où un seul palier est présent (tous les
+ * postes au même réglage, ou un hôtel qui n'a rien réglé) a un
  * décalage nul : le modèle est celui d'avant, au caractère près.
  * Les passations : un veilleur ajouté peut en casser deux, donc les places
  * de nuit paient deux passations (D8, `extraNuit`). Le décalage d'une
@@ -890,20 +892,20 @@ export function coutManqueMinimum(
  * décalage.
  */
 
-/** Palier d'un besoin souhaité, et du défaut « Important ». */
+/** Palier d'un besoin souhaité, et d'un poste non indispensable. */
 export const RANG_SOUHAITE = 0
-export const RANG_IMPORTANT = rangImportance('important')
+export const RANG_AUTRE = rangImportance('si_possible')
 
 /** Palier d'une place (le besoin qui la fixe). */
 export const rangPlace = (c: Creneau) =>
   c.souhaite ? RANG_SOUHAITE : rangImportance(c.importance)
 
 /** Palier d'un manque ou d'un trou : le plus haut des postes de ses
- * créneaux (Important sans créneau). */
+ * créneaux (non indispensable sans créneau). */
 export const rangDe = (cs: readonly Creneau[]) =>
   cs.length
     ? Math.max(...cs.map((c) => rangImportance(c.importance)))
-    : RANG_IMPORTANT
+    : RANG_AUTRE
 
 /** Une passation avec le veilleur, pour les paliers : sa clé, son prix
  * dérivé (au-delà de `POIDS_PASSATION`) et son palier. */
@@ -943,7 +945,7 @@ export function paliersPlaces(
       ...zones.map((z) => z.rang),
     ]),
   ].sort((a, b) => a - b)
-  const haut = presents.at(-1) ?? RANG_IMPORTANT
+  const haut = presents.at(-1) ?? RANG_AUTRE
   const extraBas = Math.max(0, ...zones.map((z) => z.plus))
   let pas = 0
   if (presents.length > 1)
@@ -1313,7 +1315,7 @@ export function construire(
         plus,
         rang: nuits.length
           ? Math.min(...nuits.map((c) => rangImportance(c.importance)))
-          : RANG_IMPORTANT,
+          : RANG_AUTRE,
       })
     }
   // IMPORTANCE DES POSTES (D11) et besoins souhaités : `paliersPlaces`.

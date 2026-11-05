@@ -71,8 +71,9 @@ export interface Creneau {
    * 23:00 à 07:00 reste une journée de 8 h la nuit d'un changement d'heure,
    * où ses minutes réelles font 7 h ou 9 h. Null : les minutes réelles. */
   travailMural: number | null
-  /** Importance du poste quand il manque du monde (D11, 2026-11-05) :
-   * l'ordre de ce qui reste vide en premier (`paliersPlaces`, générateur). */
+  /** Importance du poste (D11, oui / non depuis le 2026-11-05) : un poste
+   * indispensable passe devant les autres quand il manque du monde
+   * (`paliersPlaces`, générateur). Toute autre valeur : non indispensable. */
   importance: Importance
   /** Besoin souhaité (`obligatoire = false`, 2026-11-05) : rempli si
    * possible, vide avant toute place obligatoire, jamais une place à
@@ -83,9 +84,17 @@ export interface Creneau {
   titulaireSeul: boolean
 }
 
-/** Rang d'une importance : plus il est haut, plus la place reste vide tard. */
-export function rangImportance(i: Importance): number {
-  return i === 'indispensable' ? 3 : i === 'si_possible' ? 1 : 2
+/** Le poste est-il indispensable au fonctionnement ? Un choix oui / non
+ * (décision utilisateur du 2026-11-05 : « soit un poste est important, soit
+ * il ne l'est pas »). L'ancienne valeur « important » se lit non. */
+export function estIndispensable(i: Importance | null | undefined): boolean {
+  return i === 'indispensable'
+}
+
+/** Rang d'une importance : plus il est haut, plus la place reste vide tard.
+ * Deux paliers seulement : indispensable (2), le reste (1). */
+export function rangImportance(i: Importance | null | undefined): number {
+  return estIndispensable(i) ? 2 : 1
 }
 
 export function creneau(
@@ -109,7 +118,7 @@ export function creneau(
     matinTot: false,
     moment: null,
     travailMural: null,
-    importance: 'important',
+    importance: 'si_possible',
     souhaite: false,
     titulaireSeul: false,
     ...c,

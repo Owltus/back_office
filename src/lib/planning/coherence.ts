@@ -127,7 +127,7 @@ export function cibleFiche(salarieId: number, partie?: PartieFiche): string {
  * ouvrir la fiche sur une partie, `cibleFiche`), et sur Besoins
  * `poste-<id>`, `soutien-<id>` (le poste, réglage des apprentis),
  * `presence` (la vue par cycle) ou `releve` ; `regles` (Équipe : Règles des
- * contrats) et `moments` (Horaires : limites des moments). */
+ * contrats) et `moments` (Besoins : limites des moments). */
 export interface LienReglage {
   page: PageReglage
   cible?: string
@@ -1069,7 +1069,7 @@ function dureeCourte(minutes: number): string {
  * contradictoires (étape 8 du plan `planning-moteur-configurable-
  * 2026-11-05`). Chaque point mène à l'endroit où on le corrige : le tiroir
  * Règles des contrats (`?ouvrir=regles`, Équipe), la section Moments
- * (`moments`, Horaires), la relève (`releve`, Besoins) ou la fiche. La
+ * (`moments`, Besoins), la relève (`releve`, Besoins) ou la fiche. La
  * journée étoile fixée un jour sans horaire court a déjà son point
  * (`etoile-sans-horaire`). Les règles mêmes ne sont pas réécrites : elles
  * viennent de `lireRegles`, comme pour le moteur.
@@ -1231,7 +1231,7 @@ function pointsDesRegles(
   const m = regles.moments
   const heure = (x: number) => hhmm(x % 1440)
   const moment = (id: string, texte: string) =>
-    ajouter(`moments:${id}`, 'a-voir', 'horaires', texte, 'moments')
+    ajouter(`moments:${id}`, 'a-voir', 'besoins', texte, 'moments')
   if (m.nuitFin >= m.nuitDebut) {
     moment(
       'nuit',

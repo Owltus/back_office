@@ -1749,8 +1749,8 @@ describe("règles de l'établissement impossibles (étape 8, 2026-11-05)", () =>
     expect(
       verifierReglages(r).find((x) => x.id === 'moments:soir-debut'),
     ).toMatchObject({
-      ecran: 'horaires',
-      lien: { page: '/planning/horaires', cible: 'moments' },
+      ecran: 'besoins',
+      lien: { page: '/planning/besoins', cible: 'moments' },
     })
     expect(moments(avecMoments({ soir_fin: 17 * 60 }))).toEqual([
       'moments:soir-fin',

@@ -72,15 +72,14 @@ export function HeuresAccueil({
   return (
     <section
       aria-labelledby="titre-heures-accueil"
-      className="flex max-w-3xl flex-col gap-2"
+      className="flex min-w-0 flex-col gap-2"
     >
-      <h3 id="titre-heures-accueil" className="text-sm font-semibold">
+      <h3 id="titre-heures-accueil" className="text-base font-semibold">
         Ouverture et fermeture
       </h3>
       <p className="text-xs text-muted-foreground">
-        Chaque jour où le matin ou le soir est demandé, quelqu'un tient le poste
-        dès l'ouverture et jusqu'à la fermeture, pendant au moins{' '}
-        {heuresLisibles(duree)}. Aussi réglé dans Postes.
+        Quelqu'un tient le poste dès l'ouverture et jusqu'à la fermeture,
+        pendant au moins {heuresLisibles(duree)}.
       </p>
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span>Tenue pendant</span>
@@ -208,9 +207,7 @@ function LigneHeures({
           </div>
         )}
       </div>
-      <p className="text-xs text-muted-foreground">
-        {phraseHeures(v.ouverture, v.fermeture)}
-      </p>
+      <p className="sr-only">{phraseHeures(v.ouverture, v.fermeture)}</p>
     </li>
   )
 }

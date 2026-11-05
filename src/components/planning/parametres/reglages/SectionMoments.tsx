@@ -1,6 +1,7 @@
 /*
- * Section « Moments » de la page Horaires (étape 5 du plan
- * `planning-moteur-configurable-2026-11-05`) : les limites qui rangent un
+ * Section « Moments » de la page Besoins (étape 5 du plan
+ * `planning-moteur-configurable-2026-11-05` ; déplacée de la page Horaires
+ * le 2026-11-05, demande utilisateur) : les limites qui rangent un
  * horaire au matin, au middle, au soir ou à la nuit. Le moment d'un horaire
  * se calcule d'après ses heures ; avant d'enregistrer, la liste des horaires
  * qui changeraient de moment. À l'enregistrement, les moments rangés en base
@@ -131,13 +132,15 @@ export function SectionMoments({
   }
 
   return (
-    <section className="flex flex-col gap-4" aria-labelledby="titre-moments">
-      <div id="titre-moments">
-        <EnTeteSection
-          titre="Moments"
-          texte="Le moment d'un horaire se déduit de ses heures. Il range l'horaire dans les menus et compte dans le tableau de l'accueil. Ces limites décident du rangement."
-        />
-      </div>
+    <section
+      className="flex scroll-mt-4 flex-col gap-5"
+      aria-labelledby="titre-moments"
+    >
+      <EnTeteSection
+        id="titre-moments"
+        titre="Moments"
+        texte="Le moment d'un horaire se calcule d'après ses heures. Il compte dans le tableau de l'accueil."
+      />
       <div className="flex max-w-3xl flex-col gap-3 rounded-xl border bg-card p-4 text-sm">
         <ul className="flex flex-col gap-2.5">
           <li className="flex flex-wrap items-center gap-1.5">
@@ -213,19 +216,24 @@ export function SectionMoments({
           </div>
         )}
         <ErreursSaisie erreurs={erreurs} />
-        {modifiable && (
-          <div className="flex justify-end gap-2">
+        {/* Les boutons n'apparaissent qu'une fois une limite changée, comme
+            l'ouverture et la fermeture (Annuler de l'en-tête reste seul). */}
+        {modifiable && modifie && (
+          <div className="flex items-center justify-end gap-2">
+            <span className="text-xs text-muted-foreground">
+              Non enregistré
+            </span>
             <Button
               variant="outline"
               size="sm"
-              disabled={!modifie || envoi}
+              disabled={envoi}
               onClick={annuler}
             >
               Annuler
             </Button>
             <Button
               size="sm"
-              disabled={!modifie || envoi || erreurs.length > 0}
+              disabled={envoi || erreurs.length > 0}
               onClick={() => void enregistrer()}
             >
               Enregistrer

@@ -25,7 +25,8 @@ import type {
  * établissement, fictif, qui n'est pas l'hôtel. Petit hôtel de jour : pas de
  * poste de nuit, contrats de 35 h en journées de 7 h seulement, deux repos de
  * suite seulement souhaités, 6 jours d'affilée conseillés, la nuit à partir
- * de 22 h et le matin jusqu'à 10 h, une Direction « Si possible », un besoin
+ * de 22 h et le matin jusqu’à 10 h, un Petit-déjeuner indispensable (poste
+ * qui n’est pas l’accueil), une Direction non indispensable, un besoin
  * souhaité, un besoin « titulaire seulement », une fermeture à 22 h. Une
  * semaine générée : 0 infraction, les règles réglées tenues, et aucune règle
  * de l'hôtel par défaut qui s'applique quand elle est désactivée.
@@ -128,7 +129,7 @@ function etablissement(reglages: Reglages | undefined): Referentiel {
       couleur: '#222',
       horaires_autorises: [1, 3],
       presence: false,
-      importance: 'important',
+      importance: 'indispensable',
     },
     {
       id: DIRECTION,
@@ -312,7 +313,7 @@ describe('un second établissement, fictif', () => {
     for (const x of c) expect(x.presence).toEqual(['matin'])
   })
 
-  it('il manque du monde : la Direction « Si possible » reste vide en premier', () => {
+  it('il manque du monde : la Direction, non indispensable, reste vide en premier', () => {
     // Sans Fabien : 25 journées pour 26 places obligatoires. Dina pourrait
     // tenir la Direction en dépannage, mais la Réception et le
     // Petit-déjeuner passent devant.

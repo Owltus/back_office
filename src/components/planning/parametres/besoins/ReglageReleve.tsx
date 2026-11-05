@@ -87,9 +87,9 @@ export function ReglageReleve({
   return (
     <section
       aria-labelledby="titre-releve"
-      className="flex max-w-3xl flex-col gap-1.5"
+      className="flex min-w-0 flex-col gap-1.5"
     >
-      <h3 id="titre-releve" className="text-sm font-semibold">
+      <h3 id="titre-releve" className="text-base font-semibold">
         Passation entre les équipes
       </h3>
       <label className="flex items-start gap-2 text-sm">

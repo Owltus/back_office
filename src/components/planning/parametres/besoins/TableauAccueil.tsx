@@ -58,21 +58,20 @@ export function TableauAccueil({
       className="flex min-w-0 flex-col gap-3"
     >
       <div className="flex max-w-3xl flex-col gap-1">
-        <h2 id="titre-accueil" className="text-base font-semibold">
+        <h3 id="titre-accueil" className="text-base font-semibold">
           Accueil
-        </h2>
+        </h3>
         <p className="text-sm text-muted-foreground">
           {jour.length
-            ? `Combien de personnes il faut, chaque jour. Le matin et le soir : ${listeEt(jour)} ensemble, l'app répartit et choisit les horaires.`
-            : "Aucun poste de l'accueil : dans Postes, activez Poste de l'accueil sur Réception et Club."}{' '}
+            ? `Matin et soir : ${listeEt(jour)} ensemble, le planning répartit.`
+            : 'Aucun poste du matin et du soir : dans Postes, réglez Accueil sur Matin et soir.'}{' '}
           {nuit.length
-            ? `La nuit : ${listeEt(nuit)}.`
-            : 'Aucun poste de nuit : dans Postes, réglez Accueil sur Nuit pour le poste des veilleurs.'}
+            ? `Nuit : ${listeEt(nuit)}.`
+            : 'Aucun poste de nuit : dans Postes, réglez Accueil sur Nuit.'}
         </p>
         <p className="text-xs text-muted-foreground">
-          Une personne en milieu de journée compte le matin et le soir. Les
-          apprentis comptent, jamais seuls. Une case vide, en orange : personne
-          n'est demandé, l'hôtel peut rester vide à ce moment.
+          Les apprentis comptent, jamais seuls. Un tiret orange : personne de
+          demandé.
         </p>
       </div>
       <div className="overflow-x-auto rounded-xl border bg-card">

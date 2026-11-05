@@ -28,8 +28,9 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Redo2, Undo2 } from 'lucide-react'
+import { ChevronRight, Redo2, Undo2 } from 'lucide-react'
 
 import {
   useDroitsPlanning,
@@ -61,16 +62,19 @@ import { TableauAccueil } from '#/components/planning/parametres/besoins/Tableau
 import { ReglageReleve } from '#/components/planning/parametres/besoins/ReglageReleve.tsx'
 import { HeuresAccueil } from '#/components/planning/parametres/besoins/HeuresAccueil.tsx'
 import {
-  AIDE_IMPORTANCE,
-  LIBELLES_IMPORTANCE,
   phrasesOrdreDecision,
+  sectionsBesoins,
 } from '#/components/planning/parametres/besoins/ordreDecision.ts'
 import {
   idCible,
   useOuvrirCible,
 } from '#/components/planning/parametres/reglages/ouvrirCible.ts'
 import type { PropsOuvrir } from '#/components/planning/parametres/reglages/ouvrirCible.ts'
-import { CadreReglages } from '#/components/planning/parametres/reglages/cadre.tsx'
+import {
+  CadreReglages,
+  EnTeteSection,
+} from '#/components/planning/parametres/reglages/cadre.tsx'
+import { SectionMoments } from '#/components/planning/parametres/reglages/SectionMoments.tsx'
 import {
   RIEN,
   reglerChamp,
@@ -91,13 +95,16 @@ import {
 } from '#/components/ui/tabs.tsx'
 import { heures, libelleHoraire } from '#/lib/planning/affichage.ts'
 import { planningKeys } from '#/lib/planning/keys.ts'
-import { accueilActif, estPosteAccueil } from '#/lib/planning/presence.ts'
+import { estIndispensable } from '#/lib/planning/modele.ts'
+import { estPosteAccueil } from '#/lib/planning/presence.ts'
 import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
 import { reglerBesoin, reglerConsigne } from '#/lib/planning/service.ts'
 import { JOURS } from '#/lib/planning/types.ts'
-import type { Consigne, Referentiel } from '#/lib/planning/types.ts'
+import type { Consigne, Poste, Referentiel } from '#/lib/planning/types.ts'
+import { cn } from '#/lib/utils.ts'
 
 type Periode = Consigne['periode']
+type Section = 'indispensables' | 'autres'
 
 const cleCase = (posteId: number, ligne: LigneBesoin, jour: number) =>
   `${posteId}|${ligne.cle}|${jour}`
@@ -145,13 +152,14 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
     })
   }, [])
 
-  const [posteChoisi, setPosteChoisi] = useState<number | undefined>(undefined)
-  // Même règle que le moteur (`estPosteAccueil`) : sans aucun poste coché
-  // « présence », pas de tableau, tous les postes gardent leur grille.
-  const actif = !!data && accueilActif(data.postes)
-  const aPart =
-    data?.postes.filter((p) => !p.ferme && !estPosteAccueil(p, actif)) ?? []
-  const poste = aPart.find((p) => p.id === posteChoisi) ?? aPart.at(0)
+  // Les sections d'après le réglage de chaque poste (indispensable ou non,
+  // décision utilisateur du 2026-11-05) : un poste neuf y apparaît tout
+  // seul. Même règle que le moteur (`estPosteAccueil`) : sans aucun poste
+  // du matin et du soir, pas de tableau, tous les postes gardent leur grille.
+  const sections = data ? sectionsBesoins(data.postes) : undefined
+  const actif = !!sections?.accueil
+  // Le poste ouvert dans les onglets de chaque section.
+  const [choisis, setChoisis] = useState<Partial<Record<Section, number>>>({})
 
   const [historique, setHistorique] = useState<Historique>(HISTORIQUE_VIDE)
   const historiqueRef = useRef(historique)
@@ -163,6 +171,11 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
     lien,
     !!data,
     (cible) => {
+      // Limites des moments (déplacées de la page Horaires le 2026-11-05).
+      if (cible === 'moments') {
+        window.setTimeout(() => allerA('titre-moments'), 0)
+        return true
+      }
       if (cible === 'presence') {
         window.setTimeout(() => allerA('besoins-presence'), 0)
         return true
@@ -180,7 +193,11 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
         window.setTimeout(() => allerA('besoins-presence'), 0)
         return true
       }
-      setPosteChoisi(id)
+      const section: Section = estIndispensable(vise.importance)
+        ? 'indispensables'
+        : 'autres'
+      setChoisis((c) => ({ ...c, [section]: vise.id }))
+      window.setTimeout(() => allerA(`besoins-${section}`), 0)
       return true
     },
     onOuvert,
@@ -350,7 +367,7 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
     apres,
   })
 
-  const actions: ActionsGrille | undefined = poste && {
+  const actionsPour = (poste: Poste): ActionsGrille => ({
     regler: (ligne, jour, champ, v) => {
       faire({
         libelle: `${poste.nom}, ${JOURS[jour].toLowerCase()}, ${libelleHoraire(ligne)}`,
@@ -412,7 +429,7 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
       if (n) notifier('Places retirées. Ctrl + Z pour annuler.')
     },
     ajouterLigne: (cle) => garder(poste.id, [cle]),
-  }
+  })
 
   const reglerAccueil = (jour: number, periode: Periode, n: number) => {
     const avant = afficheConsigne(jour, periode)
@@ -422,6 +439,98 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
       libelle: `accueil, ${JOURS[jour].toLowerCase()} ${periode}`,
       changements: [{ type: 'consigne', jour, periode, avant, apres }],
     })
+  }
+
+  const regles = data ? lireRegles(data) : undefined
+  // Le tableau de l'accueil, ses heures et ses passations : un seul bloc,
+  // posé dans la section du réglage de ses postes.
+  const accueil = data && regles && (
+    <div className="flex flex-col gap-8">
+      <TableauAccueil
+        postes={data.postes}
+        modifiable={modifiable}
+        affiche={afficheAccueil}
+        regler={reglerAccueil}
+      />
+      <div className="grid gap-8 lg:grid-cols-2">
+        <HeuresAccueil
+          postes={data.postes}
+          modifiable={modifiable}
+          duree={regles.passations.dureeOuverture}
+        />
+        <ReglageReleve
+          minutes={regles.passations.releveMinutes}
+          continuite={regles.passations.continuiteObligatoire}
+          veilleur={regles.passations.passationVeilleur}
+          tolerance={regles.passations.equipeTolerance}
+          modifiable={modifiable}
+        />
+      </div>
+    </div>
+  )
+
+  /** Les onglets d'une section : un poste à la fois, sa grille. */
+  const ongletsDe = (section: Section, postes: Poste[]) => {
+    if (!data || !postes.length) return null
+    const poste = postes.find((p) => p.id === choisis[section]) ?? postes[0]
+    return (
+      <Tabs
+        value={String(poste.id)}
+        onValueChange={(v) =>
+          setChoisis((c) => ({ ...c, [section]: Number(v) }))
+        }
+        className="min-w-0 gap-3"
+      >
+        <TabsList
+          aria-label={
+            section === 'indispensables'
+              ? 'Postes indispensables'
+              : 'Autres postes'
+          }
+          className="max-w-full flex-wrap justify-start group-data-[orientation=horizontal]/tabs:h-auto"
+        >
+          {postes.map((p) => (
+            <TabsTrigger
+              key={p.id}
+              value={String(p.id)}
+              className="h-8 flex-none gap-2 px-3"
+            >
+              <span
+                aria-hidden
+                className="size-2 shrink-0 rounded-full"
+                style={{ background: p.couleur }}
+              />
+              {p.nom}
+              <span className="text-xs font-normal text-muted-foreground tabular-nums">
+                {heures(
+                  presenceSemaine(
+                    p,
+                    lignesAffichees(p, data, gardees.get(p.id) ?? AUCUNE),
+                    affiche,
+                  ),
+                )}
+                <span aria-hidden> / sem.</span>
+                <span className="sr-only"> de présence par semaine</span>
+              </span>
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        <TabsContent value={String(poste.id)} className="min-w-0">
+          <GrilleBesoins
+            poste={poste}
+            referentiel={data}
+            lignes={lignesAffichees(
+              poste,
+              data,
+              gardees.get(poste.id) ?? AUCUNE,
+            )}
+            modifiable={modifiable}
+            affiche={affiche}
+            actions={actionsPour(poste)}
+          />
+        </TabsContent>
+      </Tabs>
+    )
   }
 
   return (
@@ -466,124 +575,70 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
         ) : undefined
       }
     >
-      {data && (
+      {data && sections && (
         // Largeur bornée (audit UX du 2026-10-31) : étalées sur 1 400 px,
         // les 7 colonnes de jours obligeaient l'œil à traverser l'écran.
-        <div className="flex w-full max-w-6xl min-w-0 flex-col gap-6">
-          <div className="flex max-w-3xl flex-col gap-1">
-            <p className="text-sm">
-              Indiquez combien de personnes il faut, chaque jour. Le planning
-              automatique s'en sert pour placer l'équipe.
-            </p>
-            {modifiable && (
-              <p className="text-xs text-muted-foreground">
-                Cliquez sur une case pour la régler.
-              </p>
-            )}
-            <details className="text-xs text-muted-foreground">
-              <summary className="cursor-pointer select-none hover:text-foreground">
-                Dans quel ordre le planning automatique décide
-              </summary>
-              {/* Écrit d'après l'importance des postes (étape 7, D11). */}
-              <div data-ordre-decision className="mt-1 flex flex-col gap-1">
-                {phrasesOrdreDecision(data.postes).map((phrase) => (
-                  <p key={phrase}>{phrase}</p>
-                ))}
-              </div>
-            </details>
+        // Trois sections (refonte du 2026-11-05, demande utilisateur : « plus
+        // claire ») : les postes indispensables, les autres, les moments.
+        <div className="flex w-full max-w-6xl min-w-0 flex-col gap-10">
+          <p className="max-w-3xl text-sm text-muted-foreground">
+            Combien de personnes il faut, chaque jour. Le planning remplit
+            d'abord les postes indispensables.
+            {modifiable && ' Cliquez sur une case pour la régler.'}
+          </p>
+
+          <SectionBesoins
+            id="besoins-indispensables"
+            titre="Postes indispensables"
+            texte="Sans eux, l'hôtel ne tourne pas. Le planning les remplit en premier."
+            vide={
+              !sections.accueilIndispensable && !sections.indispensables.length
+                ? 'Aucun poste indispensable. Dans Postes, activez Indispensable au fonctionnement.'
+                : undefined
+            }
+          >
+            {sections.accueilIndispensable && accueil}
+            {ongletsDe('indispensables', sections.indispensables)}
+          </SectionBesoins>
+
+          <SectionBesoins
+            filet
+            id="besoins-autres"
+            titre="Autres postes, tenus au mieux"
+            texte="L'hôtel tourne sans eux quelques jours. Le planning les remplit s'il reste du monde."
+            vide={
+              (sections.accueilIndispensable || !sections.accueil) &&
+              !sections.autres.length
+                ? 'Aucun. Un poste qui n’est pas indispensable apparaît ici.'
+                : undefined
+            }
+          >
+            {sections.accueil && !sections.accueilIndispensable && accueil}
+            {ongletsDe('autres', sections.autres)}
+          </SectionBesoins>
+
+          <div className="border-t pt-8">
+            <SectionMoments referentiel={data} modifiable={modifiable} />
           </div>
 
-          <TableauAccueil
-            postes={data.postes}
-            modifiable={modifiable}
-            affiche={afficheAccueil}
-            regler={reglerAccueil}
-          />
-          {actif && (
-            <HeuresAccueil
-              postes={data.postes}
-              modifiable={modifiable}
-              duree={lireRegles(data).passations.dureeOuverture}
-            />
-          )}
-          {actif && (
-            <ReglageReleve
-              minutes={lireRegles(data).passations.releveMinutes}
-              continuite={lireRegles(data).passations.continuiteObligatoire}
-              veilleur={lireRegles(data).passations.passationVeilleur}
-              tolerance={lireRegles(data).passations.equipeTolerance}
-              modifiable={modifiable}
-            />
-          )}
-
-          {actif && <h2 className="text-base font-semibold">Autres postes</h2>}
-          {!poste ? (
-            <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-              Aucun autre poste. Les postes qui ne sont pas à l'accueil
-              (Direction, Technique…) se règlent ici.
-            </p>
-          ) : (
-            <Tabs
-              value={String(poste.id)}
-              onValueChange={(v) => setPosteChoisi(Number(v))}
-              className="min-w-0 gap-3"
+          <details className="group border-t pt-4 text-sm text-muted-foreground">
+            <summary className="flex cursor-pointer items-center gap-1.5 font-medium text-foreground select-none">
+              <ChevronRight
+                aria-hidden
+                className="size-4 text-muted-foreground transition-transform group-open:rotate-90"
+              />
+              Dans quel ordre le planning décide
+            </summary>
+            {/* Écrit d'après le réglage des postes (D11, oui / non). */}
+            <ol
+              data-ordre-decision
+              className="mt-2 ml-5 flex max-w-3xl list-decimal flex-col gap-1.5"
             >
-              <TabsList className="max-w-full flex-wrap justify-start group-data-[orientation=horizontal]/tabs:h-auto">
-                {aPart.map((p) => (
-                  <TabsTrigger
-                    key={p.id}
-                    value={String(p.id)}
-                    className="h-8 flex-none gap-2 px-3"
-                  >
-                    <span
-                      aria-hidden
-                      className="size-2 shrink-0 rounded-full"
-                      style={{ background: p.couleur }}
-                    />
-                    {p.nom}
-                    <span className="text-xs font-normal text-muted-foreground tabular-nums">
-                      {heures(
-                        presenceSemaine(
-                          p,
-                          lignesAffichees(p, data, gardees.get(p.id) ?? AUCUNE),
-                          affiche,
-                        ),
-                      )}
-                      <span aria-hidden> / sem.</span>
-                      <span className="sr-only"> de présence par semaine</span>
-                    </span>
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-              <TabsContent
-                value={String(poste.id)}
-                className="flex min-w-0 flex-col gap-3"
-              >
-                <p data-importance className="text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">
-                    Importance :{' '}
-                    {LIBELLES_IMPORTANCE[poste.importance ?? 'important']}.
-                  </span>{' '}
-                  {AIDE_IMPORTANCE[poste.importance ?? 'important']} Se règle
-                  dans Postes.
-                </p>
-                {actions && (
-                  <GrilleBesoins
-                    poste={poste}
-                    referentiel={data}
-                    lignes={lignesAffichees(
-                      poste,
-                      data,
-                      gardees.get(poste.id) ?? AUCUNE,
-                    )}
-                    modifiable={modifiable}
-                    affiche={affiche}
-                    actions={actions}
-                  />
-                )}
-              </TabsContent>
-            </Tabs>
-          )}
+              {phrasesOrdreDecision(data.postes).map((phrase) => (
+                <li key={phrase}>{phrase}</li>
+              ))}
+            </ol>
+          </details>
         </div>
       )}
     </CadreReglages>
@@ -607,4 +662,44 @@ function allerA(id: string) {
     zone.scrollTop -
     8
   zone.scrollTo({ top: haut, behavior: 'smooth' })
+}
+
+/** Une section de la page : titre, une phrase, son contenu (ou une ligne
+ * quand elle est vide). Les sections après la première sont séparées par un
+ * filet. */
+function SectionBesoins({
+  filet = false,
+  id,
+  titre,
+  texte,
+  vide,
+  children,
+}: {
+  /** Un filet au-dessus : la section suit une autre. */
+  filet?: boolean
+  id: string
+  titre: string
+  texte: string
+  vide?: string
+  children: ReactNode
+}) {
+  return (
+    <section
+      id={id}
+      aria-labelledby={`${id}-titre`}
+      className={cn(
+        'flex min-w-0 scroll-mt-4 flex-col gap-5',
+        filet && 'border-t pt-8',
+      )}
+    >
+      <EnTeteSection id={`${id}-titre`} titre={titre} texte={texte} />
+      {vide ? (
+        <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+          {vide}
+        </p>
+      ) : (
+        children
+      )}
+    </section>
+  )
 }
