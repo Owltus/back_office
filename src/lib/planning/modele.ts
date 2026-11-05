@@ -32,8 +32,9 @@ export interface Creneau {
   /** Empiète sur 22 h → 6 h en heure locale ; null : calculé ici. */
   nuit: boolean | null
   /** Moments du tableau de l'accueil où ce créneau compte (vide : aucun).
-   * Un middle de l'accueil compte au matin ET au soir (D11 du 2026-11-01,
-   * plan planning-accueil-2026-11-01) : d'où une liste. */
+   * Une liste : un middle y a compté au matin ET au soir (D11 du
+   * 2026-11-01) ; depuis le 2026-11-05 il ne compte nulle part
+   * (`momentsAccueil`). */
   presence: readonly PeriodePresence[]
   /** Créneau CANDIDAT de l'accueil (`p<jour>-<poste>-<horaire>`, D1, D2) :
    * aucune place propre (effectif 0), chacun peut le prendre ; c'est le

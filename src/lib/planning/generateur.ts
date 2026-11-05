@@ -390,6 +390,21 @@ export const POIDS_PASSATION = 300_000
 export const POIDS_RELEVE = 16_000
 /** Travailler un jour habituel (semaine type « travail »). */
 export const POIDS_JOUR_FIXE = 2_000
+/** L'équipe du matin arrive à l'ouverture (2026-11-05). Mesuré sur les 18
+ * semaines faites à la main (29/06 au 26/10) : à l'accueil, presque tous
+ * les matins commencent à 07:00 ; le calcul en faisait arriver une partie à
+ * 07:30 ou 08:00 (même journée de 7 h ou 8 h), poussé par l'équité des
+ * matins tôt, et laissait une personne seule à l'ouverture. Par minute
+ * d'arrivée après l'ouverture du poste ce jour-là, un horaire du matin d'un
+ * poste de l'accueil, plafonné à `ARRIVEE_MATIN_MAX` minutes. Linéaire, sur
+ * chaque affectation : aucune variable de plus. Confort (P5) attaché au
+ * CRÉNEAU, le même pour qui le prend : il ne départage pas un titulaire et
+ * un dépannage, d'où son absence de `PART_FIXE_DEPANNAGE` (il reste sous
+ * cette part fixe, test de palier) ; à 60 minutes, plus que l'écart d'équité le plus
+ * grand d'un shift (`EQUITE_RATTRAPAGE_MAX` × `POIDS_EQUITE`) : l'équité ne
+ * départage plus que des arrivées à la même heure. */
+export const POIDS_ARRIVEE_MATIN_MINUTE = 12
+export const ARRIVEE_MATIN_MAX = 120
 /** Le premier jour du contrat est travaillé (demande d'une responsable du
  * 2026-11-04 : « mes stagiaires commencent leur stage par deux jours de
  * repos »). Rien ne retenait le calcul de poser les deux repos de la
@@ -752,6 +767,20 @@ export function pireCoutRemplir(
     POIDS_DEJA_PROPOSE +
     BRUIT_MAX
   )
+}
+
+/** Ce que coûte un créneau du matin de l'accueil qui commence après
+ * l'ouverture de son poste ce jour-là (`POIDS_ARRIVEE_MATIN_MINUTE`).
+ * `ouvertureDe` : « poste|jour » → début de l'ouverture (minutes réelles). */
+export function coutArriveeMatin(
+  c: Creneau,
+  ouvertureDe: ReadonlyMap<string, number>,
+): number {
+  if (c.moment !== 'matin' || !c.accueil) return 0
+  const o = ouvertureDe.get(`${c.poste}|${jourDe(c)}`)
+  if (o === undefined) return 0
+  const retard = Math.min(ARRIVEE_MATIN_MAX, Math.max(0, c.debut - o))
+  return POIDS_ARRIVEE_MATIN_MINUTE * retard
 }
 
 /** P1 : une personne qui manque sur une place nécessaire, strictement plus
@@ -2126,6 +2155,18 @@ export function construire(
       if (p.aEviter.has(cleAEviter(sId, jourDe(c), c.poste, c.typeShift))) {
         m.cout(POIDS_DEJA_PROPOSE, v)
       }
+    }
+  }
+  // L'équipe du matin arrive à l'ouverture (`POIDS_ARRIVEE_MATIN_MINUTE`).
+  const ouvertureDe = new Map<string, number>()
+  for (const o of p.ouvertures ?? [])
+    ouvertureDe.set(`${o.poste}|${o.jour}`, o.debut)
+  if (ouvertureDe.size) {
+    for (const [k, v] of x) {
+      const c = creneaux.get(scinder(k)[1])
+      if (!c) continue
+      const cout = coutArriveeMatin(c, ouvertureDe)
+      if (cout > 0) m.cout(cout, v)
     }
   }
   // Petit bruit : à qualité égale, chaque graine donne une autre simulation.

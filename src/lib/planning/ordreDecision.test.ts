@@ -3,6 +3,7 @@ import highsLoader from 'highs'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import {
+  ARRIVEE_MATIN_MAX,
   BRUIT_MAX,
   compatible,
   coutConsigne,
@@ -12,12 +13,14 @@ import {
   coutPlaceVideGroupe,
   coutRemplacant,
   EQUITE_MAX_PAR_SHIFT,
+  EQUITE_RATTRAPAGE_MAX,
   generer,
   minutesDues,
   minutesEnPlus,
   PART_FIXE_DEPANNAGE,
   PART_TEMPS_1,
   pireCoutRemplir,
+  POIDS_ARRIVEE_MATIN_MINUTE,
   POIDS_DEJA_PROPOSE,
   POIDS_DEPANNAGE_MINUTE,
   POIDS_EQUITE,
@@ -167,6 +170,15 @@ describe('les poids sont des paliers dérivés', () => {
     )
     // L'équité ne fait jamais faire une heure en plus.
     expect(POIDS_SUR_CONTRAT * H).toBeGreaterThan(EQUITE_MAX_PAR_SHIFT)
+    // Arriver à l'ouverture (2026-11-05) : une heure de retard pèse plus que
+    // l'écart d'équité le plus grand, et tout le retard reste sous la part
+    // fixe du dépannage (un titulaire libre passe toujours devant).
+    expect(POIDS_ARRIVEE_MATIN_MINUTE * H).toBeGreaterThan(
+      EQUITE_RATTRAPAGE_MAX * POIDS_EQUITE,
+    )
+    expect(PART_FIXE_DEPANNAGE).toBeGreaterThan(
+      POIDS_ARRIVEE_MATIN_MINUTE * ARRIVEE_MATIN_MAX,
+    )
     expect(POIDS_EQUITE).toBeGreaterThan(0)
   })
 })
