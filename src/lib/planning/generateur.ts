@@ -406,6 +406,17 @@ export const POIDS_JOUR_FIXE = 2_000
  * départage plus que des arrivées à la même heure. */
 export const POIDS_ARRIVEE_MATIN_MINUTE = 12
 export const ARRIVEE_MATIN_MAX = 120
+/** Personne seule à l'accueil (2026-11-05), par quart d'heure de la journée
+ * de l'accueil (la plage des trous) où une seule personne autonome est là.
+ * Mesuré sur les 18 semaines faites à la main : quand l'équipe ne suffit
+ * pas pour les chiffres du tableau (3 le matin, 2 le soir), le calcul
+ * mettait le manque au hasard, parfois tout sur le soir (« 3 et 1 » plutôt
+ * que « 2 et 2 ») : de 6 à 30 soirs avec une personne seule à 21 h selon la
+ * graine. Bien sous une place vide et sous une heure due : il ne crée
+ * jamais de manque, il choisit OÙ il tombe. Ajouter une personne ne le fait
+ * jamais payer (P1 tient sans rien ajouter). Un trou (personne) le paie
+ * aussi, en plus de `POIDS_TROU_QUART`. */
+export const POIDS_SEUL_QUART = 150
 /** Le premier jour du contrat est travaillé (demande d'une responsable du
  * 2026-11-04 : « mes stagiaires commencent leur stage par deux jours de
  * repos »). Rien ne retenait le calcul de poser les deux repos de la
@@ -3023,6 +3034,8 @@ function trousEntreEquipes(
           plage.debut,
           plage.fin,
           tenus,
+          POIDS_TROU_QUART,
+          POIDS_SEUL_QUART,
         ),
       )
     }
@@ -3466,6 +3479,7 @@ function variablesTrous(
   fin: number,
   tenus: Creneau[],
   poidsQuart = POIDS_TROU_QUART,
+  poidsSeul = 0,
 ): Array<Trou & { v: string }> {
   const r: Array<Trou & { v: string }> = []
   const presents = tenus.filter((c) => c.debut < fin && c.fin > debut)
@@ -3503,6 +3517,12 @@ function variablesTrous(
     m.ajoute([...termes, [1, v]], '>=', 1)
     m.cout(Math.round((poidsQuart * (suite.fin - suite.debut)) / QUART), v)
     r.push({ poste, jour, debut: suite.debut, fin: suite.fin, v })
+    // Personne seule (`POIDS_SEUL_QUART`) : au moins deux, ou payer.
+    if (poidsSeul > 0) {
+      const seul = m.continu(0, 1)
+      m.ajoute([...termes, [1, v], [1, seul]], '>=', 2)
+      m.cout(Math.round((poidsSeul * (suite.fin - suite.debut)) / QUART), seul)
+    }
   }
   return r
 }

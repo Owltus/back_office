@@ -615,6 +615,43 @@ describe('le surplus : en dernier recours pour des heures dues (D8)', () => {
 
 // --------------------------------------------------------------- trous
 
+describe('personne seule à l’accueil (2026-11-05)', () => {
+  // Oracle : banc des 18 semaines faites à la main. Quand l'équipe ne
+  // suffit pas (3 le matin, 2 le soir, 4 personnes), « 2 et 2 » vaut mieux
+  // que « 3 et 1 » : personne ne reste seul le soir.
+  const p = () =>
+    probleme({
+      salaries: ['a', 'b', 'c', 'd'].map((id) => sal(id)),
+      creneaux: [
+        matin('m'),
+        matin('m2', 'club'),
+        cand('s', 'rec', 0, 15.5, 23, ['soir']),
+        cand('s2', 'club', 0, 15.5, 23, ['soir']),
+      ],
+      consignes: [chiffre(0, 'matin', 3), chiffre(0, 'soir', 2)],
+      nbJours: 1,
+    })
+  const soirs = (r: ReturnType<typeof gen>) =>
+    r.affectations.filter((a) => a.creneauId.startsWith('s')).length
+
+  it('accepté : le manque est partagé, deux le soir', () => {
+    const r = gen(p())
+    expect(r.affectations).toHaveLength(4)
+    expect(soirs(r)).toBe(2)
+  })
+
+  it('refusé : jamais au prix d’une place, le chiffre reste le plafond', () => {
+    // Assez de monde : le chiffre exact, sans personne en plus pour éviter
+    // d'être seul ailleurs.
+    const q = p()
+    q.salaries.push(sal('e'))
+    const r = gen(q)
+    expect(soirs(r)).toBe(2)
+    expect(r.affectations).toHaveLength(5)
+    expect(ecarts(q, r)).toEqual([0, 0])
+  })
+})
+
 describe('trous sur l’accueil entier (D15)', () => {
   it('plage : du début le plus tard des matins à la fin la plus tôt des soirs', () => {
     const cs = [
@@ -666,7 +703,8 @@ describe('trous sur l’accueil entier (D15)', () => {
       }),
     )
     expect(sansTrou.trous).toEqual([])
-    expect(qui(sansTrou)).toContain('b@cs2')
+    // a et b se valent : seul compte que le soir de 15 h soit pris.
+    expect(qui(sansTrou).some((k) => k.endsWith('@cs2'))).toBe(true)
   })
 
   /*
