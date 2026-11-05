@@ -132,6 +132,17 @@ describe('Postes', () => {
     fireEvent.click(
       r.getByRole('switch', { name: 'Jours fériés chômés le jour même' }),
     )
+    // Importance (D11) et fermeture (2026-11-05), à côté de l'ouverture.
+    fireEvent.click(r.getByRole('radio', { name: 'Indispensable' }))
+    expect(
+      r.getByText(
+        'Quand il manque du monde, ses places restent vides en dernier.',
+      ),
+    ).toBeTruthy()
+    fireEvent.change(r.getByLabelText('Fermeture'), {
+      target: { value: '23:00' },
+    })
+    expect(r.getByText(/jusqu'à 23:00 chaque soir/)).toBeTruthy()
     expect(service.enregistrerPoste).not.toHaveBeenCalled()
     fireEvent.click(r.getByRole('button', { name: 'Enregistrer' }))
     await waitFor(() =>
@@ -147,6 +158,8 @@ describe('Postes', () => {
           ferme: true,
           ouverture: null,
           feries_chomes: true,
+          importance: 'indispensable',
+          fermeture: '23:00',
         },
         2,
       ),

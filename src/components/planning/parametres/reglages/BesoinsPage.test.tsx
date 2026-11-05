@@ -34,6 +34,8 @@ const etat = vi.hoisted(() => ({
 const service = vi.hoisted(() => ({
   reglerBesoin: vi.fn(),
   reglerConsigne: vi.fn(),
+  reglerHeuresPoste: vi.fn(),
+  enregistrerReglages: vi.fn(),
 }))
 
 vi.mock('#/lib/supabase.ts', () => ({ supabase: {} }))
@@ -86,6 +88,8 @@ beforeEach(() => {
   etat.droits = { pret: true, lire: true, ecrire: true, gerer: true }
   service.reglerBesoin.mockReset()
   service.reglerConsigne.mockReset().mockResolvedValue(undefined)
+  service.reglerHeuresPoste.mockReset().mockResolvedValue(undefined)
+  service.enregistrerReglages.mockReset().mockResolvedValue(undefined)
   baseSimulee()
 })
 afterEach(cleanup)
@@ -184,6 +188,8 @@ describe('Besoins', () => {
       effectif: 2,
       soutien: 1,
       renfort: 0,
+      obligatoire: true,
+      niveau_min: 'depannage',
     })
     // Le besoin existant, relu en base (même objet).
     expect(service.reglerBesoin.mock.calls[0][1]).toBe(existant)
@@ -512,6 +518,142 @@ describe('Besoins', () => {
           expect.objectContaining({ id: 1 }),
         ),
       )
+    })
+  })
+
+  describe('obligatoire ou souhaité, niveau demandé, importance (étape 7, 2026-11-05)', () => {
+    it('Souhaité écrit obligatoire = faux, montre le repère, et s’annule', async () => {
+      // Oracle : D4, « obligatoire / souhaité » dans le panneau, un repère
+      // discret dans la case, Annuler comme toute action de la page.
+      monter(<BesoinsPage />)
+      onglet('Réception')
+      const panneau = ouvrirCase('Réception', 'lundi', '07:00–15:45')
+      fireEvent.click(panneau.getByRole('radio', { name: 'Souhaité' }))
+      await waitFor(() => expect(service.reglerBesoin).toHaveBeenCalledTimes(1))
+      expect(service.reglerBesoin.mock.calls[0][0]).toMatchObject({
+        effectif: 1,
+        obligatoire: false,
+        niveau_min: 'depannage',
+      })
+      await waitFor(() =>
+        expect(
+          caseDe('Réception', 'lundi', '07:00–15:45').querySelector(
+            '[data-repere="souhaite"]',
+          ),
+        ).toBeTruthy(),
+      )
+      expect(
+        caseDe('Réception', 'lundi', '07:00–15:45').getAttribute('aria-label'),
+      ).toContain('souhaité')
+      fireEvent.keyDown(window, { key: 'z', ctrlKey: true })
+      await waitFor(() => expect(service.reglerBesoin).toHaveBeenCalledTimes(2))
+      expect(service.reglerBesoin.mock.calls[1][0]).toMatchObject({
+        obligatoire: true,
+      })
+    })
+
+    it('Titulaire seulement écrit le niveau demandé ; une case vide ne le règle pas', async () => {
+      monter(<BesoinsPage />)
+      onglet('Réception')
+      const panneau = ouvrirCase('Réception', 'lundi', '07:00–15:45')
+      fireEvent.click(
+        panneau.getByRole('radio', { name: 'Titulaire seulement' }),
+      )
+      await waitFor(() => expect(service.reglerBesoin).toHaveBeenCalledTimes(1))
+      expect(service.reglerBesoin.mock.calls[0][0]).toMatchObject({
+        niveau_min: 'titulaire',
+      })
+      await waitFor(() =>
+        expect(
+          caseDe('Réception', 'lundi', '07:00–15:45').querySelector(
+            '[data-repere="titulaire"]',
+          ),
+        ).toBeTruthy(),
+      )
+      // Une case sans personne nécessaire (le middle, 1 en plus si besoin) :
+      // rien à rendre souhaité (refusé), le niveau demandé reste réglable.
+      cleanup()
+      monter(<BesoinsPage />)
+      onglet('Réception')
+      const vide = ouvrirCase('Réception', 'lundi', '09:00–17:45')
+      expect(
+        (vide.getByRole('radio', { name: 'Souhaité' }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(true)
+      expect(
+        (
+          vide.getByRole('radio', {
+            name: 'Titulaire seulement',
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(false)
+    })
+
+    it('l’ordre de décision est écrit d’après l’importance des postes', () => {
+      // Oracle : D11, « quand il manque du monde, Si possible reste vide en
+      // premier » ; le texte n'est plus figé.
+      const ref = etat.referentiel as Referentiel
+      const texte = () =>
+        document.querySelector('[data-ordre-decision]')?.textContent ?? ''
+      monter(<BesoinsPage />)
+      expect(texte()).toContain('Tous les postes ont la même importance')
+      cleanup()
+      for (const p of ref.postes)
+        p.importance =
+          p.nom === 'Direction'
+            ? 'si_possible'
+            : p.nom === 'Réception'
+              ? 'indispensable'
+              : 'important'
+      monter(<BesoinsPage />)
+      expect(texte()).toMatch(
+        /d'abord les besoins souhaités, puis les postes Si possible \(Direction\), puis les postes Important \([^)]*Club[^)]*\), et les postes Indispensable \(Réception\) en dernier\./,
+      )
+      expect(texte()).not.toMatch(/[«»—]/)
+      // L'onglet dit l'importance de son poste.
+      expect(
+        document.querySelector('[data-importance]')?.textContent,
+      ).toContain('Importance : Si possible.')
+    })
+
+    it('ouverture et fermeture de l’accueil : réglées ici, par Enregistrer', async () => {
+      const ref = etat.referentiel as Referentiel
+      for (const p of ref.postes)
+        p.presence = p.nom === 'Réception' || p.nom === 'Club'
+      monter(<BesoinsPage />)
+      const region = within(
+        screen.getByRole('region', { name: 'Ouverture et fermeture' }),
+      )
+      const champ = region.getByLabelText('Fermeture du poste Club')
+      fireEvent.change(champ, { target: { value: '23:00' } })
+      expect(service.reglerHeuresPoste).not.toHaveBeenCalled()
+      fireEvent.click(region.getByRole('button', { name: 'Enregistrer' }))
+      const club = ref.postes.find((p) => p.nom === 'Club')
+      await waitFor(() =>
+        expect(service.reglerHeuresPoste).toHaveBeenCalledWith(club?.id, {
+          ouverture: club?.ouverture ?? null,
+          fermeture: '23:00',
+        }),
+      )
+      // La passation entre équipes au même endroit que la relève.
+      const passation = screen.getByRole('switch', {
+        name: 'Aucun trou entre deux équipes',
+      })
+      fireEvent.click(passation)
+      await waitFor(() =>
+        expect(service.enregistrerReglages).toHaveBeenCalledWith(
+          expect.objectContaining({ continuite_obligatoire: false }),
+        ),
+      )
+    })
+
+    it('lecture seule : obligatoire et niveau ne se règlent pas', () => {
+      etat.droits = { pret: true, lire: true, ecrire: true, gerer: false }
+      monter(<BesoinsPage />)
+      onglet('Réception')
+      const panneau = ouvrirCase('Réception', 'lundi', '07:00–15:45')
+      for (const r of panneau.getAllByRole('radio'))
+        expect((r as HTMLButtonElement).disabled).toBe(true)
     })
   })
 

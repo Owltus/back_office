@@ -59,6 +59,12 @@ import type {
 } from '#/components/planning/parametres/besoins/historique.ts'
 import { TableauAccueil } from '#/components/planning/parametres/besoins/TableauAccueil.tsx'
 import { ReglageReleve } from '#/components/planning/parametres/besoins/ReglageReleve.tsx'
+import { HeuresAccueil } from '#/components/planning/parametres/besoins/HeuresAccueil.tsx'
+import {
+  AIDE_IMPORTANCE,
+  LIBELLES_IMPORTANCE,
+  phrasesOrdreDecision,
+} from '#/components/planning/parametres/besoins/ordreDecision.ts'
 import {
   idCible,
   useOuvrirCible,
@@ -188,7 +194,13 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
       ? trouverBesoin(data.besoins, posteId, ligne, jour)
       : undefined
     return b
-      ? { effectif: b.effectif, soutien: b.soutien, renfort: b.renfort }
+      ? {
+          effectif: b.effectif,
+          soutien: b.soutien,
+          renfort: b.renfort,
+          obligatoire: b.obligatoire ?? true,
+          niveau_min: b.niveau_min ?? 'depannage',
+        }
       : RIEN
   }
 
@@ -346,6 +358,17 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
         ],
       })
     },
+    option: (ligne, jour, patch) => {
+      faire({
+        libelle: `${poste.nom}, ${JOURS[jour].toLowerCase()}, ${libelleHoraire(ligne)}`,
+        changements: [
+          changementCase(poste.id, ligne, jour, {
+            ...affiche(poste.id, ligne, jour),
+            ...patch,
+          }),
+        ],
+      })
+    },
     copier: (ligne, jour, cible) => {
       const source = affiche(poste.id, ligne, jour)
       const jours = JOURS_COPIE[cible]
@@ -455,14 +478,12 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
               <summary className="cursor-pointer select-none hover:text-foreground">
                 Dans quel ordre le planning automatique décide
               </summary>
-              <p className="mt-1">
-                La loi d'abord, puis le nombre demandé à l'accueil et les
-                personnes nécessaires des autres postes, puis les heures des
-                contrats, puis un titulaire avant un dépannage, et un dépannage
-                avant un extra, puis le confort (repos groupés, jours habituels,
-                partage des week-ends, des soirs et des matins tôt sur les 4
-                dernières semaines).
-              </p>
+              {/* Écrit d'après l'importance des postes (étape 7, D11). */}
+              <div data-ordre-decision className="mt-1 flex flex-col gap-1">
+                {phrasesOrdreDecision(data.postes).map((phrase) => (
+                  <p key={phrase}>{phrase}</p>
+                ))}
+              </div>
             </details>
           </div>
 
@@ -473,8 +494,12 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
             regler={reglerAccueil}
           />
           {actif && (
+            <HeuresAccueil postes={data.postes} modifiable={modifiable} />
+          )}
+          {actif && (
             <ReglageReleve
               minutes={data.reglages?.releve_minutes ?? 30}
+              continuite={data.reglages?.continuite_obligatoire ?? true}
               modifiable={modifiable}
             />
           )}
@@ -518,7 +543,18 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
                   </TabsTrigger>
                 ))}
               </TabsList>
-              <TabsContent value={String(poste.id)} className="min-w-0">
+              <TabsContent
+                value={String(poste.id)}
+                className="flex min-w-0 flex-col gap-3"
+              >
+                <p data-importance className="text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">
+                    Importance :{' '}
+                    {LIBELLES_IMPORTANCE[poste.importance ?? 'important']}.
+                  </span>{' '}
+                  {AIDE_IMPORTANCE[poste.importance ?? 'important']} Se règle
+                  dans Postes.
+                </p>
                 {actions && (
                   <GrilleBesoins
                     poste={poste}

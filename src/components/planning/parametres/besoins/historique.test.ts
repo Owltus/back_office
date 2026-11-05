@@ -115,3 +115,25 @@ describe('historique', () => {
     expect(JOURS_COPIE.weekend).toEqual([5, 6])
   })
 })
+
+describe('options de la case (2026-11-05)', () => {
+  const ligne = { cle: 't1', horaire_id: 1, debut: '07:00', fin: '15:00' }
+  const c = (
+    avant: Record<string, unknown>,
+    apres: Record<string, unknown>,
+  ): Changement => ({
+    type: 'besoin',
+    posteId: 1,
+    ligne,
+    jour: 0,
+    avant: { effectif: 1, soutien: 0, renfort: 0, ...avant },
+    apres: { effectif: 1, soutien: 0, renfort: 0, ...apres },
+  })
+  it('souhaité ou titulaire seulement est un changement ; les défauts n’en sont pas', () => {
+    expect(sansEffet(c({}, { obligatoire: false }))).toBe(false)
+    expect(sansEffet(c({}, { niveau_min: 'titulaire' }))).toBe(false)
+    expect(
+      sansEffet(c({}, { obligatoire: true, niveau_min: 'depannage' })),
+    ).toBe(true)
+  })
+})

@@ -3,7 +3,7 @@
  * `lignesDuPoste`, `trouver`, `correspond`). Pur.
  */
 
-import type { Besoin, Horaire } from '#/lib/planning/types.ts'
+import type { Besoin, Horaire, NiveauDemande } from '#/lib/planning/types.ts'
 
 /** Une ligne : un horaire du référentiel, ou un horaire spécifique. */
 export interface LigneBesoin {
@@ -13,11 +13,32 @@ export interface LigneBesoin {
   fin: string
 }
 
-/** Minimum obligatoire, places de soutien, places en plus facultatives. */
+/** Minimum obligatoire, places de soutien, places en plus facultatives ;
+ * et, depuis le 2026-11-05 (étape 7, D4), obligatoire ou souhaité et le
+ * niveau demandé. Absents : obligatoire, dépannage accepté (comme avant). */
 export interface Reglage {
   effectif: number
   soutien: number
   renfort: number
+  obligatoire?: boolean
+  niveau_min?: NiveauDemande
+}
+
+/** Les personnes nécessaires sont souhaitées, pas obligatoires. */
+export const estSouhaite = (r: Reglage) => r.obligatoire === false
+
+/** La case demande un titulaire (jamais un dépannage). */
+export const titulaireSeulement = (r: Reglage) => r.niveau_min === 'titulaire'
+
+/** Les deux options d'une case, avec leurs défauts. */
+export function optionsDe(r: Reglage): {
+  obligatoire: boolean
+  niveau_min: NiveauDemande
+} {
+  return {
+    obligatoire: r.obligatoire !== false,
+    niveau_min: r.niveau_min ?? 'depannage',
+  }
 }
 
 /** Une personne autonome peut être placée là (nécessaire ou en plus) : un
@@ -54,11 +75,11 @@ export function reglerChamp(
   const v = Math.max(0, valeur)
   if (champ === 'effectif') {
     const soutien = v + r.renfort === 0 ? 0 : r.soutien
-    return { effectif: v, soutien, renfort: r.renfort }
+    return { ...r, effectif: v, soutien, renfort: r.renfort }
   }
   if (champ === 'renfort') {
     return v + r.effectif === 0
-      ? { effectif: r.effectif, soutien: 0, renfort: 0 }
+      ? { ...r, effectif: r.effectif, soutien: 0, renfort: 0 }
       : { ...r, renfort: v }
   }
   return { ...r, soutien: aUneBase(r) ? v : 0 }

@@ -10,6 +10,7 @@
  * l'action. La pile ne vit que le temps de la page (pas de stockage).
  */
 
+import { optionsDe } from '#/components/planning/parametres/reglages/besoins.ts'
 import type {
   LigneBesoin,
   Reglage,
@@ -58,7 +59,9 @@ export const LIMITE_HISTORIQUE = 100
 const memeReglage = (a: Reglage, b: Reglage) =>
   a.effectif === b.effectif &&
   a.soutien === b.soutien &&
-  a.renfort === b.renfort
+  a.renfort === b.renfort &&
+  optionsDe(a).obligatoire === optionsDe(b).obligatoire &&
+  optionsDe(a).niveau_min === optionsDe(b).niveau_min
 const memesBornes = (a: Bornes, b: Bornes) =>
   a.minimum === b.minimum && a.maximum === b.maximum
 

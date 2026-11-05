@@ -45,3 +45,24 @@ describe('reglerChamp', () => {
     ).toEqual({ effectif: 1, soutien: 2, renfort: 0 })
   })
 })
+
+describe('obligatoire et niveau demandé (2026-11-05)', () => {
+  it('un compteur garde les options de la case', () => {
+    const r = {
+      effectif: 1,
+      soutien: 0,
+      renfort: 1,
+      obligatoire: false,
+      niveau_min: 'titulaire' as const,
+    }
+    expect(reglerChamp(r, 'effectif', 2)).toMatchObject({
+      effectif: 2,
+      obligatoire: false,
+      niveau_min: 'titulaire',
+    })
+    expect(reglerChamp(r, 'renfort', 0)).toMatchObject({
+      obligatoire: false,
+      niveau_min: 'titulaire',
+    })
+  })
+})

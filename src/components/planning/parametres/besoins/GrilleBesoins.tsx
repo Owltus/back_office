@@ -9,7 +9,10 @@
  * sont des OPTIONS de la case : un clic (ou Entrée) ouvre son panneau, qui
  * règle les trois valeurs et peut les recopier, explicitement, sur d'autres
  * jours de la même ligne. Une case qui a des options le montre par un petit
- * repère (« +1 app. », « +1 si besoin »). Aucune action en un clic qui
+ * repère (« +1 app. », « +1 si besoin »). Depuis le 2026-11-05 (étape 7,
+ * D4), le panneau dit aussi si les personnes nécessaires sont obligatoires
+ * ou souhaitées, et le niveau demandé (titulaire seulement, ou titulaire ou
+ * dépannage) ; repères « souhaité » et « titulaire ». Aucune action en un clic qui
  * touche plusieurs jours sans le dire : le bouton qui recopiait le lundi sur
  * toute la semaine, pour les trois réglages, est retiré.
  */
@@ -17,12 +20,16 @@
 import { useState } from 'react'
 import { Ellipsis, Plus, TriangleAlert } from 'lucide-react'
 
+import { Segmente } from '#/components/planning/parametres/equipe/Segmente.tsx'
 import { Compteur } from '#/components/planning/parametres/reglages/controles.tsx'
 import {
   aUneBase,
+  estSouhaite,
   horairesAAjouter,
   lignesDuPoste,
+  optionsDe,
   soutienSansBase,
+  titulaireSeulement,
 } from '#/components/planning/parametres/reglages/besoins.ts'
 import type {
   LigneBesoin,
@@ -47,7 +54,12 @@ import { codesDuPoste } from '#/lib/planning/eligibilite.ts'
 import { alerteBesoin } from '#/lib/planning/regles.ts'
 import { presence } from '#/lib/planning/temps.ts'
 import { JOURS } from '#/lib/planning/types.ts'
-import type { Horaire, Poste, Referentiel } from '#/lib/planning/types.ts'
+import type {
+  Horaire,
+  NiveauDemande,
+  Poste,
+  Referentiel,
+} from '#/lib/planning/types.ts'
 import { cn } from '#/lib/utils.ts'
 
 export type Affiche = (
@@ -110,6 +122,9 @@ export function nomCase(
       ),
     )
   if (r.renfort > 0) options.push(`${r.renfort} en plus si besoin`)
+  if (r.effectif > 0 && estSouhaite(r)) options.push('souhaité')
+  if (r.effectif + r.renfort > 0 && titulaireSeulement(r))
+    options.push('titulaire seulement')
   return `${poste.nom}, ${JOURS[jour].toLowerCase()}, ${libelleHoraire(ligne)} : ${[n, ...options].join(', ')}`
 }
 
@@ -121,7 +136,13 @@ export interface ActionsGrille {
     champ: keyof Reglage,
     v: number,
   ) => void
-  /** « Appliquer ces réglages à » : les trois valeurs de la case. */
+  /** Obligatoire ou souhaité, niveau demandé (2026-11-05). */
+  option: (
+    ligne: LigneBesoin,
+    jour: number,
+    patch: { obligatoire?: boolean; niveau_min?: NiveauDemande },
+  ) => void
+  /** « Appliquer ces réglages à » : toutes les valeurs de la case. */
   copier: (ligne: LigneBesoin, jour: number, cible: CibleCopie) => void
   vider: (ligne: LigneBesoin) => void
   /** Les places d'apprentis sans personne à côté, sur toute la ligne. */
@@ -389,7 +410,7 @@ function CaseBesoin({
           aria-label={nomCase(poste, ligne, jour, r)}
           data-case={`${ligne.cle}|${jour}`}
           className={cn(
-            'flex h-14 w-full flex-col items-center justify-center rounded-md border border-transparent transition-colors outline-none hover:border-border hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring',
+            'flex min-h-14 w-full flex-col items-center justify-center rounded-md border border-transparent transition-colors outline-none hover:border-border hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring',
             ouvert && 'border-primary bg-primary/10',
           )}
         >
@@ -397,11 +418,12 @@ function CaseBesoin({
             className={cn(
               'text-lg leading-6 font-semibold tabular-nums',
               r.effectif === 0 && 'text-muted-foreground/40',
+              r.effectif > 0 && estSouhaite(r) && 'text-muted-foreground',
             )}
           >
             {r.effectif === 0 ? '–' : r.effectif}
           </span>
-          <span className="flex h-4 flex-wrap justify-center gap-x-1 text-[10px] leading-4 text-muted-foreground">
+          <span className="flex min-h-4 flex-wrap justify-center gap-x-1 text-[10px] leading-4 text-muted-foreground">
             {r.soutien > 0 && (
               <span
                 data-repere="soutien"
@@ -412,6 +434,12 @@ function CaseBesoin({
             )}
             {r.renfort > 0 && (
               <span data-repere="renfort">+{r.renfort} si besoin</span>
+            )}
+            {r.effectif > 0 && estSouhaite(r) && (
+              <span data-repere="souhaite">souhaité</span>
+            )}
+            {r.effectif + r.renfort > 0 && titulaireSeulement(r) && (
+              <span data-repere="titulaire">titulaire</span>
             )}
           </span>
         </button>
@@ -432,6 +460,68 @@ function CaseBesoin({
         />
       </PopoverContent>
     </Popover>
+  )
+}
+
+type ChoixObligation = 'obligatoire' | 'souhaite'
+
+/** Obligatoire ou souhaité, et niveau demandé (2026-11-05, D4) : sans
+ * personne nécessaire ni en plus, rien à régler (la case serait vide). */
+function OptionsNiveau({
+  r,
+  modifiable,
+  onChange,
+}: {
+  r: Reglage
+  modifiable: boolean
+  onChange: (patch: {
+    obligatoire?: boolean
+    niveau_min?: NiveauDemande
+  }) => void
+}) {
+  const o = optionsDe(r)
+  const sansPersonne = r.effectif === 0
+  const sansPlace = r.effectif + r.renfort === 0
+  return (
+    <div className="flex flex-col gap-2.5">
+      <div className="flex flex-col gap-1">
+        <Segmente<ChoixObligation>
+          label="Personnes nécessaires obligatoires ou souhaitées"
+          valeur={o.obligatoire ? 'obligatoire' : 'souhaite'}
+          options={[
+            { valeur: 'obligatoire', libelle: 'Obligatoire' },
+            { valeur: 'souhaite', libelle: 'Souhaité' },
+          ]}
+          disabled={!modifiable || sansPersonne}
+          onChange={(v) => onChange({ obligatoire: v === 'obligatoire' })}
+        />
+        <p className="text-xs text-muted-foreground">
+          {sansPersonne
+            ? "Mettez d'abord une personne nécessaire."
+            : o.obligatoire
+              ? 'Une place à pourvoir si personne ne la tient.'
+              : "Tenue si quelqu'un est libre. Quand il manque du monde, elle reste vide en premier, sans compter comme place à pourvoir."}
+        </p>
+      </div>
+      <div className="flex flex-col gap-1">
+        <p className="text-xs font-medium">Niveau demandé</p>
+        <Segmente<NiveauDemande>
+          label="Niveau demandé"
+          valeur={o.niveau_min}
+          options={[
+            { valeur: 'titulaire', libelle: 'Titulaire seulement' },
+            { valeur: 'depannage', libelle: 'Titulaire ou dépannage' },
+          ]}
+          disabled={!modifiable || sansPlace}
+          onChange={(v) => onChange({ niveau_min: v })}
+        />
+        <p className="text-xs text-muted-foreground">
+          {o.niveau_min === 'titulaire'
+            ? 'Seule une personne titulaire du poste tient la place. Un apprenti ou un stagiaire peut venir en plus, jamais seul.'
+            : "Une personne en dépannage peut tenir la place si aucun titulaire n'est libre."}
+        </p>
+      </div>
+    </div>
   )
 }
 
@@ -480,6 +570,12 @@ function PanneauCase({
           onChange={(v) => actions.regler(ligne, jour, 'effectif', v)}
         />
       </div>
+
+      <OptionsNiveau
+        r={r}
+        modifiable={modifiable}
+        onChange={(patch) => actions.option(ligne, jour, patch)}
+      />
 
       <div className="flex flex-col gap-2 border-t pt-2">
         <button

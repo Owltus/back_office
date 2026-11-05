@@ -676,6 +676,12 @@ export async function reglerBesoin(
           renfort: v.renfort,
           debut: v.debut,
           fin: v.fin,
+          // Obligatoire ou souhaité, niveau demandé (2026-11-05) : écrits
+          // seulement s'ils sont donnés.
+          ...(v.obligatoire !== undefined
+            ? { obligatoire: v.obligatoire }
+            : {}),
+          ...(v.niveau_min !== undefined ? { niveau_min: v.niveau_min } : {}),
         })
         .eq('id', existant.id)
         .select('id'),
@@ -718,6 +724,24 @@ export async function reglerConsigne(
   } else {
     auMoinsUne(await supabase.from('planning_consignes').insert(v).select('id'))
   }
+}
+
+/** Ouverture et fermeture d'un poste (gestion), réglées depuis la page
+ * Besoins comme depuis Postes : la même colonne, une écriture partielle. */
+export async function reglerHeuresPoste(
+  id: number,
+  v: Pick<Poste, 'ouverture' | 'fermeture'>,
+): Promise<void> {
+  auMoinsUne(
+    await supabase
+      .from('planning_postes')
+      .update({
+        ouverture: v.ouverture ?? null,
+        fermeture: v.fermeture ?? null,
+      })
+      .eq('id', id)
+      .select('id'),
+  )
 }
 
 export async function supprimerBesoin(id: number): Promise<void> {

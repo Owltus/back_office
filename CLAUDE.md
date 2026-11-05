@@ -2707,7 +2707,14 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   d'avant au caractère près (empreinte inchangée). Une passation n'est décalée que si ses nuits
   sont au palier le plus haut (sinon une nuit dépasserait son palier). « À vérifier » : ouverture
   ou fermeture qu'aucun horaire ne tient, titulaire demandé sans titulaire. Banc décembre : mêmes
-  résultats avant / après (PRD).
+  résultats avant / après (PRD). ÉCRAN : Postes = Importance (Segmente, phrase de ce que ça
+  change) et Fermeture à côté de l'Ouverture ; Besoins = panneau de case « Obligatoire /
+  Souhaité » et « Niveau demandé » (repères « souhaité », « titulaire », Annuler / Rétablir comme
+  le reste), « Ouverture et fermeture » des postes de l'accueil sous le tableau
+  (`HeuresAccueil`, bouton Enregistrer, `reglerHeuresPoste`, mêmes colonnes que Postes),
+  « Passation entre les équipes » (continuité) avec la relève, importance rappelée en tête de
+  l'onglet d'un poste, repli « Dans quel ordre… » ÉCRIT d'après l'importance
+  (`besoins/ordreDecision.ts`).
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

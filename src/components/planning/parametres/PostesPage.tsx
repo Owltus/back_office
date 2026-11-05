@@ -61,6 +61,7 @@ import {
 } from '#/components/ui/select.tsx'
 import { Switch } from '#/components/ui/switch.tsx'
 import { Segmente } from '#/components/planning/parametres/equipe/Segmente.tsx'
+import { phraseHeures } from '#/components/planning/parametres/besoins/HeuresAccueil.tsx'
 import { tientLaNuit } from '#/lib/planning/presence.ts'
 import { dureeHoraire, heures } from '#/lib/planning/affichage.ts'
 import { JOUR_MAX_CATEGORIE } from '#/lib/planning/regles.ts'
@@ -70,8 +71,22 @@ import {
   supprimerPoste,
 } from '#/lib/planning/service.ts'
 import { Tip } from '#/components/shared/Tip.tsx'
+import {
+  AIDE_IMPORTANCE,
+  LIBELLES_IMPORTANCE,
+} from '#/components/planning/parametres/besoins/ordreDecision.ts'
 import { CATEGORIES } from '#/lib/planning/types.ts'
-import type { Poste, Referentiel } from '#/lib/planning/types.ts'
+import type { Importance, Poste, Referentiel } from '#/lib/planning/types.ts'
+
+/** Importance du poste (D11 du 2026-11-05), de la plus haute à la plus
+ * basse. */
+const OPTIONS_IMPORTANCE: ReadonlyArray<{
+  valeur: Importance
+  libelle: string
+}> = (['indispensable', 'important', 'si_possible'] as const).map((valeur) => ({
+  valeur,
+  libelle: LIBELLES_IMPORTANCE[valeur],
+}))
 
 const saisieDe = (p: Poste): SaisiePoste => ({
   nom: p.nom,
@@ -83,6 +98,8 @@ const saisieDe = (p: Poste): SaisiePoste => ({
   ferme: p.ferme ?? false,
   ouverture: p.ouverture ?? null,
   feries_chomes: p.feries_chomes ?? false,
+  importance: p.importance ?? 'important',
+  fermeture: p.fermeture ?? null,
 })
 
 /** Le choix unique « Accueil » d'un poste (U1 du 2026-11-01). */
@@ -161,6 +178,8 @@ export function PostesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
       ferme: false,
       ouverture: null,
       feries_chomes: false,
+      importance: 'important',
+      fermeture: null,
     })
   }
 
@@ -467,8 +486,10 @@ function CartePoste({
             changer({
               presence: v === 'jour',
               accueil_nuit: v === 'nuit',
-              // L'ouverture ne vaut que pour un poste du matin et du soir.
+              // L'ouverture et la fermeture ne valent que pour un poste du
+              // matin et du soir.
               ouverture: v === 'jour' ? (p.ouverture ?? null) : null,
+              fermeture: v === 'jour' ? (p.fermeture ?? null) : null,
             })
           }
         />
@@ -477,27 +498,55 @@ function CartePoste({
         </span>
       </div>
 
+      <div className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium">Importance</span>
+        <Segmente<Importance>
+          label="Importance"
+          valeur={p.importance ?? 'important'}
+          options={OPTIONS_IMPORTANCE}
+          disabled={!modifiable}
+          onChange={(importance) => changer({ importance })}
+        />
+        <span className="text-xs text-muted-foreground">
+          {AIDE_IMPORTANCE[p.importance ?? 'important']}
+        </span>
+      </div>
+
       {p.presence && (
         <div className="flex flex-col gap-1.5">
-          <label htmlFor={`${idNom}-ouverture`} className="text-sm font-medium">
-            Ouverture
-          </label>
-          <div className="flex flex-wrap items-center gap-2">
-            <Input
-              id={`${idNom}-ouverture`}
-              type="time"
-              step={900}
-              className="w-32"
-              value={p.ouverture ?? ''}
-              disabled={!modifiable}
-              onChange={(e) => changer({ ouverture: e.target.value || null })}
-            />
-            <span className="text-xs text-muted-foreground">
-              {p.ouverture
-                ? `Quelqu'un sur ce poste dès ${p.ouverture} chaque matin, pendant au moins une heure.`
-                : "Aucune heure d'ouverture : vide."}
-            </span>
+          <span className="text-sm font-medium">Ouverture et fermeture</span>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+              Ouverture
+              <Input
+                id={`${idNom}-ouverture`}
+                type="time"
+                step={900}
+                className="w-32"
+                aria-label="Ouverture"
+                value={p.ouverture ?? ''}
+                disabled={!modifiable}
+                onChange={(e) => changer({ ouverture: e.target.value || null })}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+              Fermeture
+              <Input
+                id={`${idNom}-fermeture`}
+                type="time"
+                step={900}
+                className="w-32"
+                aria-label="Fermeture"
+                value={p.fermeture ?? ''}
+                disabled={!modifiable}
+                onChange={(e) => changer({ fermeture: e.target.value || null })}
+              />
+            </label>
           </div>
+          <span className="text-xs text-muted-foreground">
+            {phraseHeures(p.ouverture ?? null, p.fermeture ?? null)} Pendant au
+            moins une heure, les jours où le matin ou le soir est demandé.
+          </span>
         </div>
       )}
 
