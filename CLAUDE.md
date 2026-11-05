@@ -2697,7 +2697,8 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   défaut (migration `20261105110000`, `--avec-donnees`) : trou entre deux équipes et passation
   avec le veilleur au prix d'une place nécessaire (P1), jamais dur ; mesuré dans le PRD.
 - **IMPORTANCE DES POSTES ET BESOINS RÉGLÉS (2026-11-05, étape 7 du même plan, D4 et D11)** :
-  `planning_postes.importance` (Indispensable / Important / Si possible), `fermeture` (accueil,
+  `planning_postes.importance` (⚠ OUI / NON depuis la décision utilisateur du 2026-11-05, voir
+  « Importance oui / non » plus bas ; les trois niveaux de ce paragraphe sont l'historique), `fermeture` (accueil,
   symétrique de l'ouverture : `fermeturesAccueil`, `Probleme.fermetures`, même oracle
   `ouverturesManquees`), `planning_besoins.obligatoire` (souhaité = tenu si possible, jamais une
   place à pourvoir ni une plage de poste) et `niveau_min` (« titulaire » : jamais un dépannage,
@@ -2715,13 +2716,37 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   « Passation entre les équipes » (continuité) avec la relève, importance rappelée en tête de
   l'onglet d'un poste, repli « Dans quel ordre… » ÉCRIT d'après l'importance
   (`besoins/ordreDecision.ts`).
+- **IMPORTANCE OUI / NON + PAGE BESOINS EN SECTIONS (décision utilisateur du 2026-11-05 : « soit
+  un poste est important, soit il ne l'est pas… je voudrais que l'application fonctionne au
+  maximum par la configuration… si je crée des nouveaux postes, je n'ai pas envie de devoir
+  refabriquer un moteur » ; D11 révisée)**. Un seul réglage par poste, « Indispensable au
+  fonctionnement » (interrupteur de Postes). Base : migration d'AJOUT
+  `20261105130000_planning_importance_oui_non` (le CHECK à trois valeurs reste ; 'important' →
+  'si_possible', défaut 'si_possible' ; livraison `--avec-donnees`). Indispensables : Réception,
+  Club, Veille de nuit ; non : Direction, Adjoint, Supervision réception, Responsable technique.
+  Code : `estIndispensable` (modele.ts, seule lecture ; 'important' ou absent = non),
+  `rangImportance` à DEUX paliers (indispensable 2, le reste 1, souhaité 0), `RANG_AUTRE` ;
+  garanties inchangées (une place n'est vide que si personne ne peut la tenir). AUCUN nom ni id de
+  poste dans le moteur (vérifié ; `metier()` d'affichage lit `presence`, plus « Club »). Reste lié
+  à l'ACCUEIL (`presence`, `accueil_nuit`), pas à l'importance : le tableau matin / soir / nuit,
+  ouverture et fermeture, passations, trous, relève, équité de l'accueil, personne seule.
+  PAGE BESOINS : une phrase, puis « Postes indispensables » (tableau de l'accueil, ouverture et
+  fermeture, passation entre les équipes, puis les grilles des indispensables hors accueil),
+  « Autres postes, tenus au mieux » (onglets et grille), « Moments », repli « Dans quel ordre le
+  planning décide » en bas. Un poste se range tout seul d'après son réglage (`sectionsBesoins`,
+  `besoins/ordreDecision.ts`) ; l'accueil va dans les indispensables si l'un de ses postes l'est.
+  Ouverture et fermeture : réglées SEULEMENT dans Besoins (retirées du volet de Postes, qui le
+  dit). Rappel d'importance par onglet retiré (la section le dit).
 - **RÈGLES RÉGLÉES À L'ÉCRAN (2026-11-05, étape 5, D7 = réparties, pas de page à part)** :
   Équipe → bouton « Règles », tiroir `equipe/ReglesContrats.tsx` (journées par durée de contrat,
   journée pleine et étoile, types de contrat = `planning_modeles_contrat`, repos et rythme, école,
   congés et heures, puis la LOI en lecture seule `EncadreLoi`) ; passage pur et contrôle
-  `equipe/reglesContrats.ts` (aller-retour sans geste = mêmes règles, testé). Horaires → section
-  « Moments » (`reglages/SectionMoments.tsx`, `moments.ts`) : aperçu des horaires qui changent de
-  moment AVANT d'enregistrer, puis `enregistrerMomentsHoraires` (colonne `periode` seule).
+  `equipe/reglesContrats.ts` (aller-retour sans geste = mêmes règles, testé). Section « Moments »
+  (`reglages/SectionMoments.tsx`, `moments.ts`), DÉPLACÉE de Horaires vers BESOINS le 2026-11-05
+  (demande utilisateur ; Horaires n'a plus qu'une ligne et un lien `?ouvrir=moments`, « À
+  vérifier » cible `moments` sur Besoins) : aperçu des horaires qui changent de moment AVANT
+  d'enregistrer, puis `enregistrerMomentsHoraires` (colonne `periode` seule) ; Annuler /
+  Enregistrer n'apparaissent qu'une fois une limite changée.
   Besoins → passation avec le Veilleur, équipe du soir ensemble (`ReglageReleve`), durée tenue à
   l'ouverture (`HeuresAccueil`). Jamais montrés : poids, `personnes_nuit`, `journee_courte`,
   `journees_courtes_max`. Brouillon + Enregistrer (tiroir, Moments), gestion seule.

@@ -54,6 +54,27 @@ Numérotées D1 à D10, jamais renumérotées.
 
 Nouvelle décision ouverte :
 
-| #   | Question                                   | Choix                                                                                                                                                                                                                                       | Étape |
-| --- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
-| D11 | Comment exprimer l'importance d'un poste ? | **TRANCHÉE le 2026-11-05 : trois niveaux.** « Indispensable » (Réception, Club, nuit), « Important », « Si possible » (Direction). Quand il manque du monde, « Si possible » reste vide en premier. Remplace la notion d'accueil implicite. | 7     |
+| #   | Question                                   | Choix                                                                                                                                                                                                                                                                                                             | Étape |
+| --- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| D11 | Comment exprimer l'importance d'un poste ? | ~~**TRANCHÉE le 2026-11-05 : trois niveaux.**~~ **RÉVISÉE le même jour : oui / non**, voir plus bas. Historique : « Indispensable » (Réception, Club, nuit), « Important », « Si possible » (Direction). Quand il manque du monde, « Si possible » reste vide en premier. Remplace la notion d'accueil implicite. | 7     |
+
+**2026-11-05, D11 révisée (décision utilisateur).** « Je n'aime pas trop comment tu gères
+l'importance des postes… soit un poste est important, soit il ne l'est pas… je voudrais que
+l'application fonctionne au maximum par la configuration et non que les postes soient configurés
+en dur. Imaginons demain je crée des nouveaux postes, je n'ai pas envie de devoir refabriquer un
+moteur. » Non indispensables : Direction, Adjoint de direction, Supervision réception,
+Responsable technique (« si pendant 2 jours il n'y en a pas, l'hôtel continue à tourner grâce aux
+réceptionnistes, au Club et aux veilleurs »). Indispensables : Réception, Club, Veille de nuit.
+
+- Un seul choix par poste, « Indispensable au fonctionnement » oui / non (interrupteur dans
+  Postes). Le calcul a deux paliers : indispensable, puis le reste ; le souhaité reste dessous.
+- Base : migration d'ajout `20261105130000_planning_importance_oui_non` ('important' devient
+  'si_possible', défaut 'si_possible', le CHECK à trois valeurs est gardé) ; une valeur
+  'important' qui resterait est lue comme non indispensable.
+- Aucun poste en dur dans le moteur. La notion d'accueil (`presence`, `accueil_nuit`) reste un
+  réglage À PART : elle dit qui compte dans le tableau matin / soir / nuit, l'ouverture, la
+  fermeture et les passations, pas ce qui passe en premier. Pas unifiée (un poste peut être
+  indispensable sans être l'accueil).
+- Page Besoins refaite en sections (même demande : « plus claire », « migrer la partie Moments
+  dans Besoins ») : Postes indispensables, Autres postes tenus au mieux, Moments, puis l'ordre de
+  décision en repli. Un poste neuf se range tout seul selon son réglage.
