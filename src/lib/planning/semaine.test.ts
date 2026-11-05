@@ -1,4 +1,5 @@
 import fc from 'fast-check'
+import { momentPropose } from '#/lib/planning/moment.ts'
 import highsLoader from 'highs'
 import { beforeAll, describe, expect, it } from 'vitest'
 
@@ -2150,7 +2151,7 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
   it('Martin V3-I : recompte par cycle = oracle à la main (middle jamais, soutien compté)', () => {
     // Oracle (révisé le 2026-11-01, D5 du plan planning-accueil, et le
     // 2026-11-05) : matin / soir = famille du code sur l'Accueil (coché
-    // présence) ; middle : nulle part (un coup de main) ; horaire libre : matin avant 12 h 30 ; code sans
+    // présence) ; middle : nulle part (un coup de main) ; horaire libre : ses heures (momentPropose) ; code sans
     // famille : jamais ; soutien : compté. Une personne par jour au plus.
     type Choix = { h: Horaire | null; debut: string; fin: string } | null
     const choix: Choix[] = [
@@ -2172,8 +2173,9 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
           ? [c.h.periode]
           : []
       }
-      const [hh, mm] = c.debut.split(':').map(Number)
-      return [hh * 60 + mm < 12 * 60 + 30 ? 'matin' : 'soir']
+      // Horaire libre (2026-11-05) : ses heures, comme un horaire.
+      const libre = momentPropose({ debut: c.debut, fin: c.fin, pause: 0 })
+      return libre === 'matin' || libre === 'soir' ? [libre] : []
     }
     const gens = [ALPHA, BRAVO, CHARLIE, DELTA]
     const consignes: Consigne[] = []

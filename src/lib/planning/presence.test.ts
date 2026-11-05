@@ -430,7 +430,7 @@ describe('une semaine de l’hôtel d’essai', () => {
     const sem = p.generer('2026-11-02')
     expect(sem.stats.infractions).toBe(0)
     // Oracle : recompte à la main depuis les shifts rendus (D5 : soutiens
-    // compris ; D11 : un middle compte au matin et au soir ; D10 : la nuit
+    // compris ; un middle ne compte nulle part, 2026-11-05 ; D10 : la nuit
     // sur la Veille seule).
     const postes = new Set(
       referentiel.postes.filter((x) => x.presence).map((x) => x.id),
@@ -444,9 +444,7 @@ describe('une semaine de l’hôtel d’essai', () => {
         const c = code.get(a.type_shift_id ?? -1)?.replace(/7$/, '')
         if (periode === 'nuit') return a.poste_id === veille?.id && c === 'N'
         if (!postes.has(a.poste_id)) return false
-        return periode === 'matin'
-          ? c === 'M' || c === 'MI'
-          : c === 'AM' || c === 'MI'
+        return periode === 'matin' ? c === 'M' : c === 'AM'
       }).length
     for (const x of sem.presence) {
       expect(x.compte).toBe(recompte(x.jour, x.periode))

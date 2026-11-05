@@ -158,6 +158,23 @@ describe('moments du tableau (presence.ts)', () => {
     // Refusé : un horaire sans moment ne compte nulle part.
     expect(momentsAccueil(rec, { periode: null }, '09:00')).toEqual([])
   })
+  it('un horaire libre se lit par ses heures, comme un horaire (2026-11-05)', () => {
+    // 10:00-18:45 sans horaire : un middle, il ne compte nulle part (avant,
+    // l'heure de début seule le comptait au matin).
+    expect(momentsAccueil(rec, undefined, '10:00', true, '18:45')).toEqual([])
+    expect(momentsAccueil(rec, undefined, '07:00', true, '12:00')).toEqual([
+      'matin',
+    ])
+    expect(momentsAccueil(rec, undefined, '14:30', true, '23:15')).toEqual([
+      'soir',
+    ])
+    // 21:30-07:00 sur la Veille : une nuit (seuil de 21 h, comme un horaire).
+    expect(momentsAccueil(veille, undefined, '21:30', true, '07:00')).toEqual([
+      'nuit',
+    ])
+    // Sans fin connue : l'heure de début, comme avant.
+    expect(momentsAccueil(rec, undefined, '10:00')).toEqual(['matin'])
+  })
   it('la nuit : la Veille seule (D10)', () => {
     expect(momentsAccueil(veille, { periode: 'nuit' }, '23:00')).toEqual([
       'nuit',
@@ -266,7 +283,10 @@ describe('le chiffre est exact (D1-D3)', () => {
 
 // --------------------------------------------------------------- middle
 
-describe('un middle compte deux fois (D11)', () => {
+// Le MÉCANISME d'un créneau qui compte dans deux moments (D11) reste dans
+// le générateur ; depuis le 2026-11-05, `momentsAccueil` ne range plus
+// aucun horaire dans deux moments (un middle ne compte nulle part).
+describe('un créneau qui compte dans deux moments (mécanisme de D11)', () => {
   it('accepté : une seule personne en middle tient le matin et le soir', () => {
     const p = probleme({
       salaries: [sal('a')],
@@ -847,6 +867,38 @@ describe('assemblage d’une semaine (semaine.ts)', () => {
       if (c.poste === veille) expect(c.presence).toEqual(['nuit'])
       else expect(c.presence).not.toContain('nuit')
     }
+  })
+
+  it('un middle reste un candidat de l’accueil, sans compter nulle part (2026-11-05)', () => {
+    // Oracle : décision du 2026-11-04 (« posé s'il reste des heures ») et
+    // relecture adverse du 2026-11-05 : sans candidat, aucun middle n'était
+    // plus jamais posé, pas même celui qu'une semaine type fixe.
+    const g = preparerGeneration(donnees(true), { aujourdhui: '2026-09-01' })
+    const middles = g.probleme.creneaux.filter(
+      (c) => c.accueil && c.moment === 'middle',
+    )
+    expect(middles.length).toBeGreaterThan(0)
+    for (const c of middles) expect(c.presence).toEqual([])
+    // Refusé : un jour où ni le matin ni le soir n'est demandé, pas de
+    // middle non plus.
+    const d = donnees(true)
+    d.referentiel = {
+      ...d.referentiel,
+      consignes: d.referentiel.consignes.filter(
+        (k) => k.jour !== 2 || k.periode === 'nuit',
+      ),
+    }
+    const sans = preparerGeneration(d, { aujourdhui: '2026-09-01' })
+    expect(
+      sans.probleme.creneaux.some(
+        (c) => c.accueil && c.moment === 'middle' && c.jourPlanning === 2,
+      ),
+    ).toBe(false)
+    expect(
+      sans.probleme.creneaux.some(
+        (c) => c.accueil && c.moment === 'middle' && c.jourPlanning === 3,
+      ),
+    ).toBe(true)
   })
 
   it('une semaine générée : chiffre tenu, aucune infraction, analyse cohérente', () => {

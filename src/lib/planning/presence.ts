@@ -32,11 +32,13 @@
  * réglages (`coherence.ts`, étape 4) ne les a pas remplacées.
  */
 
+import { momentPropose } from '#/lib/planning/moment.ts'
 import { minutes } from '#/lib/planning/temps.ts'
 import type {
   Besoin,
   Consigne,
   Horaire,
+  Periode,
   PeriodePresence,
   Poste,
 } from '#/lib/planning/types.ts'
@@ -46,6 +48,15 @@ export const ORDRE_PERIODES: Readonly<Record<PeriodePresence, number>> = {
   matin: 0,
   soir: 1,
   nuit: 2,
+}
+
+/** Moment d'un horaire LIBRE (sans horaire) d'après ses heures, comme un
+ * horaire (`momentPropose`, 2026-11-05 : le moment se déduit des heures).
+ * Sans fin connue : l'heure de début (`periodeLibre`). */
+export function momentLibre(debut: string, fin?: string): Periode {
+  return fin === undefined
+    ? periodeLibre(debut)
+    : momentPropose({ debut, fin, pause: 0 })
 }
 
 /** Période d'un horaire libre : nuit de 22 h à 5 h, matin avant 12 h 30. */
@@ -251,16 +262,18 @@ export function estPosteAccueil(
  *     les trous entre équipes. Une nuit n'y compte pas (D10) ;
  *   - poste Veille de nuit (accueil actif) : nuit → nuit ;
  *   - horaire sans moment (`periode` null) : rien ;
- *   - horaire libre : son heure de début (`periodeLibre`).
+ *   - horaire libre : ses heures (`momentLibre`, comme un horaire ;
+ *     sans `fin`, son heure de début).
  * `actif` : `accueilActif` de l'hôtel (faux : rien ne compte). */
 export function momentsAccueil(
   poste: PosteAccueil | undefined,
   horaire: Pick<Horaire, 'periode'> | undefined,
   debut: string,
   actif = true,
+  fin?: string,
 ): PeriodePresence[] {
   if (!estPosteAccueil(poste, actif) || !poste) return []
-  const p = horaire ? horaire.periode : periodeLibre(debut)
+  const p = horaire ? horaire.periode : momentLibre(debut, fin)
   if (p === null) return []
   const r: PeriodePresence[] = []
   if (poste.presence) {

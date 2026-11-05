@@ -34,7 +34,9 @@ const HORAIRES: Array<[string, string, string, number, Periode | null]> = [
   ['M6', '06:30', '14:00', 30, 'matin'],
   ['M7', '07:00', '14:00', 30, 'matin'],
   ['M8', '08:00', '15:45', 45, 'matin'],
-  ['M9', '09:00', '17:45', 45, 'matin'],
+  // 08:45 et non 09:00 (2026-11-05) : le moment se calcule d'après les
+  // heures, et 09:00-17:45 serait un middle (`momentPropose`).
+  ['M9', '08:45', '17:30', 45, 'matin'],
   ['M10', '06:45', '15:30', 45, 'matin'],
   // 10 soirs
   ['S1', '14:00', '22:45', 45, 'soir'],

@@ -83,7 +83,7 @@ import {
   chiffreAccueil,
   estPosteAccueil,
   momentsAccueil,
-  periodeLibre,
+  momentLibre,
   periodeShift,
   tientLaNuit,
 } from '#/lib/planning/presence.ts'
@@ -811,13 +811,19 @@ export function posteDeLAccueil(
 /** Moments du tableau où compte un shift ou un candidat (`momentsAccueil`). */
 function presenceDe(
   ctx: Contexte,
-  x: { poste_id: number; horaire_id: number | null; debut: string },
+  x: {
+    poste_id: number
+    horaire_id: number | null
+    debut: string
+    fin?: string
+  },
 ): PeriodePresence[] {
   return momentsAccueil(
     ctx.postes.get(x.poste_id),
     x.horaire_id !== null ? ctx.horaires.get(x.horaire_id) : undefined,
     x.debut,
     accueilEnService(ctx),
+    x.fin,
   )
 }
 
@@ -856,7 +862,12 @@ function debutsMatinTot(ctx: Contexte): Map<number, number> {
  * un matin qui commence au plus tôt des matins prévus pour ce poste. */
 export function equiteDe(
   ctx: Contexte,
-  x: { poste_id: number; horaire_id: number | null; debut: string },
+  x: {
+    poste_id: number
+    horaire_id: number | null
+    debut: string
+    fin?: string
+  },
 ): { soir: boolean; matinTot: boolean; moment: Periode | null } {
   const h = x.horaire_id !== null ? ctx.horaires.get(x.horaire_id) : undefined
   const periode = periodeShift(h, x.debut)
@@ -867,7 +878,9 @@ export function equiteDe(
       periode === 'matin' && tot !== undefined && minutes(x.debut) <= tot,
     // Semaine stable et nuits (règles 6 et 7 du PRD) : le moment de
     // l'horaire, sinon l'heure de début ; un horaire sans moment : aucun.
-    moment: h ? h.periode : periodeLibre(x.debut),
+    // Horaire libre (sans horaire) : ses heures, comme un horaire
+    // (`momentPropose`, 2026-11-05) ; sans fin connue, l'heure de début.
+    moment: h ? h.periode : momentLibre(x.debut, x.fin),
   }
 }
 
@@ -1041,7 +1054,7 @@ export const idCandidat = (jour: number, posteId: number, horaireId: number) =>
 
 /** Un candidat de l'accueil : le poste et l'horaire sur ce jour du
  * planning, aucune place propre (effectif 0) ; ses moments dans `presence`
- * (un middle : matin et soir, D11). */
+ * (un middle : aucun, depuis le 2026-11-05). */
 export function creneauCandidat(
   ctx: Contexte,
   jour: number,
@@ -1073,7 +1086,10 @@ export function creneauCandidat(
  * chaque jour à partir de `depuis`, chaque poste de l'accueil et chaque
  * horaire permis au poste (`codesDuPoste` ; la fiche filtre ensuite, comme
  * partout, `codesPermis`), un candidat s'il compte dans au moins un moment
- * demandé ce jour-là (chiffre > 0). Un horaire trop long pour la catégorie
+ * demandé ce jour-là (chiffre > 0), ou si c'est un MIDDLE d'un jour où le
+ * matin ou le soir est demandé (2026-11-05 : il ne compte dans aucun
+ * chiffre, c'est un coup de main, posé s'il reste des heures, et il tient
+ * l'horaire qu'une semaine type fixe). Un horaire trop long pour la catégorie
  * du poste est écarté, comme un besoin (`alerteBesoin`). Rien si le tableau
  * n'est pas en service. */
 export function candidatsAccueil(ctx: Contexte, depuis = 0): Creneau[] {
@@ -1092,7 +1108,15 @@ export function candidatsAccueil(ctx: Contexte, depuis = 0): Creneau[] {
     for (const poste of postes) {
       for (const h of codesDuPoste(poste, horaires)) {
         const c = creneauCandidat(ctx, jour, poste, h)
-        if (!c.presence.some((m) => demandes.has(`${jour}|${m}`))) continue
+        const coupDeMain =
+          poste.presence &&
+          c.moment === 'middle' &&
+          (demandes.has(`${jour}|matin`) || demandes.has(`${jour}|soir`))
+        if (
+          !coupDeMain &&
+          !c.presence.some((m) => demandes.has(`${jour}|${m}`))
+        )
+          continue
         if (alerteBesoin(poste.categorie, duree(c))) continue
         r.push(c)
       }
