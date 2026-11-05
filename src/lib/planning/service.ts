@@ -27,6 +27,7 @@ import type {
   Horaire,
   ModeleContrat,
   Motif,
+  Periode,
   Poste,
   Referentiel,
   Reglages,
@@ -240,7 +241,7 @@ function normaliserReglages(r: Reglages | null): Reglages {
 }
 
 /** Réglages généraux du planning (gestion). */
-export async function enregistrerReglages(r: Reglages): Promise<void> {
+export async function enregistrerReglages(r: Partial<Reglages>): Promise<void> {
   auMoinsUne(
     await supabase
       .from('planning_reglages')
@@ -585,6 +586,24 @@ export const enregistrerHoraire = (
   moments?: RegleEtablissement['moments'],
 ) =>
   enregistrer<Horaire>('planning_horaires', avecMomentCalcule(v, moments), id)
+
+/** Le moment rangé en base de chaque horaire qui en change (limites des
+ * moments modifiées, page Horaires). La lecture le recalcule de toute façon
+ * (`avecMomentCalcule`) : la base reste d'accord avec l'écran. Seule la
+ * colonne `periode` est écrite, les heures ne bougent pas. */
+export async function enregistrerMomentsHoraires(
+  changes: ReadonlyArray<{ id: number; periode: Periode }>,
+): Promise<void> {
+  for (const c of changes) {
+    auMoinsUne(
+      await supabase
+        .from('planning_horaires')
+        .update({ periode: c.periode })
+        .eq('id', c.id)
+        .select('id'),
+    )
+  }
+}
 
 export const enregistrerMotif = (v: SansId<Motif>, id: number | null) =>
   enregistrer<Motif>('planning_motifs', v, id)

@@ -494,12 +494,18 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
             regler={reglerAccueil}
           />
           {actif && (
-            <HeuresAccueil postes={data.postes} modifiable={modifiable} />
+            <HeuresAccueil
+              postes={data.postes}
+              modifiable={modifiable}
+              duree={data.reglages?.duree_ouverture ?? 60}
+            />
           )}
           {actif && (
             <ReglageReleve
               minutes={data.reglages?.releve_minutes ?? 30}
               continuite={data.reglages?.continuite_obligatoire ?? true}
+              veilleur={data.reglages?.passation_veilleur ?? true}
+              tolerance={data.reglages?.equipe_tolerance ?? 30}
               modifiable={modifiable}
             />
           )}

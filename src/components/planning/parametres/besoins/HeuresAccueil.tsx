@@ -15,7 +15,12 @@ import { useEcriture } from '#/components/planning/hooks/usePlanning.ts'
 import { useNotifier } from '#/components/planning/Messages.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
-import { reglerHeuresPoste } from '#/lib/planning/service.ts'
+import { Segmente } from '#/components/planning/parametres/equipe/Segmente.tsx'
+import {
+  enregistrerReglages,
+  reglerHeuresPoste,
+} from '#/lib/planning/service.ts'
+import { heuresLisibles } from '#/lib/planning/temps.ts'
 import type { Poste } from '#/lib/planning/types.ts'
 
 /** La phrase d'un poste : ce que font son ouverture et sa fermeture. */
@@ -31,15 +36,39 @@ export function phraseHeures(
   return "Ni ouverture ni fermeture : rien n'est demandé à ces heures."
 }
 
+/** Durée pendant laquelle l'ouverture (et la fermeture) est tenue
+ * (`duree_ouverture`, 15 à 240 minutes en base). */
+const DUREES = ['30', '60', '90', '120'] as const
+type Duree = (typeof DUREES)[number]
+
 export function HeuresAccueil({
   postes,
   modifiable,
+  duree = 60,
 }: {
   postes: readonly Poste[]
   modifiable: boolean
+  /** `passations.dureeOuverture` (minutes). */
+  duree?: number
 }) {
+  const ecrire = useEcriture()
+  const notifier = useNotifier()
+  const [envoi, setEnvoi] = useState(false)
   const accueil = postes.filter((p) => p.presence && !p.ferme)
   if (!accueil.length) return null
+  const valeur = (DUREES as readonly string[]).includes(String(duree))
+    ? (String(duree) as Duree)
+    : null
+  const choisir = async (v: Duree) => {
+    if (envoi) return
+    setEnvoi(true)
+    const r = await ecrire(
+      () => enregistrerReglages({ duree_ouverture: Number(v) }),
+      "La durée de l'ouverture n'a pas pu être enregistrée",
+    )
+    setEnvoi(false)
+    if (!r.ok) notifier(r.message, 'danger')
+  }
   return (
     <section
       aria-labelledby="titre-heures-accueil"
@@ -50,9 +79,22 @@ export function HeuresAccueil({
       </h3>
       <p className="text-xs text-muted-foreground">
         Chaque jour où le matin ou le soir est demandé, quelqu'un tient le poste
-        dès l'ouverture et jusqu'à la fermeture, pendant au moins une heure.
-        Aussi réglé dans Postes.
+        dès l'ouverture et jusqu'à la fermeture, pendant au moins{' '}
+        {heuresLisibles(duree)}. Aussi réglé dans Postes.
       </p>
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span>Tenue pendant</span>
+        <Segmente<Duree>
+          label="Durée tenue à l'ouverture et à la fermeture"
+          valeur={valeur ?? '60'}
+          options={DUREES.map((d) => ({
+            valeur: d,
+            libelle: heuresLisibles(Number(d)),
+          }))}
+          disabled={!modifiable || envoi}
+          onChange={(v) => void choisir(v)}
+        />
+      </div>
       <ul className="flex flex-col divide-y rounded-xl border bg-card">
         {accueil.map((p) => (
           <LigneHeures key={p.id} poste={p} modifiable={modifiable} />

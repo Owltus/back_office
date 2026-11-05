@@ -2715,6 +2715,16 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   « Passation entre les équipes » (continuité) avec la relève, importance rappelée en tête de
   l'onglet d'un poste, repli « Dans quel ordre… » ÉCRIT d'après l'importance
   (`besoins/ordreDecision.ts`).
+- **RÈGLES RÉGLÉES À L'ÉCRAN (2026-11-05, étape 5, D7 = réparties, pas de page à part)** :
+  Équipe → bouton « Règles », tiroir `equipe/ReglesContrats.tsx` (journées par durée de contrat,
+  journée pleine et étoile, types de contrat = `planning_modeles_contrat`, repos et rythme, école,
+  congés et heures, puis la LOI en lecture seule `EncadreLoi`) ; passage pur et contrôle
+  `equipe/reglesContrats.ts` (aller-retour sans geste = mêmes règles, testé). Horaires → section
+  « Moments » (`reglages/SectionMoments.tsx`, `moments.ts`) : aperçu des horaires qui changent de
+  moment AVANT d'enregistrer, puis `enregistrerMomentsHoraires` (colonne `periode` seule).
+  Besoins → passation avec le Veilleur, équipe du soir ensemble (`ReglageReleve`), durée tenue à
+  l'ouverture (`HeuresAccueil`). Jamais montrés : poids, `personnes_nuit`, `journee_courte`,
+  `journees_courtes_max`. Brouillon + Enregistrer (tiroir, Moments), gestion seule.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

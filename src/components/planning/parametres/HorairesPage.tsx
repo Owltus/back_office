@@ -38,6 +38,7 @@ import {
   useOuvrirCible,
 } from '#/components/planning/parametres/reglages/ouvrirCible.ts'
 import type { PropsOuvrir } from '#/components/planning/parametres/reglages/ouvrirCible.ts'
+import { SectionMoments } from '#/components/planning/parametres/reglages/SectionMoments.tsx'
 import {
   CadreReglages,
   EnTeteSection,
@@ -309,6 +310,8 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
               ))}
             </div>
           </section>
+
+          <SectionMoments referentiel={data} modifiable={modifiable} />
 
           <section
             className="flex flex-col gap-4"

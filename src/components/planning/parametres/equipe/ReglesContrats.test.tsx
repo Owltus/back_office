@@ -1,0 +1,142 @@
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
+
+import type { Referentiel } from '#/lib/planning/types.ts'
+
+/*
+ * Tiroir « Règles des contrats » (page Équipe) et section « Moments » (page
+ * Horaires) contre un service simulé : lecture seule sans aucun geste
+ * d'écriture ; un réglage changé n'envoie que lui, après Enregistrer ;
+ * l'aperçu des moments liste les horaires qui changent avant l'envoi.
+ */
+
+const etat = vi.hoisted(() => ({
+  droits: { pret: true, lire: true, ecrire: true, gerer: true },
+}))
+const service = vi.hoisted(() => ({
+  enregistrerReglages: vi.fn(),
+  enregistrerModeleContrat: vi.fn(),
+  enregistrerMomentsHoraires: vi.fn(),
+}))
+
+vi.mock('#/lib/supabase.ts', () => ({ supabase: {} }))
+vi.mock('#/lib/planning/service.ts', () => service)
+vi.mock('#/components/planning/hooks/usePlanning.ts', async () => {
+  const { messageErreur } = await import('#/lib/planning/erreurs.ts')
+  return {
+    useDroitsPlanning: () => etat.droits,
+    useEcriture:
+      () => async (action: () => Promise<unknown>, echec?: string) => {
+        try {
+          await action()
+          return { ok: true }
+        } catch (err) {
+          return { ok: false, message: messageErreur(err, echec) }
+        }
+      },
+  }
+})
+
+const { ReglesContrats } =
+  await import('#/components/planning/parametres/equipe/ReglesContrats.tsx')
+const { SectionMoments } =
+  await import('#/components/planning/parametres/reglages/SectionMoments.tsx')
+const { monter, referentielDemo } =
+  await import('#/components/planning/parametres/reglages/test/monter.tsx')
+
+let ref: Referentiel
+beforeEach(() => {
+  ref = referentielDemo()
+  etat.droits = { pret: true, lire: true, ecrire: true, gerer: true }
+  service.enregistrerReglages.mockReset().mockResolvedValue(undefined)
+  service.enregistrerModeleContrat.mockReset().mockResolvedValue(undefined)
+  service.enregistrerMomentsHoraires.mockReset().mockResolvedValue(undefined)
+})
+afterEach(cleanup)
+
+const tiroir = () =>
+  monter(<ReglesContrats ouvert onFermer={() => {}} referentiel={ref} />)
+
+describe('Règles des contrats', () => {
+  it('lecture seule : tout se lit, rien ne s’écrit', () => {
+    etat.droits = { pret: true, lire: true, ecrire: true, gerer: false }
+    tiroir()
+    expect(screen.getByText('Lecture seule')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Enregistrer' })).toBeNull()
+    expect(
+      screen.getByRole('radio', { name: 'Souhaité' }).hasAttribute('disabled'),
+    ).toBe(true)
+    expect(screen.getByRole('region', { name: 'La loi' })).toBeTruthy()
+    // Jamais le nombre de veilleurs : le tableau de l'accueil le dit.
+    expect(screen.queryByText(/personnes la nuit/i)).toBeNull()
+  })
+
+  it('deux repos souhaités : seul ce réglage part, aucun type de contrat', async () => {
+    tiroir()
+    const enregistrer = screen.getByRole('button', { name: 'Enregistrer' })
+    expect(enregistrer.hasAttribute('disabled')).toBe(true)
+    fireEvent.click(screen.getByRole('radio', { name: 'Souhaité' }))
+    expect(
+      screen.getByText(/peut les séparer s'il manque du monde/),
+    ).toBeTruthy()
+    fireEvent.click(enregistrer)
+    await waitFor(() =>
+      expect(service.enregistrerReglages).toHaveBeenCalledTimes(1),
+    )
+    const envoye = service.enregistrerReglages.mock.calls[0][0]
+    expect(envoye.deux_repos_de_suite).toBe('souhaite')
+    expect(envoye.jours_affiles_max).toBe(6)
+    expect(envoye).not.toHaveProperty('personnes_nuit')
+    expect(envoye).not.toHaveProperty('releve_minutes')
+    expect(service.enregistrerModeleContrat).not.toHaveBeenCalled()
+  })
+
+  it('un type de contrat changé est envoyé seul', async () => {
+    tiroir()
+    fireEvent.click(screen.getByRole('radio', { name: 'Extra' }))
+    fireEvent.click(screen.getByRole('switch', { name: /Journée étoile/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+    await waitFor(() =>
+      expect(service.enregistrerModeleContrat).toHaveBeenCalledTimes(1),
+    )
+    expect(service.enregistrerModeleContrat.mock.calls[0][0]).toMatchObject({
+      type_contrat: 'extra',
+      journee_etoile: true,
+    })
+  })
+})
+
+describe('Moments', () => {
+  it('aperçu avant l’envoi, puis limites et moments des horaires', async () => {
+    monter(<SectionMoments referentiel={ref} modifiable />)
+    const champ = screen.getByRole('textbox', { name: 'La nuit commence à' })
+    fireEvent.change(champ, { target: { value: '23:30' } })
+    fireEvent.blur(champ)
+    const liste = await screen.findByRole('list', {
+      name: 'Horaires qui changeraient de moment',
+    })
+    expect(liste.textContent).toMatch(/Nuit/)
+    expect(service.enregistrerReglages).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+    await waitFor(() =>
+      expect(service.enregistrerMomentsHoraires).toHaveBeenCalledTimes(1),
+    )
+    expect(service.enregistrerReglages.mock.calls[0][0].nuit_debut).toBe(
+      23 * 60 + 30,
+    )
+    expect(
+      service.enregistrerMomentsHoraires.mock.calls[0][0].length,
+    ).toBeGreaterThan(0)
+  })
+
+  it('lecture seule : pas de bouton, champs grisés', () => {
+    monter(<SectionMoments referentiel={ref} modifiable={false} />)
+    expect(screen.queryByRole('button', { name: 'Enregistrer' })).toBeNull()
+    expect(
+      screen
+        .getByRole('textbox', { name: 'La nuit commence à' })
+        .hasAttribute('disabled'),
+    ).toBe(true)
+  })
+})

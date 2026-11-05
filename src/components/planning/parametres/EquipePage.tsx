@@ -9,7 +9,7 @@
 
 import { useState } from 'react'
 import type { ReactNode } from 'react'
-import { ChevronRight, Layers, UserPlus } from 'lucide-react'
+import { ChevronRight, Layers, Scale, UserPlus } from 'lucide-react'
 
 import {
   MenuParametres,
@@ -25,6 +25,7 @@ import {
   heuresContrat,
 } from '#/components/planning/parametres/equipe/brouillon.ts'
 import { GestionCategories } from '#/components/planning/parametres/equipe/GestionCategories.tsx'
+import { ReglesContrats } from '#/components/planning/parametres/equipe/ReglesContrats.tsx'
 import {
   idCible,
   partieCible,
@@ -79,6 +80,7 @@ export function EquipePage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
   const aujourdhui = useAujourdhui()
   const [fiche, setFiche] = useState<Fiche>(null)
   const [categories, setCategories] = useState(false)
+  const [regles, setRegles] = useState(false)
   const salaries = ref.data?.salaries ?? []
   useOuvrirCible(
     lien,
@@ -144,6 +146,16 @@ export function EquipePage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
                     onClick={() => setCategories(true)}
                   >
                     <Layers /> Groupes
+                  </Button>
+                </Tip>
+                <Tip label="Règles des contrats : journées, repos et rythme, école">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!ref.data}
+                    onClick={() => setRegles(true)}
+                  >
+                    <Scale /> Règles
                   </Button>
                 </Tip>
               </ButtonGroup>
@@ -249,6 +261,13 @@ export function EquipePage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
           groupes={ref.data.groupes}
           postes={ref.data.postes}
           salaries={salaries}
+        />
+      )}
+      {ref.data && (
+        <ReglesContrats
+          ouvert={regles}
+          onFermer={() => setRegles(false)}
+          referentiel={ref.data}
         />
       )}
     </PageAvecEnTete>
