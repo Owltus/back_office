@@ -1183,8 +1183,32 @@ export function construire(
     pireJfr(Math.max(0, ...p.salaries.map((s) => s.jfr?.reduction ?? 0))) +
     // Horizon glissant : ce qu'un shift ajouté peut coûter à l'esquisse.
     pireHorizon(p.suivante)
-  const coutsMinimum = comptent.map((cs) =>
-    coutManqueMinimum(cs, presenceLaPlusChere, besoinDe, R),
+  // CONTINUITÉ OBLIGATOIRE (D8, plus bas) : une passation avec le veilleur
+  // manquée coûte aussi une place nécessaire, au-dessus de tout ce qu'il
+  // faudrait payer pour ajouter quelqu'un sur un créneau qui la tiendrait
+  // (un relais). Un veilleur ajouté peut en manquer deux : ce surplus
+  // (`extraNuit`, au-delà de `POIDS_PASSATION` déjà dans `pireMoral`) entre
+  // dans le prix des places de nuit (P1). Sans la règle : 0, rien ne change.
+  const coutPassation = new Map<string, number>()
+  let extraNuit = 0
+  if (R.passations.continuiteObligatoire)
+    for (const z of zonesPassation(p)) {
+      const relais = new Set<Creneau>()
+      if (z.veille) for (const c of z.relais(z.veille)) relais.add(c)
+      for (const n of z.nuits) for (const c of z.relais(n)) relais.add(c)
+      const ouverts = [...relais].filter((c) => !c.ferme)
+      const plus = ouverts.length
+        ? coutPlaceVideGroupe(ouverts, presenceLaPlusChere, besoinDe, R)
+        : 0
+      coutPassation.set(`${z.jour}|${z.cote}`, POIDS_PASSATION + plus)
+      extraNuit = Math.max(extraNuit, plus)
+    }
+  const coutsMinimum = comptent.map(
+    (cs) =>
+      coutManqueMinimum(cs, presenceLaPlusChere, besoinDe, R) +
+      (extraNuit && cs.some((c) => !c.ferme && c.presence.includes('nuit'))
+        ? 2 * extraNuit
+        : 0),
   )
 
   // Couverture, par PLACE : un besoin `b…` et ses remplaçants `r…`
@@ -1378,7 +1402,25 @@ export function construire(
     }
   })
 
-  const trous = trousEntreEquipes(m, p, x, termesDe)
+  // CONTINUITÉ ENTRE ÉQUIPES (D8 du 2026-11-05, `continuiteObligatoire`) :
+  // un trou entre la fin d'une équipe et l'arrivée de la suivante (passation
+  // avec le veilleur comprise : la plage de l'accueil va d'un veilleur à
+  // l'autre) coûte une PLACE NÉCESSAIRE (P1) : plus que tout ce qu'il
+  // faudrait payer pour ajouter une personne sur l'un des créneaux qui le
+  // couvriraient. Jamais dur : si personne ne peut le tenir, il reste (D3).
+  // Le chevauchement (relève) reste une préférence.
+  const continuite = R.passations.continuiteObligatoire
+    ? (couvrants: Creneau[]) => {
+        const ouverts = couvrants.filter((c) => !c.ferme)
+        return ouverts.length
+          ? coutPlaceVideGroupe(ouverts, presenceLaPlusChere, besoinDe, R) +
+              (ouverts.some((c) => c.presence.includes('nuit'))
+                ? 2 * extraNuit
+                : 0)
+          : 0
+      }
+    : undefined
+  const trous = trousEntreEquipes(m, p, x, termesDe, continuite)
   // Ouverture (2026-11-01) : la première heure de chaque poste de l'accueil
   // qui a une heure d'ouverture, tenue sur CE poste.
   const ouvertures = (p.ouvertures ?? []).flatMap((o) =>
@@ -1400,7 +1442,13 @@ export function construire(
     c.accueil
       ? (sommesAccueil.get(c.id)?.n ?? 0)
       : p.salaries.filter((s) => x.has(cle(s.id, c.id))).length
-  const passations = passationsVeilleur(m, p, termesDe, borneDe)
+  const passations = passationsVeilleur(
+    m,
+    p,
+    termesDe,
+    borneDe,
+    (z) => coutPassation.get(`${z.jour}|${z.cote}`) ?? POIDS_PASSATION,
+  )
   equipesSynchro(m, p, termesDe, borneDe)
 
   // Une « expression » : termes + constante.
@@ -3052,6 +3100,7 @@ function trousEntreEquipes(
   p: Probleme,
   x: Map<string, string>,
   termesDe: (c: Creneau, quoi: 'autonomes') => Terme[],
+  continuite?: (couvrants: Creneau[]) => number,
 ): Array<Trou & { v: string }> {
   // Postes à part comptés (un besoin `b…` au matin ou au soir) ; un
   // candidat de l'accueil n'en fait pas un (ses trous sont plus bas).
@@ -3078,7 +3127,21 @@ function trousEntreEquipes(
       const debut = Math.min(...besoins.map((c) => c.debut))
       const fin = Math.max(...besoins.map((c) => c.fin))
       r.push(
-        ...variablesTrous(m, p, x, termesDe, poste, jour, debut, fin, duPoste),
+        ...variablesTrous(
+          m,
+          p,
+          x,
+          termesDe,
+          poste,
+          jour,
+          debut,
+          fin,
+          duPoste,
+          POIDS_TROU_QUART,
+          0,
+          Infinity,
+          continuite,
+        ),
       )
     }
   }
@@ -3131,6 +3194,7 @@ function trousEntreEquipes(
           POIDS_TROU_QUART,
           POIDS_SEUL_QUART,
           finSeul,
+          continuite,
         ),
       )
     }
@@ -3220,6 +3284,7 @@ function passationsVeilleur(
   p: Probleme,
   termesDe: (c: Creneau, quoi: 'autonomes') => Terme[],
   borne: (c: Creneau) => number,
+  coutDe: (z: ZonePassation) => number = () => POIDS_PASSATION,
 ): Array<Passation & { v: string }> {
   const r: Array<Passation & { v: string }> = []
   const tenu = new Map<string, Terme[]>()
@@ -3263,7 +3328,8 @@ function passationsVeilleur(
         '>=',
         tenue,
       )
-    m.cout(POIDS_PASSATION, v)
+    m.cout(coutDe(z), v)
+
     r.push({ jour: z.jour, cote: z.cote, v })
   }
   return r
@@ -3582,6 +3648,9 @@ function variablesTrous(
   poidsQuart = POIDS_TROU_QUART,
   poidsSeul = 0,
   finSeul = Infinity,
+  /** Continuité obligatoire (D8) : le prix d'une place nécessaire pour un
+   * trou que ces créneaux couvriraient, en plus du prix au quart d'heure. */
+  continuite?: (couvrants: Creneau[]) => number,
 ): Array<Trou & { v: string }> {
   const r: Array<Trou & { v: string }> = []
   const presents = tenus.filter((c) => c.debut < fin && c.fin > debut)
@@ -3602,8 +3671,10 @@ function variablesTrous(
   }
   for (const suite of suites) {
     const termes: Terme[] = []
+    const couvrants: Creneau[] = []
     for (const c of presents) {
       if (c.debut > suite.debut || c.fin < suite.fin) continue
+      couvrants.push(c)
       if (c.accueil) {
         // Les sommes du candidat (AGRÉGATS DE L'ACCUEIL) : ses autonomes.
         termes.push(...termesDe(c, 'autonomes'))
@@ -3617,7 +3688,12 @@ function variablesTrous(
     }
     const v = m.continu(0, 1)
     m.ajoute([...termes, [1, v]], '>=', 1)
-    m.cout(Math.round((poidsQuart * (suite.fin - suite.debut)) / QUART), v)
+    m.cout(
+      Math.round((poidsQuart * (suite.fin - suite.debut)) / QUART) +
+        (continuite && termes.length ? continuite(couvrants) : 0),
+      v,
+    )
+
     r.push({ poste, jour, debut: suite.debut, fin: suite.fin, v })
     // Personne seule (`POIDS_SEUL_QUART`) : au moins deux, ou payer ; pas
     // après `finSeul` (le veilleur seul). Les suites suivent les débuts des

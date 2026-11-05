@@ -2682,6 +2682,20 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   plus rapide (44 s) mais 150 à 620 au-dessus chaque semaine (il arrondit
   les coefficients et les variables continues) et n'existe pas dans le
   navigateur. HiGHS reste : optimum confirmé par un solveur indépendant.
+- **RÈGLES DE L'ÉTABLISSEMENT (2026-11-05, plan `plan/planning-moteur-configurable-2026-11-05/`,
+  étapes 2 à 4)** : tout ce que l'hôtel a choisi (journées par contrat, deux repos de suite, jour
+  isolé, jours d'affilée, repos conseillé, moments, nuits, passations, tolérance de l'équipe,
+  ouverture, école, congé long, heures en plus, limites des moments, modèles de contrat) vit dans
+  `RegleEtablissement` (`reglesEtablissement.ts`, `lireRegles` seule fabrique, défauts = l'hôtel),
+  rangé en base (`planning_reglages`, `planning_modeles_contrat`). Le moteur la lit :
+  `Contexte.regles` → `Fiche.regles` et `Probleme.regles`, lus par le générateur ET le
+  vérificateur (une règle désactivée disparaît des deux côtés, testé dans
+  `reglesEtablissementMoteur.test.ts`). Plus de test sur le type de contrat dans le moteur : le
+  modèle du contrat (`modeleDe`). La loi reste dans `regles.ts`, les poids restent internes.
+  `accueil.personnesNuit` n'est PAS lu : le chiffre de la nuit du tableau dit déjà combien de
+  veilleurs (un plafond à part le contredirait). D8 : continuité entre équipes OBLIGATOIRE par
+  défaut (migration `20261105110000`, `--avec-donnees`) : trou entre deux équipes et passation
+  avec le veilleur au prix d'une place nécessaire (P1), jamais dur ; mesuré dans le PRD.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

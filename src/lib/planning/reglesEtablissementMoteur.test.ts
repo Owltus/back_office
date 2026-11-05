@@ -368,7 +368,14 @@ describe('passation avec le veilleur (passations.passationVeilleur)', () => {
       .find((id) => id.startsWith('s'))
   it('active : le soir attend le veilleur ; désactivée : le plus court', () => {
     expect(soir(REGLES_PAR_DEFAUT)).toBe('s2300')
-    const sans = regles({ passations: { passationVeilleur: false } })
+    // La continuité de l’accueil (D8) va elle aussi jusqu’au veilleur :
+    // désactivées toutes les deux, le soir le plus court.
+    const sans = regles({
+      passations: { passationVeilleur: false, continuiteObligatoire: false },
+    })
+    expect(soir(regles({ passations: { passationVeilleur: false } }))).toBe(
+      's2300',
+    )
     expect(soir(sans)).toBe('s2245')
     expect(zonesPassation(p(sans))).toEqual([])
     expect(zonesPassation(p(REGLES_PAR_DEFAUT)).length).toBeGreaterThan(0)
@@ -508,5 +515,85 @@ describe('contrats et modèles de contrat', () => {
     // Journée pleine de 9 h : l'horaire de 8 h n'a plus de version étoile.
     const neuf = regles({ contrats: { journeePleine: 9 * H } })
     expect(versionsEtoile(huit, [sept], neuf)).toEqual([])
+  })
+})
+
+describe('continuité entre équipes (passations.continuiteObligatoire, D8)', () => {
+  // Matin 07-15 et soir 15:30-23 : une demi-heure sans personne. Seule
+  // une personne sans heures dues (0 h) peut la tenir, sur un renfort
+  // 11-19 : des heures en plus.
+  const creneaux = [
+    cr('m', 0, 7, 15, { presence: ['matin'] }),
+    cr('s', 0, 15.5, 23, { presence: ['soir'] }),
+    cr('r', 0, 11, 19, { effectif: 0, facultatif: 1 }),
+  ]
+  const salaries = [
+    personne(35, { id: 'a' }),
+    personne(35, { id: 'b' }),
+    personne(0, { id: 'c' }),
+  ]
+  const resoudre = (continuite: boolean) => {
+    const R = regles({ passations: { continuiteObligatoire: continuite } })
+    const p = probleme({ salaries, creneaux, graine: 1, regles: R })
+    return generer(p, highs)
+  }
+  it('préférence : la demi-heure reste un trou', () => {
+    const r = resoudre(false)
+    expect(r.affectations.some((a) => a.creneauId === 'r')).toBe(false)
+    expect(r.trous).toHaveLength(1)
+  })
+  it('obligatoire : quelqu’un la tient, même en heures en plus, sans vider une place', () => {
+    const r = resoudre(true)
+    expect(r.affectations.some((a) => a.creneauId === 'r')).toBe(true)
+    expect(r.manques).toEqual([])
+    expect(r.trous).toEqual([])
+  })
+  it('jamais dur : sans personne pour la tenir, le trou reste (D3)', () => {
+    const R = regles({ passations: { continuiteObligatoire: true } })
+    const p = probleme({
+      salaries: salaries.slice(0, 2),
+      creneaux,
+      graine: 1,
+      regles: R,
+    })
+    const r = generer(p, highs)
+    expect(r.statut).toBe('optimal')
+    expect(r.trous).toHaveLength(1)
+  })
+})
+
+describe('D9 : apprenti ou stagiaire selon son niveau sur le poste', () => {
+  // Une seule place, un seul candidat : l’apprenti (ou le stagiaire).
+  const fiche = (kw: Partial<Fiche>): Fiche => ({
+    id: 'x',
+    typeContrat: 'apprenti',
+    minutesHebdo: 35 * H,
+    postes: new Set<string>(),
+    ...kw,
+  })
+  const seul = (f: Fiche) => {
+    const c = [cr('j0', 0, 8, 15, { soutien: 1 })]
+    const p = probleme({ salaries: [versSolveur(f)], creneaux: c, graine: 1 })
+    return { p, r: generer(p, highs) }
+  }
+  it('titulaire ou en dépannage : autonome, il tient la place seul', () => {
+    for (const f of [
+      fiche({ postes: new Set(['r']) }),
+      fiche({ postes: new Set(['r']), postesOccasionnels: new Set(['r']) }),
+      fiche({ typeContrat: 'stagiaire', postes: new Set(['r']) }),
+    ]) {
+      const { p, r } = seul(f)
+      expect(r.affectations.map((a) => a.creneauId)).toEqual(['j0'])
+      expect(
+        violations(p, r.affectations).filter((v) => v.regle === 'SOUTIEN-SEUL'),
+      ).toEqual([])
+    }
+  })
+  it('en soutien : jamais seul, ni par le calcul ni posé à la main', () => {
+    const { p, r } = seul(fiche({ postesSoutien: new Set(['r']) }))
+    expect(r.affectations).toEqual([])
+    expect(
+      violations(p, [{ salarieId: 'x', creneauId: 'j0' }]).map((v) => v.regle),
+    ).toContain('SOUTIEN-SEUL')
   })
 })

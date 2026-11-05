@@ -97,8 +97,9 @@ export interface RegleEtablissement {
   passations: {
     /** Temps passé ensemble par l'équipe du matin et celle du soir. */
     releveMinutes: number
-    /** Aucun trou entre la fin d'une équipe et le début de la suivante :
-     * obligation (D8) ou forte préférence (aujourd'hui). */
+    /** Aucun trou entre la fin d'une équipe et le début de la suivante,
+     * passation avec le veilleur comprise : au niveau d'une place
+     * nécessaire (D8, vrai depuis le 2026-11-05), sinon une préférence. */
     continuiteObligatoire: boolean
     /** Le dernier du soir attend le veilleur, le premier du matin le
      * relaie. */
@@ -191,7 +192,8 @@ export const REGLES_PAR_DEFAUT: RegleEtablissement = {
   },
   passations: {
     releveMinutes: 30,
-    continuiteObligatoire: false,
+    // D8 (décision utilisateur du 2026-11-05) : obligatoire.
+    continuiteObligatoire: true,
     passationVeilleur: true,
     equipeTolerance: 30,
     dureeOuverture: 60,

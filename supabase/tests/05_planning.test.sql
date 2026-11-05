@@ -329,9 +329,9 @@ select is(pg_temp.essai('lecture', array['select deux_repos_de_suite || ''/'' ||
 select is(pg_temp.essai('ecriture', array['update public.planning_reglages set personnes_nuit = 2 where id = 1']),
   '0', 'règles : l''écriture ne les change pas (gestion seule)');
 select is(pg_temp.essai('gestion', array[
-  'update public.planning_reglages set personnes_nuit = 2, continuite_obligatoire = true where id = 1',
+  'update public.planning_reglages set personnes_nuit = 2, continuite_obligatoire = false where id = 1',
   'select personnes_nuit || ''/'' || continuite_obligatoire from public.planning_reglages where id = 1']),
-  '2/true', 'règles : la gestion les règle');
+  '2/false', 'règles : la gestion les règle');
 select is(pg_temp.essai('gestion', array['update public.planning_reglages set repos_confort = 600 where id = 1']),
   'err=23514', 'règles : jamais un repos entre deux services sous les 11 h de la loi');
 select is(pg_temp.essai('gestion', array['update public.planning_reglages set jours_affiles_max = 7 where id = 1']),

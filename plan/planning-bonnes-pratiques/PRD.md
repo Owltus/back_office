@@ -124,6 +124,22 @@ que les heures d'un shift de 12 h ; une présence, pas un compte de personnes : 
 l'oracle `transmissions` ; cherchée seulement quand le moment de jour qui relaie est demandé). Décembre : 5 passations du soir manquées sur 35 nuits → 1, sur un jour déjà
 validé.
 
+**CONTINUITÉ ENTRE ÉQUIPES OBLIGATOIRE (D8, décision utilisateur du 2026-11-05 : « il faut a
+minima que les deux shifts terminent et commencent en même temps pour garantir le fonctionnement
+et la continuité, et au mieux se croisent »)**. Réglage `passations.continuiteObligatoire`, vrai
+par défaut (migration `20261105110000`). Un trou entre la fin d'une équipe et l'arrivée de la
+suivante (journée de l'accueil d'un veilleur à l'autre, ou entre deux équipes d'un poste), et une
+passation avec le veilleur manquée, coûtent une PLACE NÉCESSAIRE (P1) : plus que tout ce qu'il
+faudrait payer pour ajouter une personne sur un créneau qui les tiendrait. Jamais dur : si
+personne ne peut les tenir, ils restent (D3). Le chevauchement (relève) reste une préférence.
+Mesuré (copie locale, en mémoire, comme « Compléter le mois ») : décembre, trous de l'accueil
+22 h 30 → 7 h 30, places vides 10 → 9, relèves manquées 3 → 1, passations manquées 0 → 0, heures
+dues manquées 36 h → 36 h ou 43 h selon la graine ; 29/06 → 26/10 : trous de l'accueil 2 h 15 → 0
+et 3 passations manquées → 0 sur la graine qui en avait, une à deux places vides de plus (une
+même personne ne tient pas une place ET la continuité, toutes deux P1). Un apprenti ou un
+stagiaire (D9) compte comme autonome sur un poste où il est titulaire ou en dépannage ; en
+soutien, jamais seul (règle de l'établissement, non réglable).
+
 Règle d'or : **quand l'hôtel ne peut pas faire autrement, le calcul peut enfreindre une règle
 morale, mais il le dit dans une alerte.** Il ne peut jamais enfreindre la loi.
 
@@ -131,15 +147,15 @@ morale, mais il le dit dans une alerte.** Il ne peut jamais enfreindre la loi.
 
 L'ordre réel est écrit en tête de `src/lib/planning/generateur.ts` (ORDRE DE DÉCISION) :
 
-| Palier | Contenu                                                                | Poids principaux                                                                                         |
-| ------ | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| P0     | La loi : contraintes dures.                                            | aucun poids ne la passe                                                                                  |
-| P1     | Place nécessaire vide, moment de l'accueil sous son chiffre.           | `coutPlaceVide`, `coutManqueMinimum`, dérivés des autres poids                                           |
-| P2     | Trou dans la journée de l'accueil ou entre deux équipes.               | `POIDS_TROU_QUART` = 1 500 par quart d'heure                                                             |
-| P3     | Contrats : heures dues, personne en plus, 6e jour, heures au-delà.     | `POIDS_SOUS_CONTRAT` 400 / min, `coutSurplus`, `POIDS_SIXIEME_JOUR` 15 000, `POIDS_SUR_CONTRAT` 50 / min |
-| P4     | Le métier : titulaire avant dépannage, horaire demandé avant un autre. | `POIDS_REMPLACANT` 2 000, `coutDepannage`                                                                |
-| P3 bis | Les règles morales (partie 4).                                         | voir le tableau ci-dessous, chacune au-dessus de la part fixe du dépannage                               |
-| P5     | Le confort.                                                            | `POIDS_JOUR_FIXE` 2 000, `POIDS_MEMES_REPOS` 500, `POIDS_EQUITE` 100                                     |
+| Palier | Contenu                                                                             | Poids principaux                                                                                         |
+| ------ | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| P0     | La loi : contraintes dures.                                                         | aucun poids ne la passe                                                                                  |
+| P1     | Place nécessaire vide, moment de l'accueil sous son chiffre.                        | `coutPlaceVide`, `coutManqueMinimum`, dérivés des autres poids                                           |
+| P2     | Trou dans la journée de l'accueil ou entre deux équipes (P1 depuis D8, 2026-11-05). | `POIDS_TROU_QUART` = 1 500 par quart d'heure, + le prix d'une place (`continuiteObligatoire`)            |
+| P3     | Contrats : heures dues, personne en plus, 6e jour, heures au-delà.                  | `POIDS_SOUS_CONTRAT` 400 / min, `coutSurplus`, `POIDS_SIXIEME_JOUR` 15 000, `POIDS_SUR_CONTRAT` 50 / min |
+| P4     | Le métier : titulaire avant dépannage, horaire demandé avant un autre.              | `POIDS_REMPLACANT` 2 000, `coutDepannage`                                                                |
+| P3 bis | Les règles morales (partie 4).                                                      | voir le tableau ci-dessous, chacune au-dessus de la part fixe du dépannage                               |
+| P5     | Le confort.                                                                         | `POIDS_JOUR_FIXE` 2 000, `POIDS_MEMES_REPOS` 500, `POIDS_EQUITE` 100                                     |
 
 Les règles morales, entre les heures dues et le confort (2026-11-02) :
 

@@ -738,6 +738,10 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
     // responsable) : pour un contrat de 35 h et plus (`rythmeHumain`), plus
     // de 5 jours d'affilée et le jour isolé deviennent des contraintes dures ;
     // les autres contrats gardent le modèle d'avant.
+    // Inchangée par les règles de l'établissement (2026-11-05) : les défauts
+    // reproduisent l'hôtel ; la continuité obligatoire (D8) ne touche que les
+    // variables de trou et de passation, et ces créneaux n'ont ni moment de
+    // l'accueil ni nuit (aucun trou, aucune passation).
     expect(empreinte(textes.join('\n=====\n'))).toBe('8874c146')
   })
 })

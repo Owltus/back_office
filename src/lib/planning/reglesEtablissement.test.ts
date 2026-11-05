@@ -69,7 +69,8 @@ describe('REGLES_PAR_DEFAUT : l’hôtel d’aujourd’hui, chiffre pour chiffre
     expect(r.repos.jourIsole).toBe('interdit')
     expect(r.passations.releveMinutes).toBe(30)
     expect(r.passations.passationVeilleur).toBe(true)
-    expect(r.passations.continuiteObligatoire).toBe(false)
+    // D8 (2026-11-05) : la continuité entre équipes est obligatoire.
+    expect(r.passations.continuiteObligatoire).toBe(true)
     expect(r.accueil.personnesNuit).toBe(1)
     expect(r.contrats.journees).toEqual([
       { minutesHebdo: 35 * H, durees: [7 * H], courtesMax: 0 },
@@ -138,7 +139,8 @@ describe('lireRegles', () => {
       moment_arriere_jours: 2,
       nuits_affilees_max: 5,
       repos_apres_nuits: 2,
-      continuite_obligatoire: false,
+      // Défaut passé à vrai par la migration 20261105110000 (D8).
+      continuite_obligatoire: true,
       passation_veilleur: true,
       equipe_tolerance: 30,
       duree_ouverture: 60,
