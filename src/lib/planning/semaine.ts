@@ -908,6 +908,21 @@ function muralDe(jour: number, debut: string, fin: string, pause: number) {
   return f - d - pause
 }
 
+/** Importance du poste (D11) et niveau demandé par le besoin (2026-11-05) :
+ * ce que le créneau porte pour le calcul et le vérificateur. Poste inconnu
+ * ou champ absent : important, obligatoire, dépannage accepté. */
+function niveauxDe(
+  ctx: Pick<Contexte, 'postes'>,
+  posteId: number,
+  b?: Pick<Besoin, 'obligatoire' | 'niveau_min'>,
+): Pick<Creneau, 'importance' | 'souhaite' | 'titulaireSeul'> {
+  return {
+    importance: ctx.postes.get(posteId)?.importance ?? 'important',
+    souhaite: b?.obligatoire === false,
+    titulaireSeul: b?.niveau_min === 'titulaire',
+  }
+}
+
 function presenceMaxDe(ctx: Contexte, posteId: number): number | null {
   const p = ctx.postes.get(posteId)
   return p ? presenceMaxPoste(p.categorie) : null
@@ -937,6 +952,7 @@ export function creneauBesoin(
     nuit: toucheLaNuit(b.jour, b.debut, b.fin),
     presence: presenceDe(ctx, b),
     ...equiteDe(ctx, b),
+    ...niveauxDe(ctx, b.poste_id, b),
   })
 }
 
@@ -959,6 +975,7 @@ export function creneauAffectation(ctx: Contexte, a: Affectation): Creneau {
     nuit: toucheLaNuit(a.jour, a.debut, a.fin),
     presence: presenceDe(ctx, a),
     ...equiteDe(ctx, a),
+    ...niveauxDe(ctx, a.poste_id),
   })
 }
 
@@ -1054,6 +1071,7 @@ export function creneauRemplacant(
     presence: presenceDe(ctx, x),
     place: `b${b.id}`,
     ...equiteDe(ctx, x),
+    ...niveauxDe(ctx, b.poste_id, b),
   })
 }
 
@@ -1101,6 +1119,7 @@ export function creneauCandidat(
     presence: presenceDe(ctx, x),
     accueil: true,
     ...equiteDe(ctx, x),
+    ...niveauxDe(ctx, poste.id),
   })
 }
 
@@ -1169,6 +1188,32 @@ export function ouverturesAccueil(ctx: Contexte): Probleme['ouvertures'] {
       if (!matin) continue
       const [debut, f] = bornes(ctx.lundi, jour, poste.ouverture, fin)
       r.push({ poste: String(poste.id), jour, debut, fin: f })
+    }
+  }
+  return r
+}
+
+/** La fermeture de chaque poste de l'accueil qui a une heure de fermeture
+ * (2026-11-05, symétrique de l'ouverture) : chaque jour où le soir est
+ * demandé, la dernière heure avant la fermeture, tenue sur CE poste, en
+ * minutes réelles. Une fermeture après minuit appartient au soir de la
+ * veille (« 00:30 » : de 23:30 à 00:30). Rien si le tableau n'est pas en
+ * service. */
+export function fermeturesAccueil(ctx: Contexte): Probleme['fermetures'] {
+  if (!accueilEnService(ctx)) return []
+  const r: NonNullable<Probleme['fermetures']> = []
+  const duree = ctx.regles.passations.dureeOuverture
+  for (const poste of [...ctx.postes.values()].sort((a, b) => a.id - b.id)) {
+    if (!poste.fermeture || poste.ferme || !poste.presence) continue
+    const m = (minutes(poste.fermeture) - duree + 1440) % 1440
+    const debut = `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
+    for (let jour = 0; jour < 7; jour++) {
+      const soir = ctx.consignes.some(
+        (k) => k.jour === jour && k.periode === 'soir' && chiffreAccueil(k) > 0,
+      )
+      if (!soir) continue
+      const [d, f] = bornes(ctx.lundi, jour, debut, poste.fermeture)
+      r.push({ poste: String(poste.id), jour, debut: d, fin: f })
     }
   }
   return r
@@ -1368,7 +1413,10 @@ export interface Correspondances {
  *
  * Dans chaque passe, épinglés d'abord ; un profil soutien ne prend qu'une
  * place de soutien. L'horaire exact passe toujours avant un voisin : la
- * seconde passe ne voit que ce que la première a laissé. */
+ * seconde passe ne voit que ce que la première a laissé. Un besoin
+ * « titulaire seulement » (2026-11-05) ne prend jamais un dépannage (comme
+ * le calcul, `compatible`) ; une place obligatoire passe avant une
+ * souhaitée. */
 export function correspondances(
   ctx: Contexte,
   besoins: Besoin[],
@@ -1408,6 +1456,29 @@ export function correspondances(
     const sol = salaries.get(a.salarie_id)
     return sol !== undefined && role(sol, String(a.poste_id)) === 'soutien'
   }
+  const parId = new Map(besoins.map((b) => [b.id, b]))
+  const enDepannage = (a: Affectation) => {
+    const sol = salaries.get(a.salarie_id)
+    return sol !== undefined && role(sol, String(a.poste_id)) === 'occasionnel'
+  }
+  /** Le besoin `id` accepte-t-il ce shift (niveau demandé) ? */
+  const accepte = (a: Affectation, id: number) =>
+    !(parId.get(id)?.niveau_min === 'titulaire' && enDepannage(a))
+  /** Prend dans `pool` la dernière place qui accepte le shift, une
+   * obligatoire avant une souhaitée ; undefined s'il n'y en a pas. */
+  const prendre = (pool: number[] | undefined, a: Affectation) => {
+    if (!pool?.length) return undefined
+    let i = -1
+    for (let j = pool.length - 1; j >= 0; j--) {
+      if (!accepte(a, pool[j])) continue
+      if (parId.get(pool[j])?.obligatoire !== false) {
+        i = j
+        break
+      }
+      if (i < 0) i = j
+    }
+    return i < 0 ? undefined : pool.splice(i, 1)[0]
+  }
 
   // 1. Code exact.
   for (const a of ordre) {
@@ -1416,8 +1487,8 @@ export function correspondances(
       const r = renforts.get(k)
       if (r?.length) soutien.set(a.id, r.pop() as number)
     } else {
-      const p = places.get(k)
-      if (p?.length) lien.set(a.id, p.pop() as number)
+      const id = prendre(places.get(k), a)
+      if (id !== undefined) lien.set(a.id, id)
     }
   }
 
@@ -1449,6 +1520,7 @@ export function correspondances(
       if (b.poste_id !== a.poste_id || b.jour !== a.jour) continue
       if (b.horaire_id === null || !voisins.get(b.id)?.has(h.id)) continue
       if (!reserve.get(cleDe(b))?.includes(b.id)) continue
+      if (!soutienIci && !accepte(a, b.id)) continue
       const e = Math.abs(minutes(b.debut) - minutes(a.debut))
       if (e < ecart || (e === ecart && choisi && b.id < choisi.id)) {
         choisi = b
@@ -2465,7 +2537,12 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
   // Places vides : raisons sur l'horaire imposé ET sur chaque version étoile
   // et chaque remplaçant. Ces créneaux ne servent qu'ici : ils restent hors
   // de `p`, donc hors des alertes de la semaine.
-  const vides = besoins.filter((b) => b.effectif - (pourvus.get(b.id) ?? 0) > 0)
+  // Un besoin souhaité (2026-11-05) n'est jamais une place à pourvoir : comme
+  // un renfort, il est rempli si possible et ne se compte pas.
+  const necessaires = besoins.filter((b) => b.obligatoire !== false)
+  const vides = necessaires.filter(
+    (b) => b.effectif - (pourvus.get(b.id) ?? 0) > 0,
+  )
   const voisins = new Map(
     vides.map((b) => [
       b.id,
@@ -2737,6 +2814,7 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
     creneaux: [...p.creneaux, ...candidatsDuMoment],
     consignes: chiffresAccueil(ctx),
     ouvertures: ouverturesAccueil(ctx),
+    fermetures: fermeturesAccueil(ctx),
     releveMinutes: accueil ? ctx.regles.passations.releveMinutes : 0,
   }
   const ouverturesVides: TrouOut[] = ouverturesManquees(pReglages, affs).map(
@@ -2789,22 +2867,22 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
     transmissions: passations,
     stats: {
       places:
-        besoins.reduce((t, b) => t + b.effectif, 0) +
+        necessaires.reduce((t, b) => t + b.effectif, 0) +
         [0, 1, 2, 3, 4, 5, 6].reduce((t, j) => t + placesAccueil(j), 0),
       pourvues:
-        besoins.reduce(
+        necessaires.reduce(
           (t, b) => t + Math.min(pourvus.get(b.id) ?? 0, b.effectif),
           0,
         ) + [0, 1, 2, 3, 4, 5, 6].reduce((t, j) => t + pourvuesAccueil(j), 0),
       places_jour: [0, 1, 2, 3, 4, 5, 6].map(
         (j) =>
-          besoins
+          necessaires
             .filter((b) => b.jour === j)
             .reduce((t, b) => t + b.effectif, 0) + placesAccueil(j),
       ),
       pourvues_jour: [0, 1, 2, 3, 4, 5, 6].map(
         (j) =>
-          besoins
+          necessaires
             .filter((b) => b.jour === j)
             .reduce(
               (t, b) => t + Math.min(pourvus.get(b.id) ?? 0, b.effectif),
@@ -3223,6 +3301,7 @@ export function preparerGeneration(
     aEviter,
     consignes: chiffresAccueil(ctx),
     ouvertures: ouverturesAccueil(ctx),
+    fermetures: fermeturesAccueil(ctx),
     ...(horizon
       ? { suivante: esquisseSuivante(d2, ctx, salaries, besoins) }
       : {}),

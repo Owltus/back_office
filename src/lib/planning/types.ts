@@ -76,7 +76,7 @@ export interface Poste {
    * « si possible » reste vide en premier. Absent : important. */
   importance?: Importance
   /** Heure de fermeture (HH:MM) : ce poste est tenu jusqu'à cette heure
-   * chaque soir (2026-11-05, pas encore lue par le calcul). Null : aucune. */
+   * chaque soir (2026-11-05, `fermeturesAccueil`). Null : aucune. */
   fermeture?: string | null
 }
 
@@ -223,10 +223,12 @@ export interface Besoin {
   effectif: number // personnes autonomes requises
   soutien: number // places de renfort pour les profils « soutien »
   renfort: number // places en plus, facultatives
-  /** Besoin obligatoire (vrai) ou souhaité (2026-11-05, pas encore lu par
-   * le calcul). Absent : obligatoire. */
+  /** Besoin obligatoire (vrai) ou souhaité (2026-11-05) : un souhaité est
+   * tenu si possible, vide en premier, jamais une place à pourvoir.
+   * Absent : obligatoire. */
   obligatoire?: boolean
-  /** Niveau demandé (2026-11-05, pas encore lu). Absent : dépannage. */
+  /** Niveau demandé (2026-11-05) : « titulaire » = jamais tenu en
+   * dépannage. Absent : dépannage accepté. */
   niveau_min?: NiveauDemande
 }
 

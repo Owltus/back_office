@@ -5,7 +5,11 @@
  */
 
 import { MINUTES_PAR_JOUR, NUIT_DEBUT, NUIT_FIN } from '#/lib/planning/temps.ts'
-import type { Periode, PeriodePresence } from '#/lib/planning/types.ts'
+import type {
+  Importance,
+  Periode,
+  PeriodePresence,
+} from '#/lib/planning/types.ts'
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 
 /** Un poste à tenir sur une plage horaire, avec le nombre de personnes. */
@@ -67,6 +71,21 @@ export interface Creneau {
    * 23:00 à 07:00 reste une journée de 8 h la nuit d'un changement d'heure,
    * où ses minutes réelles font 7 h ou 9 h. Null : les minutes réelles. */
   travailMural: number | null
+  /** Importance du poste quand il manque du monde (D11, 2026-11-05) :
+   * l'ordre de ce qui reste vide en premier (`paliersPlaces`, générateur). */
+  importance: Importance
+  /** Besoin souhaité (`obligatoire = false`, 2026-11-05) : rempli si
+   * possible, vide avant toute place obligatoire, jamais une place à
+   * pourvoir ni une plage de continuité. Faux partout ailleurs. */
+  souhaite: boolean
+  /** Niveau demandé « titulaire seulement » (2026-11-05) : jamais tenu en
+   * dépannage ; un soutien reste possible sur ses places de soutien. */
+  titulaireSeul: boolean
+}
+
+/** Rang d'une importance : plus il est haut, plus la place reste vide tard. */
+export function rangImportance(i: Importance): number {
+  return i === 'indispensable' ? 3 : i === 'si_possible' ? 1 : 2
 }
 
 export function creneau(
@@ -90,6 +109,9 @@ export function creneau(
     matinTot: false,
     moment: null,
     travailMural: null,
+    importance: 'important',
+    souhaite: false,
+    titulaireSeul: false,
     ...c,
   }
 }
@@ -372,6 +394,15 @@ export interface Probleme {
   /** Ouverture (2026-11-01) : la première heure d'un poste de l'accueil qui
    * a une heure d'ouverture, jour par jour (minutes réelles). */
   ouvertures?: Array<{
+    poste: string
+    jour: number
+    debut: number
+    fin: number
+  }>
+  /** Fermeture (2026-11-05, symétrique de l'ouverture) : la dernière heure
+   * d'un poste de l'accueil qui a une heure de fermeture, jour par jour
+   * (minutes réelles). Absent ou vide : aucune. */
+  fermetures?: Array<{
     poste: string
     jour: number
     debut: number

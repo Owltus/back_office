@@ -78,6 +78,8 @@ export const REGLES_BLOCAGE = [
   'HEURES-PLUS',
   'RETOUR-CONGE',
   'ECOLE-ABORDS',
+  // Niveau demandé par le besoin (2026-11-05) : titulaire seulement.
+  'TITULAIRE-DEMANDE',
   'EXTRA',
 ] as const
 
@@ -270,6 +272,12 @@ export function raisonClaire(
       )
     case 'EXTRA':
       return r('Extra libre', mention('à appeler'))
+    // Niveau demandé (2026-11-05) : la place demande un titulaire.
+    case 'TITULAIRE-DEMANDE':
+      return r(
+        'En dépannage : la place demande un titulaire',
+        fiche(salarieId, 'Postes de la fiche', 'postes'),
+      )
     // Deux repos de suite (2026-11-04) : le calcul ne les sacrifie plus,
     // la place reste vide plutôt.
     case 'REPOS-SEPARES':
@@ -393,6 +401,8 @@ const PHRASES_COMMUNES: Record<(typeof REGLES_BLOCAGE)[number], string> = {
   'HEURES-PLUS': 'Tout le monde a déjà beaucoup d’heures en plus.',
   'RETOUR-CONGE': 'Tout le monde rentre de congé.',
   'ECOLE-ABORDS': 'Tout le monde est trop près d’un jour d’école.',
+  'TITULAIRE-DEMANDE':
+    'Seuls des dépannages sont libres, et la place demande un titulaire.',
   EXTRA: 'Seuls des extras sont libres.',
 }
 

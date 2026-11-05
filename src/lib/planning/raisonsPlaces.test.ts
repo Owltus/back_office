@@ -110,6 +110,9 @@ const MESSAGES: Record<(typeof REGLES_BLOCAGE)[number], string[]> = {
   ],
   'RETOUR-CONGE': ['reprend un week-end après son congé'],
   'ECOLE-ABORDS': ["finit après 21 h la veille d'un jour d'école"],
+  'TITULAIRE-DEMANDE': [
+    'en dépannage sur ce poste : la place demande un titulaire',
+  ],
   EXTRA: ['extra disponible : à appeler et poser à la main'],
 }
 

@@ -952,7 +952,75 @@ export function verifierReglages(
     )
   }
 
+  // ------------------------------- ouverture, fermeture, niveau demandé
+  // (étape 7 du plan planning-moteur-configurable, 2026-11-05) : une règle
+  // que les réglages rendent impossible est dite ici, jamais devinée ; le
+  // calcul ne la rend jamais dure (D3), la case reste vide.
+  const duree = regles.passations.dureeOuverture
+  for (const p of r.postes) {
+    if (!accueil || !p.presence || p.ferme) continue
+    const permis = codesDuPoste(p, r.horaires)
+    const bornesH = (h: Horaire) => {
+      const d = minutesDe(h.debut)
+      const f = minutesDe(h.fin)
+      return [d, f <= d ? f + 1440 : f] as const
+    }
+    if (p.ouverture) {
+      const o = minutesDe(p.ouverture)
+      const tient = permis.some((h) => {
+        const [d, f] = bornesH(h)
+        return d <= o && f >= o + duree
+      })
+      if (!tient)
+        ajouter(
+          `ouverture-impossible:${p.id}`,
+          'a-voir',
+          'postes',
+          `${p.nom} ouvre à ${p.ouverture}, mais aucun de ses horaires ne commence à cette heure.`,
+          `poste-${p.id}`,
+        )
+    }
+    if (p.fermeture) {
+      // Une fermeture après minuit appartient au soir de la veille.
+      const brut = minutesDe(p.fermeture)
+      const tient = permis.some((h) => {
+        const [d, f] = bornesH(h)
+        return [brut, brut + 1440].some((x) => d <= x - duree && f >= x)
+      })
+      if (!tient)
+        ajouter(
+          `fermeture-impossible:${p.id}`,
+          'a-voir',
+          'postes',
+          `${p.nom} ferme à ${p.fermeture}, mais aucun de ses horaires ne va jusqu'à cette heure.`,
+          `poste-${p.id}`,
+        )
+    }
+  }
+  const titulaireDemande = new Set(
+    valides
+      .filter((b) => b.effectif > 0 && b.niveau_min === 'titulaire')
+      .map((b) => b.poste_id),
+  )
+  for (const id of [...titulaireDemande].sort((a, b) => a - b)) {
+    const p = postes.get(id)
+    if (!p || tenants(id, (n) => n === 'titulaire').length) continue
+    ajouter(
+      `titulaire-demande:${id}`,
+      'a-voir',
+      'besoins',
+      `${p.nom} : des besoins demandent un titulaire, mais personne n'est titulaire de ce poste.`,
+      `poste-${id}`,
+    )
+  }
+
   return ordonnerPoints(points)
+}
+
+/** « 07:30 » → minutes depuis minuit. */
+function minutesDe(hhmm: string): number {
+  const [h, m] = hhmm.split(':').map(Number)
+  return h * 60 + (m || 0)
 }
 
 const rangEcran = (e: EcranReglage) => ORDRE_ECRANS.indexOf(e)

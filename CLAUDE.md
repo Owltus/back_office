@@ -2696,6 +2696,18 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   veilleurs (un plafond à part le contredirait). D8 : continuité entre équipes OBLIGATOIRE par
   défaut (migration `20261105110000`, `--avec-donnees`) : trou entre deux équipes et passation
   avec le veilleur au prix d'une place nécessaire (P1), jamais dur ; mesuré dans le PRD.
+- **IMPORTANCE DES POSTES ET BESOINS RÉGLÉS (2026-11-05, étape 7 du même plan, D4 et D11)** :
+  `planning_postes.importance` (Indispensable / Important / Si possible), `fermeture` (accueil,
+  symétrique de l'ouverture : `fermeturesAccueil`, `Probleme.fermetures`, même oracle
+  `ouverturesManquees`), `planning_besoins.obligatoire` (souhaité = tenu si possible, jamais une
+  place à pourvoir ni une plage de poste) et `niveau_min` (« titulaire » : jamais un dépannage,
+  `compatible`, `correspondances`, raison TITULAIRE-DEMANDE). Créneau : `importance`, `souhaite`,
+  `titulaireSeul`. Le calcul range les places en PALIERS (`paliersPlaces`, en tête de
+  generateur.ts) : prix dérivé inchangé + un pas par palier présent ; un seul palier = modèle
+  d'avant au caractère près (empreinte inchangée). Une passation n'est décalée que si ses nuits
+  sont au palier le plus haut (sinon une nuit dépasserait son palier). « À vérifier » : ouverture
+  ou fermeture qu'aucun horaire ne tient, titulaire demandé sans titulaire. Banc décembre : mêmes
+  résultats avant / après (PRD).
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

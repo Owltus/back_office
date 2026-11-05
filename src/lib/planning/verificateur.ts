@@ -1083,7 +1083,8 @@ export function trous(
     { poste: string; jour: number; liste: Creneau[] }
   >()
   for (const c of p.creneaux) {
-    if (c.ferme || c.place !== null || c.effectif <= 0) continue
+    // Un besoin souhaité (2026-11-05) ne fait pas la plage du poste.
+    if (c.ferme || c.place !== null || c.effectif <= 0 || c.souhaite) continue
     if (!postes.has(c.poste)) continue
     const k = `${c.poste}|${jourDe(c)}`
     const g = besoins.get(k) ?? { poste: c.poste, jour: jourDe(c), liste: [] }
@@ -1329,6 +1330,20 @@ export function raisonsBlocage(
       .map((a) => creneaux.get(a.creneauId))
       .filter((c): c is Creneau => c !== undefined)
     if (siens.includes(cible)) continue
+    // Niveau demandé « titulaire seulement » (2026-11-05) : un dépannage ne
+    // tient jamais la place, comme dans le calcul (`compatible`).
+    if (r === 'occasionnel' && cible.titulaireSeul) {
+      raisons.set(s.id, [
+        {
+          salarieId: s.id,
+          regle: 'TITULAIRE-DEMANDE',
+          message: 'en dépannage sur ce poste : la place demande un titulaire',
+          creneaux: [cible.id],
+          nature: 'organisation',
+        },
+      ])
+      continue
+    }
     const avant = new Set(
       violationsSalarie(s, siens, p.nbJours, true, p.regles).map((v) =>
         cleViolation(v),
@@ -1360,14 +1375,16 @@ export function raisonsBlocage(
 
 // ------------------------------------------- ouverture et relève (2026-11-01)
 
-/** Ouvertures sans personne : pour chaque `p.ouvertures` (la première heure
- * d'un poste de l'accueil), les morceaux où personne d'autonome n'est sur CE
- * poste. Recompté ici, sans rien du générateur. */
+/** Ouvertures et fermetures sans personne : pour chaque `p.ouvertures` (la
+ * première heure d'un poste de l'accueil) et chaque `p.fermetures` (sa
+ * dernière heure, 2026-11-05), les morceaux où personne d'autonome n'est sur
+ * CE poste. Recompté ici, sans rien du générateur. */
 export function ouverturesManquees(
   p: Probleme,
   affectations: AffectationSolveur[],
 ): Trou[] {
-  if (!p.ouvertures?.length) return []
+  const bornes = [...(p.ouvertures ?? []), ...(p.fermetures ?? [])]
+  if (!bornes.length) return []
   const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
   const salaries = new Map(p.salaries.map((s) => [s.id, s]))
   const parPoste = new Map<string, PresencePoste[]>()
@@ -1385,7 +1402,7 @@ export function ouverturesManquees(
     ])
   }
   const r: Trou[] = []
-  for (const o of p.ouvertures)
+  for (const o of bornes)
     for (const t of trousDuJour(
       [{ debut: o.debut, fin: o.fin }],
       parPoste.get(o.poste) ?? [],

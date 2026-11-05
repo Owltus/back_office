@@ -39,6 +39,7 @@ import {
   duree,
   jourDe,
   presenceMax,
+  rangImportance,
   role,
   toucheLaNuit,
   journeeDe,
@@ -120,6 +121,9 @@ import type {
  *       remplaçants (`coutPlaceVideGroupe`). Au même niveau, une personne
  *       de moins que le chiffre d'un moment de l'accueil, matin, soir ou
  *       nuit (`coutManqueMinimum`, même dérivation, extra compris, D7).
+ *       Entre places, l'IMPORTANCE du poste et le besoin souhaité décident
+ *       (`paliersPlaces`, D11 du 2026-11-05) : souhaité < Si possible <
+ *       Important < Indispensable.
  *   P2  un trou (entre deux équipes d'un poste à part compté, ou sur
  *       l'accueil entier, D15) : `POIDS_TROU_QUART` par quart d'heure (D10).
  *   P3  les contrats : heures dues (`POIDS_SOUS_CONTRAT`) > une personne en
@@ -860,6 +864,107 @@ export function coutManqueMinimum(
     : 0
 }
 
+/*
+ * IMPORTANCE DES POSTES (D11 du 2026-11-05 : « quand il manque du monde,
+ * Si possible reste vide en premier ») et BESOINS SOUHAITÉS (D4). Chaque
+ * place nécessaire (P1 : une place, un manque de l'accueil, un trou entre
+ * deux équipes, une passation avec le veilleur) appartient à un PALIER :
+ *   0  un besoin souhaité (`obligatoire = false`), quel que soit son poste ;
+ *   1  une place d'un poste « Si possible » ;
+ *   2  « Important » (le défaut d'un poste) ;
+ *   3  « Indispensable ».
+ * Le palier d'un manque ou d'un trou est le plus haut des postes qui le
+ * tiendraient ; celui d'une passation, le plus bas de ses nuits. Son prix
+ * reste le prix DÉRIVÉ d'aujourd'hui (`coutPlaceVide` : une place n'est
+ * vide que si personne ne peut la tenir), plus un DÉCALAGE par palier :
+ * le i-ème palier présent dans la semaine reçoit i × `pas`, où `pas`
+ * dépasse le prix le plus cher d'une place d'un palier plus bas, surplus
+ * de nuit compris. Donc, à une personne près, une place d'un palier plus
+ * bas reste vide avant toute place d'un palier plus haut, et à palier égal
+ * rien ne change. Une semaine où un seul palier est présent (le cas de
+ * tous les postes « Important », ou d'un hôtel qui n'a rien réglé) a un
+ * décalage nul : le modèle est celui d'avant, au caractère près.
+ * Les passations : un veilleur ajouté peut en casser deux, donc les places
+ * de nuit paient deux passations (D8, `extraNuit`). Le décalage d'une
+ * passation la rendrait plus chère qu'un palier ; elle ne le reçoit que si
+ * ses nuits sont au palier le plus haut présent (rien au-dessus à
+ * dépasser), sinon elle garde le prix d'une place de son palier sans
+ * décalage.
+ */
+
+/** Palier d'un besoin souhaité, et du défaut « Important ». */
+export const RANG_SOUHAITE = 0
+export const RANG_IMPORTANT = rangImportance('important')
+
+/** Palier d'une place (le besoin qui la fixe). */
+export const rangPlace = (c: Creneau) =>
+  c.souhaite ? RANG_SOUHAITE : rangImportance(c.importance)
+
+/** Palier d'un manque ou d'un trou : le plus haut des postes de ses
+ * créneaux (Important sans créneau). */
+export const rangDe = (cs: readonly Creneau[]) =>
+  cs.length
+    ? Math.max(...cs.map((c) => rangImportance(c.importance)))
+    : RANG_IMPORTANT
+
+/** Une passation avec le veilleur, pour les paliers : sa clé, son prix
+ * dérivé (au-delà de `POIDS_PASSATION`) et son palier. */
+export interface ZonePrix {
+  cle: string
+  plus: number
+  rang: number
+}
+
+export interface Paliers {
+  /** Les paliers présents, du plus bas au plus haut. */
+  presents: number[]
+  /** Le pas entre deux paliers (0 : un seul palier). */
+  pas: number
+  /** Décalage du prix d'une place de ce palier. */
+  decalage: (rang: number) => number
+  /** Décalage d'une passation de ce palier (0 hors du palier le plus haut). */
+  passation: (rang: number) => number
+  /** Ce qu'une passation peut coûter de plus qu'un `POIDS_PASSATION`, pour
+   * un veilleur d'un manque ou d'un trou de ce palier. */
+  extraNuit: (rang: number) => number
+}
+
+/** Les paliers d'une semaine (voir plus haut). `prix(c)` : le prix dérivé
+ * d'une place vide sur `c` (`coutPlaceVide`), lu seulement s'il y a plus
+ * d'un palier. */
+export function paliersPlaces(
+  creneaux: readonly Creneau[],
+  zones: readonly ZonePrix[],
+  prix: (c: Creneau) => number,
+): Paliers {
+  const ouverts = creneaux.filter((c) => !c.ferme)
+  const presents = [
+    ...new Set([
+      ...ouverts.map(rangPlace),
+      ...ouverts.map((c) => rangImportance(c.importance)),
+      ...zones.map((z) => z.rang),
+    ]),
+  ].sort((a, b) => a - b)
+  const haut = presents.at(-1) ?? RANG_IMPORTANT
+  const extraBas = Math.max(0, ...zones.map((z) => z.plus))
+  let pas = 0
+  if (presents.length > 1)
+    pas = Math.max(0, ...ouverts.map(prix)) + 2 * extraBas + 1
+  const decalage = (rang: number) => {
+    const i = presents.findIndex((r) => r >= rang)
+    return (i < 0 ? presents.length - 1 : i) * pas
+  }
+  const passation = (rang: number) => (rang >= haut ? decalage(haut) : 0)
+  const extraHaut = Math.max(0, ...zones.map((z) => z.plus + passation(z.rang)))
+  return {
+    presents,
+    pas,
+    decalage,
+    passation,
+    extraNuit: (rang) => (rang >= haut ? extraHaut : extraBas),
+  }
+}
+
 /** Un moment sans personne autonome sur un poste compté dans la présence,
  * entre le début du premier besoin et la fin du dernier du jour. Minutes
  * réelles depuis le lundi (`temps.ts`). */
@@ -925,6 +1030,9 @@ export function compatible(s: SalarieSolveur, c: Creneau): boolean {
     !s.placementManuel &&
     r !== null &&
     (r !== 'soutien' || c.soutien > 0 || c.accueil) &&
+    // Niveau demandé « titulaire seulement » (2026-11-05) : jamais un
+    // dépannage ; un soutien garde ses places de soutien (D9).
+    !(r === 'occasionnel' && c.titulaireSeul) &&
     !s.indisponibilites.has(j) &&
     !s.horsContrat.has(j) &&
     dansLeContrat(s, c) &&
@@ -1189,8 +1297,7 @@ export function construire(
   // (un relais). Un veilleur ajouté peut en manquer deux : ce surplus
   // (`extraNuit`, au-delà de `POIDS_PASSATION` déjà dans `pireMoral`) entre
   // dans le prix des places de nuit (P1). Sans la règle : 0, rien ne change.
-  const coutPassation = new Map<string, number>()
-  let extraNuit = 0
+  const zones: ZonePrix[] = []
   if (R.passations.continuiteObligatoire)
     for (const z of zonesPassation(p)) {
       const relais = new Set<Creneau>()
@@ -1200,16 +1307,42 @@ export function construire(
       const plus = ouverts.length
         ? coutPlaceVideGroupe(ouverts, presenceLaPlusChere, besoinDe, R)
         : 0
-      coutPassation.set(`${z.jour}|${z.cote}`, POIDS_PASSATION + plus)
-      extraNuit = Math.max(extraNuit, plus)
+      // Le palier de la passation : celui de ses nuits (un veilleur ajouté
+      // est ce qui peut la casser), le plus bas.
+      const nuits = z.nuits.length ? z.nuits : [...relais]
+      zones.push({
+        cle: `${z.jour}|${z.cote}`,
+        plus,
+        rang: nuits.length
+          ? Math.min(...nuits.map((c) => rangImportance(c.importance)))
+          : RANG_IMPORTANT,
+      })
     }
-  const coutsMinimum = comptent.map(
-    (cs) =>
-      coutManqueMinimum(cs, presenceLaPlusChere, besoinDe, R) +
-      (extraNuit && cs.some((c) => !c.ferme && c.presence.includes('nuit'))
-        ? 2 * extraNuit
-        : 0),
+  // IMPORTANCE DES POSTES (D11) et besoins souhaités : `paliersPlaces`.
+  const pl = paliersPlaces(p.creneaux, zones, (c) =>
+    coutPlaceVide(
+      c,
+      presenceLaPlusChere,
+      c.place !== null ? besoinDe(c.place) : undefined,
+      R,
+    ),
   )
+  const coutPassation = new Map(
+    zones.map((z) => [z.cle, POIDS_PASSATION + z.plus + pl.passation(z.rang)]),
+  )
+  /** Le surplus de nuit d'un manque ou d'un trou de ce palier (D8). */
+  const nuitDe = (cs: Creneau[], rang: number) =>
+    cs.some((c) => !c.ferme && c.presence.includes('nuit'))
+      ? 2 * pl.extraNuit(rang)
+      : 0
+  const coutsMinimum = comptent.map((cs) => {
+    const rang = rangDe(cs.filter((c) => !c.ferme))
+    return (
+      coutManqueMinimum(cs, presenceLaPlusChere, besoinDe, R) +
+      nuitDe(cs, rang) +
+      pl.decalage(rang)
+    )
+  })
 
   // Couverture, par PLACE : un besoin `b…` et ses remplaçants `r…`
   // (`place` = id du besoin, même cycle, autre horaire permis) forment un
@@ -1255,7 +1388,11 @@ export function construire(
       '<=',
       tete.effectif + tete.facultatif,
     )
-    m.cout(coutPlaceVideGroupe(membres, presenceLaPlusChere, besoinDe, R), vm)
+    m.cout(
+      coutPlaceVideGroupe(membres, presenceLaPlusChere, besoinDe, R) +
+        pl.decalage(rangPlace(tete)),
+      vm,
+    )
     if (soutiens.length) {
       const nbImposes = soutiens.filter(([s, , c]) =>
         imposees.has(cle(s.id, c.id)),
@@ -1412,30 +1549,32 @@ export function construire(
   const continuite = R.passations.continuiteObligatoire
     ? (couvrants: Creneau[]) => {
         const ouverts = couvrants.filter((c) => !c.ferme)
+        const rang = rangDe(couvrants)
         return ouverts.length
           ? coutPlaceVideGroupe(ouverts, presenceLaPlusChere, besoinDe, R) +
-              (ouverts.some((c) => c.presence.includes('nuit'))
-                ? 2 * extraNuit
-                : 0)
+              nuitDe(ouverts, rang) +
+              pl.decalage(rang)
           : 0
       }
     : undefined
   const trous = trousEntreEquipes(m, p, x, termesDe, continuite)
   // Ouverture (2026-11-01) : la première heure de chaque poste de l'accueil
   // qui a une heure d'ouverture, tenue sur CE poste.
-  const ouvertures = (p.ouvertures ?? []).flatMap((o) =>
-    variablesTrous(
-      m,
-      p,
-      x,
-      termesDe,
-      o.poste,
-      o.jour,
-      o.debut,
-      o.fin,
-      p.creneaux.filter((c) => c.poste === o.poste),
-      POIDS_OUVERTURE_QUART,
-    ),
+  // Fermeture (2026-11-05) : la dernière heure, symétrique, même prix.
+  const ouvertures = [...(p.ouvertures ?? []), ...(p.fermetures ?? [])].flatMap(
+    (o) =>
+      variablesTrous(
+        m,
+        p,
+        x,
+        termesDe,
+        o.poste,
+        o.jour,
+        o.debut,
+        o.fin,
+        p.creneaux.filter((c) => c.poste === o.poste),
+        POIDS_OUVERTURE_QUART,
+      ),
   )
   const releves = relevesAccueil(m, p, termesDe)
   const borneDe = (c: Creneau) =>
@@ -3118,7 +3257,8 @@ function trousEntreEquipes(
     const duPoste = p.creneaux.filter((c) => c.poste === poste)
     const parJour = new Map<number, Creneau[]>()
     for (const c of duPoste) {
-      if (c.ferme || c.place !== null || c.effectif <= 0) continue
+      // Un besoin souhaité (2026-11-05) ne fait pas la plage du poste.
+      if (c.ferme || c.place !== null || c.effectif <= 0 || c.souhaite) continue
       parJour.set(jourDe(c), [...(parJour.get(jourDe(c)) ?? []), c])
     }
     for (const jour of [...parJour.keys()].sort((a, b) => a - b)) {

@@ -140,6 +140,28 @@ même personne ne tient pas une place ET la continuité, toutes deux P1). Un app
 stagiaire (D9) compte comme autonome sur un poste où il est titulaire ou en dépannage ; en
 soutien, jamais seul (règle de l'établissement, non réglable).
 
+**IMPORTANCE DES POSTES ET BESOINS RÉGLÉS (D4, D11, décisions utilisateur du 2026-11-05 : « les
+hôteliers sont plus importants sur les postes de Club et Réception ou la nuit » ; « quand il
+manque du monde, Si possible reste vide en premier »)**. Chaque poste a une importance
+(Indispensable, Important, Si possible ; base : l'accueil et la nuit Indispensables, la Direction
+Si possible, le reste Important) ; chaque besoin est obligatoire ou souhaité, et demande un
+titulaire ou accepte un dépannage. Le calcul range les places nécessaires en PALIERS (souhaité,
+puis Si possible, Important, Indispensable, `paliersPlaces`) : le prix dérivé d'une place reste
+le même (elle n'est vide que si personne ne peut la tenir), un décalage par palier fait qu'à une
+personne près, une place d'un palier plus bas reste vide avant toute place d'un palier plus haut ;
+un trou entre deux équipes suit le palier de ses postes, une passation avec le veilleur celui de
+ses nuits. Un besoin souhaité est tenu si quelqu'un est libre, ne fait pas la plage du poste et
+n'est jamais une place à pourvoir. « Titulaire seulement » : un dépannage ne tient jamais la place
+(calcul, rattachement d'un shift posé, raison « la place demande un titulaire »). Un poste de
+l'accueil peut avoir une heure de FERMETURE, symétrique de l'ouverture (la dernière heure tenue sur
+ce poste chaque soir demandé). « À vérifier » dit une ouverture ou une fermeture qu'aucun horaire du
+poste ne tient, et un titulaire demandé là où personne n'est titulaire. Une semaine où tous les
+postes ont la même importance a le modèle d'avant au caractère près (empreinte de
+`generateur.test.ts` inchangée). Mesuré (copie locale, en mémoire, décembre comme « Compléter le
+mois » avec horizon, 3 graines) : places vides de l'accueil 10, 9, 10 avant comme après, aucune
+place vide Important ni Si possible, trous, passations, relèves et heures dues identiques, 0
+infraction, 9 à 15 s pour le mois.
+
 Règle d'or : **quand l'hôtel ne peut pas faire autrement, le calcul peut enfreindre une règle
 morale, mais il le dit dans une alerte.** Il ne peut jamais enfreindre la loi.
 
