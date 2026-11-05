@@ -30,6 +30,7 @@
 
 import { TEMPS_PLEIN } from '#/lib/planning/regles.ts'
 import {
+  journeesDuContrat,
   modeleDe,
   REGLES_PAR_DEFAUT,
 } from '#/lib/planning/reglesEtablissement.ts'
@@ -117,4 +118,31 @@ export function estJourneeEtoile(
   regles: RegleEtablissement = REGLES_PAR_DEFAUT,
 ): boolean {
   return contratEtoile(s, regles) && travail < regles.contrats.journeePleine
+}
+
+/** Les horaires que peut prendre la journée étoile fixée un jour donné
+ * (fiche salarié et « À vérifier », une seule source) : parmi `possibles`
+ * (les horaires permis à la personne ce jour-là), les versions étoile de
+ * l'horaire fixé s'il y en a un ; sinon ceux d'une durée de journée étoile
+ * (de `journeeEtoileMin` à moins de `journeePleine`), et, si le contrat a
+ * des journées imposées, d'une de ces durées (39 h : 7 h pile, celles que
+ * le calcul sait poser, `journeesDuCalcul`). Vide : le planning
+ * automatique ne pourra pas la placer ce jour-là. */
+export function horairesEtoileDuJour<T extends HoraireEtoile>(
+  possibles: readonly T[],
+  fixe: HoraireEtoile | null | undefined,
+  minutesHebdo: number,
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
+): T[] {
+  if (fixe) return possibles.filter((h) => estVersionEtoile(h, fixe, regles))
+  const { journeePleine, journeeEtoileMin } = regles.contrats
+  const imposees = journeesDuContrat(regles, minutesHebdo)?.durees
+  return possibles.filter((h) => {
+    const t = travailHoraire(h)
+    return (
+      t >= journeeEtoileMin &&
+      t < journeePleine &&
+      (!imposees || imposees.includes(t))
+    )
+  })
 }

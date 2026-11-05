@@ -14,11 +14,15 @@ import {
 } from '#/lib/planning/affichage.ts'
 import { contratEtoile } from '#/lib/planning/etoile.ts'
 import type { Fiche } from '#/lib/planning/regles.ts'
-import { REGLES_PAR_DEFAUT } from '#/lib/planning/reglesEtablissement.ts'
+import {
+  aJourneeCourteImposee,
+  REGLES_PAR_DEFAUT,
+} from '#/lib/planning/reglesEtablissement.ts'
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 
 import { estEcole } from '#/lib/planning/semaine.ts'
 import { ajouterJours, ecartJours, lundiDe } from '#/lib/planning/temps.ts'
+import { JOURS } from '#/lib/planning/types.ts'
 import type {
   Absence,
   Competence,
@@ -449,6 +453,56 @@ export function reglerJour(
 export function basculerEtoile(semaine: JourType[], j: number): JourType[] {
   const deja = !!semaine[j]?.etoile
   return semaine.map((e, i) => ({ ...e, etoile: i === j ? !deja : false }))
+}
+
+/** Le jour de la journée étoile fixée (D6 : un seul), ou null : au choix
+ * du planning, qui la place au mieux chaque semaine. */
+export function jourEtoile(semaine: readonly JourType[]): number | null {
+  const j = semaine.findIndex((e) => e.etoile)
+  return j < 0 ? null : j
+}
+
+/** Les jours où la journée étoile peut être fixée : Libre ou Travaille. */
+export function joursEtoilePossibles(semaine: readonly JourType[]): number[] {
+  return semaine.flatMap((e, j) =>
+    e.mode === 'auto' || e.mode === 'travail' ? [j] : [],
+  )
+}
+
+/** Choisir le jour de la journée étoile (null : au choix du planning). Un
+ * seul jour à la fois, jamais un jour de repos (`JourType.etoile`, lu par le
+ * moteur : `Fiche.etoileFixe`). */
+export function choisirJourEtoile(
+  semaine: JourType[],
+  j: number | null,
+): JourType[] {
+  const permis = new Set(joursEtoilePossibles(semaine))
+  return semaine.map((e, i) => ({
+    ...e,
+    etoile: i === j && permis.has(i),
+  }))
+}
+
+/** La ligne « Règles appliquées » du jour étoile (null : pas de journée
+ * étoile pour ce contrat). */
+export function texteJourEtoile(
+  b: Pick<
+    Brouillon,
+    'heures_hebdo' | 'forfait_jours' | 'type_contrat' | 'semaine_type'
+  >,
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
+): string | null {
+  if (!etoilePossible(b, regles)) return null
+  const j = jourEtoile(b.semaine_type)
+  const saute = aJourneeCourteImposee(
+    regles,
+    Math.round(Number(b.heures_hebdo) * 60),
+  )
+    ? " Une semaine avec un congé ou l'école, elle saute : toutes les journées sont pleines."
+    : ''
+  return j === null
+    ? `Journée étoile : placée au mieux par le planning chaque semaine.${saute}`
+    : `Journée étoile : le ${JOURS[j].toLowerCase()}, horaire choisi par le planning.${saute}`
 }
 
 /** La fiche pour l'aperçu des règles (prototype `/regles/apercu`). */

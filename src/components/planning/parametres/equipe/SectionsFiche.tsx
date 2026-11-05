@@ -9,8 +9,11 @@ import { useMemo, useState } from 'react'
 import { Plus, Star, Trash2, X } from 'lucide-react'
 
 import {
-  basculerEtoile,
+  choisirJourEtoile,
   etoilePossible,
+  jourEtoile,
+  joursEtoilePossibles,
+  texteJourEtoile,
   ficheApercu,
   niveauParDefaut,
   nouvelleCle,
@@ -48,6 +51,8 @@ import { resume } from '#/lib/planning/regles.ts'
 import type { LigneRegle } from '#/lib/planning/regles.ts'
 import { estEcole } from '#/lib/planning/semaine.ts'
 import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
+import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
+import { horairesEtoileDuJour } from '#/lib/planning/etoile.ts'
 import { JOURS } from '#/lib/planning/types.ts'
 import type {
   Horaire,
@@ -330,7 +335,8 @@ export function SectionSemaineType({
   disabled,
 }: PropsSection) {
   const { horaires, motifs, postes } = referentiel
-  const etoile = etoilePossible(b, lireRegles(referentiel))
+  const regles = lireRegles(referentiel)
+  const etoile = etoilePossible(b, regles)
 
   // Seulement ce que la règle unique permet ce jour-là sur ses postes.
   const possibles = (jour: number) =>
@@ -339,9 +345,7 @@ export function SectionSemaineType({
     <Section
       titre="Semaine type"
       aide={`Libre : le planning automatique décide si elle travaille ; avec un horaire choisi, ce sera celui-là les jours où elle travaille (de nuit le week-end, par exemple). Travaille : son jour habituel, le planning la fait travailler ce jour-là dès qu'il le peut. Repos : jamais planifiée ce jour-là. Une absence se pose à sa date, plus bas. École : jour hors de l'hôtel, compté comme une journée de travail complète.${
-        etoile
-          ? ' ★ : journée étoile fixée, un horaire de 7 h ce jour-là ; sans étoile, le planning automatique la place selon les besoins.'
-          : ''
+        etoile ? ' ★ : jour de la journée étoile, choisi plus bas.' : ''
       }`}
     >
       <ul className="flex flex-col gap-1.5">
@@ -359,7 +363,15 @@ export function SectionSemaineType({
               key={nom}
               className="flex flex-wrap items-center justify-between gap-2"
             >
-              <span className="w-20 text-sm">{nom}</span>
+              <span className="flex w-20 items-center gap-1 text-sm">
+                {nom}
+                {etoile && e.etoile && (
+                  <Star
+                    aria-label="Journée étoile"
+                    className="size-3.5 fill-amber-400 text-amber-400"
+                  />
+                )}
+              </span>
               <span className="flex flex-wrap items-center justify-end gap-1.5">
                 {travaille && (
                   <Liste
@@ -419,42 +431,105 @@ export function SectionSemaineType({
                     }))
                   }
                 />
-                {etoile && travaille && (
-                  <Tip
-                    label={
-                      e.etoile
-                        ? `Journée étoile fixée le ${jour} : cliquez pour la laisser variable`
-                        : `Fixer la journée étoile (un horaire de 7 h) le ${jour}`
-                    }
-                  >
-                    <Button
-                      type="button"
-                      variant={e.etoile ? 'secondary' : 'ghost'}
-                      size="icon-sm"
-                      disabled={disabled}
-                      aria-pressed={!!e.etoile}
-                      aria-label={`Journée étoile le ${jour}`}
-                      onClick={() =>
-                        maj((x) => ({
-                          ...x,
-                          semaine_type: basculerEtoile(x.semaine_type, j),
-                        }))
-                      }
-                    >
-                      <Star
-                        className={cn(
-                          e.etoile && 'fill-amber-400 text-amber-400',
-                        )}
-                      />
-                    </Button>
-                  </Tip>
-                )}
               </span>
             </li>
           )
         })}
       </ul>
+      {etoile && (
+        <ChoixJourEtoile
+          b={b}
+          maj={maj}
+          disabled={disabled}
+          regles={regles}
+          possibles={possibles}
+          horaires={horaires}
+        />
+      )}
     </Section>
+  )
+}
+
+/** Le jour de la journée étoile (D6 : « si choisie c'est comme cela, sinon
+ * c'est appliqué de la meilleure façon ») : au choix du planning, ou un jour
+ * imposé chaque semaine, l'horaire plus court choisi par le planning. Les
+ * horaires possibles ce jour-là sont montrés ; aucun : la fiche le dit, comme
+ * « À vérifier » (même source, `horairesEtoileDuJour`). */
+function ChoixJourEtoile({
+  b,
+  maj,
+  disabled,
+  regles,
+  possibles,
+  horaires,
+}: Pick<PropsSection, 'b' | 'maj' | 'disabled'> & {
+  regles: RegleEtablissement
+  possibles: (jour: number) => Horaire[]
+  horaires: Horaire[]
+}) {
+  const j = jourEtoile(b.semaine_type)
+  const jours = joursEtoilePossibles(b.semaine_type)
+  const fixe =
+    j === null
+      ? null
+      : horaires.find((h) => h.id === b.semaine_type[j].type_shift_id)
+  const choix =
+    j === null
+      ? []
+      : horairesEtoileDuJour(
+          possibles(j),
+          fixe,
+          Math.round(Number(b.heures_hebdo) * 60),
+          regles,
+        )
+  const jour = j === null ? '' : JOURS[j].toLowerCase()
+  return (
+    <div className="flex flex-col gap-1.5 rounded-lg border border-dashed p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5 text-sm font-medium">
+          <Star className="size-4 text-amber-400" />
+          Jour de la journée courte
+        </span>
+        <Liste
+          label="Jour de la journée courte"
+          libelleVisible={false}
+          className="w-48"
+          disabled={disabled}
+          valeur={j === null ? 'planning' : String(j)}
+          onChange={(v) =>
+            maj((x) => ({
+              ...x,
+              semaine_type: choisirJourEtoile(
+                x.semaine_type,
+                v === 'planning' ? null : Number(v),
+              ),
+            }))
+          }
+          options={[
+            { valeur: 'planning', libelle: 'Au choix du planning' },
+            ...jours.map((k) => ({ valeur: String(k), libelle: JOURS[k] })),
+          ]}
+        />
+      </div>
+      {j === null ? (
+        <p className="text-xs text-muted-foreground">
+          Le planning place la journée courte au mieux chaque semaine, selon les
+          besoins.
+        </p>
+      ) : choix.length ? (
+        <p className="text-xs text-muted-foreground">
+          Chaque {jour}, un horaire plus court choisi par le planning parmi :{' '}
+          {choix.map((h) => libelleHoraire(h)).join(', ')}.
+        </p>
+      ) : (
+        <p className="text-xs text-amber-600 dark:text-amber-400">
+          Aucun horaire de journée étoile n'est possible le {jour} sur ses
+          postes. Le planning automatique ne pourra pas la placer ce jour-là.
+          Choisissez un autre jour, ou permettez un horaire plus court sur ses
+          postes.
+        </p>
+      )}
+    </div>
   )
 }
 
@@ -673,7 +748,13 @@ export function SectionAbsences({
 
 // ----------------------------------------------------------- règles HCR
 
-export function SectionRegles({ b }: Pick<PropsSection, 'b'>) {
+export function SectionRegles({
+  b,
+  referentiel,
+}: Pick<PropsSection, 'b'> & {
+  referentiel?: Pick<Referentiel, 'reglages' | 'modelesContrat'>
+}) {
+  const etoile = texteJourEtoile(b, lireRegles(referentiel))
   const cle = `${b.type_contrat}|${b.heures_hebdo}|${b.forfait_jours}|${b.mineur}`
   const regles = useMemo<LigneRegle[]>(() => {
     try {
@@ -691,6 +772,11 @@ export function SectionRegles({ b }: Pick<PropsSection, 'b'>) {
             {r.texte}
           </li>
         ))}
+        {etoile && (
+          <li data-regle="R-JOURNEE-ETOILE" className="text-sm">
+            {etoile}
+          </li>
+        )}
       </ul>
     </Section>
   )

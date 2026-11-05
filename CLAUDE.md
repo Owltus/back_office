@@ -2725,6 +2725,15 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   Besoins → passation avec le Veilleur, équipe du soir ensemble (`ReglageReleve`), durée tenue à
   l'ouverture (`HeuresAccueil`). Jamais montrés : poids, `personnes_nuit`, `journee_courte`,
   `journees_courtes_max`. Brouillon + Enregistrer (tiroir, Moments), gestion seule.
+- **JOUR ÉTOILE DANS LA FICHE (2026-11-05, étape 6, D6)** : « Jour de la journée courte : Au
+  choix du planning / Lundi… » sous la semaine type (`ChoixJourEtoile`, `choisirJourEtoile`, un
+  seul jour, jamais un repos), branché sur `JourType.etoile` (moteur inchangé : `etoileFixe`).
+  Horaires possibles ce jour-là montrés ; aucun = message dans la fiche ET point
+  `etoile-sans-horaire` de « À vérifier », même source `horairesEtoileDuJour` (etoile.ts : versions
+  de l'horaire fixé, sinon durée étoile et, si le contrat a des journées imposées, l'une d'elles).
+  « Règles appliquées » cite le jour (`texteJourEtoile`). Les boutons ★ par jour sont retirés.
+  Tests `jourEtoileFiche.test.ts` (vendredi choisi → 7 h le vendredi, sans choix → comme avant,
+  congé → l'étoile saute).
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

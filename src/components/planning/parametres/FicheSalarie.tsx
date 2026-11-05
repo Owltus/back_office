@@ -791,7 +791,7 @@ function CorpsFiche({
           aujourdhui={aujourdhui}
           masquerMotif={alternance && ecole ? ecole.id : null}
         />
-        <SectionRegles b={b} />
+        <SectionRegles b={b} referentiel={referentiel} />
       </div>
 
       <SheetFooter className="flex-row items-center justify-end gap-2 border-t">

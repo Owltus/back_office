@@ -57,11 +57,7 @@ import {
   codesPermis,
 } from '#/lib/planning/eligibilite.ts'
 import { travail } from '#/lib/planning/modele.ts'
-import {
-  contratEtoile,
-  estVersionEtoile,
-  travailHoraire,
-} from '#/lib/planning/etoile.ts'
+import { contratEtoile, horairesEtoileDuJour } from '#/lib/planning/etoile.ts'
 import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
 import {
   accueilActif,
@@ -683,17 +679,20 @@ export function verifierReglages(
       s.semaine_type.forEach((e, j) => {
         if (!e.etoile || e.mode === 'repos' || e.mode === 'absence') return
         const fixe = e.type_shift_id ? horaires.get(e.type_shift_id) : undefined
-        const possible = tenus.some(({ poste }) =>
-          codesPermis({
-            personne: s,
-            poste,
-            jour: j,
-            horaires: r.horaires,
-          }).codes.some((h) =>
-            fixe
-              ? estVersionEtoile(h, fixe, regles)
-              : travailHoraire(h) < regles.contrats.journeePleine,
-          ),
+        // Même source que la fiche (`horairesEtoileDuJour`).
+        const possible = tenus.some(
+          ({ poste }) =>
+            horairesEtoileDuJour(
+              codesPermis({
+                personne: s,
+                poste,
+                jour: j,
+                horaires: r.horaires,
+              }).codes,
+              fixe,
+              Math.round(Number(s.heures_hebdo) * 60),
+              regles,
+            ).length > 0,
         )
         if (possible) return
         ajouter(
