@@ -18,6 +18,7 @@ import {
   FERIE_RATTRAPAGE_JOURS,
   droitAuRattrapage,
 } from '#/lib/planning/regles.ts'
+import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import { ajouterJours, lundiDe } from '#/lib/planning/temps.ts'
 import type { Motif, Salarie } from '#/lib/planning/types.ts'
 
@@ -134,12 +135,15 @@ export function feriesARattraper(args: {
   depuis?: string
   travailles: ReadonlySet<string>
   jfrPoses: Iterable<string>
+  /** Règles de l'établissement (modèle du contrat) ; absent : défauts. */
+  regles?: RegleEtablissement
 }): JourFerie[] {
   const depuis =
     args.depuis !== undefined && args.depuis < args.du ? args.depuis : args.du
   const droits = feriesEntre(depuis, args.au).filter(
     (f) =>
-      droitAuRattrapage(args.salarie, f.date) && args.travailles.has(f.date),
+      droitAuRattrapage(args.salarie, f.date, args.regles) &&
+      args.travailles.has(f.date),
   )
   if (!droits.length) return []
   const poses = [...args.jfrPoses]

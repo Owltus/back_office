@@ -8,10 +8,11 @@
  *     d'aujourd'hui, chiffre pour chiffre (B3) ;
  *   - les réglages internes (poids du calcul) : `generateur.ts`, jamais
  *     montrés.
- * `lireRegles` est la SEULE fabrique de l'objet. Les constantes de
- * `regles.ts`, `moment.ts` et `presence.ts` sont tirées de
- * `REGLES_PAR_DEFAUT` : leurs appelants ne changent pas tant que l'étape 4
- * ne les a pas branchés sur `lireRegles`.
+ * `lireRegles` est la SEULE fabrique de l'objet. Depuis l'étape 4, le
+ * moteur la lit : `Contexte.regles` (semaine.ts) passe dans chaque fiche
+ * (`Fiche.regles`) et dans le problème (`Probleme.regles`), que le
+ * générateur ET le vérificateur lisent. Les constantes de `regles.ts`
+ * (`JOURS_AFFILES_MAX`…) ne sont plus que les défauts, pour l'aide.
  */
 
 import type {
@@ -359,4 +360,30 @@ export function passationVeilleurActive(
   unPosteTientLaNuit: boolean,
 ): boolean {
   return regles.passations.passationVeilleur && unPosteTientLaNuit
+}
+
+/** Les règles d'un type de contrat. */
+export function modeleDe(
+  regles: RegleEtablissement,
+  type: TypeContrat,
+): ModeleContratRegle {
+  return regles.modeles[type] ?? REGLES_PAR_DEFAUT.modeles[type]
+}
+
+/** Toutes les durées de journée que les contrats imposent (7 h et 8 h à
+ * l'hôtel) : une semaine type qui fixe un horaire d'une autre durée décide
+ * seule (`journeesDuCalcul`). */
+export function dureesImposees(regles: RegleEtablissement): Set<number> {
+  return new Set(regles.contrats.journees.flatMap((j) => j.durees))
+}
+
+/** Le contrat a une journée courte imposée (le 39 h : 4 × 8 h + 7 h) : la
+ * semaine d'une absence, de l'école ou d'un JFR, sa journée étoile saute
+ * (`etoileSacrifiee`, regles.ts). */
+export function aJourneeCourteImposee(
+  regles: RegleEtablissement,
+  minutesHebdo: number,
+): boolean {
+  const j = journeesDuContrat(regles, minutesHebdo)
+  return !!j && j.courtesMax > 0 && j.durees.length > 1
 }

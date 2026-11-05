@@ -28,6 +28,7 @@ import {
 } from '#/lib/planning/etoile.ts'
 import type { HoraireEtoile } from '#/lib/planning/etoile.ts'
 import { reposQuotidienMin } from '#/lib/planning/regles.ts'
+import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import { bornes, horaireDe } from '#/lib/planning/temps.ts'
 import type { JourType, Poste, Salarie } from '#/lib/planning/types.ts'
 
@@ -63,6 +64,7 @@ export function codesDeLaFiche(
 export function codesImposes(
   semaine: readonly JourType[],
   horaires: readonly HoraireEtoile[] = [],
+  regles?: RegleEtablissement,
 ): Array<readonly [number, string]> {
   const r: Array<readonly [number, string]> = []
   semaine.forEach((e, j) => {
@@ -70,7 +72,8 @@ export function codesImposes(
       r.push([j, String(e.type_shift_id)])
       const h = horaires.find((x) => x.id === e.type_shift_id)
       if (h)
-        for (const v of versionsEtoile(h, horaires)) r.push([j, String(v.id)])
+        for (const v of versionsEtoile(h, horaires, regles))
+          r.push([j, String(v.id)])
     }
   })
   return r

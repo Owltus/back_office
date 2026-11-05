@@ -19,6 +19,8 @@
 
 import type { Creneau } from '#/lib/planning/modele.ts'
 import { periodeLibre } from '#/lib/planning/presence.ts'
+import { REGLES_PAR_DEFAUT } from '#/lib/planning/reglesEtablissement.ts'
+import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import { minutes } from '#/lib/planning/temps.ts'
 import type { Horaire, Periode } from '#/lib/planning/types.ts'
 
@@ -27,10 +29,14 @@ import type { Horaire, Periode } from '#/lib/planning/types.ts'
  * d'après son début) ; sa LONGUEUR reste une règle des remplaçants : un
  * horaire court ne remplace qu'un court, et n'est remplacé que par un court
  * (comme quand « court » était son propre cycle). */
-export function estCourt(h: Pick<Horaire, 'debut' | 'fin' | 'pause'>): boolean {
+export function estCourt(
+  h: Pick<Horaire, 'debut' | 'fin' | 'pause'>,
+  /** La journée courte de l'établissement (7 h à l'hôtel). */
+  journeeCourte: number = REGLES_PAR_DEFAUT.contrats.journeeCourte,
+): boolean {
   let duree = minutes(h.fin) - minutes(h.debut)
   if (duree <= 0) duree += 24 * 60
-  return duree - h.pause < 7 * 60
+  return duree - h.pause < journeeCourte
 }
 
 /** Cycle d'un shift ou d'un besoin. Null : réservé aux appelants qui
@@ -42,8 +48,9 @@ export type Cycle = Periode | null
 export function cycleDe(
   horaire: Pick<Horaire, 'periode'> | undefined,
   debut: string,
+  l: RegleEtablissement['moments'] = REGLES_PAR_DEFAUT.moments,
 ): Cycle {
-  return horaire?.periode ?? periodeLibre(debut)
+  return horaire?.periode ?? periodeLibre(debut, l)
 }
 
 // ------------------------------------------------- trous entre deux équipes

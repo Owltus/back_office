@@ -45,18 +45,13 @@ import {
   travail,
 } from '#/lib/planning/modele.ts'
 import {
-  CHANGEMENTS_MOMENT_MAX,
-  EQUIPE_TOLERANCE,
-  JOURS_AFFILES_CONSEILLES,
-  MOMENT_ARRIERE_JOURS,
-  JOURS_AFFILES_MAX,
-  NUITS_AFFILEES_MAX,
-  REPOS_APRES_NUITS,
-  REPOS_CONFORT,
   RYTHME_CONTRAT_MIN,
+  jourIsoleDe,
   rythmeHumain,
   apresContrat,
 } from '#/lib/planning/regles.ts'
+import { REGLES_PAR_DEFAUT } from '#/lib/planning/reglesEtablissement.ts'
+import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import type {
   AffectationSolveur,
   Creneau,
@@ -623,12 +618,15 @@ export const PART_FIXE_DEPANNAGE =
  * fenêtres de 6 nuits et précède au plus deux reprises de jour, un service
  * de jour suit au plus une nuit. Les heures en plus (règle 12) se comptent
  * à la minute, avec les autres (`pireCoutRemplir`). */
-export function pireMoral(c: Creneau): number {
+export function pireMoral(
+  c: Creneau,
+  R: RegleEtablissement = REGLES_PAR_DEFAUT,
+): number {
   return (
     2 * (POIDS_REPOS_COURT + POIDS_RETOUR_REPOS_COURT) +
     POIDS_WEEKEND_LIBRE +
     2 * POIDS_MOMENT_EN_TROP +
-    2 * MOMENT_ARRIERE_JOURS * POIDS_MOMENT_ARRIERE +
+    2 * R.repos.momentArriereJours * POIDS_MOMENT_ARRIERE +
     (c.moment === 'nuit'
       ? 6 * POIDS_NUIT_AFFILEE + 2 * POIDS_REPRISE_APRES_NUIT
       : POIDS_REPRISE_APRES_NUIT) +
@@ -642,7 +640,9 @@ export function pireMoral(c: Creneau): number {
     POIDS_EQUIPE_DEPART +
     POIDS_RELEVE_CHACUN +
     // Un veilleur ajouté peut manquer sa passation des deux côtés.
-    (c.presence.includes('nuit') ? 2 * POIDS_PASSATION : 0)
+    (c.presence.includes('nuit') && R.passations.passationVeilleur
+      ? 2 * POIDS_PASSATION
+      : 0)
   )
 }
 
@@ -687,12 +687,15 @@ export function coutConsigne(
  * coûter en règles morales, en équité et en confort à la personne qu'il
  * soulagerait. Un extra ne sert donc jamais à libérer un week-end ni à
  * équilibrer, seulement à tenir une place qui resterait vide. */
-export function coutExtra(c: Creneau) {
+export function coutExtra(
+  c: Creneau,
+  R: RegleEtablissement = REGLES_PAR_DEFAUT,
+) {
   return (
     POIDS_SUR_CONTRAT * duree(c) +
     POIDS_SIXIEME_JOUR +
     coutDepannage(c) +
-    partMoraleExtra(c) +
+    partMoraleExtra(c, R) +
     1
   )
 }
@@ -701,9 +704,12 @@ export function coutExtra(c: Creneau) {
  * en équité et en confort (repos accolés, jour isolé, jour habituel, jours
  * d'affilée) à qui le ferait : la part de `coutExtra` qui interdit de
  * prendre un extra pour le soulager. */
-export function partMoraleExtra(c: Creneau): number {
+export function partMoraleExtra(
+  c: Creneau,
+  R: RegleEtablissement = REGLES_PAR_DEFAUT,
+): number {
   return (
-    pireMoral(c) +
+    pireMoral(c, R) +
     EQUITE_MAX_PAR_SHIFT +
     POIDS_REPOS_SEPARES +
     POIDS_JOUR_ISOLE +
@@ -753,6 +759,7 @@ export function pireCoutRemplir(
   c: Creneau,
   presenceLaPlusChere: number,
   besoin?: Creneau,
+  R: RegleEtablissement = REGLES_PAR_DEFAUT,
 ) {
   // Heures en plus comptées pour un remplaçant : au moins celles du besoin
   // (`minutesEnPlus`), donc au plus la plus longue des deux durées.
@@ -762,11 +769,11 @@ export function pireCoutRemplir(
   return (
     (POIDS_SUR_CONTRAT + POIDS_EQUITE_HEURES_PLUS * EQUITE_HEURES_PLUS_MAX) *
       enPlus +
-    pireMoral(c) +
+    pireMoral(c, R) +
     POIDS_DEPANNAGE_MINUTE * duree(c) +
     PART_FIXE_DEPANNAGE +
     coutRemplacant(c) +
-    (c.accueil ? coutExtra(c) : 0) +
+    (c.accueil ? coutExtra(c, R) : 0) +
     POIDS_SIXIEME_JOUR +
     POIDS_REPOS_SEPARES +
     POIDS_JOUR_ISOLE +
@@ -805,8 +812,9 @@ export function coutPlaceVide(
   c: Creneau,
   presenceLaPlusChere: number,
   besoin?: Creneau,
+  R: RegleEtablissement = REGLES_PAR_DEFAUT,
 ) {
-  return pireCoutRemplir(c, presenceLaPlusChere, besoin) + 1
+  return pireCoutRemplir(c, presenceLaPlusChere, besoin, R) + 1
 }
 
 /** P1 : une personne qui manque sur une PLACE tenue par le besoin ou l'un
@@ -817,6 +825,7 @@ export function coutPlaceVideGroupe(
   membres: Creneau[],
   presenceLaPlusChere: number,
   besoinDe: BesoinDe = (place) => membres.find((m) => m.id === place),
+  R: RegleEtablissement = REGLES_PAR_DEFAUT,
 ) {
   return Math.max(
     ...membres.map((c) =>
@@ -824,6 +833,7 @@ export function coutPlaceVideGroupe(
         c,
         presenceLaPlusChere,
         c.place !== null ? besoinDe(c.place) : undefined,
+        R,
       ),
     ),
   )
@@ -842,10 +852,11 @@ export function coutManqueMinimum(
   creneaux: Creneau[],
   presenceLaPlusChere: number,
   besoinDe?: BesoinDe,
+  R: RegleEtablissement = REGLES_PAR_DEFAUT,
 ) {
   const ouverts = creneaux.filter((c) => !c.ferme)
   return ouverts.length
-    ? coutPlaceVideGroupe(ouverts, presenceLaPlusChere, besoinDe)
+    ? coutPlaceVideGroupe(ouverts, presenceLaPlusChere, besoinDe, R)
     : 0
 }
 
@@ -1122,6 +1133,7 @@ export function construire(
   options: OptionsConstruction = {},
 ): Construit {
   const reduire = options.reduire ?? true
+  const R = p.regles ?? REGLES_PAR_DEFAUT
   const m = new Modele()
   const nbSemaines = Math.ceil(p.nbJours / 7)
   const hasard = alea(p.graine)
@@ -1172,7 +1184,7 @@ export function construire(
     // Horizon glissant : ce qu'un shift ajouté peut coûter à l'esquisse.
     pireHorizon(p.suivante)
   const coutsMinimum = comptent.map((cs) =>
-    coutManqueMinimum(cs, presenceLaPlusChere, besoinDe),
+    coutManqueMinimum(cs, presenceLaPlusChere, besoinDe, R),
   )
 
   // Couverture, par PLACE : un besoin `b…` et ses remplaçants `r…`
@@ -1219,7 +1231,7 @@ export function construire(
       '<=',
       tete.effectif + tete.facultatif,
     )
-    m.cout(coutPlaceVideGroupe(membres, presenceLaPlusChere, besoinDe), vm)
+    m.cout(coutPlaceVideGroupe(membres, presenceLaPlusChere, besoinDe, R), vm)
     if (soutiens.length) {
       const nbImposes = soutiens.filter(([s, , c]) =>
         imposees.has(cle(s.id, c.id)),
@@ -1307,7 +1319,7 @@ export function construire(
       const v = x.get(k)
       if (!v) continue
       const r = role(s, c.poste)
-      if (s.placementManuel) m.cout(coutExtra(c), v)
+      if (s.placementManuel) m.cout(coutExtra(c, R), v)
       else if (r === 'occasionnel') m.cout(coutDepannage(c), v)
       if (r !== 'soutien' || imposees.has(k)) continue
       if (!avec) {
@@ -1345,9 +1357,12 @@ export function construire(
       minimums.push({ v: vm, consigne: i })
     }
     // La NUIT n'a jamais personne en plus (décision utilisateur du
-    // 2026-11-03 : « toujours un seul night ») : plafond DUR au chiffre. Un
-    // deuxième veilleur (formation) se pose à la main : les shifts posés
-    // relèvent le plafond, jamais le calcul. Le jour reste souple (D8).
+    // 2026-11-03 : « toujours un seul night ») : plafond DUR au chiffre de
+    // la nuit du tableau de l'accueil. Un deuxième veilleur (formation) se
+    // pose à la main : les shifts posés relèvent le plafond, jamais le
+    // calcul. Le jour reste souple (D8). `accueil.personnesNuit` n'est pas
+    // lu ici : le chiffre de la nuit DIT déjà combien de personnes la nuit
+    // (un plafond à part le contredirait, deux veilleurs demandés).
     if (k.periode === 'nuit') {
       const poses = comptent[i].reduce(
         (t, c) =>
@@ -1649,7 +1664,10 @@ export function construire(
       // Rythme de 5 jours (2026-11-01) : un contrat de 35 h ou plus se fait
       // en `joursPreferesSemaine` jours, absences et jours hors contrat
       // décomptés (l'école compte déjà comme un jour, `nbJours`).
-      if (!s.contratIndicatif && s.minutesHebdoContrat >= RYTHME_CONTRAT_MIN) {
+      if (
+        !s.contratIndicatif &&
+        s.minutesHebdoContrat >= R.repos.rythmeContratMin
+      ) {
         // Jours de présence (2026-11-02) : un départ le jeudi laisse 4 jours.
         const enContrat = jours.filter((j) => !s.horsContrat.has(j))
         const absents = enContrat.filter((j) =>
@@ -1734,8 +1752,15 @@ export function construire(
       // impossible). Une semaine type qui fixe deux repos ou plus a décidé
       // elle-même (les repos fixes passent d'abord, 2026-11-03) : rien de
       // plus. Même définition que REPOS-SEPARES (verificateur.ts).
+      // Règle de l'établissement (`repos.deuxReposDeSuite`) : obligatoire
+      // (dure, comme décrit), souhaitée (une paire perdue coûte
+      // `POIDS_REPOS_SEPARES`) ou aucune.
+      const forceDeux = R.repos.deuxReposDeSuite
       const regleHotel =
-        !s.reposConsecutifs && !s.placementManuel && s.reposFixes.size < 2
+        forceDeux !== 'aucune' &&
+        !s.reposConsecutifs &&
+        !s.placementManuel &&
+        s.reposFixes.size < 2
       if (s.reposConsecutifs || (regleHotel && jours.length === 7)) {
         const pris = (d: number) =>
           fixes.some((c) => jourDe(c) === d) || s.joursHorsSite.has(d)
@@ -1769,12 +1794,22 @@ export function construire(
           }
           paires.push(libre)
         }
-        if (paires.length)
-          m.ajoute(
-            paires.map((v) => [1, v] as Terme),
-            '>=',
-            1,
-          )
+        if (paires.length) {
+          if (!s.reposConsecutifs && forceDeux === 'souhaite') {
+            const perdue = m.continu(0, 1)
+            m.ajoute(
+              [...paires.map((v) => [1, v] as Terme), [1, perdue]],
+              '>=',
+              1,
+            )
+            m.cout(POIDS_REPOS_SEPARES, perdue)
+          } else
+            m.ajoute(
+              paires.map((v) => [1, v] as Terme),
+              '>=',
+              1,
+            )
+        }
       }
 
       if (s.reposHebdoMin && siens.length) {
@@ -1793,9 +1828,9 @@ export function construire(
         // Avec l'esquisse, la semaine suivante est DANS le calcul : ses
         // jours sont des variables (ou des faits), plus une série figée.
         const fin = p.nbJours + (sk ? 7 : s.serieApres)
-        for (const [plafond, poids] of [
-          [JOURS_AFFILES_MAX, POIDS_JOUR_AFFILE],
-          [JOURS_AFFILES_CONSEILLES, POIDS_JOUR_AFFILE_CONSEILLE],
+        for (const [plafond, poids, conseille] of [
+          [R.repos.joursAffilesMax, POIDS_JOUR_AFFILE, false],
+          [R.repos.joursAffilesConseilles, POIDS_JOUR_AFFILE_CONSEILLE, true],
         ] as const) {
           const taille = plafond + 1
           for (let a = Math.max(debut, 1 - taille); a + taille <= fin; a++) {
@@ -1809,7 +1844,7 @@ export function construire(
             // (relecture du 2026-11-04 : avec le dimanche et le lundi
             // suivant libres, la paire de repos le laissait passer).
             if (
-              !(plafond === JOURS_AFFILES_CONSEILLES && rythmeHumain(s)) &&
+              !(conseille && rythmeHumain(s, R)) &&
               a >= 0 &&
               derniere < p.nbJours &&
               Math.floor(a / 7) === Math.floor(derniere / 7)
@@ -1834,10 +1869,7 @@ export function construire(
             // 2026-11-03) ; plus de 5 non plus depuis le 2026-11-04 (des
             // semaines de 5 jours, plus humain), sauf un contrat indicatif.
             // Les jours posés à la main restent des faits.
-            if (
-              plafond === JOURS_AFFILES_MAX ||
-              (plafond === JOURS_AFFILES_CONSEILLES && rythmeHumain(s))
-            ) {
+            if (!conseille || rythmeHumain(s, R)) {
               let poses = 0
               for (
                 let d = Math.max(a, 0);
@@ -1864,7 +1896,7 @@ export function construire(
       // libre, lundi possible et pas déjà posé.
       if (
         k === 0 &&
-        rythmeHumain(s) &&
+        rythmeHumain(s, R) &&
         s.joursSemainePrecedente !== null &&
         s.serieAvant === 1 &&
         !s.joursHorsSite.has(0) &&
@@ -1882,10 +1914,11 @@ export function construire(
       // n'est demandé). Jamais sur un jour posé : le modèle reste possible
       // (ne pas travailler satisfait tout). Même définition que JOUR-ISOLE
       // (verificateur.ts).
+      const isole = jourIsoleDe(s, R)
       for (const j of jours) {
         const t = travaille.get(j)
-        if (!t) continue
-        if (rythmeHumain(s)) {
+        if (!t || isole === 'aucune') continue
+        if (isole === 'interdit') {
           if (fixes.some((c) => jourDe(c) === j)) continue
           const autour: Terme[] = []
           let continu = false
@@ -1951,18 +1984,18 @@ export function construire(
         // sans) ; une variable continue au lieu de booléenne, essayée,
         // faisait de même.
         if (continu || voisins.length === 2) continue
-        const isole = m.bool()
+        const seul = m.bool()
         m.ajoute(
-          [[1, isole], [-1, t], ...voisins.map((v) => [1, v] as Terme)],
+          [[1, seul], [-1, t], ...voisins.map((v) => [1, v] as Terme)],
           '>=',
           0,
         )
-        m.cout(POIDS_JOUR_ISOLE, isole)
+        m.cout(POIDS_JOUR_ISOLE, seul)
       }
 
-      reglesMoralesSemaine(m, s, k, jours, siens, travaille, xv, estImpose)
+      reglesMoralesSemaine(m, R, s, k, jours, siens, travaille, xv, estImpose)
       if (k === 0)
-        reglesMoralesSuite(m, p, s, siens, parJour, travaille, xv, estImpose)
+        reglesMoralesSuite(m, R, p, s, siens, parJour, travaille, xv, estImpose)
 
       for (const j of s.travailFixe) {
         const t = travaille.get(j)
@@ -2527,6 +2560,7 @@ const RANG_MOMENT = { matin: 0, middle: 1, soir: 2, nuit: 3 } as const
  */
 function reglesMoralesSemaine(
   m: Modele,
+  R: RegleEtablissement,
   s: SalarieSolveur,
   k: number,
   jours: number[],
@@ -2667,12 +2701,12 @@ function reglesMoralesSemaine(
       m.ajoute([[1, change], ...negatifs(t)], '>=', -1)
     changes.push(change)
   }
-  if (changes.length > CHANGEMENTS_MOMENT_MAX) {
+  if (changes.length > R.repos.changementsMomentMax) {
     const exces = m.continu(0, changes.length)
     m.ajoute(
       [[1, exces], ...changes.map((c) => [-1, c] as Terme)],
       '>=',
-      -CHANGEMENTS_MOMENT_MAX,
+      -R.repos.changementsMomentMax,
     )
     m.cout(POIDS_MOMENT_EN_TROP, exces)
   }
@@ -2685,7 +2719,7 @@ function reglesMoralesSemaine(
   for (const j of jours) {
     for (
       let k = j + 1;
-      k <= j + MOMENT_ARRIERE_JOURS && jours.includes(k);
+      k <= j + R.repos.momentArriereJours && jours.includes(k);
       k++
     ) {
       const contraintes: Terme[][] = []
@@ -2720,6 +2754,7 @@ function reglesMoralesSemaine(
  */
 function reglesMoralesSuite(
   m: Modele,
+  R: RegleEtablissement,
   p: Probleme,
   s: SalarieSolveur,
   siens: Creneau[],
@@ -2728,6 +2763,9 @@ function reglesMoralesSuite(
   xv: (c: Creneau) => string,
   estImpose: (c: Creneau) => boolean,
 ): void {
+  const REPOS_CONFORT = R.repos.reposConfort
+  const NUITS_AFFILEES_MAX = R.repos.nuitsAffileesMax
+  const REPOS_APRES_NUITS = R.repos.reposApresNuits
   const poidsCourt =
     POIDS_REPOS_COURT + (s.retourConge !== null ? POIDS_RETOUR_REPOS_COURT : 0)
   for (const [j, liste] of parJour) {
@@ -3256,8 +3294,11 @@ export interface ZonePassation {
  * dernier matin (lendemain dans la semaine suivante) n'est pas cherché ; le
  * lundi matin l'est, face à `Probleme.veilleDuLundi`. */
 export function zonesPassation(
-  p: Pick<Probleme, 'creneaux' | 'nbJours' | 'consignes' | 'veilleDuLundi'>,
+  p: Pick<Probleme, 'creneaux' | 'nbJours' | 'consignes' | 'veilleDuLundi'> &
+    Partial<Pick<Probleme, 'regles'>>,
 ): ZonePassation[] {
+  // Règle de l'établissement : sans passation avec le veilleur, rien.
+  if (!(p.regles ?? REGLES_PAR_DEFAUT).passations.passationVeilleur) return []
   const postesAccueil = new Set(
     p.creneaux.filter((c) => c.accueil).map((c) => c.poste),
   )
@@ -3356,7 +3397,10 @@ function equipesSynchro(
   borne: (c: Creneau) => number,
 ): void {
   const R = p.releveMinutes ?? 0
+  const EQUIPE_TOLERANCE = (p.regles ?? REGLES_PAR_DEFAUT).passations
+    .equipeTolerance
   /** Une heure (début ou fin) prise par quelqu'un : y_t >= n_c / K. Deux
+
    * heures prises à plus de la tolérance l'une de l'autre : le jour est
    * étalé, `poids` une fois (w >= y_t + y_u - 1 pour chaque paire). */
   const etalement = (

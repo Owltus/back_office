@@ -94,8 +94,14 @@ import {
   supprimerMotif,
 } from '#/lib/planning/service.ts'
 import { horairesNormaux, versionsEtoile } from '#/lib/planning/etoile.ts'
-import { JOURNEE_PLEINE } from '#/lib/planning/regles.ts'
-import { heureAffichee, minutes, presence } from '#/lib/planning/temps.ts'
+import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
+
+import {
+  heureAffichee,
+  heuresLisibles,
+  minutes,
+  presence,
+} from '#/lib/planning/temps.ts'
 import type {
   Horaire,
   Motif,
@@ -230,7 +236,7 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
     setNouvelHoraire({
       ...heuresNeuves,
       couleur: PALETTE[data.horaires.length % PALETTE.length],
-      periode: momentPropose(heuresNeuves),
+      periode: momentPropose(heuresNeuves, lireRegles(data).moments),
     })
   }
   const creerMotif = () => {
@@ -292,7 +298,10 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
                     <LigneHoraire
                       key={h.id}
                       h={h}
-                      etoile={horairesNormaux(h, data.horaires).length > 0}
+                      etoile={
+                        horairesNormaux(h, data.horaires, lireRegles(data))
+                          .length > 0
+                      }
                       onOuvrir={() => setOuvert({ type: 'horaire', id: h.id })}
                     />
                   ))}
@@ -645,10 +654,12 @@ function CarteHoraire({
   // Le moment suit toujours les heures (décision du 2026-11-05) : il n'y a
   // plus rien à choisir.
   const neuf = id === null
+  // Les règles de l'établissement : limites des moments, journées.
+  const regles = lireRegles(referentiel)
   const erreurs = erreursHoraire(h, referentiel.horaires, id)
   const heuresDe = (
     maj: Partial<Pick<SaisieHoraire, 'debut' | 'fin' | 'pause'>>,
-  ) => changer(changerHeures(h, maj))
+  ) => changer(changerHeures(h, maj, regles.moments))
   const heuresChangees =
     !neuf &&
     (h.debut !== enregistre.debut ||
@@ -657,10 +668,10 @@ function CarteHoraire({
 
   const enregistrer = async () => {
     if (erreurs.length || envoi || (!modifie && !neuf)) return
-    const valeurs = nettoyerHoraire(h)
+    const valeurs = nettoyerHoraire(h, regles.moments)
     setEnvoi(true)
     const r = await ecrire(
-      () => enregistrerHoraire(valeurs, id),
+      () => enregistrerHoraire(valeurs, id, regles.moments),
       "L'horaire n'a pas pu être enregistré.",
     )
     setEnvoi(false)
@@ -704,10 +715,10 @@ function CarteHoraire({
   // savoir ce que le planning prendra.
   const ceHoraire = { ...h, id: id ?? -1 }
   const versions = heuresOk
-    ? versionsEtoile(ceHoraire, referentiel.horaires)
+    ? versionsEtoile(ceHoraire, referentiel.horaires, regles)
     : []
   const normaux = heuresOk
-    ? horairesNormaux(ceHoraire, referentiel.horaires)
+    ? horairesNormaux(ceHoraire, referentiel.horaires, regles)
     : []
   const listeHoraires = (l: readonly Horaire[]) =>
     l.map((x) => libelleHoraire(x)).join(', ')
@@ -789,20 +800,22 @@ function CarteHoraire({
         >
           <div className="flex justify-between gap-2">
             <span className="text-muted-foreground">
-              {travail >= JOURNEE_PLEINE ? 'Journée normale' : 'Heures'}
+              {travail >= regles.contrats.journeePleine
+                ? 'Journée normale'
+                : 'Heures'}
             </span>
             <span className="tabular-nums">
               {heureAffichee(h.debut)} → {heureAffichee(h.fin)} ·{' '}
               {heures(travail)} de travail
             </span>
           </div>
-          {travail >= JOURNEE_PLEINE && (
+          {travail >= regles.contrats.journeePleine && (
             <div className="flex justify-between gap-2">
               <span className="text-muted-foreground">Journée étoile</span>
               <span className="text-right tabular-nums">
                 {versions.length
                   ? listeHoraires(versions)
-                  : 'aucun horaire de 7 h contenu dans celui-ci'}
+                  : `aucun horaire de ${heuresLisibles(regles.contrats.journeeEtoileMin)} contenu dans celui-ci`}
               </span>
             </div>
           )}
@@ -821,12 +834,14 @@ function CarteHoraire({
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <span className="text-sm text-muted-foreground">Moment</span>
           <span className="text-sm font-medium">
-            {libelleMoment(momentDeLaSaisie(h))}
+            {libelleMoment(momentDeLaSaisie(h, regles.moments))}
           </span>
         </div>
         <span className="text-xs text-muted-foreground">
-          {PERIODES.find((p) => p.valeur === (momentDeLaSaisie(h) ?? 'aucune'))
-            ?.aide ?? 'Ne compte pas dans le tableau Accueil'}
+          {PERIODES.find(
+            (p) =>
+              p.valeur === (momentDeLaSaisie(h, regles.moments) ?? 'aucune'),
+          )?.aide ?? 'Ne compte pas dans le tableau Accueil'}
           . Calculé d'après les heures.
         </span>
       </div>

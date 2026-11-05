@@ -19,9 +19,12 @@ import {
 } from '#/lib/planning/cycles.ts'
 import type { PresencePoste } from '#/lib/planning/cycles.ts'
 import {
+  aJourneeCourteImposee,
   lireRegles,
+  modeleDe,
   REGLES_PAR_DEFAUT,
 } from '#/lib/planning/reglesEtablissement.ts'
+import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import {
   codePrevuAuPoste,
   codesDeLaFiche,
@@ -61,26 +64,21 @@ import type {
   EquiteFaite,
 } from '#/lib/planning/modele.ts'
 import {
-  CONGE_LONG,
-  ECOLE_LENDEMAIN_DEBUT,
-  ECOLE_VEILLE_FIN,
   FERIE_RATTRAPAGE_JOURS,
   JOURS_CONTRAT,
   alerteBesoin,
   droitAuRattrapage,
   presenceMaxPoste,
-  CONTRAT_39H,
   reductionJourFerie,
   versSolveur,
 } from '#/lib/planning/regles.ts'
 import type { Fiche } from '#/lib/planning/regles.ts'
 import {
-  JOURS_AFFILES_CONSEILLES,
-  JOURS_AFFILES_MAX,
-  RYTHME_CONTRAT_MIN,
+  jourIsoleDe,
   rythmeHumain,
   apresContrat,
 } from '#/lib/planning/regles.ts'
+
 import {
   accueilActif,
   bilanPresence,
@@ -388,6 +386,8 @@ export interface Contexte {
   motifsJfr: Set<number>
   /** JFR posés encore en proposition : « salarié|date ». */
   jfrProposes: Set<string>
+  /** Règles de l'établissement (`lireRegles`). */
+  regles: RegleEtablissement
 }
 
 export function estEcole(m: Pick<Motif, 'nature' | 'code' | 'nom'>): boolean {
@@ -484,6 +484,7 @@ export function contexte(d: DonneesSemaine): Contexte {
         .filter((a) => a.epinglee === false && motifsJfr.has(a.motif_id))
         .map((a) => `${a.salarie_id}|${a.jour}`),
     ),
+    regles: lireRegles(d.referentiel),
   }
 }
 
@@ -520,7 +521,7 @@ export function shiftsConnus(
 export function feriesEnAttente(
   ctx: Pick<Contexte, 'lundi' | 'staff' | 'absences' | 'motifsJfr'> & {
     postes?: ReadonlyMap<number, Pick<Poste, 'feries_chomes'>>
-  },
+  } & Partial<Pick<Contexte, 'regles'>>,
   shifts: readonly Affectation[],
 ): Map<number, JourFerie[]> {
   const du = ajouterJours(ctx.lundi, -FERIE_RATTRAPAGE_JOURS)
@@ -553,6 +554,7 @@ export function feriesEnAttente(
       depuis,
       travailles: siens,
       jfrPoses: poses,
+      regles: ctx.regles,
     })
     if (liste.length) r.set(x.id, liste)
   }
@@ -578,8 +580,9 @@ export function feriesChomes(
 export function ferieDuJour(
   x: Pick<Salarie, 'type_contrat' | 'date_entree' | 'semaine_type'>,
   date: string,
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
 ): boolean {
-  if (!droitAuRattrapage(x, date)) return false
+  if (!droitAuRattrapage(x, date, regles)) return false
   const travail = x.semaine_type.map((e) => e.mode === 'travail')
   if (!travail.some(Boolean)) return true
   return travail[ecartJours(lundiDe(date), date)] ?? false
@@ -604,8 +607,9 @@ export function avecFeriesDuJour(
   if (!jf) return r
   const feries = feriesEntre(ajouterJours(lundi, -28), ajouterJours(lundi, 20))
   const postes = new Map(d.referentiel.postes.map((p) => [p.id, p]))
+  const regles = lireRegles(d.referentiel)
   for (const x of d.referentiel.salaries) {
-    const stagiaire = x.type_contrat === 'stagiaire'
+    const stagiaire = modeleDe(regles, x.type_contrat).feriesJourMeme
     const encadrement = !stagiaire && feriesChomes(x, postes)
     if (!stagiaire && !encadrement) continue
     for (const f of feries) {
@@ -701,7 +705,7 @@ export function fiche(
   x: Salarie,
   lundi: string,
   ctx: Pick<Contexte, 'sansDecompte' | 'ecole' | 'absences'> &
-    Partial<Pick<Contexte, 'horaires'>>,
+    Partial<Pick<Contexte, 'horaires' | 'regles'>>,
   exclu = false,
 ): Fiche {
   const semaine = x.semaine_type
@@ -736,7 +740,11 @@ export function fiche(
   // prototype retirée le 2026-10-27, décision utilisateur : ce repos « fixe
   // mais pas vraiment » paraissait arbitraire). Les règles HCR suffisent.
   const travailFixe = new Set<number>()
-  const imposes = codesImposes(semaine, [...(ctx.horaires?.values() ?? [])])
+  const imposes = codesImposes(
+    semaine,
+    [...(ctx.horaires?.values() ?? [])],
+    ctx.regles,
+  )
   const etoile = new Set<number>()
   semaine.forEach((e, j) => {
     if (e.mode === 'travail') travailFixe.add(j)
@@ -752,6 +760,7 @@ export function fiche(
       [...niveaux].filter(([, n]) => n === 'soutien').map(([p]) => p),
     ),
     typeContrat: x.type_contrat,
+    regles: ctx.regles,
     minutesHebdo: Math.round(Number(x.heures_hebdo) * 60),
     forfaitJours: x.forfait_jours,
     mineur: x.mineur,
@@ -828,6 +837,7 @@ function presenceDe(
     x.debut,
     accueilEnService(ctx),
     x.fin,
+    ctx.regles.moments,
   )
 }
 
@@ -844,7 +854,7 @@ function debutsMatinTot(ctx: Contexte): Map<number, number> {
       if (posteDeLAccueil(ctx, b.poste_id)) continue
       const h =
         b.horaire_id !== null ? ctx.horaires.get(b.horaire_id) : undefined
-      if (periodeShift(h, b.debut) !== 'matin') continue
+      if (periodeShift(h, b.debut, ctx.regles.moments) !== 'matin') continue
       const m = minutes(b.debut)
       r.set(b.poste_id, Math.min(r.get(b.poste_id) ?? m, m))
     }
@@ -878,10 +888,11 @@ export function equiteDe(
   // l'horaire, sinon l'heure de début ; un horaire sans moment : aucun.
   // Horaire libre (sans horaire) : ses heures, comme un horaire
   // (`momentPropose`, 2026-11-05) ; sans fin connue, l'heure de début.
-  const moment = h ? h.periode : momentLibre(x.debut, x.fin)
+  const l = ctx.regles.moments
+  const moment = h ? h.periode : momentLibre(x.debut, x.fin, l)
   // L'équité lit le MÊME moment (relecture du 2026-11-05 : un 21:30-07:00
   // libre était une nuit pour les nuits et un soir pour l'équité).
-  const periode = periodeShift(h ?? { periode: moment }, x.debut)
+  const periode = periodeShift(h ?? { periode: moment }, x.debut, l)
   const tot = debutsMatinTot(ctx).get(x.poste_id)
   return {
     soir: periode === 'soir',
@@ -964,14 +975,16 @@ export function creneauAffectation(ctx: Contexte, a: Affectation): Creneau {
  * elles tiennent la place comme lui (`versionsEtoileDe`). Aucun code n'est
  * créé ni modifié : on choisit parmi ceux qui existent. Triés par id. */
 export function remplacantsDe(
-  ctx: Pick<Contexte, 'horaires' | 'postes'>,
+  ctx: Pick<Contexte, 'horaires' | 'postes'> &
+    Partial<Pick<Contexte, 'regles'>>,
   b: Pick<Besoin, 'poste_id' | 'horaire_id'>,
 ): Horaire[] {
   if (b.horaire_id === null) return []
   const h = ctx.horaires.get(b.horaire_id)
   if (!h || h.periode === null) return []
-  const cycle = cycleDe(h, h.debut)
-  const court = estCourt(h)
+  const R = ctx.regles ?? REGLES_PAR_DEFAUT
+  const cycle = cycleDe(h, h.debut, R.moments)
+  const court = estCourt(h, R.contrats.journeeCourte)
   const etoiles = new Set(versionsEtoileDe(ctx, b).map((v) => v.id))
   return codesDuPoste(ctx.postes.get(b.poste_id), [...ctx.horaires.values()])
     .filter(
@@ -979,8 +992,8 @@ export function remplacantsDe(
         c.id !== h.id &&
         c.periode !== null &&
         !etoiles.has(c.id) &&
-        cycleDe(c, c.debut) === cycle &&
-        estCourt(c) === court,
+        cycleDe(c, c.debut, R.moments) === cycle &&
+        estCourt(c, R.contrats.journeeCourte) === court,
     )
     .sort((a, c) => a.id - c.id)
 }
@@ -991,7 +1004,8 @@ export function remplacantsDe(
  * demandé (`creneauEtoile`). Vide pour un besoin sans horaire ou de moins de
  * 8 h. Triées par id. */
 export function versionsEtoileDe(
-  ctx: Pick<Contexte, 'horaires' | 'postes'>,
+  ctx: Pick<Contexte, 'horaires' | 'postes'> &
+    Partial<Pick<Contexte, 'regles'>>,
   b: Pick<Besoin, 'poste_id' | 'horaire_id'>,
 ): Horaire[] {
   if (b.horaire_id === null) return []
@@ -1000,6 +1014,7 @@ export function versionsEtoileDe(
   return versionsEtoile(
     h,
     codesDuPoste(ctx.postes.get(b.poste_id), [...ctx.horaires.values()]),
+    ctx.regles,
   )
 }
 
@@ -1144,7 +1159,7 @@ export function ouverturesAccueil(ctx: Contexte): Probleme['ouvertures'] {
   const r: NonNullable<Probleme['ouvertures']> = []
   for (const poste of [...ctx.postes.values()].sort((a, b) => a.id - b.id)) {
     if (!poste.ouverture || poste.ferme || !poste.presence) continue
-    const m = minutes(poste.ouverture) + DUREE_OUVERTURE
+    const m = minutes(poste.ouverture) + ctx.regles.passations.dureeOuverture
     const fin = `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
     for (let jour = 0; jour < 7; jour++) {
       const matin = ctx.consignes.some(
@@ -1646,7 +1661,11 @@ export function weekendsLiberes(d: DonneesSemaine): Set<number> {
   const motifs = new Map(d.referentiel.motifs.map((m) => [m.id, m]))
   const r = new Set<number>()
   for (const x of ctx.staff) {
-    if (x.type_contrat === 'extra' || !estWeekendFixe(x) || aDesReposFixes(x))
+    if (
+      modeleDe(ctx.regles, x.type_contrat).placementManuel ||
+      !estWeekendFixe(x) ||
+      aDesReposFixes(x)
+    )
       continue
     const hors = joursHorsContrat(x, lundi)
     if (hors.has(5) || hors.has(6)) continue
@@ -1773,7 +1792,7 @@ export function avecHistoire(
       let longueur = 0
       for (let j = e; etat.get(j) === 'conge' || etat.get(j) === 'pont'; j--)
         if (etat.get(j) === 'conge') longueur++
-      if (longueur < CONGE_LONG) continue
+      if (longueur < ctx.regles.conges.congeLong) continue
       if (e >= -1) retourConge = e + 1
       else if (!avant.some((a) => a.jour - 7 > e)) retourConge = 0
       break
@@ -1787,12 +1806,17 @@ export function avecHistoire(
       if (e - 1 >= 0 && e - 1 <= 6)
         finAvantEcole.set(
           e - 1,
-          bornes(lundi, e - 1, hhmm(ECOLE_VEILLE_FIN), '23:59')[0],
+          bornes(lundi, e - 1, hhmm(ctx.regles.ecole.veilleFin), '23:59')[0],
         )
       if (e + 1 >= 0 && e + 1 <= 6)
         debutApresEcole.set(
           e + 1,
-          bornes(lundi, e + 1, hhmm(ECOLE_LENDEMAIN_DEBUT), '23:59')[0],
+          bornes(
+            lundi,
+            e + 1,
+            hhmm(ctx.regles.ecole.lendemainDebut),
+            '23:59',
+          )[0],
         )
     }
     // Règle 12 : heures au-delà du contrat des semaines d'avant connues.
@@ -1890,8 +1914,10 @@ export function debutApresReposHebdo(
 export function posteEquite(
   x: Salarie,
   postes?: ReadonlyMap<number, Pick<Poste, 'presence' | 'ferme'>>,
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
 ): number | null {
-  if (x.type_contrat === 'extra' || x.forfait_jours) return null
+  if (modeleDe(regles, x.type_contrat).placementManuel || x.forfait_jours)
+    return null
   if (
     postes &&
     x.competences.some((c) => {
@@ -2078,11 +2104,6 @@ export function placerRepos(
  * 5 jours de travail, comme le calcul qui ne peut plus le remplir). Pour la
  * place des repos, il compte comme le bord de la semaine (du travail) : un
  * mardi travaillé n'est pas « isolé » parce que le lundi passé est vide. */
-const ALTERNANCE: ReadonlySet<Salarie['type_contrat']> = new Set([
-  'apprenti',
-  'stagiaire',
-])
-
 export function reposDeduits(
   x: Salarie,
   sol: SalarieSolveur,
@@ -2093,9 +2114,11 @@ export function reposDeduits(
   sansDecompte: ReadonlySet<number> = new Set(),
   motifsRepos: ReadonlySet<number> = new Set(),
   passes = 0,
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
 ): number[] {
-  if (x.type_contrat === 'extra') return []
-  if (ALTERNANCE.has(x.type_contrat) && !remplie) return []
+  const modele = modeleDe(regles, x.type_contrat)
+  if (modele.placementManuel) return []
+  if (modele.alternance && !remplie) return []
   const absents = joursAbsents(x, lundi, absences)
   const travailles = new Set([...siens.map(jourDe), ...sol.joursHorsSite])
   const etats: EtatJour[] = [0, 1, 2, 3, 4, 5, 6].map((j) => {
@@ -2183,8 +2206,10 @@ export function reposObliges(
   /** Horaires que la personne peut prendre (`horairesPermis`) : le repos
    * quotidien n'est jugé que sur eux. */
   horaires: ReadonlyArray<Pick<Horaire, 'debut' | 'fin'>>,
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
 ): ReposOblige[] {
-  if (x.type_contrat === 'extra' || sol.placementManuel) return []
+  if (modeleDe(regles, x.type_contrat).placementManuel || sol.placementManuel)
+    return []
   const absents = joursAbsents(x, lundi, absences)
   const travaille = new Set(siens.map(jourDe))
   for (const [j, m] of absents) if (m !== null && ecole.has(m)) travaille.add(j)
@@ -2205,9 +2230,9 @@ export function reposObliges(
     const affiles = gauche + 1 + droite
     // 5 au plus depuis le 2026-11-04 pour un contrat de 35 h et plus
     // (`rythmeHumain`), comme le calcul et JOURS-AFFILES ; 6 sinon.
-    const plafondAffiles = rythmeHumain(sol)
-      ? JOURS_AFFILES_CONSEILLES
-      : JOURS_AFFILES_MAX
+    const plafondAffiles = rythmeHumain(sol, regles)
+      ? regles.repos.joursAffilesConseilles
+      : regles.repos.joursAffilesMax
     if (affiles > plafondAffiles) {
       r.push({
         jour: j,
@@ -2219,7 +2244,7 @@ export function reposObliges(
     // le calcul ne le pose pas. Certain : une absence (hors école) ou un
     // repos fixe ; le jour voisin d'une semaine connue et libre. Un jour
     // simplement vide ne l'est pas (il peut encore être travaillé).
-    if (rythmeHumain(sol)) {
+    if (jourIsoleDe(sol, regles) === 'interdit') {
       const libreSur = (d: number): boolean => {
         if (apresContrat(sol, d)) return false
         if (d < 0)
@@ -2377,6 +2402,7 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
   const p = probleme({
     salaries: [...salaries.values()],
     creneaux: [...creneaux.values()],
+    regles: ctx.regles,
   })
   const toutes = violations(p, affs)
 
@@ -2569,6 +2595,7 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
         ctx.sansDecompte,
         ctx.motifsRepos,
         passes,
+        ctx.regles,
       ),
       repos_proposes: [0, 1, 2, 3, 4, 5, 6].filter((j) =>
         ctx.reposProposes.has(`${x.id}|${ajouterJours(lundi, j)}`),
@@ -2586,6 +2613,7 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
         ctx.motifsRepos,
         passes,
         horairesPermis(x, sol, ctx),
+        ctx.regles,
       ),
     })
   }
@@ -2709,9 +2737,7 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
     creneaux: [...p.creneaux, ...candidatsDuMoment],
     consignes: chiffresAccueil(ctx),
     ouvertures: ouverturesAccueil(ctx),
-    releveMinutes: accueil
-      ? lireRegles(d.referentiel).passations.releveMinutes
-      : 0,
+    releveMinutes: accueil ? ctx.regles.passations.releveMinutes : 0,
   }
   const ouverturesVides: TrouOut[] = ouverturesManquees(pReglages, affs).map(
     (t) => ({
@@ -3051,7 +3077,11 @@ export function preparerGeneration(
           sol.reposFixes.has(j) ||
           // 39 h : la journée étoile saute avec le JFR, quel que soit son
           // jour (2026-11-04). Sinon, jamais le jour de l'étoile fixée.
-          (sol.etoileFixe.has(j) && sol.minutesContrat !== CONTRAT_39H)
+          (sol.etoileFixe.has(j) &&
+            !aJourneeCourteImposee(
+              ctx.regles,
+              sol.minutesContrat ?? sol.minutesHebdoContrat,
+            ))
         )
           continue
         jours.add(j)
@@ -3069,7 +3099,7 @@ export function preparerGeneration(
   const groupes = new Map<number, Array<{ x: Salarie; minutes: number }>>()
   for (const x of ctx.staff) {
     const sol = salaries.get(x.id)
-    const groupe = posteEquite(x, ctx.postes)
+    const groupe = posteEquite(x, ctx.postes, ctx.regles)
     if (!sol || groupe === null) continue
     groupes.set(groupe, [
       ...(groupes.get(groupe) ?? []),
@@ -3183,6 +3213,7 @@ export function preparerGeneration(
   const p = probleme({
     salaries: [...salaries.values()],
     creneaux,
+    regles: ctx.regles,
     // Graine propre à la semaine et à l'historique : les repos « libres »
     // changent d'une semaine à l'autre, deux « Compléter » ne tirent pas
     // le même hasard.
@@ -3196,7 +3227,7 @@ export function preparerGeneration(
       ? { suivante: esquisseSuivante(d2, ctx, salaries, besoins) }
       : {}),
     releveMinutes: accueilEnService(ctx)
-      ? lireRegles(d.referentiel).passations.releveMinutes
+      ? ctx.regles.passations.releveMinutes
       : 0,
     // Passation du lundi matin avec le veilleur du dimanche d'avant.
     veilleDuLundi: veilleDuLundiDe(d, lundi),
@@ -3364,7 +3395,7 @@ export function esquisseSuivante(
   const personnes = new Map<string, SuivantePersonne>()
   for (const x of ctx.staff) {
     const sol = salaries.get(x.id)
-    if (!sol || x.type_contrat === 'extra' || sol.placementManuel) continue
+    if (!sol || sol.placementManuel) continue
     const hors = joursHorsContrat(x, suivant)
     const absents = joursAbsents(x, suivant, ctx.absences)
     const fixes = new Map<number, 0 | 1>()
@@ -3402,7 +3433,8 @@ export function esquisseSuivante(
     )
     if (hors.size === 7) continue
     const rythme =
-      !sol.contratIndicatif && Number(x.heures_hebdo) * 60 >= RYTHME_CONTRAT_MIN
+      !sol.contratIndicatif &&
+      Number(x.heures_hebdo) * 60 >= ctx.regles.repos.rythmeContratMin
     personnes.set(sol.id, {
       fixes,
       horsSite,

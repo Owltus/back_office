@@ -47,6 +47,8 @@ import {
   numeroSemaine,
   parGroupe,
 } from '#/lib/planning/affichage.ts'
+import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
+import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import { estEcole } from '#/lib/planning/semaine.ts'
 import type { AlerteOut, SemaineOut, ShiftOut } from '#/lib/planning/semaine.ts'
 import { ajouterJours, heureAffichee } from '#/lib/planning/temps.ts'
@@ -163,6 +165,8 @@ export function GrilleMois({
   onVerrou?: (lundi: string) => void
 }) {
   const { motifs, horaires, groupes } = referentiel
+  // Règles de l'établissement (journée étoile des cartes).
+  const regles = useMemo(() => lireRegles(referentiel), [referentiel])
   const [enVol, setEnVol] = useState<EnVol | null>(null)
   const capteurs = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
@@ -456,6 +460,7 @@ export function GrilleMois({
                 <LigneMois
                   key={`s-${s.id}`}
                   personne={s}
+                  regles={regles}
                   mois={mois}
                   jours={jours}
                   lire={lire}
@@ -511,6 +516,7 @@ const classesIndice: Record<Exclude<Indice, null>, string> = {
 
 function LigneMois({
   personne: s,
+  regles,
   mois,
   jours,
   lire,
@@ -526,6 +532,7 @@ function LigneMois({
   onDouble,
 }: {
   personne: Salarie
+  regles: RegleEtablissement
   mois: string
   jours: string[]
   lire: (sid: number, date: string) => CaseMois | null
@@ -751,7 +758,7 @@ function LigneMois({
             // l'un sous l'autre au centre ; l'étoile en pastille au coin haut
             // droit, hors de la grille : les horaires restent alignés.
             <span className="grid w-full grid-cols-[1fr_auto_1fr] items-center text-[9.5px] leading-[1.15] font-semibold tabular-nums">
-              {journeeEtoile(s, shift) && (
+              {journeeEtoile(s, shift, regles) && (
                 <span
                   className="planning-etoile-badge"
                   aria-label="journée étoile"

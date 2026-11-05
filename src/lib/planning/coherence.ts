@@ -62,7 +62,7 @@ import {
   estVersionEtoile,
   travailHoraire,
 } from '#/lib/planning/etoile.ts'
-import { JOURNEE_PLEINE } from '#/lib/planning/regles.ts'
+import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
 import {
   accueilActif,
   chiffreAccueil,
@@ -301,6 +301,9 @@ export function verifierReglages(
   options: OptionsControle = {},
 ): PointReglage[] {
   const points: PointReglage[] = []
+  // Les règles de l'établissement (journées, modèles de contrat).
+  const regles = lireRegles(r)
+
   const ajouter = (
     id: string,
     gravite: Gravite,
@@ -676,7 +679,7 @@ export function verifierReglages(
     // jour-là, un horaire de moins de 8 h qui existe (une version étoile de
     // l'horaire fixé, s'il y en a un). Aucun n'est permis sur ses postes :
     // le planning automatique ne pourra pas la placer ce jour-là.
-    if (contratEtoile(s)) {
+    if (contratEtoile(s, regles)) {
       s.semaine_type.forEach((e, j) => {
         if (!e.etoile || e.mode === 'repos' || e.mode === 'absence') return
         const fixe = e.type_shift_id ? horaires.get(e.type_shift_id) : undefined
@@ -688,8 +691,8 @@ export function verifierReglages(
             horaires: r.horaires,
           }).codes.some((h) =>
             fixe
-              ? estVersionEtoile(h, fixe)
-              : travailHoraire(h) < JOURNEE_PLEINE,
+              ? estVersionEtoile(h, fixe, regles)
+              : travailHoraire(h) < regles.contrats.journeePleine,
           ),
         )
         if (possible) return

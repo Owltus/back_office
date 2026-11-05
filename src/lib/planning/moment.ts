@@ -6,6 +6,7 @@
  */
 
 import { REGLES_PAR_DEFAUT } from '#/lib/planning/reglesEtablissement.ts'
+import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import { minutes } from '#/lib/planning/temps.ts'
 import type { Horaire, Periode } from '#/lib/planning/types.ts'
 
@@ -29,8 +30,9 @@ import type { Horaire, Periode } from '#/lib/planning/types.ts'
  */
 export function momentPropose(
   h: Pick<Horaire, 'debut' | 'fin' | 'pause'>,
+  /** Limites des moments de l'établissement (`lireRegles(...).moments`). */
+  l: RegleEtablissement['moments'] = REGLES_PAR_DEFAUT.moments,
 ): Periode {
-  const l = REGLES_PAR_DEFAUT.moments
   const debut = minutes(h.debut)
   const fin = minutes(h.fin)
   if (debut >= l.nuitDebut || debut < l.nuitFin) return 'nuit'
@@ -44,7 +46,8 @@ export function momentPropose(
  * 2026-11-05, ne survit pas. */
 export function avecMomentCalcule<
   T extends Pick<Horaire, 'debut' | 'fin' | 'pause' | 'periode'>,
->(h: T): T {
-  const periode = momentPropose(h)
+>(h: T, l: RegleEtablissement['moments'] = REGLES_PAR_DEFAUT.moments): T {
+  const periode = momentPropose(h, l)
+
   return h.periode === periode ? h : { ...h, periode }
 }

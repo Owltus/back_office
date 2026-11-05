@@ -34,6 +34,7 @@
 
 import { momentPropose } from '#/lib/planning/moment.ts'
 import { REGLES_PAR_DEFAUT } from '#/lib/planning/reglesEtablissement.ts'
+import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import { minutes } from '#/lib/planning/temps.ts'
 import type {
   Besoin,
@@ -54,16 +55,22 @@ export const ORDRE_PERIODES: Readonly<Record<PeriodePresence, number>> = {
 /** Moment d'un horaire LIBRE (sans horaire) d'après ses heures, comme un
  * horaire (`momentPropose`, 2026-11-05 : le moment se déduit des heures).
  * Sans fin connue : l'heure de début (`periodeLibre`). */
-export function momentLibre(debut: string, fin?: string): Periode {
+export function momentLibre(
+  debut: string,
+  fin?: string,
+  l: RegleEtablissement['moments'] = REGLES_PAR_DEFAUT.moments,
+): Periode {
   return fin === undefined
-    ? periodeLibre(debut)
-    : momentPropose({ debut, fin, pause: 0 })
+    ? periodeLibre(debut, l)
+    : momentPropose({ debut, fin, pause: 0 }, l)
 }
 
 /** Période d'un horaire libre sans fin connue : nuit aux mêmes limites que
  * `momentPropose` (21 h à 5 h), matin avant 12 h 30. */
-export function periodeLibre(debut: string): 'matin' | 'soir' | 'nuit' {
-  const l = REGLES_PAR_DEFAUT.moments
+export function periodeLibre(
+  debut: string,
+  l: RegleEtablissement['moments'] = REGLES_PAR_DEFAUT.moments,
+): 'matin' | 'soir' | 'nuit' {
   const m = minutes(debut)
   if (m >= l.nuitDebut || m < l.nuitFin) return 'nuit'
   return m < l.libreMatinAvant ? 'matin' : 'soir'
@@ -94,11 +101,12 @@ export function periodePresence(
   horaire: Pick<Horaire, 'periode'> | undefined,
   debut: string,
   nuitComptee = false,
+  l: RegleEtablissement['moments'] = REGLES_PAR_DEFAUT.moments,
 ): PeriodePresence | null {
   const famille = horaire ? horaire.periode : null
   // Middle (D11) et horaire sans moment : jamais.
   if (horaire && (famille === 'middle' || famille === null)) return null
-  const p = !horaire ? periodeLibre(debut) : famille
+  const p = !horaire ? periodeLibre(debut, l) : famille
   if (p === 'nuit') return nuitComptee ? 'nuit' : null
   if (p !== 'matin' && p !== 'soir') return null
   return poste?.presence ? p : null
@@ -110,9 +118,10 @@ export function periodePresence(
 export function periodeShift(
   horaire: Pick<Horaire, 'periode'> | undefined,
   debut: string,
+  l: RegleEtablissement['moments'] = REGLES_PAR_DEFAUT.moments,
 ): 'matin' | 'soir' | null {
   const famille = horaire ? horaire.periode : null
-  const p = !horaire || famille === 'middle' ? periodeLibre(debut) : famille
+  const p = !horaire || famille === 'middle' ? periodeLibre(debut, l) : famille
   return p === 'matin' || p === 'soir' ? p : null
 }
 
@@ -274,9 +283,11 @@ export function momentsAccueil(
   debut: string,
   actif = true,
   fin?: string,
+  l: RegleEtablissement['moments'] = REGLES_PAR_DEFAUT.moments,
 ): PeriodePresence[] {
   if (!estPosteAccueil(poste, actif) || !poste) return []
-  const p = horaire ? horaire.periode : momentLibre(debut, fin)
+  const p = horaire ? horaire.periode : momentLibre(debut, fin, l)
+
   if (p === null) return []
   const r: PeriodePresence[] = []
   if (poste.presence) {

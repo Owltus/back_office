@@ -7,7 +7,14 @@
  */
 
 import { salarieSolveur } from '#/lib/planning/modele.ts'
-import { REGLES_PAR_DEFAUT } from '#/lib/planning/reglesEtablissement.ts'
+import {
+  aJourneeCourteImposee,
+  dureesImposees,
+  journeesDuContrat,
+  modeleDe,
+  REGLES_PAR_DEFAUT,
+} from '#/lib/planning/reglesEtablissement.ts'
+import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import type { SalarieSolveur } from '#/lib/planning/modele.ts'
 import { heuresLisibles } from '#/lib/planning/temps.ts'
 import type { Categorie, TypeContrat } from '#/lib/planning/types.ts'
@@ -44,20 +51,37 @@ export const RYTHME_CONTRAT_MIN = REGLES_PAR_DEFAUT.repos.rythmeContratMin
  * 35 h et plus, ni forfait jours ni extra : un petit contrat a des jours
  * seuls par nature. Une seule source pour le générateur, le vérificateur
  * et les repos obligés. */
-export function rythmeHumain(s: {
-  contratIndicatif: boolean
-  placementManuel: boolean
-  minutesHebdoContrat: number
-  minutesContrat?: number
-}): boolean {
+export function rythmeHumain(
+  s: {
+    contratIndicatif: boolean
+    placementManuel: boolean
+    minutesHebdoContrat: number
+    minutesContrat?: number
+  },
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
+): boolean {
   // Le contrat, jamais les heures dues de la semaine : un congé, un JFR ou
   // l'école ne doivent pas lever ces règles (relecture du 2026-11-04 : 39 h
   // et quatre jours de congé, le vendredi restait seul).
   return (
     !s.contratIndicatif &&
     !s.placementManuel &&
-    (s.minutesContrat ?? s.minutesHebdoContrat) >= RYTHME_CONTRAT_MIN
+    (s.minutesContrat ?? s.minutesHebdoContrat) >= regles.repos.rythmeContratMin
   )
+}
+
+/** Le jour de travail seul entre deux repos, tel que la règle de
+ * l'établissement le dit pour cette personne : interdit (dur pour le calcul,
+ * bloque une place), à éviter (conseil), ou sans règle. Interdit seulement
+ * au rythme humain (`rythmeHumain`) : les autres contrats ont des jours
+ * seuls par nature, au plus un conseil. */
+export function jourIsoleDe(
+  s: Parameters<typeof rythmeHumain>[0],
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
+): 'interdit' | 'a_eviter' | 'aucune' {
+  const r = regles.repos.jourIsole
+  if (r === 'aucune') return 'aucune'
+  return r === 'interdit' && rythmeHumain(s, regles) ? 'interdit' : 'a_eviter'
 }
 
 /** Le jour `v` (0 = lundi de la période ; négatif, la semaine d'avant ;
@@ -187,7 +211,13 @@ export interface Fiche {
   contratDebut?: number | null
   contratFin?: number | null
   personne?: string | null
+  /** Règles de l'établissement (`lireRegles`) ; absent : les défauts. */
+  regles?: RegleEtablissement
 }
+
+const reglesDe = (f: Pick<Fiche, 'regles'>) => f.regles ?? REGLES_PAR_DEFAUT
+const modeleFiche = (f: Pick<Fiche, 'regles' | 'typeContrat'>) =>
+  modeleDe(reglesDe(f), f.typeContrat)
 
 const vide: ReadonlySet<number> = new Set()
 
@@ -208,7 +238,7 @@ export function plafondHebdo(f: Fiche): number {
   }
   if (f.forfaitJours) return FORFAIT_SEMAINE_MAX
   // Un extra n'a pas de durée contractuelle (À VÉRIFIER) : le plafond absolu.
-  if (f.typeContrat === 'extra') return SEMAINE_MAX
+  if (modeleFiche(f).contratIndicatif) return SEMAINE_MAX
   return plafondTempsPartiel(f)
 }
 
@@ -228,7 +258,9 @@ export function presenceMaxPoste(categorie: string): number | null {
 /** R-JOURNEE-ETOILE : contrats au-delà de 35 h payés à l'heure. */
 export function journeeEtoile(f: Fiche): boolean {
   return (
-    f.minutesHebdo > TEMPS_PLEIN && !f.forfaitJours && f.typeContrat !== 'extra'
+    f.minutesHebdo > TEMPS_PLEIN &&
+    !f.forfaitJours &&
+    modeleFiche(f).journeeEtoile
   )
 }
 
@@ -260,8 +292,11 @@ function joursAbsents(f: Fiche): number {
 export function etoileSacrifiee(f: Fiche): boolean {
   // Le 39 h seulement : les autres contrats à étoile gardent leur calcul
   // (« si ce n'est ni 35 h ni 39 h, fais au mieux »).
+  // Un contrat dont les journées imposées ont une journée courte (le 39 h).
   return (
-    journeeEtoile(f) && f.minutesHebdo === CONTRAT_39H && joursAbsents(f) > 0
+    journeeEtoile(f) &&
+    aJourneeCourteImposee(reglesDe(f), f.minutesHebdo) &&
+    joursAbsents(f) > 0
   )
 }
 
@@ -278,25 +313,24 @@ export function etoileSacrifiee(f: Fiche): boolean {
  * garde les shifts posés).
  */
 export function journeesDuCalcul(f: Fiche): ReadonlySet<number> | null {
-  if (f.forfaitJours || f.typeContrat === 'extra') return null
+  const R = reglesDe(f)
+  if (f.forfaitJours || !modeleFiche(f).journeesImposees) return null
   // Une semaine type qui fixe un horaire ni de 7 h ni de 8 h décide seule
   // (relecture du 2026-11-04) : un horaire choisi à la main n'est jamais
   // refusé ni remplacé. Des horaires fixés de 7 h ou de 8 h (le veilleur, la
   // technique) restent dans la règle, plafond compris.
+  const imposees = dureesImposees(R)
   if (
     f.shiftImpose?.length &&
-    (!f.journeesFixees ||
-      [...f.journeesFixees].some(
-        (t) => t !== JOURNEE_COURTE && t !== JOURNEE_PLEINE,
-      ))
+    (!f.journeesFixees || [...f.journeesFixees].some((t) => !imposees.has(t)))
   )
     return null
-  if (f.minutesHebdo === CONTRAT_35H) return new Set([JOURNEE_COURTE])
-  if (f.minutesHebdo === CONTRAT_39H)
-    return etoileSacrifiee(f)
-      ? new Set([JOURNEE_PLEINE])
-      : new Set([JOURNEE_PLEINE, JOURNEE_COURTE])
-  return null
+  const j = journeesDuContrat(R, f.minutesHebdo)
+  if (!j) return null
+  // La semaine où la journée étoile saute : la plus longue seule.
+  return etoileSacrifiee(f)
+    ? new Set([Math.max(...j.durees)])
+    : new Set(j.durees)
 }
 
 /**
@@ -307,10 +341,11 @@ export function journeesDuCalcul(f: Fiche): ReadonlySet<number> | null {
  * prudente (plus de temps réservé dans le plafond de la semaine).
  */
 export function journeeContrat(f: Fiche): number {
-  if (journeeEtoile(f)) return JOURNEE_PLEINE
+  const pleine = reglesDe(f).contrats.journeePleine
+  if (journeeEtoile(f)) return pleine
   const parJour = Math.floor(Math.max(0, f.minutesHebdo) / JOURS_CONTRAT)
-  if (f.forfaitJours || f.typeContrat === 'extra') {
-    return Math.max(JOURNEE_PLEINE, parJour)
+  if (f.forfaitJours || modeleFiche(f).contratIndicatif) {
+    return Math.max(pleine, parJour)
   }
   return parJour
 }
@@ -340,8 +375,9 @@ export function heuresDues(f: Fiche): number {
     dues &&
     etoileTravaillable(f)
   ) {
-    const courte = f.minutesHebdo - (JOURS_CONTRAT - 1) * JOURNEE_PLEINE
-    dues -= JOURNEE_PLEINE - Math.max(0, Math.min(JOURNEE_PLEINE, courte))
+    const pleine = reglesDe(f).contrats.journeePleine
+    const courte = f.minutesHebdo - (JOURS_CONTRAT - 1) * pleine
+    dues -= pleine - Math.max(0, Math.min(pleine, courte))
   }
   return Math.max(0, Math.min(f.minutesHebdo, dues))
 }
@@ -358,8 +394,9 @@ export function heuresDues(f: Fiche): number {
 export function droitAuRattrapage(
   x: { type_contrat: TypeContrat; date_entree: string | null },
   ferie: string,
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
 ): boolean {
-  if (x.type_contrat === 'extra' || x.type_contrat === 'stagiaire') return false
+  if (!modeleDe(regles, x.type_contrat).ferieRattrape) return false
   if (!x.date_entree) return false
   const annee = Number(x.date_entree.slice(0, 4)) + 1
   // Comparaison de textes AAAA-MM-JJ : une entrée un 29 février ouvre droit
@@ -430,10 +467,10 @@ export function versSolveur(f: Fiche): SalarieSolveur {
     // de particulier : une journée de 8 h comme les autres.
     etoileFixe: etoile && !etoileSacrifiee(f) ? (f.etoileFixe ?? vide) : vide,
     journeesCalcul: journeesDuCalcul(f),
-    journeesCourtesMax: etoile ? JOURNEES_COURTES_MAX : null,
-    journeePleine: JOURNEE_PLEINE,
-    contratIndicatif: !!f.forfaitJours || f.typeContrat === 'extra',
-    placementManuel: f.typeContrat === 'extra',
+    journeesCourtesMax: etoile ? reglesDe(f).contrats.journeesCourtesMax : null,
+    journeePleine: reglesDe(f).contrats.journeePleine,
+    contratIndicatif: !!f.forfaitJours || modeleFiche(f).contratIndicatif,
+    placementManuel: modeleFiche(f).placementManuel,
     shiftImpose: f.shiftImpose ?? [],
     shiftsAutorises: f.shiftsAutorises ?? new Set(),
     postesOccasionnels: f.postesOccasionnels ?? new Set(),
@@ -512,7 +549,7 @@ export function resume(f: Fiche): LigneRegle[] {
       'Stagiaire : au plus 10 h par jour, mêmes repos que les salariés',
     ])
   }
-  if (f.typeContrat === 'apprenti' || f.joursEcole?.size) {
+  if (modeleFiche(f).alternance || f.joursEcole?.size) {
     lignes.push([
       'R-ECOLE-HEURES',
       `Un jour d'école compte comme une journée de travail complète (${heuresLisibles(s.minutesEcoleJour)})`,

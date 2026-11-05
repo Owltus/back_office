@@ -7,7 +7,9 @@
 
 import { COULEUR_VALIDE } from '#/components/planning/parametres/reglages/controles.tsx'
 import { momentPropose, nomHoraire } from '#/lib/planning/affichage.ts'
+import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import { minutes, presence } from '#/lib/planning/temps.ts'
+
 import { CATEGORIES } from '#/lib/planning/types.ts'
 import type { Horaire, Motif, Poste } from '#/lib/planning/types.ts'
 
@@ -137,26 +139,34 @@ export function heuresLibres(
 export function changerHeures(
   h: SaisieHoraire,
   maj: Partial<Pick<SaisieHoraire, 'debut' | 'fin' | 'pause'>>,
+  /** Limites des moments de l'établissement (`lireRegles`). */
+  l?: RegleEtablissement['moments'],
 ): Partial<SaisieHoraire> {
   const suite = { ...h, ...maj }
   if (!heuresCompletes(suite) || !Number.isFinite(suite.pause)) return maj
-  return { ...maj, periode: momentPropose(suite) }
+  return { ...maj, periode: momentPropose(suite, l) }
 }
 
 /** Le moment montré dans le volet : celui des heures dès qu'elles sont
  * complètes (2026-11-05), sinon le dernier connu (heure en cours de frappe). */
-export function momentDeLaSaisie(h: SaisieHoraire): SaisieHoraire['periode'] {
+export function momentDeLaSaisie(
+  h: SaisieHoraire,
+  l?: RegleEtablissement['moments'],
+): SaisieHoraire['periode'] {
   return heuresCompletes(h) && Number.isFinite(h.pause)
-    ? momentPropose(h)
+    ? momentPropose(h, l)
     : h.periode
 }
 
 /** Le moment est-il celui que les heures proposent ? */
-export function momentEstPropose(h: SaisieHoraire): boolean {
+export function momentEstPropose(
+  h: SaisieHoraire,
+  l?: RegleEtablissement['moments'],
+): boolean {
   return (
     heuresCompletes(h) &&
     Number.isFinite(h.pause) &&
-    h.periode === momentPropose(h)
+    h.periode === momentPropose(h, l)
   )
 }
 
@@ -200,8 +210,11 @@ export function erreursPoste(p: SaisiePoste): string[] {
 
 /** Ce qui part en base : le nom (obligatoire en base) écrit par l'app
  * d'après les heures et le moment, jamais saisi. */
-export function nettoyerHoraire(h: SaisieHoraire): Omit<Horaire, 'id'> {
-  return { ...h, periode: momentPropose(h), nom: nomHoraire(h) }
+export function nettoyerHoraire(
+  h: SaisieHoraire,
+  l?: RegleEtablissement['moments'],
+): Omit<Horaire, 'id'> {
+  return { ...h, periode: momentPropose(h, l), nom: nomHoraire(h) }
 }
 
 export function nettoyerMotif(m: SaisieMotif): SaisieMotif {

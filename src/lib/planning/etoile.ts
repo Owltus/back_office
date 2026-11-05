@@ -28,11 +28,12 @@
  * 15:00–22:45 ; 23:00–07:00 → 00:00–07:00.
  */
 
+import { TEMPS_PLEIN } from '#/lib/planning/regles.ts'
 import {
-  JOURNEE_ETOILE_MIN,
-  JOURNEE_PLEINE,
-  TEMPS_PLEIN,
-} from '#/lib/planning/regles.ts'
+  modeleDe,
+  REGLES_PAR_DEFAUT,
+} from '#/lib/planning/reglesEtablissement.ts'
+import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import { bornesMurales, horaireDe } from '#/lib/planning/temps.ts'
 import type { Horaire, Salarie } from '#/lib/planning/types.ts'
 
@@ -55,11 +56,16 @@ export function travailHoraire(h: Omit<HoraireEtoile, 'id'>): number {
 }
 
 /** `v` est-il une version étoile de `h` (règles en tête du fichier) ? */
-export function estVersionEtoile(v: HoraireEtoile, h: HoraireEtoile): boolean {
+export function estVersionEtoile(
+  v: HoraireEtoile,
+  h: HoraireEtoile,
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
+): boolean {
+  const { journeePleine, journeeEtoileMin } = regles.contrats
   if (v.id === h.id) return false
-  if (travailHoraire(h) !== JOURNEE_PLEINE) return false
+  if (travailHoraire(h) !== journeePleine) return false
   const t = travailHoraire(v)
-  if (t < JOURNEE_ETOILE_MIN || t >= JOURNEE_PLEINE) return false
+  if (t < journeeEtoileMin || t >= journeePleine) return false
   const [hd, hf] = plage(h)
   const [vd, vf] = plage(v)
   return vd >= hd && vf <= hf
@@ -70,9 +76,10 @@ export function estVersionEtoile(v: HoraireEtoile, h: HoraireEtoile): boolean {
 export function versionsEtoile<T extends HoraireEtoile>(
   h: HoraireEtoile,
   horaires: readonly T[],
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
 ): T[] {
   return horaires
-    .filter((v) => estVersionEtoile(v, h))
+    .filter((v) => estVersionEtoile(v, h, regles))
     .sort((a, b) => a.id - b.id)
 }
 
@@ -81,9 +88,10 @@ export function versionsEtoile<T extends HoraireEtoile>(
 export function horairesNormaux<T extends HoraireEtoile>(
   v: HoraireEtoile,
   horaires: readonly T[],
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
 ): T[] {
   return horaires
-    .filter((h) => estVersionEtoile(v, h))
+    .filter((h) => estVersionEtoile(v, h, regles))
     .sort((a, b) => a.id - b.id)
 }
 
@@ -91,11 +99,12 @@ export function horairesNormaux<T extends HoraireEtoile>(
  * ni forfait jours ni extra (même règle que `journeeEtoile` de `regles.ts`). */
 export function contratEtoile(
   s: Pick<Salarie, 'heures_hebdo' | 'forfait_jours' | 'type_contrat'>,
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
 ): boolean {
   return (
     Math.round(Number(s.heures_hebdo) * 60) > TEMPS_PLEIN &&
     !s.forfait_jours &&
-    s.type_contrat !== 'extra'
+    modeleDe(regles, s.type_contrat).journeeEtoile
   )
 }
 
@@ -105,6 +114,7 @@ export function contratEtoile(
 export function estJourneeEtoile(
   s: Pick<Salarie, 'heures_hebdo' | 'forfait_jours' | 'type_contrat'>,
   travail: number,
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
 ): boolean {
-  return contratEtoile(s) && travail < JOURNEE_PLEINE
+  return contratEtoile(s, regles) && travail < regles.contrats.journeePleine
 }

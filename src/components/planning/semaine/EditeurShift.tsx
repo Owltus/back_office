@@ -65,6 +65,7 @@ import {
   texteEtoileDeja,
 } from '#/components/planning/codesCase.ts'
 import { PastilleHoraire } from '#/components/planning/PastilleHoraire.tsx'
+import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
 import {
   ChampsHoraireSpecifique,
   ChoixPosteSpecifique,
@@ -222,7 +223,9 @@ export function EditeurShift({
   }
   // Une journée étoile (horaire de 7 h, version d'un horaire de 8 h) n'est
   // jamais choisie d'office : elle se choisit, une fois par semaine.
-  const pasEtoile = (h: Horaire) => horairesNormaux(h, horaires).length === 0
+  const regles = lireRegles(referentiel)
+  const pasEtoile = (h: Horaire) =>
+    horairesNormaux(h, horaires, regles).length === 0
   /** Premier code sans alerte : sur ce poste s'il est donné, sinon dans la
    * première rubrique qui en a un (métier habituel d'abord). Jamais un code
    * qui casse la coupure de repos d'office ; une journée étoile seulement

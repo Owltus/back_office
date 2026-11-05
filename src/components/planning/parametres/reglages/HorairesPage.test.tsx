@@ -8,6 +8,7 @@ import {
   within,
 } from '@testing-library/react'
 
+import { REGLES_PAR_DEFAUT } from '#/lib/planning/reglesEtablissement.ts'
 import type { Referentiel } from '#/lib/planning/types.ts'
 
 /*
@@ -168,6 +169,8 @@ describe('Horaires et absences', () => {
         periode: 'matin',
       },
       1,
+      // Les limites des moments de l'établissement (défauts ici).
+      REGLES_PAR_DEFAUT.moments,
     )
     expect(
       await screen.findByText(

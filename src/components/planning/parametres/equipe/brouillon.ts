@@ -12,7 +12,11 @@ import {
   enPeriodes,
   postesDuGroupe,
 } from '#/lib/planning/affichage.ts'
+import { contratEtoile } from '#/lib/planning/etoile.ts'
 import type { Fiche } from '#/lib/planning/regles.ts'
+import { REGLES_PAR_DEFAUT } from '#/lib/planning/reglesEtablissement.ts'
+import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
+
 import { estEcole } from '#/lib/planning/semaine.ts'
 import { ajouterJours, ecartJours, lundiDe } from '#/lib/planning/temps.ts'
 import type {
@@ -301,10 +305,13 @@ export function filtrerJours(
 export const niveauParDefaut = (contrat: TypeContrat): Niveau =>
   enAlternance(contrat) ? 'soutien' : 'titulaire'
 
-/** Journée étoile possible : au-delà de 35 h payé à l'heure. */
+/** Journée étoile possible : au-delà de 35 h payé à l'heure, pour un
+ * contrat dont le modèle a une journée étoile (`contratEtoile`, la même
+ * règle que le moteur). */
 export const etoilePossible = (
   b: Pick<Brouillon, 'heures_hebdo' | 'forfait_jours' | 'type_contrat'>,
-) => b.heures_hebdo > 35 && !b.forfait_jours && b.type_contrat !== 'extra'
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
+) => contratEtoile(b, regles)
 
 /** Passer en extra : 0 h et pas de forfait ; en sortir : 35 h si c'était 0. */
 export function changerContrat(

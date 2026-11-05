@@ -35,20 +35,12 @@ import type {
   SalarieSolveur,
 } from '#/lib/planning/modele.ts'
 import {
-  CHANGEMENTS_MOMENT_MAX,
-  ECOLE_LENDEMAIN_DEBUT,
-  ECOLE_VEILLE_FIN,
-  EQUIPE_TOLERANCE,
-  JOURS_AFFILES_CONSEILLES,
-  JOURS_AFFILES_MAX,
-  MOMENT_ARRIERE_JOURS,
-  NUITS_AFFILEES_MAX,
-  REPOS_APRES_NUITS,
-  REPOS_CONFORT,
-  SEMAINES_EN_PLUS_ALERTE,
+  jourIsoleDe,
   rythmeHumain,
   apresContrat,
 } from '#/lib/planning/regles.ts'
+import { REGLES_PAR_DEFAUT } from '#/lib/planning/reglesEtablissement.ts'
+import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import { heuresLisibles as h } from '#/lib/planning/temps.ts'
 import type { Periode, PeriodePresence } from '#/lib/planning/types.ts'
 
@@ -77,6 +69,8 @@ export function violationsSalarie(
    * le calcul refuse aussi. À l'écran d'une semaine, non : un planning en
    * cours de saisie en serait plein. */
   pourUnePlace = false,
+  /** Règles de l'établissement (`Probleme.regles`) ; défaut : l'hôtel. */
+  R: RegleEtablissement = REGLES_PAR_DEFAUT,
 ): Violation[] {
   const erreurs: Violation[] = []
   const ajoute = (
@@ -231,12 +225,13 @@ export function violationsSalarie(
       const uneSemaine = d >= 0 && Math.floor(d / 7) === Math.floor(f / 7)
       // Depuis le 2026-11-04, 5 au plus pour un contrat de 35 h et plus (le
       // calcul ne va plus au-delà, `rythmeHumain`), 6 sinon.
-      const plafond = rythmeHumain(s)
-        ? JOURS_AFFILES_CONSEILLES
-        : JOURS_AFFILES_MAX
+      const humain = rythmeHumain(s, R)
+      const plafond = humain
+        ? R.repos.joursAffilesConseilles
+        : R.repos.joursAffilesMax
       // Dans une semaine, 6 jours se disent aussi pour un 35 h (le calcul ne
       // les fait plus) ; les autres ont le 6e jour et R-SIX-JOURS-MAX.
-      const dansSemaineCompte = plafond === JOURS_AFFILES_CONSEILLES
+      const dansSemaineCompte = humain
       if (n > plafond && ici.length && (dansSemaineCompte || !uneSemaine))
         ajoute(
           'JOURS-AFFILES',
@@ -439,6 +434,7 @@ export function violationsSalarie(
     (regle, message, creneaux) =>
       ajoute(regle, message, creneaux, 'organisation'),
     pourUnePlace,
+    R,
   )
   return erreurs
 }
@@ -450,6 +446,9 @@ export const JOUR_ISOLE_INTERDIT =
   'un jour de travail seul entre deux jours sans travail'
 export const JOUR_ISOLE_A_EVITER =
   'un jour de travail seul entre deux jours sans travail (à éviter)'
+/** REPOS-SEPARES quand la règle de l'établissement n'est que souhaitée
+ * (`repos.deuxReposDeSuite`) : un conseil, jamais une raison qui bloque. */
+export const REPOS_SEPARES_SOUHAITE = ' (souhaité)'
 
 /** Ce qui distingue deux violations pour savoir ce qu'une place ajoute :
  * la règle et le message, et pour un jour isolé le jour lui-même (un jour
@@ -472,7 +471,8 @@ export function moraleQuiBloque(v: {
   message: string
 }): boolean {
   return (
-    v.regle === 'REPOS-SEPARES' ||
+    (v.regle === 'REPOS-SEPARES' &&
+      !v.message.endsWith(REPOS_SEPARES_SOUHAITE)) ||
     (v.regle === 'JOUR-ISOLE' && v.message === JOUR_ISOLE_INTERDIT)
   )
 }
@@ -514,8 +514,12 @@ function alertesMorales(
   nbJours: number,
   ajoute: (regle: string, message: string, creneaux: Creneau[]) => void,
   pourUnePlace: boolean,
+  R: RegleEtablissement,
 ): void {
   if (!liste.length) return
+  const REPOS_CONFORT = R.repos.reposConfort
+  const NUITS_AFFILEES_MAX = R.repos.nuitsAffileesMax
+  const REPOS_APRES_NUITS = R.repos.reposApresNuits
   const travaille = (d: number) => parJour.has(d) || s.joursHorsSite.has(d)
   const nbSemaines = Math.ceil(nbJours / 7)
 
@@ -565,14 +569,14 @@ function alertesMorales(
     if (fin !== undefined && c.fin > fin)
       ajoute(
         'ECOLE-ABORDS',
-        `finit après ${h(ECOLE_VEILLE_FIN)} la veille d'un jour d'école`,
+        `finit après ${h(R.ecole.veilleFin)} la veille d'un jour d'école`,
         [c],
       )
     const debut = s.debutApresEcole.get(j)
     if (debut !== undefined && c.debut < debut)
       ajoute(
         'ECOLE-ABORDS',
-        `commence avant ${h(ECOLE_LENDEMAIN_DEBUT)} le lendemain d'un jour d'école`,
+        `commence avant ${h(R.ecole.lendemainDebut)} le lendemain d'un jour d'école`,
         [c],
       )
   }
@@ -625,8 +629,9 @@ function alertesMorales(
   // vide doit le dire (`pourUnePlace`). Pour les autres, l'alerte reste un
   // conseil (message `JOUR_ISOLE_A_EVITER`), jamais une raison qui bloque
   // une place.
-  if (!s.placementManuel && !s.contratIndicatif) {
-    const dur = rythmeHumain(s)
+  const isole = jourIsoleDe(s, R)
+  if (!s.placementManuel && !s.contratIndicatif && isole !== 'aucune') {
+    const dur = isole === 'interdit'
     const toujours = dur && pourUnePlace
     const parSemaine = (d: number) =>
       intervalle(7 * Math.floor(d / 7), 7 * Math.floor(d / 7) + 7).filter(
@@ -668,6 +673,7 @@ function alertesMorales(
     // générateur. Une semaine type qui fixe deux repos ou plus a décidé
     // elle-même : rien n'est dit.
     if (
+      R.repos.deuxReposDeSuite !== 'aucune' &&
       !s.placementManuel &&
       !s.reposConsecutifs &&
       s.reposFixes.size < 2 &&
@@ -688,9 +694,12 @@ function alertesMorales(
       if (libres.length && !colles)
         ajoute(
           'REPOS-SEPARES',
-          libres.length >= 2
+          (libres.length >= 2
             ? 'ses jours de repos de la semaine ne se suivent pas'
-            : 'pas deux jours de repos de suite dans la semaine',
+            : 'pas deux jours de repos de suite dans la semaine') +
+            (R.repos.deuxReposDeSuite === 'souhaite'
+              ? REPOS_SEPARES_SOUHAITE
+              : ''),
           semaine,
         )
     }
@@ -729,17 +738,17 @@ function alertesMorales(
         const a = avecMoment[j]
         const b = avecMoment[i]
         if (
-          jourDe(b) - jourDe(a) <= MOMENT_ARRIERE_JOURS &&
+          jourDe(b) - jourDe(a) <= R.repos.momentArriereJours &&
           RANG[a.moment as Periode] > RANG[b.moment as Periode]
         ) {
           arriere = [a, b]
           break
         }
       }
-    if (changements > CHANGEMENTS_MOMENT_MAX)
+    if (changements > R.repos.changementsMomentMax)
       ajoute(
         'MOMENTS',
-        `${changements} changements de moment dans la semaine (${CHANGEMENTS_MOMENT_MAX} au plus conseillé)`,
+        `${changements} changements de moment dans la semaine (${R.repos.changementsMomentMax} au plus conseillé)`,
         avecMoment,
       )
     if (arriere)
@@ -776,7 +785,10 @@ function alertesMorales(
       // Les heures dues ont déjà l'école en moins (`heuresDues`).
       const total = semaine.reduce((t, c) => t + travail(c), 0)
       const avant = s.equiteAvant.semainesEnPlus ?? 0
-      if (total > s.minutesHebdoContrat && avant + 1 >= SEMAINES_EN_PLUS_ALERTE)
+      if (
+        total > s.minutesHebdoContrat &&
+        avant + 1 >= R.heures.semainesEnPlusAlerte
+      )
         ajoute(
           'HEURES-PLUS',
           `au-delà de son contrat ${avant + 1} semaines sur 4 : les heures en plus se partagent`,
@@ -904,7 +916,15 @@ export function violations(
   }
   const parPersonne = new Map<string, SalarieSolveur[]>()
   for (const s of p.salaries) {
-    erreurs.push(...violationsSalarie(s, parSalarie.get(s.id) ?? [], p.nbJours))
+    erreurs.push(
+      ...violationsSalarie(
+        s,
+        parSalarie.get(s.id) ?? [],
+        p.nbJours,
+        false,
+        p.regles,
+      ),
+    )
     if (s.personne !== null) {
       parPersonne.set(s.personne, [...(parPersonne.get(s.personne) ?? []), s])
     }
@@ -1251,7 +1271,9 @@ export function raisonsBlocageAccueil(
       .map((a) => creneaux.get(a.creneauId))
       .filter((c): c is Creneau => c !== undefined)
     const avant = new Set(
-      violationsSalarie(s, siens, p.nbJours, true).map((v) => cleViolation(v)),
+      violationsSalarie(s, siens, p.nbJours, true, p.regles).map((v) =>
+        cleViolation(v),
+      ),
     )
     // Déjà compté dans ce moment : ce n'est pas lui qui manque.
     if (cibles.some((c) => siens.includes(c))) continue
@@ -1264,6 +1286,7 @@ export function raisonsBlocageAccueil(
         [...siens, cible],
         p.nbJours,
         true,
+        p.regles,
       ).filter((v) => !avant.has(cleViolation(v)))
       if (meilleure === null || liste.length < meilleure.length)
         meilleure = liste
@@ -1307,9 +1330,17 @@ export function raisonsBlocage(
       .filter((c): c is Creneau => c !== undefined)
     if (siens.includes(cible)) continue
     const avant = new Set(
-      violationsSalarie(s, siens, p.nbJours, true).map((v) => cleViolation(v)),
+      violationsSalarie(s, siens, p.nbJours, true, p.regles).map((v) =>
+        cleViolation(v),
+      ),
     )
-    const apres = violationsSalarie(s, [...siens, cible], p.nbJours, true)
+    const apres = violationsSalarie(
+      s,
+      [...siens, cible],
+      p.nbJours,
+      true,
+      p.regles,
+    )
     let liste = apres.filter((v) => !avant.has(cleViolation(v)))
     if (s.placementManuel && liste.length === 0) {
       liste = [
@@ -1430,11 +1461,15 @@ export function transmissions(
     const veille = jour > 0 ? de(jour - 1, 'nuit') : veilleDuLundi
     let matinSoir = contact(matins, soirs)
     if (matinSoir && sansReleve.includes(jour)) matinSoir = 'manque'
+    // Sans passation avec le veilleur (règle de l'établissement) : rien à
+    // dire de la nuit.
+    const veilleur = (p.regles ?? REGLES_PAR_DEFAUT).passations
+      .passationVeilleur
     r.push({
       jour,
-      nuitMatin: contact(veille, matins),
+      nuitMatin: veilleur ? contact(veille, matins) : null,
       matinSoir,
-      soirNuit: contact(soirs, nuits),
+      soirNuit: veilleur ? contact(soirs, nuits) : null,
     })
   }
   return r
@@ -1539,6 +1574,8 @@ export function equipesDesynchro(
   affectations: AffectationSolveur[],
 ): EquipeDesynchro[] {
   const R = p.releveMinutes ?? 0
+  const EQUIPE_TOLERANCE = (p.regles ?? REGLES_PAR_DEFAUT).passations
+    .equipeTolerance
   const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
   const salaries = new Map(p.salaries.map((s) => [s.id, s]))
   const postesJour = new Set(

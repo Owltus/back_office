@@ -47,6 +47,7 @@ import {
 import { resume } from '#/lib/planning/regles.ts'
 import type { LigneRegle } from '#/lib/planning/regles.ts'
 import { estEcole } from '#/lib/planning/semaine.ts'
+import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
 import { JOURS } from '#/lib/planning/types.ts'
 import type {
   Horaire,
@@ -329,7 +330,8 @@ export function SectionSemaineType({
   disabled,
 }: PropsSection) {
   const { horaires, motifs, postes } = referentiel
-  const etoile = etoilePossible(b)
+  const etoile = etoilePossible(b, lireRegles(referentiel))
+
   // Seulement ce que la règle unique permet ce jour-là sur ses postes.
   const possibles = (jour: number) =>
     codesSemaineType(b, postes, horaires, jour)

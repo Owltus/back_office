@@ -6,6 +6,7 @@
 
 import { MINUTES_PAR_JOUR, NUIT_DEBUT, NUIT_FIN } from '#/lib/planning/temps.ts'
 import type { Periode, PeriodePresence } from '#/lib/planning/types.ts'
+import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 
 /** Un poste à tenir sur une plage horaire, avec le nombre de personnes. */
 export interface Creneau {
@@ -378,6 +379,10 @@ export interface Probleme {
   }>
   /** Relève entre le matin et le soir, en minutes (0 ou absent : aucune). */
   releveMinutes?: number
+  /** Règles de l'établissement (`lireRegles`), lues par le générateur ET le
+   * vérificateur. Absent : les défauts (l'hôtel). */
+  regles?: RegleEtablissement
+
   /** La nuit du dimanche d'avant (shifts de nuit de l'accueil, minutes de
    * cette semaine) : la passation du lundi matin se fait avec elle
    * (`zonesPassation`). Absent : rien à chercher. */

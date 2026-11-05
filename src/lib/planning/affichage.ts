@@ -3,6 +3,7 @@
  */
 
 import { estJourneeEtoile } from '#/lib/planning/etoile.ts'
+import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import { POSTE_ID_ACCUEIL, posteEquite } from '#/lib/planning/semaine.ts'
 import type { BilanOut, SemaineOut } from '#/lib/planning/semaine.ts'
 import {
@@ -420,8 +421,9 @@ export function genreMotif(m?: Motif): string {
 export function journeeEtoile(
   s: Pick<Salarie, 'forfait_jours' | 'heures_hebdo' | 'type_contrat'>,
   shift: { duree: number },
+  regles?: RegleEtablissement,
 ): boolean {
-  return estJourneeEtoile(s, shift.duree)
+  return estJourneeEtoile(s, shift.duree, regles)
 }
 
 export function horaireLibelle(h: Horaire | undefined): string {

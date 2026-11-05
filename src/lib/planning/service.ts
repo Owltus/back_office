@@ -13,6 +13,8 @@ import { refusDroits } from '#/lib/planning/erreurs.ts'
 import { SEMAINES_EQUITE } from '#/lib/planning/modele.ts'
 import { avecMomentCalcule } from '#/lib/planning/moment.ts'
 import { ORDRE_PERIODES } from '#/lib/planning/presence.ts'
+import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
+import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import { premierLundiLu } from '#/lib/planning/feries.ts'
 import type { NouveauShift, NouvelleAbsence } from '#/lib/planning/semaine.ts'
 import { ajouterJours, lundiDe } from '#/lib/planning/temps.ts'
@@ -192,9 +194,18 @@ export async function fetchReferentiel(): Promise<Referentiel> {
       .select(COL_MODELE_CONTRAT)
       .order('type_contrat'),
   ])
+  // La ligne manque (base pas encore migrée) : la relève par défaut ;
+  // les autres règles absentes reprennent leurs défauts (`lireRegles`).
+  const lesReglages = normaliserReglages(
+    verifier(reglages) as unknown as Reglages | null,
+  )
+  const moments = lireRegles({ reglages: lesReglages }).moments
   return {
-    // Le moment se déduit des heures (2026-11-05), quoi que dise la base.
-    horaires: (verifier(horaires) as Horaire[]).map(avecMomentCalcule),
+    // Le moment se déduit des heures (2026-11-05), quoi que dise la base,
+    // aux limites de l'établissement.
+    horaires: (verifier(horaires) as Horaire[]).map((h) =>
+      avecMomentCalcule(h, moments),
+    ),
     motifs: verifier(motifs),
     postes: (verifier(postes) as Poste[]).map((p) => ({
       ...p,
@@ -216,11 +227,7 @@ export async function fetchReferentiel(): Promise<Referentiel> {
     verrous: (verifier(verrous) as Array<{ lundi: string }>).map(
       (v) => v.lundi,
     ),
-    // La ligne manque (base pas encore migrée) : la relève par défaut ;
-    // les autres règles absentes reprennent leurs défauts (`lireRegles`).
-    reglages: normaliserReglages(
-      verifier(reglages) as unknown as Reglages | null,
-    ),
+    reglages: lesReglages,
     modelesContrat: verifier(modeles) as unknown as ModeleContrat[],
   }
 }
@@ -571,8 +578,14 @@ async function enregistrer<T extends { id: number }>(
   return ligne.id
 }
 
-export const enregistrerHoraire = (v: SansId<Horaire>, id: number | null) =>
-  enregistrer<Horaire>('planning_horaires', avecMomentCalcule(v), id)
+export const enregistrerHoraire = (
+  v: SansId<Horaire>,
+  id: number | null,
+  /** Limites des moments de l'établissement (`lireRegles(...).moments`). */
+  moments?: RegleEtablissement['moments'],
+) =>
+  enregistrer<Horaire>('planning_horaires', avecMomentCalcule(v, moments), id)
+
 export const enregistrerMotif = (v: SansId<Motif>, id: number | null) =>
   enregistrer<Motif>('planning_motifs', v, id)
 export const enregistrerPoste = (v: SansId<Poste>, id: number | null) =>
