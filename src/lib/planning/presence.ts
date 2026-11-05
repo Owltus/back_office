@@ -22,8 +22,10 @@
  *
  * ⚠ TABLEAU DE L'ACCUEIL (plan planning-accueil-2026-11-01, décisions
  * utilisateur du 2026-11-01) : le MOTEUR et l'analyse comptent désormais par
- * `momentsAccueil` (plus bas), qui RÉVISE trois points de cet en-tête :
- * un middle compte au matin ET au soir (D11), la nuit ne compte que sur le
+ * `momentsAccueil` (plus bas), qui RÉVISE deux points de cet en-tête (un
+ * troisième, « un middle compte au matin ET au soir » (D11), est revenu
+ * en arrière le 2026-11-05 : un middle ne compte nulle part), la nuit ne
+ * compte que sur le
  * poste de catégorie Veille de nuit (D10), et les soutiens comptent (D5,
  * l'appelant ne les retire plus). `periodePresence` et
  * `sommeBesoinsPresence` gardent l'ancienne règle tant que le contrôle des
@@ -240,9 +242,13 @@ export function estPosteAccueil(
 
 /** Moments du tableau où compte un shift (ou un créneau candidat) de ce
  * poste, dans l'ordre matin, soir, nuit. Vide : il ne compte nulle part.
- *   - poste coché « présence » : matin → matin, soir → soir, middle → matin
- *     ET soir (D11 du 2026-11-01 : « Marc fait 11:00 – 19:45 » compte au
- *     matin et au soir) ; une nuit n'y compte pas (D10) ;
+ *   - poste coché « présence » : matin → matin, soir → soir ; un middle ne
+ *     compte NULLE PART (2026-11-05, révise D11 du 2026-11-01 : une
+ *     responsable, « les middles sont des shifts en option, un coup de
+ *     main » ; et, mesuré sur les 18 semaines faites à la main, un middle
+ *     compté deux fois remplaçait un vrai soir : une personne seule à 21 h
+ *     69 jours sur 126 au lieu de 22, 21 à la main). Il reste compté pour
+ *     les trous entre équipes. Une nuit n'y compte pas (D10) ;
  *   - poste Veille de nuit (accueil actif) : nuit → nuit ;
  *   - horaire sans moment (`periode` null) : rien ;
  *   - horaire libre : son heure de début (`periodeLibre`).
@@ -258,8 +264,8 @@ export function momentsAccueil(
   if (p === null) return []
   const r: PeriodePresence[] = []
   if (poste.presence) {
-    if (p === 'matin' || p === 'middle') r.push('matin')
-    if (p === 'soir' || p === 'middle') r.push('soir')
+    if (p === 'matin') r.push('matin')
+    if (p === 'soir') r.push('soir')
   }
   if (tientLaNuit(poste) && p === 'nuit') r.push('nuit')
   return r

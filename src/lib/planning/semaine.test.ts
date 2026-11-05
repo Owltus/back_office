@@ -2147,10 +2147,10 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
     )
   })
 
-  it('Martin V3-I : recompte par cycle = oracle à la main (middle deux fois, soutien compté)', () => {
-    // Oracle (révisé le 2026-11-01, D5 et D11 du plan planning-accueil) :
-    // matin / soir = famille du code sur l'Accueil (coché présence) ; middle
-    // : matin ET soir ; horaire libre : matin avant 12 h 30 ; code sans
+  it('Martin V3-I : recompte par cycle = oracle à la main (middle jamais, soutien compté)', () => {
+    // Oracle (révisé le 2026-11-01, D5 du plan planning-accueil, et le
+    // 2026-11-05) : matin / soir = famille du code sur l'Accueil (coché
+    // présence) ; middle : nulle part (un coup de main) ; horaire libre : matin avant 12 h 30 ; code sans
     // famille : jamais ; soutien : compté. Une personne par jour au plus.
     type Choix = { h: Horaire | null; debut: string; fin: string } | null
     const choix: Choix[] = [
@@ -2167,7 +2167,7 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
     ]
     const oracle = (c: NonNullable<Choix>): Array<'matin' | 'soir'> => {
       if (c.h) {
-        if (c.h.periode === 'middle') return ['matin', 'soir']
+        if (c.h.periode === 'middle') return []
         return c.h.periode === 'matin' || c.h.periode === 'soir'
           ? [c.h.periode]
           : []

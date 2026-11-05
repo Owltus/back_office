@@ -154,7 +154,7 @@ const PERIODES: ReadonlyArray<{
   {
     valeur: 'middle',
     libelle: 'Middle',
-    aide: 'Compte le matin et le soir dans le tableau Accueil',
+    aide: 'Un coup de main : ne compte ni le matin ni le soir dans le tableau Accueil',
   },
   {
     valeur: 'soir',

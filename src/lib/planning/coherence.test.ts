@@ -1387,7 +1387,7 @@ describe("verifierReglages, tableau de l'accueil", () => {
     )
   })
 
-  it('un middle compte au matin ET au soir (D11)', () => {
+  it('un middle ne compte ni au matin ni au soir (2026-11-05, révise D11)', () => {
     const r = accueil()
     r.postes[1].horaires_autorises = [M, S, X]
     r.salaries.push(
@@ -1396,14 +1396,15 @@ describe("verifierReglages, tableau de l'accueil", () => {
         shifts_autorises: [X],
       }),
     )
+    // La personne qui ne fait que des middles ne compte pas : 5, pas 6.
+    chiffre(r, 0, 5)
+    chiffre(r, 1, 5)
+    expect(deLAccueil(r)).toEqual([])
     chiffre(r, 0, 6)
     chiffre(r, 1, 6)
-    expect(deLAccueil(r)).toEqual([])
-    chiffre(r, 0, 7)
-    chiffre(r, 1, 7)
     expect(deLAccueil(r).map((x) => x.texte)).toEqual([
-      "Lundi matin : il faut 7 personnes, mais seulement 6 peuvent venir à l'accueil.",
-      "Lundi soir : il faut 7 personnes, mais seulement 6 peuvent venir à l'accueil.",
+      "Lundi matin : il faut 6 personnes, mais seulement 5 peuvent venir à l'accueil.",
+      "Lundi soir : il faut 6 personnes, mais seulement 5 peuvent venir à l'accueil.",
     ])
   })
 

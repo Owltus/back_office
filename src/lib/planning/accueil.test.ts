@@ -146,11 +146,12 @@ describe('moments du tableau (presence.ts)', () => {
   const rec = { presence: true, categorie: 'reception' as const }
   const veille = { presence: false, categorie: 'veille_nuit' as const }
   const aPart = { presence: false, categorie: 'autre' as const }
-  it('un middle compte au matin ET au soir (D11)', () => {
-    expect(momentsAccueil(rec, { periode: 'middle' }, '11:00')).toEqual([
-      'matin',
-      'soir',
-    ])
+  it('un middle ne compte ni au matin ni au soir (2026-11-05, révise D11)', () => {
+    // Oracle : décision d'une responsable du 2026-11-04 (« les middles sont
+    // des shifts en option, un coup de main ») et banc des semaines faites
+    // à la main : compté deux fois, le middle remplaçait un vrai soir et
+    // laissait une personne seule à 21 h (69 jours sur 126, 21 à la main).
+    expect(momentsAccueil(rec, { periode: 'middle' }, '11:00')).toEqual([])
     expect(momentsAccueil(rec, { periode: 'matin' }, '07:00')).toEqual([
       'matin',
     ])

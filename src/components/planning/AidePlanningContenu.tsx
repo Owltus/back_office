@@ -581,7 +581,7 @@ export function AidePlanningContenu({
               ],
               [
                 'Middle',
-                'le reste : à cheval sur le matin et le soir. Un middle compte au matin ET au soir de l’accueil.',
+                'le reste : à cheval sur le matin et le soir. Un middle est un coup de main : il ne compte ni au matin ni au soir de l’accueil, et il est posé s’il reste des heures.',
               ],
             ]}
           />
