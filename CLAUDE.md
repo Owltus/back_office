@@ -2760,6 +2760,22 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   Tests `jourEtoileFiche.test.ts` (vendredi choisi → 7 h le vendredi, sans choix → comme avant,
   congé → l'étoile saute).
 - **Contrôle et aide suivent les règles (étape 8, 2026-11-05)** : « À vérifier » dit une règle impossible (journées sans horaire, deux repos empêchés par la semaine type, relève sans horaires qui se croisent, moments qui se chevauchent ; cibles `regles`, `moments`, `releve`) ; l’aide « ? » lit `lireRegles` (prop `regles`) et dit où se règle chaque règle.
+- **CONTRATS ET POSTES RÉGLABLES (2026-11-06, lot 1a de `10-audit-notions-en-dur.md`, demande
+  utilisateur : « aucun paramètre en dur »)**. Migration `20261106100000` (RETIRE quatre CHECK :
+  livraison `--supprimer` et `--avec-donnees`). `planning_modeles_contrat` = LA liste des contrats
+  (clé texte gardée, `nom`, `ordre`, `jour_max_minutes` (stagiaire 600), `mineur_possible`,
+  `forfait_possible`, `fin_obligatoire`) ; `planning_salaries.type_contrat` en clé étrangère ;
+  mineur et forfait contrôlés par trigger (PL400), contrat utilisé jamais retiré (PL409). Équipe,
+  Règles des contrats : créer, renommer, retirer un contrat ; ancienneté (12 mois) et délai (91 j)
+  des jours fériés (`planning_reglages.ferie_*`, `regles.feries`). Groupe : case « Cadres au
+  forfait jours possibles » (remplace le nom « Direction »). Poste : `jour_max_minutes` (60 à
+  720, `JOUR_MAX_LOI` 12 h) remplace la catégorie, qui n'est plus lue (colonne gardée) ; la nuit
+  de l'accueil = `accueil_nuit` seul. Code : `listeContrats`, `nomContrat`, `modeleDe` ; un
+  contrat placé à la main se comporte en extra (48 h, 0 h, interrupteur Actif). L'évolution d'un
+  apprenti garde son contrat (choix dans le dialogue). `contratsPostesReglables.test.ts` refuse
+  toute comparaison à un code de contrat et toute lecture de `categorie` dans les sources.
+  Empreinte 8874c146 et banc de décembre identiques. Libellé « Hôtelier » de la Supervision
+  réception devenu son nom (la catégorie n'est plus lue).
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 
