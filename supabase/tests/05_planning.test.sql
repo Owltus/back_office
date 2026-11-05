@@ -140,7 +140,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':J', (select j from t_ids)::text);
 $$;
 
-select plan(109);
+select plan(129);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -302,14 +302,14 @@ select is(pg_temp.essai('gestion', array[
   'true', 'forfait jours : possible pour un CDI');
 select is(pg_temp.essai('gestion', array[
   pg_temp.q('insert into public.planning_salaries (prenom, nom, type_contrat, heures_hebdo, forfait_jours) values (''Appr'', ''Test'', ''apprenti'', 35, true)')]),
-  'err=23514', 'forfait jours : jamais pour un apprenti');
+  'err=PL400', 'forfait jours : jamais pour un apprenti (case du modèle)');
 select is(pg_temp.essai('gestion', array[
   pg_temp.q('insert into public.planning_salaries (prenom, nom, type_contrat, heures_hebdo, mineur) values (''Jeune'', ''Test'', ''apprenti'', 35, true)'),
   pg_temp.q('select mineur::text from public.planning_salaries where prenom = ''Jeune'' and nom = ''Test''')]),
   'true', 'mineur : possible pour un apprenti');
 select is(pg_temp.essai('gestion', array[
   pg_temp.q('insert into public.planning_salaries (prenom, nom, type_contrat, heures_hebdo, mineur) values (''Jeune'', ''Cdi'', ''cdi'', 35, true)')]),
-  'err=23514', 'mineur : jamais en CDI');
+  'err=PL400', 'mineur : jamais en CDI (case du modèle)');
 select is(pg_temp.essai('lecture', array['select releve_minutes::text from public.planning_reglages where id = 1']),
   (select releve_minutes::text from public.planning_reglages where id = 1), 'réglages : la lecture lit la relève');
 select is(pg_temp.essai('ecriture', array['update public.planning_reglages set releve_minutes = 45 where id = 1']),
@@ -370,8 +370,75 @@ select is(pg_temp.essai('gestion', array[
   'update public.planning_modeles_contrat set placement_manuel = true where type_contrat = ''cdd''',
   'select placement_manuel::text from public.planning_modeles_contrat where type_contrat = ''cdd''']),
   'true', 'modèles de contrat : la gestion les règle');
-select is(pg_temp.essai('gestion', array['insert into public.planning_modeles_contrat (type_contrat) values (''interim'')']),
-  'err=23514', 'modèles de contrat : un type de contrat inconnu est refusé');
+-- Types de contrat de l'établissement (2026-11-06, migration 20261106100000).
+select is(pg_temp.essai('gestion', array[
+  'insert into public.planning_modeles_contrat (type_contrat, nom, placement_manuel) values (''contrat_t1'', ''Saisonnier test'', true)',
+  'select nom || ''/'' || placement_manuel from public.planning_modeles_contrat where type_contrat = ''contrat_t1''']),
+  'Saisonnier test/true', 'contrats : la gestion crée un type de contrat');
+select is(pg_temp.essai('gestion', array['insert into public.planning_modeles_contrat (type_contrat) values (''contrat_t2'')']),
+  'err=23502', 'contrats : un type de contrat sans nom est refusé');
+select is(pg_temp.essai('gestion', array['insert into public.planning_modeles_contrat (type_contrat, nom) values (''contrat_t3'', ''cdi'')']),
+  'err=23505', 'contrats : deux types de contrat ne portent pas le même nom');
+select is(pg_temp.essai('gestion', array['insert into public.planning_modeles_contrat (type_contrat, nom) values (''Contrat T'', ''Essai'')']),
+  'err=23514', 'contrats : un identifiant hors format est refusé');
+select is(pg_temp.essai('ecriture', array['insert into public.planning_modeles_contrat (type_contrat, nom) values (''contrat_t4'', ''Essai'')']),
+  'err=42501', 'contrats : l''écriture n''en crée pas');
+select is(pg_temp.essai('gestion', array[
+  'update public.planning_modeles_contrat set nom = ''Contrat à durée indéterminée'' where type_contrat = ''cdi''',
+  'select nom from public.planning_modeles_contrat where type_contrat = ''cdi''']),
+  'Contrat à durée indéterminée', 'contrats : la gestion renomme un contrat');
+select is(pg_temp.essai('gestion', array[
+  pg_temp.q('insert into public.planning_salaries (prenom, nom, type_contrat) values (''Inconnu'', ''Test'', ''interim'')')]),
+  'err=23503', 'contrats : une fiche ne prend qu''un contrat de la liste');
+select is(pg_temp.essai('gestion', array[
+  pg_temp.q('update public.planning_salaries set type_contrat = ''cdd'' where id = :S1'),
+  'delete from public.planning_modeles_contrat where type_contrat = ''cdd''']),
+  'err=PL409', 'contrats : un contrat utilisé par une fiche ne se retire pas');
+select is(pg_temp.essai('gestion', array[
+  'insert into public.planning_modeles_contrat (type_contrat, nom) values (''contrat_t5'', ''Vide test'')',
+  'delete from public.planning_modeles_contrat where type_contrat = ''contrat_t5''']),
+  '1', 'contrats : un contrat que personne n''utilise se retire');
+select is(pg_temp.essai('gestion', array[
+  'insert into public.planning_modeles_contrat (type_contrat, nom, mineur_possible) values (''contrat_t6'', ''Jeunes test'', true)',
+  pg_temp.q('insert into public.planning_salaries (prenom, nom, type_contrat, mineur) values (''Jeune'', ''T6'', ''contrat_t6'', true)'),
+  'update public.planning_modeles_contrat set mineur_possible = false where type_contrat = ''contrat_t6''']),
+  'err=PL409', 'contrats : « peut être mineur » ne se retire pas tant qu''un mineur a ce contrat');
+select is(pg_temp.essai('gestion', array[
+  'insert into public.planning_modeles_contrat (type_contrat, nom, forfait_possible) values (''contrat_t7'', ''Cadres test'', true)',
+  pg_temp.q('insert into public.planning_salaries (prenom, nom, type_contrat, heures_hebdo, forfait_jours) values (''Cadre'', ''T7'', ''contrat_t7'', 0, true)'),
+  'select forfait_jours::text from public.planning_salaries where nom = ''T7''']),
+  'true', 'contrats : le forfait jours suit la case du contrat, pas son code');
+select is(pg_temp.essai('gestion', array['update public.planning_modeles_contrat set jour_max_minutes = 780 where type_contrat = ''stagiaire''']),
+  'err=23514', 'contrats : une durée max d''un jour au-delà de 12 h est refusée');
+select is((select jour_max_minutes::text || '/' || mineur_possible || '/' || fin_obligatoire
+             from public.planning_modeles_contrat where type_contrat = 'stagiaire'),
+  '600/true/true', 'contrats : le stagiaire garde 10 h par jour, mineur possible, fin obligatoire');
+select is(pg_temp.essai('gestion', array[
+  pg_temp.q('update public.planning_postes set jour_max_minutes = 780 where id = :PA')]),
+  'err=23514', 'postes : jamais plus de 12 h de service (la loi)');
+select is(pg_temp.essai('gestion', array[
+  pg_temp.q('update public.planning_postes set jour_max_minutes = 600 where id = :PA'),
+  pg_temp.q('select jour_max_minutes::text from public.planning_postes where id = :PA')]),
+  '600', 'postes : la gestion règle la durée max d''un service');
+select is(pg_temp.essai('ecriture', array[
+  pg_temp.q('update public.planning_postes set jour_max_minutes = 600 where id = :PA')]),
+  '0', 'postes : l''écriture ne règle pas la durée max');
+select is((select column_default from information_schema.columns
+            where table_schema = 'public' and table_name = 'planning_postes'
+              and column_name = 'jour_max_minutes'),
+  '690', 'postes : un poste neuf a 11 h 30 de service au plus');
+select is(pg_temp.essai('gestion', array[
+  'update public.planning_reglages set ferie_anciennete_mois = 6, ferie_rattrapage_jours = 60 where id = 1',
+  'select ferie_anciennete_mois || ''/'' || ferie_rattrapage_jours from public.planning_reglages where id = 1']),
+  '6/60', 'jours fériés : la gestion règle ancienneté et délai de rattrapage');
+select is(pg_temp.essai('gestion', array['update public.planning_reglages set ferie_rattrapage_jours = 400 where id = 1']),
+  'err=23514', 'jours fériés : un délai de rattrapage hors bornes est refusé');
+select is(pg_temp.essai('ecriture', array['update public.planning_reglages set ferie_anciennete_mois = 6 where id = 1']),
+  '0', 'jours fériés : l''écriture ne règle pas l''ancienneté');
+select is(pg_temp.essai('gestion', array[
+  'update public.planning_groupes set forfait_possible = true where nom = ''Groupe test''',
+  'select forfait_possible::text from public.planning_groupes where nom = ''Groupe test''']),
+  'true', 'groupes : la gestion règle « cadres au forfait jours possibles »');
 select is(pg_temp.essai('gestion', array['update public.planning_modeles_contrat set ferie_rattrape = true, feries_jour_meme = true where type_contrat = ''cdi''']),
   'err=23514', 'modèles de contrat : jamais un jour férié rattrapé ET pris le jour même');
 

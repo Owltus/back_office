@@ -2471,6 +2471,15 @@ const PL_ACCUEIL: ReadonlyArray<readonly [string, readonly number[]]> = [
 ]
 /** Postes comptés dans le matin et le soir de l'accueil. */
 const PL_PRESENCE = new Set(['Réception', 'Club'])
+/** Durée max d'un service par ancienne catégorie (planning_postes.jour_max_minutes). */
+const PL_JOUR_MAX: Readonly<Record<string, number>> = {
+  reception: 720,
+  veille_nuit: 720,
+  cuisine: 660,
+  administratif_hors_site: 600,
+  autre: 690,
+}
+
 const PL_GROUPES: ReadonlyArray<readonly [string, string, readonly string[]]> =
   [
     [
@@ -2687,6 +2696,7 @@ function genererPlanning(f: Fenetre, tables: Table[], apres: string[]): void {
     'accueil_nuit',
     'ouverture',
     'importance',
+    'jour_max_minutes',
   ])
   postes.identiteForcee = true
   const idPoste = new Map<string, number>()
@@ -2706,6 +2716,8 @@ function genererPlanning(f: Fenetre, tables: Table[], apres: string[]): void {
       // Réception et Club tenus dès 07:00 (2026-11-01).
       PL_PRESENCE.has(nom) ? '07:00' : null,
       plImportance(nom, categorie),
+      // Durée max d'un service (2026-11-06) : celle de l'ancienne catégorie.
+      PL_JOUR_MAX[categorie] ?? 690,
     ])
   })
   const groupes = table('public.planning_groupes', [
@@ -2713,6 +2725,7 @@ function genererPlanning(f: Fenetre, tables: Table[], apres: string[]): void {
     'nom',
     'ordre',
     'postes_autorises',
+    'forfait_possible',
   ])
   groupes.identiteForcee = true
   const idGroupe = new Map<string, number>()
@@ -2723,6 +2736,8 @@ function genererPlanning(f: Fenetre, tables: Table[], apres: string[]): void {
       nom,
       i,
       `{${permis.map((p) => idPoste.get(p)).join(',')}}`,
+      // Cadres au forfait jours : la Direction (2026-11-06).
+      code === 'direction',
     ])
   })
   const besoins = table('public.planning_besoins', [
