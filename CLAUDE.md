@@ -2675,6 +2675,13 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   heures, personne seule, horaires) : temps × 3 pour moments seuls 101 → 96
   et changements d'heure 26 → 25 % ; les plannings de même coût se valent
   presque, donc les proposer au choix (décision produit) apporterait peu.
+  SOLVEURS COMPARÉS sur le MÊME modèle (14 semaines réelles exportées par
+  `construire(...).modele.lp()`, lues par un lecteur maison dans OR-Tools
+  9.15, venv du prototype) : SCIP retrouve EXACTEMENT l'optimum de HiGHS sur
+  les 14 (126 s au total contre 80 s, jusqu'à 46 s une semaine) ; CP-SAT est
+  plus rapide (44 s) mais 150 à 620 au-dessus chaque semaine (il arrondit
+  les coefficients et les variables continues) et n'existe pas dans le
+  navigateur. HiGHS reste : optimum confirmé par un solveur indépendant.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 
