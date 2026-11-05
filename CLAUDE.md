@@ -2668,8 +2668,13 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   (`POIDS_AFFINAGE_HORAIRE`), objectif d'origine borné à l'optimum +
   `AFFINAGE_TOLERANCE` (600), gardé seulement s'il est prouvé optimal,
   plafonné à `AFFINAGE_PLAFOND_S` ; heure d'arrivée changée 34 → 28 % (23 %
-  à la main), même couverture et même temps. Piste non faite (décision
-  produit) : proposer plusieurs plannings de même coût au choix.
+  à la main), même couverture et même temps ; il peut aussi échanger la
+  Réception et le Club (26 %). Le reste suit des règles voulues (relève de
+  chacun, ouverture de chaque poste). ESSAYÉ ET ÉCARTÉ : un PORTEFEUILLE de 3
+  résolutions par semaine (graines différentes, la meilleure sur places,
+  heures, personne seule, horaires) : temps × 3 pour moments seuls 101 → 96
+  et changements d'heure 26 → 25 % ; les plannings de même coût se valent
+  presque, donc les proposer au choix (décision produit) apporterait peu.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 
