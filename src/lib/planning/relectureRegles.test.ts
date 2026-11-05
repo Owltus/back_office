@@ -50,7 +50,7 @@ function poste(id: number, kw: Partial<Poste> = {}): Poste {
   return {
     id,
     nom: `Poste ${id}`,
-    categorie: 'reception',
+    jour_max_minutes: 720,
     couleur: '#000',
     horaires_autorises: [],
     presence: false,
@@ -113,12 +113,20 @@ describe('1. heures indicatives : la loi du temps partiel tient', () => {
     expect(s.minutesHebdoMax).toBe(32 * H)
   })
 
-  it('un extra garde le plafond absolu de 48 h', () => {
+  it('un contrat posé à la main (l’extra) garde le plafond absolu de 48 h', () => {
     const s = versSolveur(
       fiche({
         typeContrat: 'extra',
         minutesHebdo: 0,
-        regles: indicatif('extra'),
+        regles: lireRegles({
+          reglages: { releve_minutes: 30 },
+          modelesContrat: [
+            modele('extra', {
+              contrat_indicatif: true,
+              placement_manuel: true,
+            }),
+          ],
+        }),
       }),
     )
     expect(s.minutesHebdoMax).toBe(48 * H)

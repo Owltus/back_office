@@ -143,9 +143,9 @@ const ecarts = (p: Probleme, r: ReturnType<typeof gen>) =>
 // ------------------------------------------------------------- moments
 
 describe('moments du tableau (presence.ts)', () => {
-  const rec = { presence: true, categorie: 'reception' as const }
-  const veille = { presence: false, categorie: 'veille_nuit' as const }
-  const aPart = { presence: false, categorie: 'autre' as const }
+  const rec = { presence: true, jour_max_minutes: 720 }
+  const veille = { presence: false, jour_max_minutes: 720, accueil_nuit: true }
+  const aPart = { presence: false, jour_max_minutes: 690 }
   it('un middle ne compte ni au matin ni au soir (2026-11-05, révise D11)', () => {
     // Oracle : décision d'une responsable du 2026-11-04 (« les middles sont
     // des shifts en option, un coup de main ») et banc des semaines faites
@@ -191,14 +191,14 @@ describe('moments du tableau (presence.ts)', () => {
 })
 
 describe('un seul choix Accueil, poste fermé (U1, U3 du 2026-11-01)', () => {
-  const base = { presence: false, categorie: 'autre' as const }
+  const base = { presence: false, jour_max_minutes: 690 }
   it('la nuit vient du réglage du poste, pas de sa catégorie', () => {
     const nuit = { ...base, accueil_nuit: true }
     expect(momentsAccueil(nuit, { periode: 'nuit' }, '23:00')).toEqual(['nuit'])
-    // Refusé : catégorie Veille de nuit mais réglé « Non ».
+    // Refusé : réglé « Non » (la catégorie Veille de nuit n'est plus lue).
     const veilleNon = {
       ...base,
-      categorie: 'veille_nuit' as const,
+      jour_max_minutes: 720,
       accueil_nuit: false,
     }
     expect(momentsAccueil(veilleNon, { periode: 'nuit' }, '23:00')).toEqual([])
@@ -206,7 +206,7 @@ describe('un seul choix Accueil, poste fermé (U1, U3 du 2026-11-01)', () => {
   it('un poste fermé ne compte nulle part et n’a aucun horaire permis', () => {
     const ferme = {
       presence: true,
-      categorie: 'reception' as const,
+      jour_max_minutes: 720,
       ferme: true,
     }
     expect(momentsAccueil(ferme, { periode: 'matin' }, '07:00')).toEqual([])
@@ -957,7 +957,7 @@ describe('assemblage d’une semaine (semaine.ts)', () => {
   const ref = hotelAccueil(true)
   const accueilIds = new Set(
     ref.postes
-      .filter((p) => p.presence || p.categorie === 'veille_nuit')
+      .filter((p) => p.presence || p.accueil_nuit)
       .map((p) => String(p.id)),
   )
 
@@ -990,9 +990,7 @@ describe('assemblage d’une semaine (semaine.ts)', () => {
 
   it('la Veille ne propose que ses nuits, la Réception aucune nuit (D10)', () => {
     const g = preparerGeneration(donnees(true), { aujourdhui: '2026-09-01' })
-    const veille = String(
-      ref.postes.find((p) => p.categorie === 'veille_nuit')?.id,
-    )
+    const veille = String(ref.postes.find((p) => p.accueil_nuit)?.id)
     for (const c of g.probleme.creneaux.filter((x) => x.accueil)) {
       if (c.poste === veille) expect(c.presence).toEqual(['nuit'])
       else expect(c.presence).not.toContain('nuit')

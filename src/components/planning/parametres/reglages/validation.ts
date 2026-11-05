@@ -8,9 +8,9 @@
 import { COULEUR_VALIDE } from '#/components/planning/parametres/reglages/controles.tsx'
 import { momentPropose, nomHoraire } from '#/lib/planning/affichage.ts'
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
-import { minutes, presence } from '#/lib/planning/temps.ts'
+import { JOUR_MAX_LOI } from '#/lib/planning/regles.ts'
+import { heuresLisibles, minutes, presence } from '#/lib/planning/temps.ts'
 
-import { CATEGORIES } from '#/lib/planning/types.ts'
 import type { Horaire, Motif, Poste } from '#/lib/planning/types.ts'
 
 /** Saisie d'un horaire : ni code (retiré le 2026-10-31) ni nom (écrit par
@@ -201,8 +201,11 @@ export function erreursMotif(m: SaisieMotif): string[] {
 export function erreursPoste(p: SaisiePoste): string[] {
   const erreurs: string[] = []
   controlerNom(p.nom, 'au poste', erreurs)
-  if (!CATEGORIES.some((c) => c.code === p.categorie)) {
-    erreurs.push('Choisissez la catégorie HCR.')
+  const max = p.jour_max_minutes
+  if (max !== undefined && !(max >= 60 && max <= JOUR_MAX_LOI)) {
+    erreurs.push(
+      `La durée max d'un service va de 1 h à ${heuresLisibles(JOUR_MAX_LOI)}, comme le veut la loi.`,
+    )
   }
   controlerCouleur(p.couleur, erreurs)
   return erreurs

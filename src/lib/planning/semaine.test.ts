@@ -928,7 +928,7 @@ describe('planning de la semaine (test_api.py)', () => {
     const poste = {
       id: 100,
       nom: 'Spa',
-      categorie: 'autre' as const,
+      jour_max_minutes: 690,
       couleur: '#000000',
       horaires_autorises: [],
       presence: false,
@@ -1568,7 +1568,7 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
     {
       id: ACCUEIL,
       nom: 'Accueil',
-      categorie: 'reception',
+      jour_max_minutes: 720,
       couleur: '#111111',
       horaires_autorises: [1, 2, 3, 4, 5, 6, 7],
       // Poste « à part » depuis le 2026-11-01 (plan planning-accueil,
@@ -1581,7 +1581,8 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
     {
       id: VEILLE,
       nom: 'Veille',
-      categorie: 'veille_nuit',
+      jour_max_minutes: 720,
+      accueil_nuit: true,
       couleur: '#222222',
       horaires_autorises: [9],
       presence: false,
@@ -2403,7 +2404,7 @@ describe('Martin V3-I : remplaçants, propriété', () => {
           const poste: Poste = {
             id: 1,
             nom: 'P',
-            categorie: 'reception',
+            jour_max_minutes: 720,
             couleur: '#000000',
             horaires_autorises: autorises,
             presence: true,

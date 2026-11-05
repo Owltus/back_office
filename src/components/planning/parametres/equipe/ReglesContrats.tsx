@@ -26,9 +26,10 @@ import {
 import {
   avertissementsSaisie,
   BORNES,
+  changementsContrats,
+  contratNeuf,
   erreursSaisie,
   ligneNeuve,
-  modelesChanges,
   PHRASES,
   phraseLigne,
   reglagesDepuis,
@@ -46,6 +47,7 @@ import {
 } from '#/components/planning/parametres/reglages/controles.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
+import { Input } from '#/components/ui/input.tsx'
 import {
   Sheet,
   SheetContent,
@@ -55,21 +57,21 @@ import {
   SheetTitle,
 } from '#/components/ui/sheet.tsx'
 import {
-  JOUR_MAX_CATEGORIE,
+  JOUR_MAX_LOI,
   JOURS_TRAVAILLES_MAX,
   MINEUR_JOUR_MAX,
   MINEUR_REPOS_QUOTIDIEN,
   MINEUR_SEMAINE_MAX,
   REPOS_QUOTIDIEN,
   SEMAINE_MAX,
-  STAGE_JOUR_MAX,
 } from '#/lib/planning/regles.ts'
 import {
+  ajouterModeleContrat,
   enregistrerModeleContrat,
   enregistrerReglages,
+  supprimerModeleContrat,
 } from '#/lib/planning/service.ts'
 import { heuresLisibles, hhmm } from '#/lib/planning/temps.ts'
-import { TYPES_CONTRAT } from '#/lib/planning/types.ts'
 import type {
   ForceRegle,
   JourIsole,
@@ -118,12 +120,23 @@ const FERIES: ReadonlyArray<{ valeur: Feries; libelle: string }> = [
   { valeur: 'jour_meme', libelle: 'Le jour même' },
   { valeur: 'aucun', libelle: 'Aucun' },
 ]
-const PHRASE_FERIES: Record<Feries, string> = {
-  rattrapes:
-    'Après un an, un jour férié travaillé ouvre un jour férié rattrapé, proposé dans les semaines qui suivent.',
-  jour_meme: 'Les jours fériés sont pris le jour même, sans rattrapage.',
-  aucun: 'Aucun jour férié particulier.',
+/** « Après un an », « Après 6 mois », « Dès l'arrivée ». */
+function anciennete(mois: number): string {
+  if (mois === 0) return "Dès l'arrivée"
+  if (mois % 12 === 0) {
+    const ans = mois / 12
+    return `Après ${ans} an${ans > 1 ? 's' : ''}`
+  }
+  return `Après ${mois} mois`
 }
+const phraseFeries = (f: Feries, mois: number): string =>
+  f === 'rattrapes'
+    ? `${anciennete(mois)}, un jour férié travaillé ouvre un jour férié rattrapé, proposé dans les semaines qui suivent.`
+    : f === 'jour_meme'
+      ? 'Les jours fériés sont pris le jour même, sans rattrapage.'
+      : 'Aucun jour férié particulier.'
+/** Durée max d'un jour pour un contrat : « Celle du poste » ou une durée. */
+const SANS_MAX = 'poste'
 const feriesDe = (m: ModeleContrat): Feries =>
   m.ferie_rattrape ? 'rattrapes' : m.feries_jour_meme ? 'jour_meme' : 'aucun'
 
@@ -155,7 +168,8 @@ export function ReglesContrats({
 }: {
   ouvert: boolean
   onFermer: () => void
-  referentiel: Pick<Referentiel, 'reglages' | 'modelesContrat'>
+  referentiel: Pick<Referentiel, 'reglages' | 'modelesContrat'> &
+    Partial<Pick<Referentiel, 'salaries'>>
 }) {
   const { gerer } = useDroitsPlanning()
   const ecrire = useEcriture()
@@ -172,7 +186,7 @@ export function ReglesContrats({
     annuler,
     adopter,
   } = useBrouillon<SaisieReglesContrats>(enregistre)
-  const [type, setType] = useState<TypeContrat>('cdi')
+  const [choisi, setType] = useState<TypeContrat | null>(null)
   const [envoi, setEnvoi] = useState(false)
   /** Enregistrement en deux temps (réglages, puis types de contrat) : le
    * second a échoué, le premier est fait. Dit tant que la saisie reste. */
@@ -190,7 +204,22 @@ export function ReglesContrats({
     changer({
       journees: b.journees.map((l) => (l.cle === cle ? { ...l, ...maj } : l)),
     })
-  const modele = b.modeles.find((m) => m.type_contrat === type)
+  // Le contrat montré : celui choisi, sinon le premier de la liste.
+  const modele =
+    b.modeles.find((m) => m.type_contrat === choisi) ?? b.modeles.at(0)
+  const type = modele?.type_contrat
+  /** Fiches (tous contrats, anciens compris) qui utilisent un type. */
+  const fiches = (t: TypeContrat) =>
+    (referentiel.salaries ?? []).filter((x) => x.type_contrat === t).length
+  const ajouterContrat = () => {
+    const neuf = contratNeuf(b)
+    changer({ modeles: [...b.modeles, neuf] })
+    setType(neuf.type_contrat)
+  }
+  const retirerContrat = (t: TypeContrat) => {
+    changer({ modeles: b.modeles.filter((m) => m.type_contrat !== t) })
+    setType(null)
+  }
   const changerModele = (maj: Partial<ModeleContrat>) =>
     changer({
       modeles: b.modeles.map((m) =>
@@ -202,11 +231,15 @@ export function ReglesContrats({
     if (!gerer || envoi || erreurs.length) return
     setEnvoi(true)
     let reglagesFaits = false
+    const { ajoutes, changes, retires } = changementsContrats(enregistre, b)
     const r = await ecrire(async () => {
       await enregistrerReglages(reglagesDepuis(b))
       reglagesFaits = true
-      for (const m of modelesChanges(enregistre, b))
-        await enregistrerModeleContrat(m)
+      // Créer, puis mettre à jour, puis retirer (refusé par la base s'il
+      // sert encore).
+      for (const m of ajoutes) await ajouterModeleContrat(m)
+      for (const m of changes) await enregistrerModeleContrat(m)
+      for (const t of retires) await supprimerModeleContrat(t)
     }, "Les règles des contrats n'ont pas pu être enregistrées")
     setEnvoi(false)
     setPartiel(!r.ok && reglagesFaits)
@@ -397,23 +430,77 @@ export function ReglesContrats({
 
           <Section
             titre="Types de contrat"
-            aide="Ce qui change selon le type de contrat. Chaque fiche suit les règles de son type."
+            aide="Les contrats de l'établissement et ce qui change selon le contrat. Chaque fiche suit les règles du sien."
           >
-            <Segmente<TypeContrat>
-              label="Type de contrat"
-              valeur={type}
-              options={TYPES_CONTRAT.map((t) => ({
-                valeur: t.code,
-                libelle: t.libelle,
-              }))}
-              onChange={setType}
-            />
-            {modele && (
+            <div className="flex flex-wrap items-center gap-2">
+              {modele && type && (
+                <Segmente<TypeContrat>
+                  label="Type de contrat"
+                  valeur={type}
+                  options={b.modeles.map((m) => ({
+                    valeur: m.type_contrat,
+                    libelle: m.nom?.trim() || 'Sans nom',
+                  }))}
+                  onChange={setType}
+                />
+              )}
+              {gerer && b.modeles.length < BORNES.contratsMax && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={envoi}
+                  onClick={ajouterContrat}
+                >
+                  <Plus /> Nouveau contrat
+                </Button>
+              )}
+            </div>
+            {modele && type && (
               <div
                 className="flex flex-col gap-3"
                 role="group"
-                aria-label={`Règles du type ${TYPES_CONTRAT.find((t) => t.code === type)?.libelle}`}
+                aria-label={`Règles du type ${modele.nom ?? ''}`}
               >
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="flex min-w-48 flex-1 flex-col gap-1.5 text-xs font-medium">
+                    Nom du contrat
+                    <Input
+                      value={modele.nom ?? ''}
+                      maxLength={BORNES.nomContratMax}
+                      disabled={off}
+                      onChange={(e) => changerModele({ nom: e.target.value })}
+                    />
+                  </label>
+                  {gerer &&
+                    (fiches(type) > 0 ? (
+                      <Tip
+                        label={`Utilisé par ${fiches(type)} fiche${fiches(type) > 1 ? 's' : ''} : changez d'abord leur contrat.`}
+                      >
+                        <span tabIndex={0}>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled
+                          >
+                            <Trash2 /> Retirer ce contrat
+                          </Button>
+                        </span>
+                      </Tip>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        disabled={envoi || b.modeles.length < 2}
+                        onClick={() => retirerContrat(type)}
+                      >
+                        <Trash2 /> Retirer ce contrat
+                      </Button>
+                    ))}
+                </div>
                 <Effet
                   texte={
                     modele.journees_imposees
@@ -459,11 +546,11 @@ export function ReglesContrats({
                     Posé à la main seulement
                   </Interrupteur>
                 </Effet>
-                {/* Un extra seulement : il n'a pas de durée contractuelle.
-                    Tout autre contrat suit la loi du temps partiel (B1).
-                    Une base qui l'aurait coché ailleurs le montre, pour
-                    pouvoir le décocher. */}
-                {(type === 'extra' || modele.contrat_indicatif) && (
+                {/* Un contrat posé à la main seulement (l'extra) : il n'a
+                    pas de durée contractuelle. Tout autre contrat suit la
+                    loi du temps partiel (B1). Une base qui l'aurait coché
+                    ailleurs le montre, pour pouvoir le décocher. */}
+                {(modele.placement_manuel || modele.contrat_indicatif) && (
                   <Effet
                     texte={
                       modele.contrat_indicatif
@@ -495,9 +582,91 @@ export function ReglesContrats({
                     Alternance
                   </Interrupteur>
                 </Effet>
+                <Effet
+                  texte={
+                    modele.mineur_possible
+                      ? 'La fiche peut être déclarée mineure : la loi des mineurs s’applique alors.'
+                      : 'Toujours majeur.'
+                  }
+                >
+                  <Interrupteur
+                    coche={!!modele.mineur_possible}
+                    disabled={off}
+                    onChange={(v) => changerModele({ mineur_possible: v })}
+                  >
+                    Peut être mineur
+                  </Interrupteur>
+                </Effet>
+                <Effet
+                  texte={
+                    modele.forfait_possible
+                      ? 'Cadre au forfait jours possible, dans un groupe qui le permet.'
+                      : 'Jamais au forfait jours.'
+                  }
+                >
+                  <Interrupteur
+                    coche={!!modele.forfait_possible}
+                    disabled={off}
+                    onChange={(v) => changerModele({ forfait_possible: v })}
+                  >
+                    Forfait jours possible
+                  </Interrupteur>
+                </Effet>
+                <Effet
+                  texte={
+                    modele.fin_obligatoire
+                      ? 'La fiche ne s’enregistre pas sans sa fin de contrat.'
+                      : 'La fin de contrat est facultative.'
+                  }
+                >
+                  <Interrupteur
+                    coche={!!modele.fin_obligatoire}
+                    disabled={off}
+                    onChange={(v) => changerModele({ fin_obligatoire: v })}
+                  >
+                    Fin de contrat obligatoire
+                  </Interrupteur>
+                </Effet>
+                <Reglage
+                  titre="Durée max d'un jour"
+                  effet={
+                    modele.jour_max_minutes == null
+                      ? 'Celle du poste tenu.'
+                      : `Au plus ${h(Math.min(modele.jour_max_minutes, JOUR_MAX_LOI))} par jour, quel que soit le poste.`
+                  }
+                >
+                  <Liste
+                    label={`Durée max d'un jour du contrat ${modele.nom ?? ''}`}
+                    libelleVisible={false}
+                    className="w-36"
+                    valeur={
+                      modele.jour_max_minutes == null
+                        ? SANS_MAX
+                        : String(modele.jour_max_minutes)
+                    }
+                    disabled={off}
+                    onChange={(v) =>
+                      changerModele({
+                        jour_max_minutes: v === SANS_MAX ? null : Number(v),
+                      })
+                    }
+                    options={[
+                      { valeur: SANS_MAX, libelle: 'Celle du poste' },
+                      ...durees(
+                        BORNES.jourMaxContratMin,
+                        BORNES.jourMaxContratMax,
+                        modele.jour_max_minutes ?? 10 * H,
+                        30,
+                      ),
+                    ]}
+                  />
+                </Reglage>
                 <Reglage
                   titre="Jours fériés"
-                  effet={PHRASE_FERIES[feriesDe(modele)]}
+                  effet={phraseFeries(
+                    feriesDe(modele),
+                    b.ferie_anciennete_mois,
+                  )}
                 >
                   <Segmente<Feries>
                     label="Jours fériés"
@@ -706,6 +875,44 @@ export function ReglesContrats({
             </Reglage>
           </Section>
 
+          <Section
+            titre="Jours fériés"
+            aide="Pour les contrats aux jours fériés rattrapés."
+          >
+            <Reglage
+              titre="Ancienneté qui ouvre le rattrapage"
+              effet={`${anciennete(b.ferie_anciennete_mois)}, un jour férié travaillé ouvre un jour férié rattrapé.`}
+            >
+              <span className="flex items-center gap-2 text-sm">
+                <Compteur
+                  etiquette="Ancienneté qui ouvre le rattrapage, en mois"
+                  valeur={b.ferie_anciennete_mois}
+                  min={0}
+                  max={BORNES.ancienneteMax}
+                  disabled={off}
+                  onChange={(v) => changer({ ferie_anciennete_mois: v })}
+                />
+                mois
+              </span>
+            </Reglage>
+            <Reglage
+              titre="Délai pour le rattraper"
+              effet={`Le planning le propose pendant ${b.ferie_rattrapage_jours} jours. Il reste signalé tant qu'il n'est pas rendu.`}
+            >
+              <span className="flex items-center gap-2 text-sm">
+                <Compteur
+                  etiquette="Délai pour rattraper un jour férié, en jours"
+                  valeur={b.ferie_rattrapage_jours}
+                  min={BORNES.rattrapageMin}
+                  max={BORNES.rattrapageMax}
+                  disabled={off}
+                  onChange={(v) => changer({ ferie_rattrapage_jours: v })}
+                />
+                jours
+              </span>
+            </Reglage>
+          </Section>
+
           <Section titre="Congés et heures">
             <Reglage
               titre="Retour de congé en douceur"
@@ -790,7 +997,7 @@ export function ReglesContrats({
 }
 
 const MESSAGE_PARTIEL =
-  "Les réglages de repos et de journées sont enregistrés, mais les règles des types de contrat n'ont pas été enregistrées. Vos modifications restent à l'écran : enregistrez à nouveau."
+  "Les réglages de repos et de journées sont enregistrés, mais pas tous les types de contrat. Vos modifications restent à l'écran : enregistrez à nouveau."
 
 function Effet({ texte, children }: { texte: string; children: ReactNode }) {
   return (
@@ -803,7 +1010,6 @@ function Effet({ texte, children }: { texte: string; children: ReactNode }) {
 
 /** La loi : jamais réglable, dite en phrases simples. */
 export function EncadreLoi() {
-  const jourMax = Math.max(...Object.values(JOUR_MAX_CATEGORIE))
   return (
     <section
       aria-label="La loi"
@@ -828,8 +1034,8 @@ export function EncadreLoi() {
           jours de repos par semaine en principe.
         </li>
         <li>
-          Au plus {h(jourMax)} de présence par jour selon le poste (
-          {h(STAGE_JOUR_MAX)} pour un stagiaire).
+          Au plus {h(JOUR_MAX_LOI)} de présence par jour. Chaque poste et chaque
+          contrat peut en demander moins.
         </li>
         <li>
           Un mineur : au plus {h(MINEUR_JOUR_MAX)} par jour et{' '}

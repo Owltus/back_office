@@ -27,6 +27,7 @@ import {
   journeesDuContrat,
   joursDuContrat,
   lireRegles,
+  modeleDe,
   passationVeilleurActive,
   REGLES_PAR_DEFAUT,
 } from '#/lib/planning/reglesEtablissement.ts'
@@ -207,7 +208,10 @@ describe('lireRegles', () => {
     expect(r.repos.jourIsole).toBe('aucune')
     expect(r.repos.joursAffilesMax).toBe(6)
     expect(r.modeles.cdd.placementManuel).toBe(true)
-    expect(r.modeles.cdi).toEqual(REGLES_PAR_DEFAUT.modeles.cdi)
+    // La base porte LA liste : le CDI n'y est pas, `modeleDe` reprend son
+    // défaut (une fiche n'en a jamais : clé étrangère).
+    expect(Object.keys(r.modeles)).toEqual(['cdd'])
+    expect(modeleDe(r, 'cdi')).toEqual(REGLES_PAR_DEFAUT.modeles.cdi)
     expect(REGLES_PAR_DEFAUT.modeles.cdd.placementManuel).toBe(false)
   })
 

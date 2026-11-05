@@ -16,6 +16,7 @@ import { contratEtoile } from '#/lib/planning/etoile.ts'
 import type { Fiche } from '#/lib/planning/regles.ts'
 import {
   aJourneeCourteImposee,
+  listeContrats,
   modeleDe,
   REGLES_PAR_DEFAUT,
 } from '#/lib/planning/reglesEtablissement.ts'
@@ -82,14 +83,18 @@ export function semaineComplete(s: JourType[] | null | undefined): JourType[] {
   }))
 }
 
-/** Fiche vierge : CDI, 39 h, active, semaine type libre, aucun poste. */
-export function brouillonVierge(groupeId: number | null = null): Brouillon {
+/** Fiche vierge : le premier contrat de la liste (le CDI à l'hôtel), 39 h,
+ * active, semaine type libre, aucun poste. */
+export function brouillonVierge(
+  groupeId: number | null = null,
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
+): Brouillon {
   return {
     id: null,
     prenom: '',
     nom: '',
     groupe_id: groupeId,
-    type_contrat: 'cdi',
+    type_contrat: listeContrats(regles)[0]?.code ?? '',
     heures_hebdo: 39,
     forfait_jours: false,
     mineur: false,
@@ -323,25 +328,47 @@ export const etoilePossible = (
   regles: RegleEtablissement = REGLES_PAR_DEFAUT,
 ) => contratEtoile(b, regles)
 
-/** Passer en extra : 0 h et pas de forfait ; en sortir : 35 h si c'était 0. */
+/** Passer à un contrat placé à la main (l'extra) : 0 h et pas de forfait ;
+ * en sortir : 35 h si c'était 0. Tout se lit dans le modèle du contrat
+ * (2026-11-06), jamais dans son code. */
 export function changerContrat(
   b: Brouillon,
   type_contrat: TypeContrat,
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
 ): Brouillon {
+  const m = modeleDe(regles, type_contrat)
   return {
     ...b,
     type_contrat,
-    heures_hebdo: type_contrat === 'extra' ? 0 : b.heures_hebdo || 35,
-    // Seuls un CDI ou un CDD peuvent être cadres au forfait (2026-11-01).
-    forfait_jours: CONTRATS_CADRE.has(type_contrat) ? b.forfait_jours : false,
-    // Seuls un apprenti ou un stagiaire peuvent être mineurs (2026-11-01).
-    mineur: CONTRATS_MINEUR.has(type_contrat) ? b.mineur : false,
+    heures_hebdo: m.placementManuel ? 0 : b.heures_hebdo || 35,
+    // Forfait jours et mineur : seulement si le contrat le permet.
+    forfait_jours: m.forfaitPossible ? b.forfait_jours : false,
+    mineur: m.mineurPossible ? b.mineur : false,
     // Un extra vient ponctuellement : jamais de fin de contrat (U2) ; un
     // autre contrat est toujours actif (sa fin le sort du planning).
-    date_sortie: type_contrat === 'extra' ? null : b.date_sortie,
-    actif: type_contrat === 'extra' ? b.actif : true,
+    date_sortie: m.placementManuel ? null : b.date_sortie,
+    actif: m.placementManuel ? b.actif : true,
   }
 }
+
+/** Contrat placé à la main (l'extra) : pas d'heures, pas de fin, un
+ * interrupteur Actif. */
+export const contratManuel = (
+  type: TypeContrat,
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
+) => modeleDe(regles, type).placementManuel
+
+/** « Mineur » possible pour ce contrat (case du modèle). */
+export const mineurPossible = (
+  type: TypeContrat,
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
+) => modeleDe(regles, type).mineurPossible
+
+/** La fin du contrat est obligatoire (case du modèle, U2 du 2026-11-01). */
+export const finObligatoire = (
+  type: TypeContrat,
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
+) => modeleDe(regles, type).finObligatoire
 
 /** Change de catégorie ; les compétences hors de ses postes tombent. */
 export function changerCategorie(
@@ -363,45 +390,25 @@ export function changerCategorie(
       ...b,
       groupe_id: groupeId,
       competences: gardees,
-      // Hors de la direction, plus de forfait jours (2026-11-01).
-      forfait_jours: b.forfait_jours && estDirection(groupe),
+      // Hors d'un groupe au forfait possible, plus de forfait jours.
+      forfait_jours: b.forfait_jours && !!groupe?.forfait_possible,
     },
     perdues: b.competences.length - gardees.length,
   }
 }
 
-/** Contrats qui peuvent être mineurs (décision utilisateur du 2026-11-01 :
- * un CDI, un CDD ou un extra est majeur). */
-export const CONTRATS_MINEUR: ReadonlySet<TypeContrat> = new Set([
-  'apprenti',
-  'stagiaire',
-])
-
-/** Contrats qui peuvent être cadres au forfait jours (décision utilisateur
- * du 2026-11-01 : jamais un apprenti, un stagiaire ni un extra). */
-export const CONTRATS_CADRE: ReadonlySet<TypeContrat> = new Set(['cdi', 'cdd'])
-
-/** Le groupe Direction (par son nom) : le seul où l'on est cadre. */
-export function estDirection(groupe: Pick<Groupe, 'nom'> | undefined): boolean {
-  return (
-    !!groupe &&
-    groupe.nom
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .trim()
-      .toLowerCase() === 'direction'
-  )
-}
-
-/** « Cadre au forfait jours » possible : un CDI ou un CDD du groupe
- * Direction seulement (décision utilisateur du 2026-11-01). */
+/** « Cadre au forfait jours » possible : le contrat le permet (case du
+ * modèle) ET le groupe aussi (case du groupe ; à l'hôtel, un CDI ou un CDD
+ * de la Direction, décision utilisateur du 2026-11-01). Plus aucun nom de
+ * groupe ni code de contrat lu depuis le 2026-11-06. */
 export function forfaitPossible(
   b: Pick<Brouillon, 'type_contrat' | 'groupe_id'>,
   groupes: ReadonlyArray<Groupe>,
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
 ): boolean {
   return (
-    CONTRATS_CADRE.has(b.type_contrat) &&
-    estDirection(groupes.find((g) => g.id === b.groupe_id))
+    modeleDe(regles, b.type_contrat).forfaitPossible &&
+    !!groupes.find((g) => g.id === b.groupe_id)?.forfait_possible
   )
 }
 
@@ -529,38 +536,36 @@ export function ficheApercu(
 }
 
 /** Ce qui empêche d'enregistrer (null : rien). */
-export function erreurBrouillon(b: Brouillon): string | null {
+export function erreurBrouillon(
+  b: Brouillon,
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
+): string | null {
   if (!b.prenom.trim()) return 'Indiquez le prénom.'
   if (!(b.heures_hebdo >= 0 && b.heures_hebdo <= 48)) {
     return 'Les heures par semaine vont de 0 à 48.'
   }
   // Audit RH du 2026-11-01 : un contrat mesuré a des heures, et un mineur
   // ne dépasse pas 35 h (le moteur le plafonne, les heures dues suivaient).
-  if (heuresSansObjet(b)) return erreurSuite(b)
+  if (heuresSansObjet(b, regles)) return erreurSuite(b, regles)
   if (b.heures_hebdo <= 0)
     return 'Indiquez les heures par semaine (plus de 0 h).'
   if (b.mineur && b.heures_hebdo > 35)
     return 'Un mineur ne peut pas dépasser 35 h par semaine.'
-  return erreurSuite(b)
+  return erreurSuite(b, regles)
 }
 
-/** Extra et cadre au forfait jours : les heures par semaine ne comptent pas. */
+/** Contrat placé à la main (l'extra) et cadre au forfait jours : les heures
+ * par semaine ne comptent pas. */
 export function heuresSansObjet(
   b: Pick<Brouillon, 'type_contrat' | 'forfait_jours'>,
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
 ): boolean {
-  return b.type_contrat === 'extra' || b.forfait_jours
+  return contratManuel(b.type_contrat, regles) || b.forfait_jours
 }
 
-/** Contrats à durée limitée : la fin est obligatoire (U2 du 2026-11-01). */
-export const FIN_OBLIGATOIRE: ReadonlySet<TypeContrat> = new Set([
-  'cdd',
-  'apprenti',
-  'stagiaire',
-])
-
-function erreurSuite(b: Brouillon): string | null {
-  if (FIN_OBLIGATOIRE.has(b.type_contrat) && !b.date_sortie)
-    return 'Indiquez la fin du contrat : elle est obligatoire pour un CDD, un apprenti ou un stagiaire.'
+function erreurSuite(b: Brouillon, regles: RegleEtablissement): string | null {
+  if (finObligatoire(b.type_contrat, regles) && !b.date_sortie)
+    return `Indiquez la fin du contrat : elle est obligatoire pour le contrat ${modeleDe(regles, b.type_contrat).nom}.`
   if (b.date_entree && !dateValide(b.date_entree))
     return "La date d'arrivée est incomplète."
   if (b.date_sortie && !dateValide(b.date_sortie))
@@ -589,13 +594,15 @@ export interface Evolution {
   forfait_jours?: boolean
 }
 
+/** L'évolution proposée : le lendemain, le même contrat (le nouveau se
+ * choisit dans le dialogue ; l'apprenti n'y passe plus en CDI d'office). */
 export function evolutionParDefaut(
   b: Brouillon,
   aujourdhui: string,
 ): Evolution {
   return {
     date: ajouterJours(aujourdhui, 1),
-    type_contrat: b.type_contrat === 'apprenti' ? 'cdi' : b.type_contrat,
+    type_contrat: b.type_contrat,
     groupe_id: b.groupe_id,
     heures_hebdo: b.heures_hebdo || 35,
     competences: b.competences,
@@ -603,14 +610,18 @@ export function evolutionParDefaut(
   }
 }
 
-export function erreurEvolution(b: Brouillon, e: Evolution): string | null {
+export function erreurEvolution(
+  b: Brouillon,
+  e: Evolution,
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
+): string | null {
   if (!dateValide(e.date))
     return 'Indiquez la date de début du nouveau contrat.'
   if (b.date_entree && e.date <= b.date_entree) {
     return "La date doit être après l'arrivée sur le contrat actuel."
   }
   if (
-    e.type_contrat !== 'extra' &&
+    !contratManuel(e.type_contrat, regles) &&
     !e.forfait_jours &&
     !(e.heures_hebdo > 0 && e.heures_hebdo <= 48)
   ) {
@@ -647,11 +658,13 @@ export function planEvolution(
   groupes: Groupe[],
   motifs: Motif[],
   jours: Map<string, number> = joursDesPeriodes(b.absences),
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
 ): PlanEvolution {
   const veille = ajouterJours(e.date, -1)
   const finAncien =
     b.date_sortie && b.date_sortie < e.date ? b.date_sortie : veille
-  const alternance = enAlternance(e.type_contrat)
+  const alternance = enAlternance(e.type_contrat, regles)
+  const manuel = contratManuel(e.type_contrat, regles)
   const possibles = postesDuGroupe(
     postes,
     groupes.find((g) => g.id === e.groupe_id),
@@ -665,9 +678,8 @@ export function planEvolution(
     suite_de: b.id,
     type_contrat: e.type_contrat,
     groupe_id: e.groupe_id,
-    heures_hebdo: e.type_contrat === 'extra' ? 0 : e.heures_hebdo,
-    forfait_jours:
-      e.type_contrat === 'extra' ? false : (e.forfait_jours ?? b.forfait_jours),
+    heures_hebdo: manuel ? 0 : e.heures_hebdo,
+    forfait_jours: manuel ? false : (e.forfait_jours ?? b.forfait_jours),
     date_entree: e.date,
     date_sortie:
       b.date_sortie && b.date_sortie >= e.date ? b.date_sortie : null,

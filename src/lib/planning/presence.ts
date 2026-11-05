@@ -244,17 +244,14 @@ export function accueilActif(
   return false
 }
 
-type PosteAccueil = Pick<
-  Poste,
-  'presence' | 'categorie' | 'accueil_nuit' | 'ferme'
->
+type PosteAccueil = Pick<Poste, 'presence' | 'accueil_nuit' | 'ferme'>
 
 /** Le poste tient-il la nuit de l'accueil (U1 du 2026-11-01) ? Son réglage
- * « Accueil : nuit » ; sans réglage (données de test anciennes), la
- * catégorie Veille de nuit. Un poste fermé ne tient rien. */
+ * « Accueil : nuit », seul (la catégorie n'est plus lue depuis le
+ * 2026-11-06). Un poste fermé ne tient rien. */
 export function tientLaNuit(poste: PosteAccueil | undefined): boolean {
   if (!poste || poste.ferme) return false
-  return poste.accueil_nuit ?? poste.categorie === 'veille_nuit'
+  return poste.accueil_nuit ?? false
 }
 
 /** Le poste est-il de l'accueil (D12, U1) ? `actif` : `accueilActif` de

@@ -131,7 +131,7 @@ describe('contrôles de saisie (miroir des contraintes de la base)', () => {
     )
     const poste = {
       nom: 'Bar',
-      categorie: 'autre' as const,
+      jour_max_minutes: 690,
       couleur: '#22c55e',
       horaires_autorises: [],
       presence: false,

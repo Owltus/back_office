@@ -16,6 +16,7 @@
  * le planning ; gestion = en plus, le cadenas du mois.
  */
 
+import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
@@ -837,6 +838,7 @@ export function VueMois({
         referentiel.salaries,
         referentiel.postes,
         dansLeMois,
+        lireRegles(referentiel),
       ).total
     : 0
 
@@ -904,6 +906,7 @@ export function VueMois({
                         referentiel.salaries,
                         referentiel.postes,
                         porteeMois(mois),
+                        lireRegles(referentiel),
                       ),
                     ),
                   }
@@ -1183,6 +1186,7 @@ export function VueMois({
 
       {referentiel && (
         <PanneauAlertes
+          regles={lireRegles(referentiel)}
           ouvert={alertesOuvertes}
           onFermer={() => setAlertesOuvertes(false)}
           semaines={liste}
@@ -1211,6 +1215,7 @@ export function VueMois({
 
       {referentiel && (
         <PanneauAlertes
+          regles={lireRegles(referentiel)}
           ouvert={infractionsOuvertes}
           onFermer={() => setInfractionsOuvertes(false)}
           semaines={liste}

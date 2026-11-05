@@ -4,6 +4,8 @@
  * local (`supabase/seed/generer.ts`, `genererPlanning`).
  */
 
+import { reglagesCategorie } from '#/lib/planning/test/codesTest.ts'
+import type { CategorieTest } from '#/lib/planning/test/codesTest.ts'
 import { ajouterJours } from '#/lib/planning/temps.ts'
 import { avecCode, horaireTest } from '#/lib/planning/test/codesTest.ts'
 import type {
@@ -57,7 +59,7 @@ const MOTIFS: Array<[string, string, boolean, 'absence' | 'ecole']> = [
   ['RP', 'Repos', true, 'absence'],
   ['FO', 'Formation', true, 'absence'],
 ]
-const POSTES: Array<[string, Poste['categorie'], string[]]> = [
+const POSTES: Array<[string, CategorieTest, string[]]> = [
   ['Direction', 'autre', ['D']],
   ['Réception', 'reception', ['M', 'MI', 'AM']],
   ['Club', 'autre', ['M', 'MI', 'AM']],
@@ -263,7 +265,7 @@ export function hotelDemo(lundi: string): {
   const postes: Poste[] = POSTES.map(([nom, categorie, codes], i) => ({
     id: i + 1,
     nom,
-    categorie,
+    ...reglagesCategorie(categorie),
     couleur: '#000000',
     horaires_autorises: avecVersions(codes).map(idH),
     presence: false,

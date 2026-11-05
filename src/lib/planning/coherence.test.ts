@@ -59,7 +59,7 @@ function poste(id: number, nom: string, kw: Partial<Poste> = {}): Poste {
   return {
     id,
     nom,
-    categorie: 'reception',
+    jour_max_minutes: 720,
     couleur: '#000000',
     horaires_autorises: [],
     presence: false,
@@ -696,7 +696,7 @@ describe('verifierReglages, points complets (test de mutation)', () => {
       point(
         'besoin-duree:1:06:00-20:00',
         'besoins',
-        "Sur le poste Réception, l'horaire 06:00–20:00 dure plus longtemps qu'un service de sa catégorie HCR ne le permet (mercredi). Ces besoins sont ignorés.",
+        "Sur le poste Réception, l'horaire 06:00–20:00 dure plus longtemps que la durée max d'un service sur ce poste (mercredi). Ces besoins sont ignorés.",
         { page: '/planning/besoins', cible: 'poste-1' },
       ),
     )
@@ -1119,7 +1119,11 @@ describe('verifierReglages, cycles', () => {
   const avecVeille = (): Referentiel => {
     const r = propre()
     r.postes.push(
-      poste(2, 'Veille', { categorie: 'veille_nuit', horaires_autorises: [N] }),
+      poste(2, 'Veille', {
+        jour_max_minutes: 720,
+        accueil_nuit: true,
+        horaires_autorises: [N],
+      }),
     )
     r.salaries.push(
       salarie(13, { competences: [{ poste_id: 2, niveau: 'titulaire' }] }),
@@ -1208,7 +1212,8 @@ describe("verifierReglages, tableau de l'accueil", () => {
         poste(1, 'Réception', { presence: true, horaires_autorises: [M, S] }),
         poste(2, 'Club', { presence: true, horaires_autorises: [M, S] }),
         poste(3, 'Veille', {
-          categorie: 'veille_nuit',
+          jour_max_minutes: 720,
+          accueil_nuit: true,
           horaires_autorises: [N],
         }),
       ],

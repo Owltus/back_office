@@ -18,7 +18,7 @@ import type { Poste } from '#/lib/planning/types.ts'
 const poste = (id: number, nom: string, kw: Partial<Poste> = {}): Poste => ({
   id,
   nom,
-  categorie: 'autre',
+  jour_max_minutes: 690,
   couleur: '#000',
   horaires_autorises: [],
   presence: false,

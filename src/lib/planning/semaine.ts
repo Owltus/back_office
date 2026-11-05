@@ -64,7 +64,6 @@ import type {
   EquiteFaite,
 } from '#/lib/planning/modele.ts'
 import {
-  FERIE_RATTRAPAGE_JOURS,
   JOURS_CONTRAT,
   alerteBesoin,
   droitAuRattrapage,
@@ -524,8 +523,9 @@ export function feriesEnAttente(
   } & Partial<Pick<Contexte, 'regles'>>,
   shifts: readonly Affectation[],
 ): Map<number, JourFerie[]> {
-  const du = ajouterJours(ctx.lundi, -FERIE_RATTRAPAGE_JOURS)
-  const depuis = ajouterJours(du, -FERIE_RATTRAPAGE_JOURS)
+  const fenetre = (ctx.regles ?? REGLES_PAR_DEFAUT).feries.rattrapageJours
+  const du = ajouterJours(ctx.lundi, -fenetre)
+  const depuis = ajouterJours(du, -fenetre)
   const au = ajouterJours(ctx.lundi, 6)
   const travailles = new Map<number, Set<string>>()
   for (const a of shifts) {
@@ -615,7 +615,7 @@ export function avecFeriesDuJour(
     for (const f of feries) {
       if (x.date_entree && f.date < x.date_entree) continue
       if (x.date_sortie && f.date > x.date_sortie) continue
-      if (encadrement && !ferieDuJour(x, f.date)) continue
+      if (encadrement && !ferieDuJour(x, f.date, regles)) continue
       const posee = d.affectations.some(
         (a) =>
           a.salarie_id === x.id && ajouterJours(a.lundi, a.jour) === f.date,
@@ -925,7 +925,7 @@ function niveauxDe(
 
 function presenceMaxDe(ctx: Contexte, posteId: number): number | null {
   const p = ctx.postes.get(posteId)
-  return p ? presenceMaxPoste(p.categorie) : null
+  return p ? presenceMaxPoste(p) : null
 }
 
 export function creneauBesoin(
@@ -1114,7 +1114,7 @@ export function creneauCandidat(
     pause: h.pause,
     travailMural: muralDe(jour, ecrit.debut, ecrit.fin, h.pause),
     jourPlanning: jour,
-    presenceMax: presenceMaxPoste(poste.categorie),
+    presenceMax: presenceMaxPoste(poste),
     nuit: toucheLaNuit(jour, ecrit.debut, ecrit.fin),
     presence: presenceDe(ctx, x),
     accueil: true,
@@ -1158,7 +1158,7 @@ export function candidatsAccueil(ctx: Contexte, depuis = 0): Creneau[] {
           !c.presence.some((m) => demandes.has(`${jour}|${m}`))
         )
           continue
-        if (alerteBesoin(poste.categorie, duree(c))) continue
+        if (alerteBesoin(poste, duree(c))) continue
         r.push(c)
       }
     }
@@ -1366,9 +1366,7 @@ export function besoinsValides(ctx: Contexte): {
   for (const b of ctx.besoins) {
     const presence = duree(creneauBesoin(ctx, b))
     const poste = ctx.postes.get(b.poste_id)
-    let message = poste
-      ? alerteBesoin(poste.categorie, presence)
-      : 'poste supprimé'
+    let message = poste ? alerteBesoin(poste, presence) : 'poste supprimé'
     if (poste && !message && !codePrevuAuPoste(poste, b.horaire_id)) {
       message = "cet horaire n'est pas prévu pour ce poste"
     }

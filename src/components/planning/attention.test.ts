@@ -591,15 +591,22 @@ describe('places de l’accueil (2026-11-01)', () => {
       nom: 'Réception',
       couleur: '#000',
       presence: true,
-      categorie: 'reception',
+      jour_max_minutes: 720,
     },
-    { id: 8, nom: 'Club', couleur: '#111', presence: true, categorie: 'autre' },
+    {
+      id: 8,
+      nom: 'Club',
+      couleur: '#111',
+      presence: true,
+      jour_max_minutes: 690,
+    },
     {
       id: 7,
       nom: 'Veille de nuit',
       couleur: '#222',
       presence: false,
-      categorie: 'veille_nuit',
+      jour_max_minutes: 720,
+      accueil_nuit: true,
     },
   ] as Poste[]
   const gens = [

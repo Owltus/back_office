@@ -494,7 +494,7 @@ export function verifierReglages(
         `besoin-duree:${cle.slice(6)}`,
         'a-voir',
         'besoins',
-        `Sur le poste ${g.poste.nom}, ${libelle} dure plus longtemps qu'un service de sa catégorie HCR ne le permet (${quand}). Ces besoins sont ignorés.`,
+        `Sur le poste ${g.poste.nom}, ${libelle} dure plus longtemps que la durée max d'un service sur ce poste (${quand}). Ces besoins sont ignorés.`,
         `poste-${g.poste.id}`,
       )
     }

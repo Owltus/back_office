@@ -41,9 +41,9 @@ import { supabase } from '#/lib/supabase.ts'
 const COL_HORAIRE = 'id, nom, debut, fin, couleur, pause, periode'
 const COL_MOTIF = 'id, code, nom, couleur, decompte, nature'
 const COL_POSTE =
-  'id, nom, categorie, couleur, horaires_autorises, presence, accueil_nuit, ferme, ouverture, ordre, feries_chomes, importance, fermeture'
+  'id, nom, couleur, horaires_autorises, presence, accueil_nuit, ferme, ouverture, ordre, feries_chomes, importance, fermeture, jour_max_minutes'
 const COL_CONSIGNE = 'id, jour, periode, minimum, maximum'
-const COL_GROUPE = 'id, nom, ordre, postes_autorises'
+const COL_GROUPE = 'id, nom, ordre, postes_autorises, forfait_possible'
 const COL_SALARIE =
   'id, prenom, nom, groupe_id, type_contrat, heures_hebdo, forfait_jours, mineur, competences, semaine_type, shifts_autorises, date_entree, date_sortie, actif, suite_de'
 const COL_BESOIN =
@@ -86,9 +86,17 @@ const CHAMPS_REGLAGES = [
   'journee_courte',
   'journee_etoile_min',
   'journees_courtes_max',
+  'ferie_anciennete_mois',
+  'ferie_rattrapage_jours',
 ] as const satisfies ReadonlyArray<keyof Reglages>
 const COL_REGLAGES = CHAMPS_REGLAGES.join(', ')
 const CHAMPS_MODELE = [
+  'nom',
+  'ordre',
+  'jour_max_minutes',
+  'mineur_possible',
+  'forfait_possible',
+  'fin_obligatoire',
   'journees_imposees',
   'journee_etoile',
   'placement_manuel',
@@ -196,6 +204,7 @@ export async function fetchReferentiel(): Promise<Referentiel> {
     supabase
       .from('planning_modeles_contrat')
       .select(COL_MODELE_CONTRAT)
+      .order('ordre')
       .order('type_contrat'),
   ])
   // La ligne manque (base pas encore migrée) : la relève par défaut ;
@@ -272,8 +281,39 @@ export async function enregistrerModeleContrat(
   auMoinsUne(
     await supabase
       .from('planning_modeles_contrat')
-      .update(Object.fromEntries(CHAMPS_MODELE.map((c) => [c, m[c]])))
+      .update(
+        Object.fromEntries(
+          CHAMPS_MODELE.filter((c) => m[c] !== undefined).map((c) => [c, m[c]]),
+        ),
+      )
       .eq('type_contrat', m.type_contrat)
+      .select('type_contrat'),
+  )
+}
+
+/** Un nouveau type de contrat de l'établissement (gestion). */
+export async function ajouterModeleContrat(m: ModeleContrat): Promise<void> {
+  auMoinsUne(
+    await supabase
+      .from('planning_modeles_contrat')
+      .insert({
+        type_contrat: m.type_contrat,
+        ...Object.fromEntries(
+          CHAMPS_MODELE.filter((c) => m[c] !== undefined).map((c) => [c, m[c]]),
+        ),
+      })
+      .select('type_contrat'),
+  )
+}
+
+/** Retire un type de contrat (gestion). La base le refuse (PL409) tant
+ * qu'une fiche l'utilise. */
+export async function supprimerModeleContrat(type: string): Promise<void> {
+  auMoinsUne(
+    await supabase
+      .from('planning_modeles_contrat')
+      .delete()
+      .eq('type_contrat', type)
       .select('type_contrat'),
   )
 }
@@ -320,8 +360,11 @@ export async function fetchShifts(
 /** La semaine `lundi`, celle d'après, les semaines d'avant jusqu'à
  * `premierLundiLu` (repos de 35 h, jours fériés à rattraper), et les absences
  * sur la même étendue jusqu'à S+1. */
-export function fetchSemaine(lundi: string): Promise<DonneesShifts> {
-  const premier = premierLundiLu(lundi)
+export function fetchSemaine(
+  lundi: string,
+  fenetreFeries?: number,
+): Promise<DonneesShifts> {
+  const premier = premierLundiLu(lundi, fenetreFeries)
   const lundis: string[] = []
   for (let l = premier; l <= ajouterJours(lundi, 7); l = ajouterJours(l, 7))
     lundis.push(l)
@@ -333,10 +376,11 @@ export function fetchSemaine(lundi: string): Promise<DonneesShifts> {
  * lecture. Pas mise en cache : la génération relit toujours la base. */
 export function fetchSemainePourGeneration(
   lundi: string,
+  fenetreFeries?: number,
 ): Promise<DonneesShifts> {
   // Au moins jusqu'à `premierLundiLu` : jours fériés à rattraper.
   const equite = ajouterJours(lundi, -7 * Math.max(2, SEMAINES_EQUITE))
-  const ferie = premierLundiLu(lundi)
+  const ferie = premierLundiLu(lundi, fenetreFeries)
   const premier = ferie < equite ? ferie : equite
   const lundis: string[] = []
   for (let l = premier; l <= ajouterJours(lundi, 7); l = ajouterJours(l, 7))

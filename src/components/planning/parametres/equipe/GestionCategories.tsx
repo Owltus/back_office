@@ -16,6 +16,7 @@ import {
   useEcriture,
 } from '#/components/planning/hooks/usePlanning.ts'
 import { useNotifier } from '#/components/planning/Messages.tsx'
+import { Interrupteur } from '#/components/planning/parametres/equipe/Champs.tsx'
 import { TousOuCertains } from '#/components/planning/parametres/reglages/TousOuCertains.tsx'
 import { useConfirm } from '#/components/shared/ConfirmDialog.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
@@ -123,6 +124,7 @@ export function GestionCategories({
     nom: g.nom,
     ordre: g.ordre,
     postes_autorises: g.postes_autorises,
+    forfait_possible: g.forfait_possible ?? false,
     ...maj,
   })
 
@@ -348,6 +350,22 @@ export function GestionCategories({
                       </div>
                     )}
                   </TousOuCertains>
+                  <Interrupteur
+                    coche={!!g.forfait_possible}
+                    disabled={!gerer || enCours}
+                    onChange={(v) =>
+                      void action(
+                        () =>
+                          enregistrerGroupe(
+                            valeurs(g, { forfait_possible: v }),
+                            g.id,
+                          ),
+                        'Groupe non enregistré',
+                      )
+                    }
+                  >
+                    Cadres au forfait jours possibles
+                  </Interrupteur>
                 </li>
               )
             })}

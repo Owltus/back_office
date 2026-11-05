@@ -12,6 +12,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { codeErreur, messageErreur } from '#/lib/planning/erreurs.ts'
+import { fenetreFeries } from '#/lib/planning/feries.ts'
 import { planningKeys } from '#/lib/planning/keys.ts'
 import { SEMAINES_EQUITE } from '#/lib/planning/modele.ts'
 import {
@@ -88,9 +89,14 @@ export function useReferentiel() {
 
 export function useShiftsSemaine(lundi: string) {
   useRelireAuRetour()
+  const qc = useQueryClient()
   return useQuery({
     queryKey: planningKeys.semaine(lundi),
-    queryFn: () => fetchSemaine(lundi),
+    queryFn: () =>
+      fetchSemaine(
+        lundi,
+        fenetreFeries(qc.getQueryData<Referentiel>(planningKeys.referentiel())),
+      ),
     staleTime: 30_000,
   })
 }
@@ -248,7 +254,12 @@ export function useGenerer() {
           queryFn: fetchReferentiel,
           staleTime: 0,
         }),
-        fetchSemainePourGeneration(lundi),
+        fetchSemainePourGeneration(
+          lundi,
+          fenetreFeries(
+            qc.getQueryData<Referentiel>(planningKeys.referentiel()),
+          ),
+        ),
       ])
       const d = donneesGeneration(lundi, referentiel, shifts)
       const aujourdhui = options.aujourdhui ?? aujourdhuiParis()
@@ -277,7 +288,7 @@ export function useGenerer() {
         nouvelles,
         absences: g.absences(resultat),
       })
-      let apres = await fetchSemaine(lundi)
+      let apres = await fetchSemaine(lundi, fenetreFeries(referentiel))
       // Une génération COMPLÈTE pose aussi ses repos, en proposition
       // (2026-11-03) : ceux que la semaine générée déduit, sur les jours
       // vides. Jamais pour la pose des horaires fixes (`seulement`).
@@ -301,7 +312,7 @@ export function useGenerer() {
             nouvelles: [],
             absences: repos,
           })
-          apres = await fetchSemaine(lundi)
+          apres = await fetchSemaine(lundi, fenetreFeries(referentiel))
         }
       }
       await qc.invalidateQueries({ queryKey: planningKeys.all })

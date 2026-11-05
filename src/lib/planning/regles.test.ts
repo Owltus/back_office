@@ -65,10 +65,12 @@ describe('règles HCR → solveur', () => {
     ).toBe(10 * H)
   })
 
-  it('besoin trop long pour sa catégorie', () => {
-    expect(alerteBesoin('cuisine', 11 * H)).toBeNull()
-    expect(alerteBesoin('cuisine', 11 * H + 1)).not.toBeNull()
-    expect(alerteBesoin('reception', 12 * H)).toBeNull()
+  it('besoin trop long pour son poste', () => {
+    expect(alerteBesoin({ jour_max_minutes: 11 * H }, 11 * H)).toBeNull()
+    expect(
+      alerteBesoin({ jour_max_minutes: 11 * H }, 11 * H + 1),
+    ).not.toBeNull()
+    expect(alerteBesoin({ jour_max_minutes: 12 * H }, 12 * H)).toBeNull()
   })
 
   it('le résumé cite les règles du mineur', () => {

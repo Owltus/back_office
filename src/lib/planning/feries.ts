@@ -18,9 +18,10 @@ import {
   FERIE_RATTRAPAGE_JOURS,
   droitAuRattrapage,
 } from '#/lib/planning/regles.ts'
+import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import { ajouterJours, lundiDe } from '#/lib/planning/temps.ts'
-import type { Motif, Salarie } from '#/lib/planning/types.ts'
+import type { Motif, Referentiel, Salarie } from '#/lib/planning/types.ts'
 
 export interface JourFerie {
   date: string // AAAA-MM-JJ
@@ -100,8 +101,22 @@ export function feriesEntre(du: string, au: string): JourFerie[] {
  * fériés plus anciens prennent d'abord leurs JFR (`feriesARattraper`), sans
  * quoi le JFR d'un jour férié sorti de la fenêtre serait compté pour le
  * suivant. Shifts ET absences à partir de lui. */
-export function premierLundiLu(lundi: string): string {
-  return lundiDe(ajouterJours(lundi, -Math.max(14, 2 * FERIE_RATTRAPAGE_JOURS)))
+export function premierLundiLu(
+  lundi: string,
+  fenetre: number = FERIE_RATTRAPAGE_JOURS,
+): string {
+  return lundiDe(ajouterJours(lundi, -Math.max(14, 2 * fenetre)))
+}
+
+/** La fenêtre de rattrapage des règles (`feries.rattrapageJours`) quand le
+ * référentiel est déjà lu ; sinon le défaut. Une vue chargée avant lui lit
+ * la fenêtre par défaut, puis la bonne à la lecture suivante. */
+export function fenetreFeries(
+  referentiel: Pick<Referentiel, 'reglages'> | null | undefined,
+): number {
+  return referentiel
+    ? lireRegles(referentiel).feries.rattrapageJours
+    : FERIE_RATTRAPAGE_JOURS
 }
 
 /** Code du motif « Jour férié rattrapé ». À ne pas confondre avec JF, le

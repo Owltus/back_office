@@ -199,7 +199,12 @@ describe('EquipePage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Restreindre' }))
     await waitFor(() =>
       expect(service.enregistrerGroupe).toHaveBeenCalledWith(
-        { nom: 'Hôteliers', ordre: 1, postes_autorises: [2, 3] },
+        {
+          nom: 'Hôteliers',
+          ordre: 1,
+          postes_autorises: [2, 3],
+          forfait_possible: false,
+        },
         2,
       ),
     )
@@ -225,7 +230,12 @@ describe('EquipePage', () => {
       fireEvent.click(within(choix).getByRole('radio', { name: 'Tous' }))
       await waitFor(() =>
         expect(service.enregistrerGroupe).toHaveBeenLastCalledWith(
-          { nom: 'Hôteliers', ordre: 1, postes_autorises: [] },
+          {
+            nom: 'Hôteliers',
+            ordre: 1,
+            postes_autorises: [],
+            forfait_possible: false,
+          },
           2,
         ),
       )
@@ -239,7 +249,12 @@ describe('EquipePage', () => {
       )
       await waitFor(() =>
         expect(service.enregistrerGroupe).toHaveBeenLastCalledWith(
-          { nom: 'Hôteliers', ordre: 1, postes_autorises: [2, 3, 4] },
+          {
+            nom: 'Hôteliers',
+            ordre: 1,
+            postes_autorises: [2, 3, 4],
+            forfait_possible: false,
+          },
           2,
         ),
       )

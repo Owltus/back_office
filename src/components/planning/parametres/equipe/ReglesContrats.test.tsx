@@ -17,6 +17,8 @@ const etat = vi.hoisted(() => ({
 const service = vi.hoisted(() => ({
   enregistrerReglages: vi.fn(),
   enregistrerModeleContrat: vi.fn(),
+  ajouterModeleContrat: vi.fn(),
+  supprimerModeleContrat: vi.fn(),
   enregistrerMomentsHoraires: vi.fn(),
 }))
 
@@ -52,6 +54,8 @@ beforeEach(() => {
   service.enregistrerReglages.mockReset().mockResolvedValue(undefined)
   service.enregistrerModeleContrat.mockReset().mockResolvedValue(undefined)
   service.enregistrerMomentsHoraires.mockReset().mockResolvedValue(undefined)
+  service.ajouterModeleContrat.mockReset().mockResolvedValue(undefined)
+  service.supprimerModeleContrat.mockReset().mockResolvedValue(undefined)
 })
 afterEach(cleanup)
 
@@ -107,8 +111,102 @@ describe('Règles des contrats', () => {
   })
 })
 
+describe('Types de contrat de l’établissement (2026-11-06)', () => {
+  it('créer « Saisonnier » posé à la main, puis l’enregistrer', async () => {
+    tiroir()
+    fireEvent.click(screen.getByRole('button', { name: /Nouveau contrat/ }))
+    const nom = screen.getByRole('textbox', { name: 'Nom du contrat' })
+    expect((nom as HTMLInputElement).value).toBe('Nouveau contrat')
+    fireEvent.change(nom, { target: { value: 'Saisonnier' } })
+    fireEvent.click(
+      screen.getByRole('switch', { name: /Posé à la main seulement/ }),
+    )
+    expect(screen.getByRole('radio', { name: 'Saisonnier' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+    await waitFor(() =>
+      expect(service.ajouterModeleContrat).toHaveBeenCalledTimes(1),
+    )
+    expect(service.ajouterModeleContrat.mock.calls[0][0]).toMatchObject({
+      type_contrat: 'contrat_1',
+      nom: 'Saisonnier',
+      placement_manuel: true,
+      ordre: 5,
+    })
+    expect(service.enregistrerModeleContrat).not.toHaveBeenCalled()
+    expect(service.supprimerModeleContrat).not.toHaveBeenCalled()
+  })
+
+  it('renommer un contrat n’envoie que lui', async () => {
+    tiroir()
+    fireEvent.click(screen.getByRole('radio', { name: 'CDD' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Nom du contrat' }), {
+      target: { value: 'Contrat court' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+    await waitFor(() =>
+      expect(service.enregistrerModeleContrat).toHaveBeenCalledTimes(1),
+    )
+    expect(service.enregistrerModeleContrat.mock.calls[0][0]).toMatchObject({
+      type_contrat: 'cdd',
+      nom: 'Contrat court',
+    })
+  })
+
+  it('un contrat utilisé ne se retire pas ; un contrat libre, si', async () => {
+    tiroir()
+    // Le jeu d'essai a des CDI : le bouton est grisé.
+    expect(
+      screen
+        .getByRole('button', { name: /Retirer ce contrat/ })
+        .hasAttribute('disabled'),
+    ).toBe(true)
+    // Sans aucun CDD : il se retire.
+    ref.salaries = ref.salaries.filter((x) => x.type_contrat !== 'cdd')
+    cleanup()
+    tiroir()
+    fireEvent.click(screen.getByRole('radio', { name: 'CDD' }))
+    fireEvent.click(screen.getByRole('button', { name: /Retirer ce contrat/ }))
+    expect(screen.queryByRole('radio', { name: 'CDD' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+    await waitFor(() =>
+      expect(service.supprimerModeleContrat).toHaveBeenCalledWith('cdd'),
+    )
+  })
+
+  it('deux contrats ne portent pas le même nom', () => {
+    tiroir()
+    fireEvent.click(screen.getByRole('radio', { name: 'CDD' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Nom du contrat' }), {
+      target: { value: 'cdi' },
+    })
+    expect(
+      screen.getByText(/deux contrats ne portent pas le même nom/),
+    ).toBeTruthy()
+    expect(
+      screen
+        .getByRole('button', { name: 'Enregistrer' })
+        .hasAttribute('disabled'),
+    ).toBe(true)
+  })
+
+  it('jours fériés : ancienneté réglée, la phrase la suit', () => {
+    tiroir()
+    expect(
+      screen.getAllByText(/Après 1 an, un jour férié travaillé/).length,
+    ).toBeGreaterThan(0)
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /Ancienneté qui ouvre le rattrapage, en mois : un de plus/,
+      }),
+    )
+    expect(
+      screen.getAllByText(/Après 13 mois, un jour férié travaillé/).length,
+    ).toBeGreaterThan(0)
+  })
+})
+
 describe('Règles des contrats : relecture adverse du 2026-11-05', () => {
-  it('1. « Heures indicatives » n’est offert qu’au type extra', () => {
+  it('1. « Heures indicatives » n’est offert qu’au contrat posé à la main', () => {
     tiroir()
     // CDI par défaut : la case n'est pas là.
     expect(
@@ -129,7 +227,7 @@ describe('Règles des contrats : relecture adverse du 2026-11-05', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
     const alerte = await screen.findByRole('alert')
     expect(alerte.textContent).toMatch(/types de contrat/)
-    expect(alerte.textContent).toMatch(/pas été enregistr/)
+    expect(alerte.textContent).toMatch(/mais pas tous/)
     // Le brouillon reste : la saisie est encore là, Enregistrer encore actif.
     expect(
       screen

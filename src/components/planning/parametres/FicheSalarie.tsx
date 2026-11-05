@@ -30,6 +30,7 @@ import { useNotifier } from '#/components/planning/Messages.tsx'
 import {
   brouillonDe,
   brouillonVierge,
+  contratManuel,
   dateFr,
   diffAbsences,
   diffVide,
@@ -93,7 +94,11 @@ import {
 import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { messageErreur } from '#/lib/planning/erreurs.ts'
 import { planningKeys } from '#/lib/planning/keys.ts'
-import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
+import {
+  lireRegles,
+  listeContrats,
+  nomContrat,
+} from '#/lib/planning/reglesEtablissement.ts'
 import { estEcole } from '#/lib/planning/semaine.ts'
 import {
   enregistrerSalarie,
@@ -103,7 +108,6 @@ import {
   poserAbsences,
   supprimerSalarie,
 } from '#/lib/planning/service.ts'
-import { TYPES_CONTRAT } from '#/lib/planning/types.ts'
 import type {
   Absence,
   Affectation,
@@ -187,7 +191,7 @@ export function FicheSalarie({
             initial={
               salarie
                 ? brouillonDe(salarie, absences.data ?? [])
-                : brouillonVierge(groupeId ?? null)
+                : brouillonVierge(groupeId ?? null, lireRegles(ref.data))
             }
             referentiel={ref.data}
             onFermer={onFermer}
@@ -342,10 +346,11 @@ function CorpsFiche({
   const maj = (f: (x: Brouillon) => Brouillon) => setB((x) => f(x))
 
   const ecole = referentiel.motifs.find(estEcole)
-  const alternance = enAlternance(b.type_contrat, lireRegles(referentiel))
+  const regles = lireRegles(referentiel)
+  const alternance = enAlternance(b.type_contrat, regles)
   const groupe = referentiel.groupes.find((g) => g.id === b.groupe_id)
   const desactive = !gerer || enCours
-  const erreur = erreurBrouillon(b)
+  const erreur = erreurBrouillon(b, regles)
 
   /** Jours d'absence en base, relus maintenant (le planning a pu en poser). */
   const absencesEnBase = (id: number) =>
@@ -367,8 +372,8 @@ function CorpsFiche({
           x.contrats.some((c) => c.id === b.id),
         )?.contrats ?? [])
   const recouvre = (c: Salarie) =>
-    c.type_contrat === 'extra' && !c.date_sortie
-      ? `Ces dates recouvrent son contrat d'extra ${periodeContrat(c)}, qui n'a pas de fin : désactivez-le dans sa fiche (« Inactif »), puis recommencez.`
+    contratManuel(c.type_contrat, regles) && !c.date_sortie
+      ? `Ces dates recouvrent son contrat ${nomContrat(regles, c.type_contrat)} ${periodeContrat(c)}, qui n'a pas de fin : désactivez-le dans sa fiche (« Inactif »), puis recommencez.`
       : `Ces dates recouvrent son contrat ${periodeContrat(c)} : une personne n'a qu'un contrat à la fois. Changez d'abord les dates de l'un des deux.`
 
   // Ce que chaque contrat a servi : seul un contrat jamais servi se
@@ -393,10 +398,7 @@ function CorpsFiche({
   const cibleSuppression = () => {
     const c = autresContrats().find((x) => x.id === aSupprimer)
     if (!c) return ''
-    const type =
-      TYPES_CONTRAT.find((x) => x.code === c.type_contrat)?.libelle ??
-      c.type_contrat
-    return `${type} ${periodeContrat(c)}`
+    return `${nomContrat(regles, c.type_contrat)} ${periodeContrat(c)}`
   }
 
   const enregistrer = () =>
@@ -518,26 +520,29 @@ function CorpsFiche({
         ...brouillonDe(enregistre, []),
         id: null,
         type_contrat: v.type,
-        heures_hebdo: v.type === 'extra' ? 0 : v.heures,
-        forfait_jours: v.type === 'extra' ? false : enregistre.forfait_jours,
+        heures_hebdo: contratManuel(v.type, regles) ? 0 : v.heures,
+        forfait_jours: contratManuel(v.type, regles)
+          ? false
+          : enregistre.forfait_jours,
         date_entree: v.debut || null,
         date_sortie: v.fin || null,
         actif: true,
         suite_de: enregistre.id,
       }
-      const err = erreurBrouillon(nouveau)
+      const err = erreurBrouillon(nouveau, regles)
       if (err) {
         notifier(err, 'attention')
         return false
       }
-      // Un extra embauché (bonne pratique RH) : son contrat d'extra, sans
-      // fin, s'arrête la veille du nouveau contrat ; il reste au parcours.
+      // Un extra embauché (bonne pratique RH) : son contrat placé à la
+      // main, sans fin, s'arrête la veille du nouveau contrat ; il reste au
+      // parcours.
       let extra: Salarie | null = null
       let contrats = autresContrats()
       const premier = chevauche(contrats, nouveau)
       if (
         premier &&
-        premier.type_contrat === 'extra' &&
+        contratManuel(premier.type_contrat, regles) &&
         !premier.date_sortie &&
         nouveau.date_entree &&
         (!premier.date_entree || premier.date_entree < nouveau.date_entree)
@@ -584,7 +589,7 @@ function CorpsFiche({
   const evoluer = async (e: Evolution): Promise<boolean> =>
     (await uneFois(async () => {
       if (!gerer || b.id === null) return false
-      const err = erreurEvolution(b, e)
+      const err = erreurEvolution(b, e, regles)
       if (err) {
         notifier(err, 'attention')
         return false
@@ -626,6 +631,7 @@ function CorpsFiche({
             joursInitiaux,
             joursDesPeriodes(b.absences),
           ),
+          regles,
         )
         await enregistrerSalarie(plan.ancien, id)
       } catch (x) {
@@ -931,9 +937,8 @@ function ParcoursContrats({
     x.contrats.some((c) => c.id === id),
   )
   if (!p || (p.contrats.length < 2 && !gerer)) return null
-  const libelle = (s: Salarie) =>
-    TYPES_CONTRAT.find((t) => t.code === s.type_contrat)?.libelle ??
-    s.type_contrat
+  const regles = lireRegles(referentiel)
+  const libelle = (s: Salarie) => nomContrat(regles, s.type_contrat)
   const periode = periodeContrat
   const poste = (s: Salarie) => {
     const c =
@@ -1056,13 +1061,13 @@ function ParcoursContrats({
             <Liste
               label="Type de contrat"
               valeur={ajout.type}
-              options={TYPES_CONTRAT.map((t) => ({
-                valeur: t.code,
-                libelle: t.libelle,
+              options={listeContrats(regles).map((m) => ({
+                valeur: m.code,
+                libelle: m.nom,
               }))}
               onChange={(v) => setAjout({ ...ajout, type: v as TypeContrat })}
             />
-            {ajout.type !== 'extra' && (
+            {!contratManuel(ajout.type, regles) && (
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor={`${idChamp}-h`} className="text-xs">
                   Heures par semaine

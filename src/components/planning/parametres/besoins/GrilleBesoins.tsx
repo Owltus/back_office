@@ -285,7 +285,7 @@ function LigneGrille({
 }) {
   const nom = libelleHoraire(ligne)
   const reglages = JOURS.map((_, j) => affiche(poste.id, ligne, j))
-  const trop = alerteBesoin(poste.categorie, presence(ligne.debut, ligne.fin))
+  const trop = alerteBesoin(poste, presence(ligne.debut, ligne.fin))
   const orphelins = reglages.filter(soutienSansBase).length
   const alertes = [
     !permise && "Cet horaire n'est pas dans les horaires possibles du poste.",

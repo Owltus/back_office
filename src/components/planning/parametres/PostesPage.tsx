@@ -1,7 +1,7 @@
 /*
  * Paramètres du Planning : les postes (prototype `PostesPage.tsx`, spec §5.1).
- * Une carte par poste : nom, catégorie HCR (qui fixe la durée maximale
- * d'un service, convention HCR), couleur, rangement à part, horaires
+ * Une carte par poste : nom, durée max d'un service (bornée par la loi
+ * : 12 h), couleur, rangement à part, horaires
  * possibles (Tous ou Seulement ceux-ci). Enregistrement explicite par carte ;
  * un nouveau poste est une carte brouillon, créée en base à Enregistrer.
  * Seule la gestion modifie ; lecture et écriture voient les réglages.
@@ -63,7 +63,11 @@ import { Switch } from '#/components/ui/switch.tsx'
 import { Segmente } from '#/components/planning/parametres/equipe/Segmente.tsx'
 import { tientLaNuit } from '#/lib/planning/presence.ts'
 import { dureeHoraire, heures } from '#/lib/planning/affichage.ts'
-import { JOUR_MAX_CATEGORIE } from '#/lib/planning/regles.ts'
+import {
+  JOUR_MAX_LOI,
+  JOUR_MAX_POSTE_DEFAUT,
+  presenceMaxPoste,
+} from '#/lib/planning/regles.ts'
 import {
   enregistrerPoste,
   ordonnerPostes,
@@ -75,12 +79,11 @@ import {
   AIDE_NON_INDISPENSABLE,
 } from '#/components/planning/parametres/besoins/ordreDecision.ts'
 import { estIndispensable } from '#/lib/planning/modele.ts'
-import { CATEGORIES } from '#/lib/planning/types.ts'
 import type { Poste, Referentiel } from '#/lib/planning/types.ts'
 
 const saisieDe = (p: Poste): SaisiePoste => ({
   nom: p.nom,
-  categorie: p.categorie,
+  jour_max_minutes: presenceMaxPoste(p),
   couleur: p.couleur,
   horaires_autorises: [...p.horaires_autorises],
   presence: p.presence,
@@ -161,7 +164,7 @@ export function PostesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
     setOuvert(null)
     setNouveau({
       nom: 'Nouveau poste',
-      categorie: 'autre',
+      jour_max_minutes: JOUR_MAX_POSTE_DEFAUT,
       couleur: PALETTE[ref.data.postes.length % PALETTE.length],
       horaires_autorises: [],
       presence: false,
@@ -196,7 +199,7 @@ export function PostesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
         <>
           <EnTeteSection
             titre="Les postes de l'hôtel"
-            texte="Un clic sur un poste ouvre son réglage : nom, catégorie HCR (elle fixe la durée maximale d'un service selon la convention HCR), couleur et horaires possibles. L'ordre de la liste est l'organigramme : les flèches montent ou descendent un poste, et le planning range chaque groupe dans cet ordre, du poste le plus haut au plus bas."
+            texte="Un clic sur un poste ouvre son réglage : nom, durée max d'un service (12 h au plus, la loi), couleur et horaires possibles. L'ordre de la liste est l'organigramme : les flèches montent ou descendent un poste, et le planning range chaque groupe dans cet ordre, du poste le plus haut au plus bas."
           />
           <div className="overflow-hidden rounded-xl border bg-card">
             <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b bg-muted/40 px-3 py-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
@@ -278,7 +281,7 @@ export function PostesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
                     : `Poste ${posteOuvert?.nom ?? ''}`}
                 </SheetTitle>
                 <SheetDescription>
-                  Nom, catégorie HCR, couleur et horaires possibles
+                  Nom, durée max d'un service, couleur et horaires possibles
                 </SheetDescription>
               </SheetHeader>
               <div className="p-4">
@@ -410,7 +413,17 @@ function CartePoste({
   const besoinsSemaine = referentiel.besoins
     .filter((b) => b.poste_id === id)
     .reduce((n, b) => n + b.effectif * dureeHoraire(b.debut, b.fin), 0)
-  const max = JOUR_MAX_CATEGORIE[p.categorie]
+  const max = presenceMaxPoste(p)
+  // De 4 h à la loi, par demi-heure ; la valeur actuelle toujours proposée.
+  const choixMax = [
+    ...new Set([
+      ...Array.from(
+        { length: (JOUR_MAX_LOI - 240) / 30 + 1 },
+        (_, i) => 240 + i * 30,
+      ),
+      max,
+    ]),
+  ].sort((a, b) => a - b)
   const idNom = `poste-${id ?? 'nouveau'}-nom`
 
   return (
@@ -432,27 +445,26 @@ function CartePoste({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <Label>Catégorie HCR</Label>
+        <Label>Durée max d'un service</Label>
         <Select
-          value={p.categorie}
+          value={String(max)}
           disabled={!modifiable}
-          onValueChange={(v) =>
-            changer({ categorie: v as SaisiePoste['categorie'] })
-          }
+          onValueChange={(v) => changer({ jour_max_minutes: Number(v) })}
         >
-          <SelectTrigger className="w-full" aria-label="Catégorie HCR">
+          <SelectTrigger className="w-full" aria-label="Durée max d'un service">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {CATEGORIES.map((c) => (
-              <SelectItem key={c.code} value={c.code}>
-                {c.libelle}, service max {heures(JOUR_MAX_CATEGORIE[c.code])}
+            {choixMax.map((m) => (
+              <SelectItem key={m} value={String(m)}>
+                {heures(m)}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
         <span className="text-xs text-muted-foreground">
-          Un service dure au plus {heures(max)} sur ce poste (convention HCR).
+          Un service dure au plus {heures(max)} sur ce poste, pause comprise. La
+          loi ne permet jamais plus de {heures(JOUR_MAX_LOI)}.
         </span>
       </div>
 

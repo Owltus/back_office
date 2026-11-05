@@ -20,6 +20,11 @@ import type { RaisonClaire } from '#/lib/planning/raisonsPlaces.ts'
 import { POSTE_ID_ACCUEIL } from '#/lib/planning/semaine.ts'
 import type { EquipeOut, SemaineOut } from '#/lib/planning/semaine.ts'
 import { ORDRE_PERIODES, tientLaNuit } from '#/lib/planning/presence.ts'
+import {
+  modeleDe,
+  REGLES_PAR_DEFAUT,
+} from '#/lib/planning/reglesEtablissement.ts'
+import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import { ajouterJours } from '#/lib/planning/temps.ts'
 import { JOURS } from '#/lib/planning/types.ts'
 import type {
@@ -222,9 +227,16 @@ export function pointsAttention(
   salaries: Salarie[],
   postes: Poste[],
   portee: Portee = TOUT,
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
 ): PointsAttention {
   const garder = portee.jour
   const parId = new Map(salaries.map((s) => [s.id, s]))
+  // Un contrat placé à la main (l'extra) : à appeler, jamais placé par le
+  // calcul. Lu dans le modèle du contrat, jamais dans son code.
+  const aAppeler = (id: number) => {
+    const x = parId.get(id)
+    return !!x && modeleDe(regles, x.type_contrat).placementManuel
+  }
   // Prénom, avec l'initiale du nom quand deux personnes le partagent.
   const courts = nomsCourts(salaries)
   const nom = (id: number) => courts.get(id) ?? 'Inconnu'
@@ -262,16 +274,15 @@ export function pointsAttention(
           id: r.salarie_id,
           nom: nom(r.salarie_id),
           posteId: competence?.poste_id ?? t.poste_id,
-          role:
-            x?.type_contrat === 'extra'
-              ? 'extra'
-              : niveau === 'occasionnel'
-                ? 'occasionnel'
-                : 'titulaire',
+          role: aAppeler(r.salarie_id)
+            ? 'extra'
+            : niveau === 'occasionnel'
+              ? 'occasionnel'
+              : 'titulaire',
           raisons: claires,
           possible: estPossible(claires),
         })
-        if (parId.get(r.salarie_id)?.type_contrat === 'extra') {
+        if (aAppeler(r.salarie_id)) {
           extras.push(nom(r.salarie_id))
           continue
         }
@@ -293,7 +304,7 @@ export function pointsAttention(
           .filter(
             (x) =>
               !ouvertes.has(x.salarie_id) &&
-              parId.get(x.salarie_id)?.type_contrat !== 'extra' &&
+              !aAppeler(x.salarie_id) &&
               estPossible(raisonsClaires(x.salarie_id, x.regles, x.messages)),
           )
           .map((x) => nom(x.salarie_id))

@@ -113,7 +113,7 @@ function etablissement(reglages: Reglages | undefined): Referentiel {
     {
       id: RECEPTION,
       nom: 'Réception',
-      categorie: 'reception',
+      jour_max_minutes: 720,
       couleur: '#111',
       horaires_autorises: [1, 2, 3],
       presence: true,
@@ -125,7 +125,7 @@ function etablissement(reglages: Reglages | undefined): Referentiel {
     {
       id: PDJ,
       nom: 'Petit-déjeuner',
-      categorie: 'autre',
+      jour_max_minutes: 690,
       couleur: '#222',
       horaires_autorises: [1, 3],
       presence: false,
@@ -134,7 +134,7 @@ function etablissement(reglages: Reglages | undefined): Referentiel {
     {
       id: DIRECTION,
       nom: 'Direction',
-      categorie: 'autre',
+      jour_max_minutes: 690,
       couleur: '#333',
       horaires_autorises: [4],
       presence: false,

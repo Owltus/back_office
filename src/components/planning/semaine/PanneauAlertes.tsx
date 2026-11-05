@@ -16,6 +16,7 @@
  * 15 h à 16 h »).
  */
 
+import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import type { ReactNode } from 'react'
 import { useRouter } from '@tanstack/react-router'
 import { ChevronRight, CircleCheck } from 'lucide-react'
@@ -150,7 +151,10 @@ export function PanneauAlertes({
   infractionsSeules = false,
   horaires,
   onPlacer,
+  regles,
 }: {
+  /** Les règles de l'établissement (`lireRegles`) ; absent : les défauts. */
+  regles?: RegleEtablissement
   ouvert: boolean
   onFermer: () => void
   semaines: SemaineOut[]
@@ -169,7 +173,7 @@ export function PanneauAlertes({
    * seule), pas de bouton. */
   onPlacer?: (d: DemandePlacement) => void
 }) {
-  const p = pointsAttention(semaines, salaries, postes, portee)
+  const p = pointsAttention(semaines, salaries, postes, portee, regles)
   const shifts = p.aPourvoir.flatMap((j) => j.shifts)
   const compte = (l: PointPersonne[]) =>
     l.reduce((n, x) => n + x.messages.length, 0)

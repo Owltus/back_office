@@ -175,7 +175,7 @@ const personne = (champs: Partial<Salarie> = {}): Salarie => ({
 const poste = (horaires_autorises: number[]): Poste => ({
   id: 1,
   nom: 'Poste',
-  categorie: 'reception',
+  jour_max_minutes: 720,
   couleur: '#000000',
   horaires_autorises,
   presence: false,

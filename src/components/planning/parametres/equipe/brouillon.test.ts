@@ -4,8 +4,9 @@ import {
   brouillonVierge,
   changerCategorie,
   changerContrat,
-  CONTRATS_MINEUR,
   erreurBrouillon,
+  erreurEvolution,
+  evolutionParDefaut,
   forfaitPossible,
   heuresSansObjet,
   fusionnerAbsences,
@@ -15,6 +16,8 @@ import {
   periodesDe,
 } from '#/components/planning/parametres/equipe/brouillon.ts'
 import type { PeriodeBrouillon } from '#/components/planning/parametres/equipe/brouillon.ts'
+import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
+import type { ModeleContrat } from '#/lib/planning/types.ts'
 
 /*
  * Absences de la fiche : enregistrement en trois temps (base relue, jours à
@@ -179,9 +182,15 @@ describe('fin de contrat et bouton Actif (U2 du 2026-11-01)', () => {
   })
 })
 
-describe('cadre au forfait jours : la direction seule (2026-11-01)', () => {
+describe('cadre au forfait jours : contrat et groupe qui le permettent (2026-11-01, cases du 2026-11-06)', () => {
   const groupes = [
-    { id: 1, nom: 'Direction', ordre: 0, postes_autorises: [] },
+    {
+      id: 1,
+      nom: 'Direction',
+      ordre: 0,
+      postes_autorises: [],
+      forfait_possible: true,
+    },
     { id: 2, nom: 'Hôteliers', ordre: 1, postes_autorises: [] },
   ]
   const fiche = (kw: Partial<ReturnType<typeof brouillonVierge>>) => ({
@@ -225,7 +234,21 @@ describe('mineur : apprenti ou stagiaire seulement (2026-11-01)', () => {
     expect(changerContrat(jeune, 'stagiaire').mineur).toBe(true)
     for (const t of ['cdi', 'cdd', 'extra'] as const)
       expect(changerContrat(jeune, t).mineur).toBe(false)
-    expect([...CONTRATS_MINEUR].sort()).toEqual(['apprenti', 'stagiaire'])
+  })
+  it('le groupe se lit par sa case, plus par son nom', () => {
+    const renomme = [
+      {
+        id: 1,
+        nom: 'Encadrement',
+        ordre: 0,
+        postes_autorises: [],
+        forfait_possible: true,
+      },
+      { id: 2, nom: 'Direction', ordre: 1, postes_autorises: [] },
+    ]
+    expect(forfaitPossible(fiche({ groupe_id: 1 }), renomme)).toBe(true)
+    // Refusé : nommé Direction, mais sans la case.
+    expect(forfaitPossible(fiche({ groupe_id: 2 }), renomme)).toBe(false)
   })
 })
 
@@ -257,5 +280,91 @@ describe('alternance : le modèle du type de contrat décide (relecture du 2026-
     expect(enAlternance('stagiaire', regles)).toBe(false)
     expect(niveauParDefaut('cdd', regles)).toBe('soutien')
     expect(niveauParDefaut('stagiaire', regles)).toBe('titulaire')
+  })
+})
+
+describe('contrats de l’établissement : les cases du modèle, jamais le code (2026-11-06)', () => {
+  const ligne = (kw: Partial<ModeleContrat>): ModeleContrat => ({
+    type_contrat: 'contrat_1',
+    nom: 'Saisonnier',
+    journees_imposees: false,
+    journee_etoile: false,
+    placement_manuel: true,
+    contrat_indicatif: true,
+    ferie_rattrape: false,
+    feries_jour_meme: false,
+    alternance: false,
+    mineur_possible: false,
+    forfait_possible: false,
+    fin_obligatoire: false,
+    ...kw,
+  })
+  const regles = lireRegles({
+    modelesContrat: [
+      ligne({}),
+      ligne({
+        type_contrat: 'cdi',
+        nom: 'CDI',
+        ordre: 1,
+        placement_manuel: false,
+        contrat_indicatif: false,
+        forfait_possible: true,
+      }),
+    ],
+  })
+  const fiche = (kw: Partial<ReturnType<typeof brouillonVierge>>) => ({
+    ...brouillonVierge(null, regles),
+    prenom: 'Léa',
+    ...kw,
+  })
+  it('la fiche vierge prend le premier contrat de la liste', () => {
+    expect(brouillonVierge(null, regles).type_contrat).toBe('contrat_1')
+  })
+  it('un contrat posé à la main : 0 h, pas de fin, interrupteur Actif', () => {
+    const b = changerContrat(
+      fiche({
+        type_contrat: 'cdi',
+        heures_hebdo: 35,
+        date_sortie: '2027-01-01',
+      }),
+      'contrat_1',
+      regles,
+    )
+    expect(b.heures_hebdo).toBe(0)
+    expect(b.date_sortie).toBeNull()
+    expect(heuresSansObjet(b, regles)).toBe(true)
+    expect(erreurBrouillon(b, regles)).toBeNull()
+  })
+  it('fin obligatoire : la case du modèle, avec son nom', () => {
+    const r = lireRegles({
+      modelesContrat: [
+        ligne({ placement_manuel: false, fin_obligatoire: true }),
+      ],
+    })
+    expect(
+      erreurBrouillon(
+        { ...brouillonVierge(null, r), prenom: 'Léa', heures_hebdo: 35 },
+        r,
+      ),
+    ).toBe(
+      'Indiquez la fin du contrat : elle est obligatoire pour le contrat Saisonnier.',
+    )
+  })
+  it('l’évolution garde le contrat : le nouveau se choisit dans le dialogue', () => {
+    const b = fiche({
+      type_contrat: 'apprenti',
+      heures_hebdo: 35,
+      competences: [{ poste_id: 1, niveau: 'soutien' }],
+    })
+    const e = evolutionParDefaut(b, '2026-11-06')
+    expect(e.type_contrat).toBe('apprenti')
+    // Choisi « Saisonnier », posé à la main : aucune heure exigée.
+    expect(
+      erreurEvolution(
+        b,
+        { ...e, type_contrat: 'contrat_1', heures_hebdo: 0 },
+        regles,
+      ),
+    ).toBeNull()
   })
 })

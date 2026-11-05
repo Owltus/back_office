@@ -37,8 +37,25 @@ export interface JourneesContrat {
   courtesMax: number
 }
 
-/** Les règles d'un type de contrat (`planning_modeles_contrat`). */
+/** Un type de contrat de l'établissement et ses règles
+ * (`planning_modeles_contrat`). Depuis le 2026-11-06, la LISTE des contrats
+ * est celle de l'établissement : le code n'est jamais comparé, seules ces
+ * cases sont lues. */
 export interface ModeleContratRegle {
+  /** Identifiant (`type_contrat`), jamais montré. */
+  code: TypeContrat
+  /** Nom affiché. */
+  nom: string
+  /** Rang dans les listes. */
+  ordre: number
+  /** Durée max d'un jour de travail (minutes), null : celle du poste. */
+  jourMaxMinutes: number | null
+  /** Peut être déclaré mineur. */
+  mineurPossible: boolean
+  /** Peut être cadre au forfait jours (si son groupe le permet). */
+  forfaitPossible: boolean
+  /** La fiche exige une fin de contrat. */
+  finObligatoire: boolean
   /** Le calcul ne pose que les journées de `contrats.journees`. */
   journeesImposees: boolean
   /** Au-delà de 35 h, une journée étoile chaque semaine. */
@@ -150,13 +167,24 @@ export interface RegleEtablissement {
     /** Semaines au-delà du contrat (sur 4) avant l'alerte. */
     semainesEnPlusAlerte: number
   }
-  /** Règles propres à chaque type de contrat. */
+  feries: {
+    /** Ancienneté (mois) qui ouvre le rattrapage d'un jour férié travaillé. */
+    ancienneteMois: number
+    /** Un jour férié travaillé reste à rattraper ce nombre de jours. */
+    rattrapageJours: number
+  }
+  /** Les types de contrat de l'établissement, par identifiant. */
   modeles: Readonly<Record<TypeContrat, ModeleContratRegle>>
 }
 
 /** Un salarié « ordinaire » (CDI, CDD) : rattrapage des jours fériés après
- * un an, journées imposées, journée étoile au-delà de 35 h. */
-const MODELE_ORDINAIRE: ModeleContratRegle = {
+ * un an, journées imposées, journée étoile au-delà de 35 h. Sert aussi de
+ * modèle à un contrat inconnu (jamais en base : clé étrangère). */
+const MODELE_ORDINAIRE: Omit<ModeleContratRegle, 'code' | 'nom' | 'ordre'> = {
+  jourMaxMinutes: null,
+  mineurPossible: false,
+  forfaitPossible: true,
+  finObligatoire: false,
   journeesImposees: true,
   journeeEtoile: true,
   placementManuel: false,
@@ -211,12 +239,23 @@ export const REGLES_PAR_DEFAUT: RegleEtablissement = {
   ecole: { veilleFin: 21 * H, lendemainDebut: 8 * H },
   conges: { congeLong: 5 },
   heures: { semainesEnPlusAlerte: 3 },
-  // Mêmes lignes que la migration 20261105100000.
+  feries: { ancienneteMois: 12, rattrapageJours: 91 },
+  // Mêmes lignes que les migrations 20261105100000 et 20261106100000.
   modeles: {
-    cdi: MODELE_ORDINAIRE,
-    cdd: MODELE_ORDINAIRE,
+    cdi: { ...MODELE_ORDINAIRE, code: 'cdi', nom: 'CDI', ordre: 0 },
+    cdd: {
+      ...MODELE_ORDINAIRE,
+      code: 'cdd',
+      nom: 'CDD',
+      ordre: 1,
+      finObligatoire: true,
+    },
     extra: {
       ...MODELE_ORDINAIRE,
+      code: 'extra',
+      nom: 'Extra',
+      ordre: 2,
+      forfaitPossible: false,
       journeesImposees: false,
       journeeEtoile: false,
       placementManuel: true,
@@ -225,11 +264,27 @@ export const REGLES_PAR_DEFAUT: RegleEtablissement = {
     },
     stagiaire: {
       ...MODELE_ORDINAIRE,
+      code: 'stagiaire',
+      nom: 'Stagiaire',
+      ordre: 3,
+      jourMaxMinutes: 10 * H,
+      mineurPossible: true,
+      forfaitPossible: false,
+      finObligatoire: true,
       ferieRattrape: false,
       feriesJourMeme: true,
       alternance: true,
     },
-    apprenti: { ...MODELE_ORDINAIRE, alternance: true },
+    apprenti: {
+      ...MODELE_ORDINAIRE,
+      code: 'apprenti',
+      nom: 'Apprenti',
+      ordre: 4,
+      mineurPossible: true,
+      forfaitPossible: false,
+      finObligatoire: true,
+      alternance: true,
+    },
   },
 }
 
@@ -301,18 +356,36 @@ export function lireRegles(
       semainesEnPlusAlerte:
         r.semaines_en_plus_alerte ?? d.heures.semainesEnPlusAlerte,
     },
+    feries: {
+      ancienneteMois: r.ferie_anciennete_mois ?? d.feries.ancienneteMois,
+      rattrapageJours: r.ferie_rattrapage_jours ?? d.feries.rattrapageJours,
+    },
     modeles: lireModeles(referentiel?.modelesContrat),
   }
 }
 
-/** Les modèles de contrat de la base ; un type absent garde son défaut. */
+/** Les contrats de la base : ils SONT la liste (un contrat retiré n'y est
+ * plus). Sans ligne (données de test, base pas encore migrée) : les
+ * défauts. Une case absente d'une ligne (données de test) reprend le défaut
+ * du contrat de même identifiant, sinon celui d'un contrat ordinaire. */
 function lireModeles(
   lignes: readonly ModeleContrat[] | undefined,
 ): Readonly<Record<TypeContrat, ModeleContratRegle>> {
-  const r = { ...REGLES_PAR_DEFAUT.modeles }
-  for (const m of lignes ?? []) {
-    if (!(m.type_contrat in r)) continue
+  if (!lignes?.length) return REGLES_PAR_DEFAUT.modeles
+  const r: Record<TypeContrat, ModeleContratRegle> = {}
+  for (const m of lignes) {
+    const d = modeleDefaut(m.type_contrat)
     r[m.type_contrat] = {
+      code: m.type_contrat,
+      nom: m.nom ?? d.nom,
+      ordre: m.ordre ?? d.ordre,
+      jourMaxMinutes:
+        m.jour_max_minutes === undefined
+          ? d.jourMaxMinutes
+          : m.jour_max_minutes,
+      mineurPossible: m.mineur_possible ?? d.mineurPossible,
+      forfaitPossible: m.forfait_possible ?? d.forfaitPossible,
+      finObligatoire: m.fin_obligatoire ?? d.finObligatoire,
       journeesImposees: m.journees_imposees,
       journeeEtoile: m.journee_etoile,
       placementManuel: m.placement_manuel,
@@ -366,13 +439,36 @@ export function passationVeilleurActive(
   return regles.passations.passationVeilleur && unPosteTientLaNuit
 }
 
+/** Le défaut d'un identifiant : le contrat de l'hôtel de même identifiant,
+ * sinon un contrat ordinaire nommé par sa clé. */
+function modeleDefaut(type: TypeContrat): ModeleContratRegle {
+  return Object.hasOwn(REGLES_PAR_DEFAUT.modeles, type)
+    ? REGLES_PAR_DEFAUT.modeles[type]
+    : { ...MODELE_ORDINAIRE, code: type, nom: type, ordre: 0 }
+}
+
 /** Les règles d'un type de contrat. */
 export function modeleDe(
   regles: RegleEtablissement,
   type: TypeContrat,
 ): ModeleContratRegle {
-  return regles.modeles[type] ?? REGLES_PAR_DEFAUT.modeles[type]
+  return Object.hasOwn(regles.modeles, type)
+    ? regles.modeles[type]
+    : modeleDefaut(type)
 }
+
+/** Les contrats de l'établissement, dans l'ordre des listes. */
+export function listeContrats(
+  regles: RegleEtablissement,
+): ModeleContratRegle[] {
+  return Object.values(regles.modeles).sort(
+    (a, b) => a.ordre - b.ordre || a.nom.localeCompare(b.nom, 'fr'),
+  )
+}
+
+/** Le nom affiché d'un contrat. */
+export const nomContrat = (regles: RegleEtablissement, type: TypeContrat) =>
+  modeleDe(regles, type).nom
 
 /** Toutes les durées de journée que les contrats imposent (7 h et 8 h à
  * l'hôtel) : une semaine type qui fixe un horaire d'une autre durée décide

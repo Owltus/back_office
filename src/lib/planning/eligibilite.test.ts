@@ -62,7 +62,7 @@ function poste(id: number, horaires_autorises: number[] = []): Poste {
   return {
     id,
     nom: `Poste ${id}`,
-    categorie: 'autre',
+    jour_max_minutes: 690,
     couleur: '#444444',
     horaires_autorises,
     presence: false,

@@ -45,7 +45,7 @@ function poste(id: number, nom: string, autorises: number[] = []): Poste {
   return {
     id,
     nom,
-    categorie: 'reception',
+    jour_max_minutes: 720,
     couleur: '#000',
     horaires_autorises: autorises,
     presence: true,

@@ -11,9 +11,10 @@
 export type Niveau = 'titulaire' | 'occasionnel' | 'soutien'
 export type ModeJour = 'auto' | 'travail' | 'repos' | 'absence'
 export type NatureMotif = 'absence' | 'ecole' | 'repos'
-export type Categorie =
-  'reception' | 'veille_nuit' | 'cuisine' | 'administratif_hors_site' | 'autre'
-export type TypeContrat = 'cdi' | 'cdd' | 'extra' | 'stagiaire' | 'apprenti'
+/** Identifiant d'un type de contrat (`planning_modeles_contrat.type_contrat`).
+ * La LISTE des contrats est celle de l'établissement (2026-11-06) : aucun
+ * code n'est lu par le calcul, seulement les cases du modèle. */
+export type TypeContrat = string
 /** Importance d'un poste (D11 du 2026-11-05). */
 export type Importance = 'indispensable' | 'important' | 'si_possible'
 /** Force d'une règle de l'établissement (colonne texte en base). */
@@ -53,12 +54,14 @@ export interface Motif {
 export interface Poste {
   id: number
   nom: string
-  categorie: Categorie
   couleur: string
   horaires_autorises: number[] // vide = tous
+  /** Durée max d'un service sur ce poste (présence, minutes ; 2026-11-06,
+   * à la place de la catégorie), bornée par la loi (`JOUR_MAX_LOI`).
+   * Absent (données de test) : `JOUR_MAX_POSTE_DEFAUT`. */
+  jour_max_minutes?: number
   presence: boolean // poste de l'accueil le matin et le soir
-  /** Poste de l'accueil la nuit (U1 du 2026-11-01). Absent (données de
-   * test anciennes) : déduit de la catégorie Veille de nuit. */
+  /** Poste de l'accueil la nuit (U1 du 2026-11-01). Absent : non. */
   accueil_nuit?: boolean
   /** Poste fermé (U3) : plus proposé nulle part, historique gardé. */
   ferme?: boolean
@@ -127,12 +130,29 @@ export interface Reglages {
   journee_courte?: number
   journee_etoile_min?: number
   journees_courtes_max?: number
+  /** Ancienneté (mois) qui ouvre le rattrapage d'un jour férié travaillé. */
+  ferie_anciennete_mois?: number
+  /** Un jour férié travaillé reste à rattraper ce nombre de jours. */
+  ferie_rattrapage_jours?: number
 }
 
-/** Règles d'un type de contrat (table `planning_modeles_contrat`, une ligne
- * par type, 2026-11-05). */
+/** Un type de contrat de l'établissement et ses règles (table
+ * `planning_modeles_contrat`, une ligne par contrat ; créés, renommés,
+ * retirés dans Équipe depuis le 2026-11-06). */
 export interface ModeleContrat {
   type_contrat: TypeContrat
+  /** Nom affiché. Absent (données de test) : la clé. */
+  nom?: string
+  /** Rang dans les listes. Absent : 0. */
+  ordre?: number
+  /** Durée max d'un jour de travail (minutes) ; null : celle du poste. */
+  jour_max_minutes?: number | null
+  /** Une personne de ce contrat peut être mineure. */
+  mineur_possible?: boolean
+  /** Une personne de ce contrat peut être au forfait jours. */
+  forfait_possible?: boolean
+  /** La fiche exige une fin de contrat. */
+  fin_obligatoire?: boolean
   /** Le calcul ne pose que les journées de `journees_contrats`. */
   journees_imposees: boolean
   /** Au-delà de 35 h, une journée étoile chaque semaine. */
@@ -154,6 +174,9 @@ export interface Groupe {
   nom: string
   ordre: number
   postes_autorises: number[] // vide = tous
+  /** Ses membres peuvent être cadres au forfait jours, si leur contrat le
+   * permet (2026-11-06, à la place du nom « Direction »). Absent : non. */
+  forfait_possible?: boolean
 }
 
 export interface Competence {
@@ -263,28 +286,6 @@ export interface Referentiel {
    * défauts (`REGLES_PAR_DEFAUT`). */
   modelesContrat?: ModeleContrat[]
 }
-
-export const CATEGORIES: ReadonlyArray<{
-  code: Categorie
-  libelle: string
-}> = [
-  { code: 'reception', libelle: 'Réception' },
-  { code: 'veille_nuit', libelle: 'Veille de nuit' },
-  { code: 'cuisine', libelle: 'Cuisine' },
-  { code: 'administratif_hors_site', libelle: 'Administratif hors site' },
-  { code: 'autre', libelle: 'Autre (étages, salle, bar, direction…)' },
-]
-
-export const TYPES_CONTRAT: ReadonlyArray<{
-  code: TypeContrat
-  libelle: string
-}> = [
-  { code: 'cdi', libelle: 'CDI' },
-  { code: 'cdd', libelle: 'CDD' },
-  { code: 'extra', libelle: 'Extra' },
-  { code: 'stagiaire', libelle: 'Stagiaire' },
-  { code: 'apprenti', libelle: 'Apprenti' },
-]
 
 export const JOURS = [
   'Lundi',

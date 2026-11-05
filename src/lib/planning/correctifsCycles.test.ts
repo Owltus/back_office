@@ -85,7 +85,8 @@ const poste = (
 ): Poste => ({
   id,
   nom,
-  categorie: id === VEILLE ? 'veille_nuit' : 'reception',
+  jour_max_minutes: 720,
+  accueil_nuit: id === VEILLE,
   couleur: '#111111',
   horaires_autorises,
   presence,

@@ -93,7 +93,7 @@ function apres(n: number): Referentiel {
     r.postes.push({
       id: 1,
       nom: 'Réception',
-      categorie: 'reception',
+      jour_max_minutes: 720,
       couleur: '#000000',
       horaires_autorises: [],
       presence: false,

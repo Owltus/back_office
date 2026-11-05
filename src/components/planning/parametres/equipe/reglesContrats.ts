@@ -10,10 +10,18 @@
 import {
   joursDuContrat,
   lireRegles,
+  listeContrats,
   REGLES_PAR_DEFAUT,
 } from '#/lib/planning/reglesEtablissement.ts'
-import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
-import { JOURS_TRAVAILLES_MAX, TEMPS_PLEIN } from '#/lib/planning/regles.ts'
+import type {
+  ModeleContratRegle,
+  RegleEtablissement,
+} from '#/lib/planning/reglesEtablissement.ts'
+import {
+  JOUR_MAX_LOI,
+  JOURS_TRAVAILLES_MAX,
+  TEMPS_PLEIN,
+} from '#/lib/planning/regles.ts'
 import { heuresLisibles } from '#/lib/planning/temps.ts'
 import type {
   ForceRegle,
@@ -22,9 +30,7 @@ import type {
   ModeleContrat,
   Referentiel,
   Reglages,
-  TypeContrat,
 } from '#/lib/planning/types.ts'
-import { TYPES_CONTRAT } from '#/lib/planning/types.ts'
 
 const H = 60
 
@@ -64,7 +70,11 @@ export interface SaisieReglesContrats {
   ecole_lendemain_debut: number
   conge_long: number
   semaines_en_plus_alerte: number
-  /** Une ligne par type de contrat, dans l'ordre de `TYPES_CONTRAT`. */
+  ferie_anciennete_mois: number
+  ferie_rattrapage_jours: number
+  /** Les types de contrat de l'établissement, dans l'ordre des listes. Un
+   * contrat ajouté ici est créé à l'enregistrement, un contrat retiré est
+   * supprimé (la base refuse s'il sert encore). */
   modeles: ModeleContrat[]
 }
 
@@ -88,6 +98,13 @@ export const BORNES = {
   congeLongMax: 30,
   semainesEnPlusMax: 4,
   lignesMax: 10,
+  contratsMax: 20,
+  nomContratMax: 40,
+  ancienneteMax: 60,
+  rattrapageMin: 7,
+  rattrapageMax: 182,
+  jourMaxContratMin: 1 * H,
+  jourMaxContratMax: JOUR_MAX_LOI,
 } as const
 
 const nouvelleCle = (() => {
@@ -111,13 +128,15 @@ function ligneDe(
   }
 }
 
-function modeleDeLaBase(
-  type: TypeContrat,
-  regles: RegleEtablissement,
-): ModeleContrat {
-  const m = regles.modeles[type]
+function modeleDeLaBase(m: ModeleContratRegle): ModeleContrat {
   return {
-    type_contrat: type,
+    type_contrat: m.code,
+    nom: m.nom,
+    ordre: m.ordre,
+    jour_max_minutes: m.jourMaxMinutes,
+    mineur_possible: m.mineurPossible,
+    forfait_possible: m.forfaitPossible,
+    fin_obligatoire: m.finObligatoire,
     journees_imposees: m.journeesImposees,
     journee_etoile: m.journeeEtoile,
     placement_manuel: m.placementManuel,
@@ -152,7 +171,60 @@ export function saisieDepuis(
     ecole_lendemain_debut: r.ecole.lendemainDebut,
     conge_long: r.conges.congeLong,
     semaines_en_plus_alerte: r.heures.semainesEnPlusAlerte,
-    modeles: TYPES_CONTRAT.map((t) => modeleDeLaBase(t.code, r)),
+    ferie_anciennete_mois: r.feries.ancienneteMois,
+    ferie_rattrapage_jours: r.feries.rattrapageJours,
+    modeles: listeContrats(r).map(modeleDeLaBase),
+  }
+}
+
+/** Un contrat neuf : nommé « Nouveau contrat », règles d'un contrat
+ * ordinaire, en fin de liste ; identifiant libre (`contrat_2`…), jamais
+ * montré ni réécrit. */
+export function contratNeuf(s: SaisieReglesContrats): ModeleContrat {
+  const pris = new Set(s.modeles.map((m) => m.type_contrat))
+  let n = 1
+  while (pris.has(`contrat_${n}`)) n++
+  const noms = new Set(s.modeles.map((m) => cleNom(m.nom ?? '')))
+  let nom = 'Nouveau contrat'
+  for (let k = 2; noms.has(cleNom(nom)); k++) nom = `Nouveau contrat ${k}`
+  return {
+    type_contrat: `contrat_${n}`,
+    nom,
+    ordre: Math.max(-1, ...s.modeles.map((m) => m.ordre ?? 0)) + 1,
+    jour_max_minutes: null,
+    mineur_possible: false,
+    forfait_possible: false,
+    fin_obligatoire: false,
+    journees_imposees: true,
+    journee_etoile: true,
+    placement_manuel: false,
+    contrat_indicatif: false,
+    ferie_rattrape: true,
+    feries_jour_meme: false,
+    alternance: false,
+  }
+}
+
+const cleNom = (nom: string) => nom.trim().toLocaleLowerCase('fr')
+
+/** Ce que l'enregistrement fait aux types de contrat : créer, mettre à jour,
+ * supprimer (comparaison à la base lue). */
+export function changementsContrats(
+  avant: SaisieReglesContrats,
+  apres: SaisieReglesContrats,
+): {
+  ajoutes: ModeleContrat[]
+  changes: ModeleContrat[]
+  retires: string[]
+} {
+  const lus = new Set(avant.modeles.map((m) => m.type_contrat))
+  const restent = new Set(apres.modeles.map((m) => m.type_contrat))
+  return {
+    ajoutes: apres.modeles.filter((m) => !lus.has(m.type_contrat)),
+    changes: modelesChanges(avant, apres).filter((m) =>
+      lus.has(m.type_contrat),
+    ),
+    retires: [...lus].filter((t) => !restent.has(t)),
   }
 }
 
@@ -190,6 +262,8 @@ export function reglagesDepuis(s: SaisieReglesContrats): Partial<Reglages> {
     ecole_lendemain_debut: s.ecole_lendemain_debut,
     conge_long: s.conge_long,
     semaines_en_plus_alerte: s.semaines_en_plus_alerte,
+    ferie_anciennete_mois: s.ferie_anciennete_mois,
+    ferie_rattrapage_jours: s.ferie_rattrapage_jours,
   }
 }
 
@@ -306,6 +380,35 @@ export function erreursSaisie(s: SaisieReglesContrats): string[] {
       erreurs.push(
         'Un contrat prend ses jours fériés le jour même ou les rattrape, pas les deux.',
       )
+  if (!s.modeles.length) erreurs.push('Gardez au moins un type de contrat.')
+  if (s.modeles.length > BORNES.contratsMax)
+    erreurs.push(`Au plus ${BORNES.contratsMax} types de contrat.`)
+  const noms = new Set<string>()
+  for (const m of s.modeles) {
+    const nom = (m.nom ?? '').trim()
+    if (!nom) erreurs.push('Donnez un nom à chaque type de contrat.')
+    else if (nom.length > BORNES.nomContratMax)
+      erreurs.push(
+        `${nom} : un nom de contrat fait au plus ${BORNES.nomContratMax} caractères.`,
+      )
+    else if (noms.has(cleNom(nom)))
+      erreurs.push(`${nom} : deux contrats ne portent pas le même nom.`)
+    noms.add(cleNom(nom))
+  }
+  if (
+    s.ferie_anciennete_mois < 0 ||
+    s.ferie_anciennete_mois > BORNES.ancienneteMax
+  )
+    erreurs.push(
+      `L'ancienneté des jours fériés va de 0 à ${BORNES.ancienneteMax} mois.`,
+    )
+  if (
+    s.ferie_rattrapage_jours < BORNES.rattrapageMin ||
+    s.ferie_rattrapage_jours > BORNES.rattrapageMax
+  )
+    erreurs.push(
+      `Un jour férié se rattrape dans les ${BORNES.rattrapageMin} à ${BORNES.rattrapageMax} jours.`,
+    )
   return erreurs
 }
 

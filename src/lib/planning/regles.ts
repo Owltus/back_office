@@ -17,18 +17,18 @@ import {
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import type { SalarieSolveur } from '#/lib/planning/modele.ts'
 import { heuresLisibles } from '#/lib/planning/temps.ts'
-import type { Categorie, TypeContrat } from '#/lib/planning/types.ts'
+import type { Poste, TypeContrat } from '#/lib/planning/types.ts'
 
 const H = 60
 
-/** R-JOUR-MAX : durée maximale d'un service selon la catégorie du poste. */
-export const JOUR_MAX_CATEGORIE: Record<Categorie, number> = {
-  reception: 12 * H,
-  veille_nuit: 12 * H,
-  cuisine: 11 * H,
-  administratif_hors_site: 10 * H,
-  autre: 11 * H + 30,
-}
+/** R-JOUR-MAX : la loi borne un service à 12 h (réception et veille de
+ * nuit, HCR ; les autres métiers ont moins). Depuis le 2026-11-06, la durée
+ * max d'un service se règle sur le POSTE (`Poste.jour_max_minutes`), jamais
+ * au-delà de cette borne. */
+export const JOUR_MAX_LOI = 12 * H
+/** Durée max d'un poste sans réglage (données de test) : 11 h 30, le défaut
+ * de la base (ancienne catégorie « autre »). */
+export const JOUR_MAX_POSTE_DEFAUT = 11 * H + 30
 
 export const SEMAINE_MAX = 48 * H // R-SEMAINE-MAX-ABS
 export const REPOS_QUOTIDIEN = 11 * H // R-REPOS-QUOTIDIEN
@@ -171,7 +171,6 @@ export const JOURS_CONTRAT = 5
 /** R-CADRE-FJ : seuls le repos de 11 h et le repos hebdo, soit 13 h d'amplitude. */
 export const FORFAIT_JOUR_MAX = 13 * H
 export const FORFAIT_SEMAINE_MAX = JOURS_TRAVAILLES_PREFERES * FORFAIT_JOUR_MAX
-export const STAGE_JOUR_MAX = 10 * H // R-STAGE-TEMPS (prototype, À VÉRIFIER)
 export const MINEUR_JOUR_MAX = 8 * H // R-MINEUR-JOUR-MAX
 export const MINEUR_SEMAINE_MAX = 35 * H // R-MINEUR-SEMAINE-MAX
 export const MINEUR_REPOS_QUOTIDIEN = 12 * H // R-REPOS-QUOTIDIEN-MINEUR
@@ -237,25 +236,32 @@ export function plafondHebdo(f: Fiche): number {
     return Math.min(MINEUR_SEMAINE_MAX, SEMAINE_MAX, plafondTempsPartiel(f))
   }
   if (f.forfaitJours) return FORFAIT_SEMAINE_MAX
-  // Un extra n'a pas de durée contractuelle (À VÉRIFIER) : le plafond absolu.
-  // Tout autre contrat suit la loi du temps partiel, heures indicatives ou
-  // non (relecture du 2026-11-05 : « Heures indicatives » sur un CDI de
-  // 24 h ouvrait 48 h). La loi n'est jamais réglable (B1).
-  if (f.typeContrat === 'extra') return SEMAINE_MAX
+  // Un contrat placé à la main (l'extra) n'a pas de durée contractuelle (À
+  // VÉRIFIER) : le plafond absolu. Tout autre contrat suit la loi du temps
+  // partiel, heures indicatives ou non (relecture du 2026-11-05 : « Heures
+  // indicatives » sur un CDI de 24 h ouvrait 48 h). La loi n'est jamais
+  // réglable (B1).
+  if (modeleFiche(f).placementManuel) return SEMAINE_MAX
   return plafondTempsPartiel(f)
 }
 
 export function plafondJour(f: Fiche): number {
   if (f.mineur) return MINEUR_JOUR_MAX
-  if (f.typeContrat === 'stagiaire') return STAGE_JOUR_MAX
+  // Durée max du contrat (le stagiaire : 10 h, R-STAGE-TEMPS), réglée dans
+  // son modèle, jamais au-delà de la loi.
+  const jourMax = modeleFiche(f).jourMaxMinutes
+  if (jourMax !== null) return Math.min(jourMax, JOUR_MAX_LOI)
   if (f.forfaitJours) return FORFAIT_JOUR_MAX
   // Le plafond propre à chaque poste est porté par chaque créneau.
-  return Math.max(...Object.values(JOUR_MAX_CATEGORIE))
+  return JOUR_MAX_LOI
 }
 
-/** R-JOUR-MAX : présence maximale d'un service sur un poste de cette catégorie. */
-export function presenceMaxPoste(categorie: string): number | null {
-  return (JOUR_MAX_CATEGORIE as Record<string, number>)[categorie] ?? null
+/** R-JOUR-MAX : présence maximale d'un service sur ce poste (son réglage,
+ * borné par la loi). */
+export function presenceMaxPoste(
+  poste: Pick<Poste, 'jour_max_minutes'>,
+): number {
+  return Math.min(poste.jour_max_minutes ?? JOUR_MAX_POSTE_DEFAUT, JOUR_MAX_LOI)
 }
 
 /** R-JOURNEE-ETOILE : contrats au-delà de 35 h payés à l'heure. */
@@ -401,19 +407,25 @@ export function droitAuRattrapage(
 ): boolean {
   if (!modeleDe(regles, x.type_contrat).ferieRattrape) return false
   if (!x.date_entree) return false
-  const annee = Number(x.date_entree.slice(0, 4)) + 1
+  // L'ancienneté des règles (12 mois à l'hôtel), ajoutée mois par mois.
+  const mois =
+    Number(x.date_entree.slice(5, 7)) - 1 + regles.feries.ancienneteMois
+  const annee = Number(x.date_entree.slice(0, 4)) + Math.floor(mois / 12)
+  const mm = String((mois % 12) + 1).padStart(2, '0')
   // Comparaison de textes AAAA-MM-JJ : une entrée un 29 février ouvre droit
   // le 1er mars suivant.
-  return ferie >= `${annee}${x.date_entree.slice(4, 10)}`
+  return ferie >= `${annee}-${mm}${x.date_entree.slice(7, 10)}`
 }
 
 /** R-FERIE-RATTRAPE : un jour férié travaillé reste DÛ, avec son alerte
  * (JOUR-FERIE), et le calcul propose son JFR chaque semaine, jusqu'à ce
  * qu'il soit rendu (décision utilisateur du 2026-11-03, Q9 et Q14 : avant,
  * il se perdait sans prévenir au bout de 4 semaines). Borne de lecture :
- * 13 semaines (un trimestre) ; au-delà, les vues ne lisent plus ce jour
- * férié. Les vues lisent deux fois cette étendue (`premierLundiLu`). */
-export const FERIE_RATTRAPAGE_JOURS = 91
+ * 13 semaines (un trimestre) à l'hôtel, réglée dans les règles
+ * (`feries.rattrapageJours`, 2026-11-06) ; au-delà, les vues ne lisent plus
+ * ce jour férié. Les vues lisent deux fois cette étendue (`premierLundiLu`).
+ * Cette constante n'est plus que le défaut. */
+export const FERIE_RATTRAPAGE_JOURS = REGLES_PAR_DEFAUT.feries.rattrapageJours
 
 /** R-FERIE-RATTRAPE : un JFR vaut un jour d'absence décompté, comme un
  * congé (`heuresDues` avec un jour de plus) : ce qu'il retire aux heures
@@ -481,16 +493,17 @@ export function versSolveur(f: Fiche): SalarieSolveur {
   })
 }
 
-/** Un besoin plus long que le maximum HCR de sa catégorie ne peut être tenu. */
+/** Un besoin plus long que la durée max d'un service sur son poste ne peut
+ * être tenu. */
 export function alerteBesoin(
-  categorie: string,
+  poste: Pick<Poste, 'jour_max_minutes'>,
   dureeMinutes: number,
 ): string | null {
-  const maximum = presenceMaxPoste(categorie)
-  if (maximum !== null && dureeMinutes > maximum) {
+  const maximum = presenceMaxPoste(poste)
+  if (dureeMinutes > maximum) {
     const h = Math.floor(maximum / 60)
     const m = maximum % 60
-    return `dépasse la durée maximale d'un service pour cette catégorie (${h} h ${String(m).padStart(2, '0')}, R-JOUR-MAX)`
+    return `dépasse la durée maximale d'un service sur ce poste (${h} h ${String(m).padStart(2, '0')}, R-JOUR-MAX)`
   }
   return null
 }
@@ -546,10 +559,11 @@ export function resume(f: Fiche): LigneRegle[] {
       'Forfait jours : pas de décompte des heures. Le repos de 11 h et le repos de la semaine s’appliquent.',
     ])
   }
-  if (f.typeContrat === 'stagiaire') {
+  const modele = modeleFiche(f)
+  if (modele.jourMaxMinutes !== null) {
     lignes.push([
       'R-STAGE-TEMPS',
-      'Stagiaire : au plus 10 h par jour, mêmes repos que les salariés',
+      `${modele.nom} : au plus ${heuresLisibles(Math.min(modele.jourMaxMinutes, JOUR_MAX_LOI))} par jour, mêmes repos que les salariés`,
     ])
   }
   if (modeleFiche(f).alternance || f.joursEcole?.size) {

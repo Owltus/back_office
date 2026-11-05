@@ -435,7 +435,7 @@ describe('une semaine de l’hôtel d’essai', () => {
     const postes = new Set(
       referentiel.postes.filter((x) => x.presence).map((x) => x.id),
     )
-    const veille = referentiel.postes.find((x) => x.categorie === 'veille_nuit')
+    const veille = referentiel.postes.find((x) => x.accueil_nuit)
     const code = new Map(referentiel.horaires.map((h) => [h.id, codeTest(h)]))
     const recompte = (jour: number, periode: 'matin' | 'soir' | 'nuit') =>
       sem.affectations.filter((a) => {

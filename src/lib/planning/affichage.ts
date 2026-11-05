@@ -4,6 +4,7 @@
 
 import { estJourneeEtoile } from '#/lib/planning/etoile.ts'
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
+import { tientLaNuit } from '#/lib/planning/presence.ts'
 import { POSTE_ID_ACCUEIL, posteEquite } from '#/lib/planning/semaine.ts'
 import type { BilanOut, SemaineOut } from '#/lib/planning/semaine.ts'
 import {
@@ -243,8 +244,9 @@ export function postesTenus(
     .join(' · ')
 }
 
-/** Libellé métier de la colonne staff : « Veilleur », « Hôtelier » (poste de
- * la réception ou de l'accueil), ou le poste. Aucun nom de poste en dur. */
+/** Libellé métier de la colonne staff : « Veilleur » (poste de la nuit de
+ * l'accueil), « Hôtelier » (poste de l'accueil le jour), ou le poste. Aucun
+ * nom de poste en dur, et plus la catégorie (2026-11-06). */
 export function metier(
   s: Pick<Salarie, 'competences'>,
   postes: Poste[],
@@ -255,9 +257,9 @@ export function metier(
     .map((c) => postes.find((p) => p.id === c.poste_id))
     .filter((p): p is Poste => !!p)
     .map((p) =>
-      p.categorie === 'veille_nuit'
+      tientLaNuit({ ...p, ferme: false })
         ? 'Veilleur'
-        : p.categorie === 'reception' || p.presence
+        : p.presence
           ? 'Hôtelier'
           : p.nom,
     )

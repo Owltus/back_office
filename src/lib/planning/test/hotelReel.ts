@@ -8,6 +8,8 @@
  * qui en ont besoin posent eux-mêmes les quelques shifts concernés.
  */
 
+import { reglagesCategorie } from '#/lib/planning/test/codesTest.ts'
+import type { CategorieTest } from '#/lib/planning/test/codesTest.ts'
 import { ajouterJours } from '#/lib/planning/temps.ts'
 import { avecCode, horaireTest } from '#/lib/planning/test/codesTest.ts'
 import type {
@@ -77,7 +79,7 @@ const MOTIFS: Array<[string, string, boolean, 'absence' | 'ecole']> = [
 ]
 const ACCUEIL = ['Réception', 'Club']
 const JOUR = ['M', 'MI', 'S', 'SD']
-const POSTES: Array<[string, Poste['categorie'], string[], boolean]> = [
+const POSTES: Array<[string, CategorieTest, string[], boolean]> = [
   ['Direction', 'autre', ['D'], true],
   ['Adjoint de direction', 'autre', ['AD', 'M', 'S', 'SD'], true],
   ['Supervision réception', 'reception', ['SR', 'M', 'MI', 'S'], true],
@@ -295,7 +297,7 @@ export function hotelReel(): { referentiel: Referentiel; absences: Absence[] } {
   const postes: Poste[] = POSTES.map(([nom, categorie, codes], i) => ({
     id: i + 1,
     nom,
-    categorie,
+    ...reglagesCategorie(categorie),
     couleur: '#000000',
     horaires_autorises: avecVersions(codes).map(idH),
     presence: false,

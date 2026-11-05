@@ -596,28 +596,21 @@ describe('traduction des règles (regles.ts)', () => {
       string
     >
 
-  it('durée maximale d’un service par catégorie', () => {
-    const attendu = {
-      reception: 12 * H,
-      veille_nuit: 12 * H,
-      cuisine: 11 * H,
-      administratif_hors_site: 10 * H,
-      autre: 11 * H + 30,
-    }
-    expect(
-      Object.fromEntries(
-        Object.keys(attendu).map((k) => [k, presenceMaxPoste(k)]),
-      ),
-    ).toEqual(attendu)
-    expect(presenceMaxPoste('inconnue')).toBeNull()
+  it('durée maximale d’un service : celle du poste, jamais plus que la loi', () => {
+    expect(presenceMaxPoste({ jour_max_minutes: 10 * H })).toBe(10 * H)
+    expect(presenceMaxPoste({ jour_max_minutes: 12 * H })).toBe(12 * H)
+    // Au-delà de la loi (donnée hors CHECK) : ramené à 12 h.
+    expect(presenceMaxPoste({ jour_max_minutes: 14 * H })).toBe(12 * H)
+    // Sans réglage (données de test) : 11 h 30, le défaut de la base.
+    expect(presenceMaxPoste({})).toBe(11 * H + 30)
   })
 
   it('l’alerte d’un besoin annonce le maximum en heures', () => {
-    expect(alerteBesoin('autre', 11 * H + 30)).toBeNull()
-    expect(alerteBesoin('autre', 11 * H + 31)).toBe(
-      "dépasse la durée maximale d'un service pour cette catégorie (11 h 30, R-JOUR-MAX)",
+    const poste = { jour_max_minutes: 11 * H + 30 }
+    expect(alerteBesoin(poste, 11 * H + 30)).toBeNull()
+    expect(alerteBesoin(poste, 11 * H + 31)).toBe(
+      "dépasse la durée maximale d'un service sur ce poste (11 h 30, R-JOUR-MAX)",
     )
-    expect(alerteBesoin('inconnue', 99 * H)).toBeNull()
   })
 
   it('forfait jours : 13 h d’amplitude et heures indicatives', () => {

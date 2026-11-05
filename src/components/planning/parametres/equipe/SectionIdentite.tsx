@@ -11,11 +11,12 @@ import { Repeat } from 'lucide-react'
 import {
   changerCategorie,
   changerContrat,
-  CONTRATS_MINEUR,
+  contratManuel,
   evolutionParDefaut,
-  FIN_OBLIGATOIRE,
+  finObligatoire,
   forfaitPossible,
   heuresSansObjet,
+  mineurPossible,
 } from '#/components/planning/parametres/equipe/brouillon.ts'
 import type {
   Brouillon,
@@ -34,13 +35,24 @@ import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { Label } from '#/components/ui/label.tsx'
 import { postesDuGroupe } from '#/lib/planning/affichage.ts'
-import { TYPES_CONTRAT } from '#/lib/planning/types.ts'
+import {
+  lireRegles,
+  listeContrats,
+} from '#/lib/planning/reglesEtablissement.ts'
+import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import type { TypeContrat } from '#/lib/planning/types.ts'
 
-const OPTIONS_CONTRAT = TYPES_CONTRAT.map((t) => ({
-  valeur: t.code,
-  libelle: t.libelle,
-}))
+/** Les contrats de l'établissement (liste créée dans « Règles des
+ * contrats »), plus celui de la fiche s'il n'y est plus. */
+function optionsContrat(regles: RegleEtablissement, actuel: TypeContrat) {
+  const liste = listeContrats(regles).map((m) => ({
+    valeur: m.code,
+    libelle: m.nom,
+  }))
+  return liste.some((o) => o.valeur === actuel)
+    ? liste
+    : [...liste, { valeur: actuel, libelle: actuel }]
+}
 
 function Champ({
   label,
@@ -80,6 +92,8 @@ export function SectionIdentite({
 }) {
   const notifier = useNotifier()
   const { groupes, postes } = referentiel
+  const regles = lireRegles(referentiel)
+  const manuel = contratManuel(b.type_contrat, regles)
   const optionsGroupe = [
     { valeur: 'aucune', libelle: 'Sans groupe' },
     ...groupes.map((g) => ({ valeur: String(g.id), libelle: g.nom })),
@@ -139,19 +153,21 @@ export function SectionIdentite({
         <Liste
           label="Contrat"
           valeur={b.type_contrat}
-          options={OPTIONS_CONTRAT}
-          onChange={(v) => maj((x) => changerContrat(x, v as TypeContrat))}
+          options={optionsContrat(regles, b.type_contrat)}
+          onChange={(v) =>
+            maj((x) => changerContrat(x, v as TypeContrat, regles))
+          }
           disabled={disabled}
         />
         <Champ
           label={
-            heuresSansObjet(b)
+            heuresSansObjet(b, regles)
               ? 'Heures par semaine (sans objet)'
               : 'Heures par semaine'
           }
           aide={
-            b.type_contrat === 'extra'
-              ? "Un extra est appelé en dernier, à l'accueil seulement, quand l'équipe ne suffit pas. Ses heures ne sont pas fixées."
+            manuel
+              ? "Ce contrat est placé à la main, quand l'équipe ne suffit pas. Ses heures ne sont pas fixées."
               : b.forfait_jours
                 ? 'Cadre au forfait jours : pas de décompte des heures.'
                 : undefined
@@ -164,7 +180,7 @@ export function SectionIdentite({
               min={0}
               max={48}
               step={0.5}
-              disabled={disabled || heuresSansObjet(b)}
+              disabled={disabled || heuresSansObjet(b, regles)}
               value={Number.isFinite(b.heures_hebdo) ? b.heures_hebdo : ''}
               onChange={(e) => {
                 const h =
@@ -189,10 +205,10 @@ export function SectionIdentite({
             />
           )}
         </Champ>
-        {b.type_contrat !== 'extra' && (
+        {!manuel && (
           <Champ
             label={
-              FIN_OBLIGATOIRE.has(b.type_contrat)
+              finObligatoire(b.type_contrat, regles)
                 ? 'Fin de contrat (obligatoire)'
                 : 'Fin de contrat'
             }
@@ -215,10 +231,10 @@ export function SectionIdentite({
         )}
       </div>
       <div className="flex flex-col gap-2">
-        {/* Cadre au forfait jours : la direction seule, en CDI ou CDD
-            (2026-11-01) ; une fiche déjà cochée garde l'interrupteur pour
-            pouvoir le retirer. */}
-        {(forfaitPossible(b, groupes) || b.forfait_jours) && (
+        {/* Cadre au forfait jours : si le contrat ET le groupe le
+            permettent (à l'hôtel, la direction en CDI ou CDD) ; une fiche
+            déjà cochée garde l'interrupteur pour pouvoir le retirer. */}
+        {(forfaitPossible(b, groupes, regles) || b.forfait_jours) && (
           <Interrupteur
             coche={b.forfait_jours}
             disabled={disabled}
@@ -227,9 +243,10 @@ export function SectionIdentite({
             Cadre au forfait jours
           </Interrupteur>
         )}
-        {/* Mineur : apprenti ou stagiaire seulement (2026-11-01) ; une fiche
-            déjà cochée garde l'interrupteur pour pouvoir le retirer. */}
-        {(CONTRATS_MINEUR.has(b.type_contrat) || b.mineur) && (
+        {/* Mineur : si le contrat le permet (à l'hôtel, apprenti ou
+            stagiaire) ; une fiche déjà cochée garde l'interrupteur pour
+            pouvoir le retirer. */}
+        {(mineurPossible(b.type_contrat, regles) || b.mineur) && (
           <Interrupteur
             coche={b.mineur}
             disabled={disabled}
@@ -238,9 +255,10 @@ export function SectionIdentite({
             Mineur (16-18 ans)
           </Interrupteur>
         )}
-        {/* Actif / Inactif : pour un extra seulement (U2) ; une fiche
-            déjà désactivée le garde pour pouvoir la rouvrir. */}
-        {(b.type_contrat === 'extra' || !b.actif) && (
+        {/* Actif / Inactif : pour un contrat placé à la main seulement
+            (l'extra, U2) ; une fiche déjà désactivée le garde pour pouvoir
+            la rouvrir. */}
+        {(manuel || !b.actif) && (
           <Interrupteur
             coche={b.actif}
             disabled={disabled}
@@ -298,6 +316,7 @@ function BlocEvolution({
   onCreer: () => void
 }) {
   const id = useId()
+  const regles = lireRegles(referentiel)
   // La fiche telle qu'elle sera à partir de la date (postes, contrat).
   const apres: Brouillon = {
     ...b,
@@ -332,7 +351,7 @@ function BlocEvolution({
         <Liste
           label="Nouveau contrat"
           valeur={evolution.type_contrat}
-          options={OPTIONS_CONTRAT}
+          options={optionsContrat(regles, evolution.type_contrat)}
           onChange={(v) =>
             setEvolution({ ...evolution, type_contrat: v as TypeContrat })
           }
@@ -368,29 +387,30 @@ function BlocEvolution({
             })
           }}
         />
-        {evolution.type_contrat !== 'extra' && !evolution.forfait_jours && (
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor={`${id}-heures`} className="text-xs">
-              Heures par semaine
-            </Label>
-            <Input
-              id={`${id}-heures`}
-              type="number"
-              min={1}
-              max={48}
-              step={0.5}
-              value={evolution.heures_hebdo}
-              onChange={(e) =>
-                setEvolution({
-                  ...evolution,
-                  heures_hebdo: Number(e.target.value),
-                })
-              }
-            />
-          </div>
-        )}
+        {!contratManuel(evolution.type_contrat, regles) &&
+          !evolution.forfait_jours && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={`${id}-heures`} className="text-xs">
+                Heures par semaine
+              </Label>
+              <Input
+                id={`${id}-heures`}
+                type="number"
+                min={1}
+                max={48}
+                step={0.5}
+                value={evolution.heures_hebdo}
+                onChange={(e) =>
+                  setEvolution({
+                    ...evolution,
+                    heures_hebdo: Number(e.target.value),
+                  })
+                }
+              />
+            </div>
+          )}
       </div>
-      {(forfaitPossible(apres, referentiel.groupes) ||
+      {(forfaitPossible(apres, referentiel.groupes, regles) ||
         evolution.forfait_jours) && (
         <Interrupteur
           coche={!!evolution.forfait_jours}

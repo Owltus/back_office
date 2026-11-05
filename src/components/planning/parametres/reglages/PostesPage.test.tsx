@@ -109,11 +109,13 @@ describe('Postes', () => {
     ).toBeNull()
   })
 
-  it('montre la durée maximale de la catégorie et les chiffres du poste', () => {
+  it('montre la durée maximale du poste et les chiffres du poste', () => {
     monter(<PostesPage />)
     const r = carte('Réception')
     expect(
-      r.getByText('Un service dure au plus 12h sur ce poste (convention HCR).'),
+      r.getByText(
+        'Un service dure au plus 12h sur ce poste, pause comprise. La loi ne permet jamais plus de 12h.',
+      ),
     ).toBeTruthy()
     expect(
       r.getByText('Seuls ces horaires sont proposés et placés sur ce poste.'),
@@ -156,7 +158,7 @@ describe('Postes', () => {
       expect(service.enregistrerPoste).toHaveBeenCalledWith(
         {
           nom: 'Réception',
-          categorie: 'reception',
+          jour_max_minutes: 720,
           couleur: '#000000',
           // M, MI, AM, leurs versions étoile (2026-11-02), puis N ajouté.
           horaires_autorises: [1, 2, 3, 8, 9, 10, 4],

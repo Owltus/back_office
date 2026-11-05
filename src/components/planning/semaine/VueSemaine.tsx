@@ -10,6 +10,7 @@
  * erreur arrive en message lisible dans le fil.
  */
 
+import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { MouseEvent as EvenementSouris } from 'react'
 import {
@@ -677,6 +678,7 @@ export function VueSemaine({
           referentiel.salaries,
           referentiel.postes,
           porteeSemaine(aujourdhui),
+          lireRegles(referentiel),
         ).total
       : 0
 
@@ -1100,6 +1102,7 @@ export function VueSemaine({
 
       {semaine && referentiel && (
         <PanneauAlertes
+          regles={lireRegles(referentiel)}
           ouvert={alertesOuvertes}
           onFermer={() => setAlertesOuvertes(false)}
           semaines={[semaine]}
@@ -1129,6 +1132,7 @@ export function VueSemaine({
 
       {semaine && referentiel && (
         <PanneauAlertes
+          regles={lireRegles(referentiel)}
           ouvert={infractionsOuvertes}
           onFermer={() => setInfractionsOuvertes(false)}
           semaines={[semaine]}

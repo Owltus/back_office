@@ -9,6 +9,8 @@
  * Veille), pour mesurer avant / après.
  */
 
+import { reglagesCategorie } from '#/lib/planning/test/codesTest.ts'
+import type { CategorieTest } from '#/lib/planning/test/codesTest.ts'
 import type {
   Besoin,
   Consigne,
@@ -102,16 +104,15 @@ const CLUB = [
   'MI2',
 ]
 // (nom, catégorie, horaires, à part, présence)
-const POSTES: Array<[string, Poste['categorie'], string[], boolean, boolean]> =
-  [
-    ['Direction', 'autre', ['D1', 'D2'], true, false],
-    ['Adjoint', 'autre', ['AD', 'M3', 'S3'], true, false],
-    ['Supervision', 'reception', ['SU1', 'SU2', 'MI3'], true, false],
-    ['Réception', 'reception', JOUR_ACCUEIL, false, true],
-    ['Club', 'autre', CLUB, false, true],
-    ['Veille de nuit', 'veille_nuit', ['N1', 'N2', 'N3'], false, false],
-    ['Technique', 'autre', ['T', 'TV'], true, false],
-  ]
+const POSTES: Array<[string, CategorieTest, string[], boolean, boolean]> = [
+  ['Direction', 'autre', ['D1', 'D2'], true, false],
+  ['Adjoint', 'autre', ['AD', 'M3', 'S3'], true, false],
+  ['Supervision', 'reception', ['SU1', 'SU2', 'MI3'], true, false],
+  ['Réception', 'reception', JOUR_ACCUEIL, false, true],
+  ['Club', 'autre', CLUB, false, true],
+  ['Veille de nuit', 'veille_nuit', ['N1', 'N2', 'N3'], false, false],
+  ['Technique', 'autre', ['T', 'TV'], true, false],
+]
 
 const T: Niveau = 'titulaire'
 const OC: Niveau = 'occasionnel'
@@ -176,7 +177,7 @@ export function hotelAccueil(accueil = true): Referentiel {
     ([nom, categorie, codes, , presence], i) => ({
       id: i + 1,
       nom,
-      categorie,
+      ...reglagesCategorie(categorie),
       couleur: '#000000',
       horaires_autorises: codes.map(idH),
       presence: accueil && presence,

@@ -165,7 +165,7 @@ describe('importance des postes : oui / non (D11, 2026-11-05)', () => {
       {
         id: ZEPHYR,
         nom: 'Zéphyr',
-        categorie: 'autre',
+        jour_max_minutes: 690,
         couleur: '#333',
         horaires_autorises: [1, 2],
         presence: false,
@@ -310,7 +310,7 @@ const POSTES: Poste[] = [
   {
     id: ACCUEIL,
     nom: 'Accueil',
-    categorie: 'reception',
+    jour_max_minutes: 720,
     couleur: '#111',
     horaires_autorises: [1, 2],
     presence: true,
@@ -319,7 +319,7 @@ const POSTES: Poste[] = [
   {
     id: TECH,
     nom: 'Technique',
-    categorie: 'autre',
+    jour_max_minutes: 690,
     couleur: '#222',
     horaires_autorises: [1, 2],
     presence: false,

@@ -50,11 +50,16 @@ import {
 } from '#/lib/planning/affichage.ts'
 import { dansLEquipe, parcours } from '#/lib/planning/parcours.ts'
 import type { Parcours } from '#/lib/planning/parcours.ts'
-import { TYPES_CONTRAT } from '#/lib/planning/types.ts'
+import {
+  lireRegles,
+  modeleDe,
+  nomContrat,
+  REGLES_PAR_DEFAUT,
+} from '#/lib/planning/reglesEtablissement.ts'
+import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import type { Poste, Salarie } from '#/lib/planning/types.ts'
 import { cn } from '#/lib/utils.ts'
 
-const CONTRATS = new Map(TYPES_CONTRAT.map((t) => [t.code, t.libelle]))
 const GRIS = '#98a2b3'
 
 /** Poste principal : le premier tenu en titulaire, sinon le premier tenu. */
@@ -219,6 +224,7 @@ export function EquipePage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
               <TableauMembres
                 membres={g.membres}
                 postes={ref.data.postes}
+                regles={lireRegles(ref.data)}
                 aujourdhui={aujourdhui}
                 parcoursDe={parcoursDe}
                 onOuvrir={(s) => setFiche({ id: s.id, groupeId: s.groupe_id })}
@@ -239,6 +245,7 @@ export function EquipePage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
                 <TableauMembres
                   membres={anciens}
                   postes={ref.data.postes}
+                  regles={lireRegles(ref.data)}
                   aujourdhui={aujourdhui}
                   parcoursDe={parcoursDe}
                   onOuvrir={(s) =>
@@ -311,12 +318,14 @@ const TH = 'px-3 py-2 text-left text-xs font-medium text-muted-foreground'
 function TableauMembres({
   membres,
   postes,
+  regles,
   aujourdhui,
   parcoursDe,
   onOuvrir,
 }: {
   membres: Salarie[]
   postes: Poste[]
+  regles: RegleEtablissement
   aujourdhui: string
   parcoursDe: (s: Salarie) => Parcours | undefined
   onOuvrir: (s: Salarie) => void
@@ -344,6 +353,7 @@ function TableauMembres({
               s={s}
               parcours={parcoursDe(s)}
               postes={postes}
+              regles={regles}
               aujourdhui={aujourdhui}
               onOuvrir={() => onOuvrir(s)}
             />
@@ -360,6 +370,7 @@ export function texteSuivant(
   courant: Salarie,
   suivant: Salarie,
   postes: Poste[],
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
 ): string {
   const quand = dateFr(suivant.date_entree as string)
   if (
@@ -367,7 +378,7 @@ export function texteSuivant(
   )
     return `Nouveau poste le ${quand}`
   if (courant.type_contrat !== suivant.type_contrat)
-    return `${CONTRATS.get(suivant.type_contrat) ?? suivant.type_contrat} le ${quand}`
+    return `${nomContrat(regles, suivant.type_contrat)} le ${quand}`
   return `Nouveau contrat le ${quand}`
 }
 
@@ -375,9 +386,11 @@ function LigneMembre({
   s,
   parcours: p,
   postes,
+  regles,
   aujourdhui,
   onOuvrir,
 }: {
+  regles: RegleEtablissement
   s: Salarie
   parcours?: Parcours
   postes: Poste[]
@@ -387,10 +400,10 @@ function LigneMembre({
   const couleur = postePrincipal(s, postes)?.couleur ?? GRIS
   const sorti = !!s.date_sortie && s.date_sortie < aujourdhui
   const parti = sorti || !s.actif
-  const contrat = CONTRATS.get(s.type_contrat) ?? s.type_contrat
+  const contrat = nomContrat(regles, s.type_contrat)
   const heures = s.forfait_jours
     ? 'Forfait jours'
-    : s.type_contrat === 'extra' && !s.heures_hebdo
+    : modeleDe(regles, s.type_contrat).placementManuel && !s.heures_hebdo
       ? 'Sans heures'
       : heuresContrat(s.heures_hebdo)
   return (
@@ -472,7 +485,9 @@ function LigneMembre({
           )}
           {/* Un contrat qui en suit un autre : le changement, pas une fin. */}
           {p?.suivant ? (
-            <Puce ton="arrivee">{texteSuivant(s, p.suivant, postes)}</Puce>
+            <Puce ton="arrivee">
+              {texteSuivant(s, p.suivant, postes, regles)}
+            </Puce>
           ) : (
             s.date_sortie && (
               <Puce ton={sorti ? 'depart' : 'fin'}>

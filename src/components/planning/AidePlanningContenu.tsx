@@ -31,7 +31,7 @@ import type { ContenuStatut } from '#/components/planning/semaine/edition.ts'
 import { SEMAINES_EQUITE } from '#/lib/planning/modele.ts'
 import {
   FORFAIT_JOUR_MAX,
-  JOUR_MAX_CATEGORIE,
+  JOUR_MAX_LOI,
   JOURS_TRAVAILLES_MAX,
   JOURS_TRAVAILLES_PREFERES,
   MINEUR_JOUR_MAX,
@@ -41,19 +41,19 @@ import {
   REPOS_HEBDO_MIN,
   REPOS_QUOTIDIEN,
   SEMAINE_MAX,
-  STAGE_JOUR_MAX,
   TEMPS_PLEIN,
 } from '#/lib/planning/regles.ts'
 import {
   joursDuContrat,
+  listeContrats,
   REGLES_PAR_DEFAUT,
 } from '#/lib/planning/reglesEtablissement.ts'
 import type {
   JourneesContrat,
+  ModeleContratRegle,
   RegleEtablissement,
 } from '#/lib/planning/reglesEtablissement.ts'
 import { heuresLisibles as h } from '#/lib/planning/temps.ts'
-import { CATEGORIES } from '#/lib/planning/types.ts'
 import type { Horaire } from '#/lib/planning/types.ts'
 
 /** Les parties de la page, dans l'ordre du sommaire. */
@@ -451,6 +451,27 @@ function Sommaire() {
 /** Corps de l'aide du planning (bouton « ? » des vues mois et semaine,
  * `AideGestes`), comme l'aide des autres pages : les gestes de la vue
  * ouverte, puis tout le fonctionnement de l'application. Lecture seule. */
+/** Ce qu'un type de contrat a de particulier, d'après ses cases (aucun
+ * code de contrat lu) ; vide : un contrat ordinaire. */
+function phraseContrat(m: ModeleContratRegle): string {
+  const p: string[] = []
+  if (m.placementManuel)
+    p.push(
+      'Le calcul ne le place jamais : il s’appelle d’abord, puis se pose à la main. Il ne reçoit jamais de repos déduit.',
+    )
+  if (m.contratIndicatif) p.push('Pas d’heures dues.')
+  if (m.alternance)
+    p.push(
+      'Ses jours d’école viennent du calendrier de sa fiche. Il commence en soutien : jamais seul.',
+    )
+  if (m.jourMaxMinutes !== null)
+    p.push(
+      `Au plus ${h(Math.min(m.jourMaxMinutes, JOUR_MAX_LOI))} par jour, mêmes repos que les salariés.`,
+    )
+  if (m.feriesJourMeme) p.push('Jours fériés pris le jour même.')
+  return p.join(' ')
+}
+
 export function AidePlanningContenu({
   gestes = [],
   regles: R = REGLES_PAR_DEFAUT,
@@ -679,15 +700,8 @@ export function AidePlanningContenu({
 
       <Section
         id="postes"
-        intro="Un poste dit où l’on travaille. Sa catégorie HCR fixe la durée maximale d’un service."
+        intro={`Un poste dit où l’on travaille. Il fixe la durée maximale d’un service, réglée dans Postes : jamais plus de ${h(JOUR_MAX_LOI)}, la loi.`}
       >
-        <Tableau
-          entetes={['Catégorie HCR', 'Service le plus long']}
-          lignes={CATEGORIES.map((c) => [
-            c.libelle,
-            h(JOUR_MAX_CATEGORIE[c.code]),
-          ])}
-        />
         <Sous titre="L’accueil">
           <p className="text-muted-foreground">
             Chaque poste a un choix Accueil : non, matin et soir, ou nuit. Les
@@ -771,18 +785,11 @@ export function AidePlanningContenu({
               'Forfait jours',
               `Les heures ne se comptent pas. Seuls le repos de ${h(REPOS_QUOTIDIEN)} et le repos de la semaine s’appliquent (${h(FORFAIT_JOUR_MAX)} d’amplitude au plus).`,
             ],
-            [
-              'Extra',
-              'Pas d’heures dues. Il ne reçoit jamais de repos déduit. Le calcul ne le place jamais : il s’appelle d’abord, puis se pose à la main.',
-            ],
-            [
-              'Apprenti',
-              'Ses jours d’école viennent du calendrier de sa fiche. Il est en soutien : jamais seul.',
-            ],
-            [
-              'Stagiaire',
-              `Au plus ${h(STAGE_JOUR_MAX)} par jour, mêmes repos que les salariés. En soutien comme l’apprenti.`,
-            ],
+            // Les types de contrat de l'établissement qui ont quelque chose
+            // de particulier (Équipe, Règles des contrats).
+            ...listeContrats(R)
+              .map((m) => [m.nom, phraseContrat(m)] as const)
+              .filter(([, phrase]) => phrase),
             [
               'Mineur',
               `Au plus ${h(MINEUR_JOUR_MAX)} par jour et ${h(MINEUR_SEMAINE_MAX)} par semaine, ${h(MINEUR_REPOS_QUOTIDIEN)} de repos entre deux services, aucun travail entre 22 h et 6 h, deux jours de repos qui se suivent.`,

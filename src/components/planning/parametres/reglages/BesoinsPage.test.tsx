@@ -396,7 +396,7 @@ describe('Besoins', () => {
     monter(<BesoinsPage />)
     expect(
       grille('Direction').getByText(
-        /dépasse la durée maximale d'un service pour cette catégorie \(11 h 30/,
+        /dépasse la durée maximale d'un service sur ce poste \(11 h 30/,
       ),
     ).toBeTruthy()
     onglet('Réception')
