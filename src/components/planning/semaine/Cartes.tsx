@@ -6,7 +6,7 @@
  */
 
 import { useRegles } from '#/components/planning/hooks/useMoments.ts'
-import { NIVEAUX_HOTEL, niveauLu } from '#/lib/planning/niveaux.ts'
+import { NIVEAUX, niveauLu } from '#/lib/planning/niveaux.ts'
 import type { Niveaux } from '#/lib/planning/niveaux.ts'
 import { MOMENTS_HOTEL } from '#/lib/planning/moment.ts'
 import type { Moments } from '#/lib/planning/moment.ts'
@@ -74,7 +74,7 @@ export function ligneAuLieuDe(
 
 export function texteCarte(
   c: ContenuCarte,
-  niveaux: Niveaux = NIVEAUX_HOTEL,
+  niveaux: Niveaux = NIVEAUX,
   /** Les moments de l'établissement (`useRegles().moments`). */
   moments: Moments = MOMENTS_HOTEL,
 ): string[] {

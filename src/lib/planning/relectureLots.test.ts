@@ -4,7 +4,6 @@ import {
   erreursSaisie,
   saisieDepuis,
 } from '#/components/planning/parametres/equipe/reglesContrats.ts'
-import { avertissementNiveau } from '#/components/planning/parametres/postes/SectionNiveaux.tsx'
 import {
   phraseCycle,
   pointsAttention,
@@ -12,7 +11,7 @@ import {
 import { codesUniques } from '#/components/planning/codesCase.ts'
 import { nettoyerHoraire } from '#/components/planning/parametres/reglages/validation.ts'
 import { texteCarte } from '#/components/planning/semaine/Cartes.tsx'
-import { NIVEAUX_HOTEL } from '#/lib/planning/niveaux.ts'
+import { NIVEAUX } from '#/lib/planning/niveaux.ts'
 import { donneesGeneration } from '#/components/planning/hooks/usePlanning.ts'
 import { premierLundiGeneration } from '#/lib/planning/semaine.ts'
 import {
@@ -335,7 +334,7 @@ describe('5. les vues lisent les moments de l’établissement', () => {
         role: null,
         alertes: [],
       },
-      NIVEAUX_HOTEL,
+      NIVEAUX,
       l,
     )
     expect(lignes[0]).toMatch(/^Soirée/)
@@ -384,8 +383,8 @@ describe('5. les vues lisent les moments de l’établissement', () => {
   })
 })
 
-describe('9b. un niveau qui cesse de tenir une place seul', () => {
-  const ref = () => {
+describe('9b. un besoin qui ne demande que du soutien (niveaux fixes)', () => {
+  it('« À vérifier » le dit : le soutien n’est jamais seul', () => {
     const r = hotelAccueil(true)
     const aPart = r.postes.find((p) => p.zone_id == null) as Poste
     r.besoins = [
@@ -397,51 +396,16 @@ describe('9b. un niveau qui cesse de tenir une place seul', () => {
         horaire_id: null,
         debut: '09:00',
         fin: '17:00',
-        effectif: 1,
-        soutien: 0,
+        effectif: 0,
+        soutien: 1,
         renfort: 0,
-        niveaux: [{ niveau: 'occasionnel', nombre: 1 }],
+        niveaux: [{ niveau: 'soutien', nombre: 1 }],
       } as never,
     ]
-    r.niveaux = [
-      {
-        id: 'titulaire',
-        nom: 'Titulaire',
-        ordre: 0,
-        autonome: true,
-        jamais_seul: false,
-      },
-      {
-        id: 'occasionnel',
-        nom: 'Dépannage',
-        ordre: 1,
-        autonome: false,
-        jamais_seul: false,
-      },
-      {
-        id: 'soutien',
-        nom: 'Soutien',
-        ordre: 2,
-        autonome: false,
-        jamais_seul: true,
-      },
-    ]
-    return { r, aPart }
-  }
-
-  it('« À vérifier » le dit : la place ne se tient plus seule', () => {
-    const { r, aPart } = ref()
     const points = verifierReglages(r, { aujourdhui: '2026-11-01' })
     const p = points.find((x) => x.id === `soutien-seul:${aPart.id}`)
-    expect(p?.texte).toMatch(/Dépannage/)
-  })
-
-  it('l’écran prévient avant de décocher', () => {
-    const { r } = ref()
-    expect(avertissementNiveau(r, 'occasionnel', 'Dépannage')).toMatch(
-      /1 besoin/,
-    )
-    expect(avertissementNiveau(r, 'soutien', 'Soutien')).toBeNull()
+    expect(p?.texte).toMatch(/Soutien, qui n’est jamais seul/)
+    expect(p?.texte).toMatch(/un titulaire ou un dépannage/)
   })
 })
 

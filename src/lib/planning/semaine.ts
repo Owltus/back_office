@@ -79,7 +79,7 @@ import {
   estAutonome,
   estPrefere,
   estSecours,
-  NIVEAUX_HOTEL,
+  NIVEAUX,
   niveauLu,
 } from '#/lib/planning/niveaux.ts'
 import type { Niveaux, NiveauSolveur } from '#/lib/planning/niveaux.ts'
@@ -621,7 +621,7 @@ export function feriesEnAttente(
 export function feriesChomes(
   x: Pick<Salarie, 'competences'>,
   postes: ReadonlyMap<number, Pick<Poste, 'feries_chomes'>>,
-  niveaux: Niveaux = NIVEAUX_HOTEL,
+  niveaux: Niveaux = NIVEAUX,
 ): boolean {
   const principal = x.competences.find((c) => estPrefere(niveaux, c.niveau))
   return !!principal && !!postes.get(principal.poste_id)?.feries_chomes

@@ -4,8 +4,7 @@
  * Identité et contrat : `SectionIdentite.tsx`.
  */
 
-import { lireNiveaux } from '#/lib/planning/niveaux.ts'
-import type { Niveaux } from '#/lib/planning/niveaux.ts'
+import { NIVEAUX } from '#/lib/planning/niveaux.ts'
 import { zoneDuPoste } from '#/lib/planning/zones.ts'
 import { useMemo, useState } from 'react'
 import { Plus, Star, Trash2, X } from 'lucide-react'
@@ -46,7 +45,6 @@ import { Input } from '#/components/ui/input.tsx'
 import {
   grouperHoraires,
   libelleHoraire,
-  aideNiveau,
   postesDuGroupe,
 } from '#/lib/planning/affichage.ts'
 import { resume } from '#/lib/planning/regles.ts'
@@ -71,17 +69,12 @@ export interface PropsSection {
   disabled: boolean
 }
 
-/** Les niveaux de l'établissement, dans leur ordre (2026-11-06). */
-function optionsNiveau(niveaux: Niveaux) {
-  return niveaux.liste.map((n) => {
-    const lu = niveaux.parId.get(n.id)
-    return {
-      valeur: n.id,
-      libelle: n.nom,
-      aide: lu ? aideNiveau(lu) : '',
-    }
-  })
-}
+/** Les trois niveaux fixes (2026-11-06), dans leur ordre. */
+const OPTIONS_NIVEAU = NIVEAUX.liste.map((n) => ({
+  valeur: n.id,
+  libelle: n.nom,
+  aide: n.phrase,
+}))
 
 const MODES: ReadonlyArray<{ valeur: ModeJour; libelle: string }> = [
   { valeur: 'auto', libelle: 'Libre' },
@@ -110,8 +103,7 @@ export function SectionCompetences({
   disabled,
 }: PropsSection) {
   const { postes, groupes } = referentiel
-  const etab = lireNiveaux(referentiel.niveaux)
-  const options = optionsNiveau(etab)
+  const options = OPTIONS_NIVEAU
   const groupe = groupes.find((g) => g.id === b.groupe_id)
   const niveaux = new Map(b.competences.map((c) => [c.poste_id, c.niveau]))
   const tenus = postes.filter((p) => niveaux.has(p.id))
@@ -132,7 +124,7 @@ export function SectionCompetences({
   return (
     <Section
       titre="Compétences"
-      aide={`Les postes qu'elle tient, et à quel niveau. Le planning préfère le premier niveau. ${options.map((o) => `${o.libelle} : ${o.aide.toLowerCase()}.`).join(' ')} Les niveaux se règlent dans Postes.`}
+      aide={`Les postes qu'elle tient, et à quel niveau. ${options.map((o) => `${o.libelle} : ${o.aide}`).join(' ')} Les heures du contrat passent avant : un dépannage qui manque d'heures peut passer devant un titulaire qui a les siennes.`}
     >
       {tenus.length === 0 && (
         <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
@@ -144,7 +136,7 @@ export function SectionCompetences({
         {tenus.map((p) => (
           <li
             key={p.id}
-            className="flex flex-wrap items-center justify-between gap-2"
+            className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5"
           >
             <span className="flex min-w-0 items-center gap-2 text-sm">
               {pastille(p.couleur)}
@@ -175,6 +167,9 @@ export function SectionCompetences({
                 </Tip>
               )}
             </span>
+            <small className="basis-full text-right text-xs text-muted-foreground">
+              {NIVEAUX.parId.get(niveaux.get(p.id) ?? '')?.phrase ?? ''}
+            </small>
           </li>
         ))}
       </ul>

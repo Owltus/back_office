@@ -7,7 +7,7 @@
 import { MINUTES_PAR_JOUR, NUIT_DEBUT, NUIT_FIN } from '#/lib/planning/temps.ts'
 import type { Periode, PeriodePresence } from '#/lib/planning/types.ts'
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
-import { NIVEAUX_HOTEL } from '#/lib/planning/niveaux.ts'
+import { NIVEAUX } from '#/lib/planning/niveaux.ts'
 import type { NiveauSolveur } from '#/lib/planning/niveaux.ts'
 
 /** Un poste à tenir sur une plage horaire, avec le nombre de personnes. */
@@ -386,9 +386,9 @@ export function dansLeContrat(s: SalarieSolveur, c: Creneau): boolean {
   )
 }
 
-const PREFERE = NIVEAUX_HOTEL.autonomes[0]
-const SECOURS = NIVEAUX_HOTEL.autonomes[NIVEAUX_HOTEL.autonomes.length - 1]
-const SOUTIEN = [...NIVEAUX_HOTEL.parId.values()].find(
+const PREFERE = NIVEAUX.autonomes[0]
+const SECOURS = NIVEAUX.autonomes[NIVEAUX.autonomes.length - 1]
+const SOUTIEN = [...NIVEAUX.parId.values()].find(
   (n) => !n.autonome,
 ) as NiveauSolveur
 

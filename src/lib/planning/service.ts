@@ -33,7 +33,6 @@ import type {
   ModeleContrat,
   Motif,
   Moment,
-  NiveauEtab,
   Periode,
   Zone,
   Poste,
@@ -53,7 +52,6 @@ const COL_ZONE =
   'id, nom, ordre, continue, releve_minutes, passation_nuit, equipe_tolerance'
 const COL_MOMENT =
   'id, nom, ordre, priorite, debut_de, debut_a, fin_de, fin_a, toutes, libre_avant, compte_dans_tableau, est_nuit, couleur, article'
-const COL_NIVEAU = 'id, nom, ordre, autonome, jamais_seul'
 const COL_GROUPE = 'id, nom, ordre, postes_autorises, forfait_possible'
 const COL_SALARIE =
   'id, prenom, nom, groupe_id, type_contrat, heures_hebdo, forfait_jours, mineur, competences, semaine_type, shifts_autorises, date_entree, date_sortie, actif, suite_de'
@@ -174,7 +172,6 @@ export async function fetchReferentiel(): Promise<Referentiel> {
     feries,
     lignesMoments,
     lignesZones,
-    lignesNiveaux,
   ] = await Promise.all([
     supabase
       .from('planning_horaires')
@@ -228,11 +225,6 @@ export async function fetchReferentiel(): Promise<Referentiel> {
       .order('ordre')
       .order('id'),
     supabase.from('planning_zones').select(COL_ZONE).order('ordre').order('id'),
-    supabase
-      .from('planning_niveaux')
-      .select(COL_NIVEAU)
-      .order('ordre')
-      .order('id'),
   ])
   // La ligne manque (base pas encore migrée) : la relève par défaut ;
   // les autres règles absentes reprennent leurs défauts (`lireRegles`).
@@ -275,7 +267,6 @@ export async function fetchReferentiel(): Promise<Referentiel> {
       ...z,
       id: num(z.id),
     })),
-    niveaux: verifier(lignesNiveaux) as unknown as NiveauEtab[],
   }
 }
 
@@ -743,50 +734,6 @@ export async function ajouterZone(z: Omit<Zone, 'id'>): Promise<void> {
 export async function supprimerZone(id: number): Promise<void> {
   auMoinsUne(
     await supabase.from('planning_zones').delete().eq('id', id).select('id'),
-  )
-}
-
-/** Un niveau neuf (gestion). */
-export async function ajouterNiveau(n: NiveauEtab): Promise<void> {
-  auMoinsUne(await supabase.from('planning_niveaux').insert(n).select('id'))
-}
-
-/** Un niveau : son nom ou ses cases (gestion). */
-export async function enregistrerNiveau(
-  id: string,
-  champs: Partial<Omit<NiveauEtab, 'id'>>,
-): Promise<void> {
-  auMoinsUne(
-    await supabase
-      .from('planning_niveaux')
-      .update(champs)
-      .eq('id', id)
-      .select('id'),
-  )
-}
-
-/** Range les niveaux (ordre = position dans la liste) : le premier est
- * préféré par le calcul. */
-export async function ordonnerNiveaux(ids: string[]): Promise<void> {
-  for (const [ordre, id] of ids.entries()) {
-    try {
-      auMoinsUne(
-        await supabase
-          .from('planning_niveaux')
-          .update({ ordre })
-          .eq('id', id)
-          .select('id'),
-      )
-    } catch (err) {
-      throw ordre > 0 ? partielle(err) : err
-    }
-  }
-}
-
-/** Retire un niveau (gestion) : refusé par la base s'il sert encore. */
-export async function supprimerNiveau(id: string): Promise<void> {
-  auMoinsUne(
-    await supabase.from('planning_niveaux').delete().eq('id', id).select('id'),
   )
 }
 

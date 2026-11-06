@@ -8,9 +8,9 @@
  * `type_absence_id`) : c'est un JSON, recopié tel quel à l'import.
  */
 
-/** Niveau d'une personne sur un poste : l'identifiant d'un niveau de
- * l'établissement (`planning_niveaux.id`, 2026-11-06, `niveaux.ts`). Aucun
- * n'est lu par sa clé. */
+/** Niveau d'une personne sur un poste : la clé d'un des trois niveaux
+ * FIXES (titulaire, dépannage, soutien), écrits dans `niveaux.ts` seul
+ * (décision de l'utilisateur du 2026-11-06). */
 export type Niveau = string
 export type ModeJour = 'auto' | 'travail' | 'repos' | 'absence'
 export type NatureMotif = 'absence' | 'ecole' | 'repos'
@@ -21,21 +21,9 @@ export type TypeContrat = string
 /** Force d'une règle de l'établissement (colonne texte en base). */
 export type ForceRegle = 'obligatoire' | 'souhaite' | 'aucune'
 export type JourIsole = 'interdit' | 'a_eviter' | 'aucune'
-/** Niveau demandé par un besoin : le moins préféré des niveaux autonomes
- * qui tiennent la place (`planning_niveaux.id`). Null ou inconnu : tout
- * niveau autonome. */
+/** Niveau demandé par un besoin : titulaire seulement, ou null (titulaire
+ * ou dépannage). */
 export type NiveauDemande = string | null
-
-/** Un niveau de l'établissement (`planning_niveaux`, 2026-11-06). */
-export interface NiveauEtab {
-  id: string
-  nom: string
-  ordre: number
-  /** Tient une place seul. */
-  autonome: boolean
-  /** Toujours avec une personne autonome qui ne l'est pas. */
-  jamais_seul: boolean
-}
 
 /** Nombre de personnes demandé à un niveau par un besoin. */
 export interface BesoinNiveau {
@@ -404,9 +392,6 @@ export interface Referentiel {
   /** Zones (`planning_zones`, 2026-11-06) ; absentes (données de test) :
    * l'accueil seul, aux réglages de passation (`zoneParDefaut`). */
   zones?: Zone[]
-  /** Niveaux (`planning_niveaux`, 2026-11-06) ; absents (données de test) :
-   * ceux de l'hôtel (`NIVEAUX_PAR_DEFAUT`). */
-  niveaux?: NiveauEtab[]
 }
 
 export const JOURS = [

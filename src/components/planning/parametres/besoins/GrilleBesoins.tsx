@@ -58,7 +58,7 @@ import {
   libelleMoment,
   listeOu,
 } from '#/lib/planning/affichage.ts'
-import { NIVEAUX_HOTEL } from '#/lib/planning/niveaux.ts'
+import { NIVEAUX } from '#/lib/planning/niveaux.ts'
 import type { Niveaux } from '#/lib/planning/niveaux.ts'
 import { codesDuPoste } from '#/lib/planning/eligibilite.ts'
 import { alerteBesoin } from '#/lib/planning/regles.ts'
@@ -116,7 +116,7 @@ export function nomCase(
   ligne: LigneBesoin,
   jour: number,
   r: Reglage,
-  niveaux: Niveaux = NIVEAUX_HOTEL,
+  niveaux: Niveaux = NIVEAUX,
 ): string {
   const n =
     r.effectif === 0

@@ -372,7 +372,7 @@ export function verifierReglages(
     avant: [],
     apres: [],
   })
-  // Les niveaux de l'établissement (2026-11-06) : aucun n'est lu par sa clé.
+  // Les trois niveaux fixes (`niveaux.ts`, 2026-11-06).
   const niv = regles.niveaux
   const autonome = (n: string) => estAutonome(niv, n)
   const prefere = (n: string) => estPrefere(niv, n)
@@ -849,8 +849,7 @@ export function verifierReglages(
     )
     const jours = seuls.map((b) => b.jour)
     if (!jours.length) continue
-    // Un nombre par niveau dont le niveau ne tient plus une place seul
-    // (relecture du 2026-11-06) : la cause est dite.
+    // Un nombre par niveau qui ne demande que du soutien : la cause est dite.
     const niveauxSeuls = [
       ...new Set(
         seuls.flatMap((b) =>
@@ -866,7 +865,7 @@ export function verifierReglages(
       'a-voir',
       'besoins',
       niveauxSeuls.length
-        ? `Le poste ${p.nom} demande le niveau ${listeOu(niveauxSeuls)}, qui ne tient pas une place seul (${listeJours(jours)}). Ces places ne seront jamais pourvues : demandez aussi une personne qui tient la place seule, ou laissez ce niveau tenir seul dans Postes.`
+        ? `Le poste ${p.nom} demande le niveau ${listeOu(niveauxSeuls)}, qui n’est jamais seul (${listeJours(jours)}). Ces places ne seront jamais pourvues : demandez aussi un titulaire ou un dépannage.`
         : `Le poste ${p.nom} demande des personnes en soutien sans personne à côté (${listeJours(jours)}). Ces places ne seront jamais pourvues : retirez-les ou ajoutez une personne nécessaire.`,
       `soutien-${p.id}`,
     )

@@ -32,7 +32,7 @@ import type {
   Poste,
   Salarie,
 } from '#/lib/planning/types.ts'
-import { NIVEAUX_HOTEL, positionNiveau } from '#/lib/planning/niveaux.ts'
+import { NIVEAUX, positionNiveau } from '#/lib/planning/niveaux.ts'
 import type { Niveaux, NiveauSolveur } from '#/lib/planning/niveaux.ts'
 
 /** Repère visuel d'un niveau : le préféré (plein), un autre niveau
@@ -49,20 +49,10 @@ export function genreNiveau(
   return n.rang === 0 ? 'prefere' : 'autre'
 }
 
-/** Ce qu'un niveau veut dire, tiré de ses cases (2026-11-06 : plus de
- * libellé écrit par niveau). */
-export function aideNiveau(
-  n: Pick<NiveauSolveur, 'autonome' | 'jamaisSeul' | 'rang'>,
-): string {
-  if (!n.autonome)
-    return n.jamaisSeul
-      ? 'Ne compte pas seul, toujours accompagné'
-      : 'Ne compte pas seul'
-  const base =
-    n.rang === 0
-      ? 'Tient le poste seul, au quotidien'
-      : 'Peut le tenir seul, à éviter si possible'
-  return n.jamaisSeul ? `${base}, jamais seul` : base
+/** Ce qu'un niveau veut dire : la phrase des trois niveaux fixes
+ * (`niveaux.ts`, 2026-11-06). */
+export function aideNiveau(n: Pick<NiveauSolveur, 'phrase'>): string {
+  return n.phrase
 }
 
 /** « Réception », « Réception et Club », « Bar, Réception et Club ». */
@@ -292,7 +282,7 @@ export function postesDuGroupe(postes: Poste[], groupe?: Groupe): Poste[] {
 export function postesTenus(
   s: Pick<Salarie, 'competences'>,
   postes: Poste[],
-  niveaux: Niveaux = NIVEAUX_HOTEL,
+  niveaux: Niveaux = NIVEAUX,
 ): string {
   return [...s.competences]
     .sort(
@@ -310,7 +300,7 @@ export function postesTenus(
 export function metier(
   s: Pick<Salarie, 'competences'>,
   postes: Poste[],
-  niveaux: Niveaux = NIVEAUX_HOTEL,
+  niveaux: Niveaux = NIVEAUX,
 ): string {
   const noms = [...s.competences]
     .sort(
@@ -329,7 +319,7 @@ export function metier(
 export function rangOrganigramme(
   s: Partial<Pick<Salarie, 'competences'>>,
   postes: ReadonlyArray<Pick<Poste, 'id'>>,
-  niveaux: Niveaux = NIVEAUX_HOTEL,
+  niveaux: Niveaux = NIVEAUX,
 ): number {
   const place = new Map(postes.map((p, i) => [p.id, i]))
   const n = postes.length

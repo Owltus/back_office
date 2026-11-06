@@ -32,7 +32,7 @@
  * incohérents sont dans des semaines verrouillées, les cacher les aurait tus.
  */
 
-import { estAutonome, estPrefere, lireNiveaux } from '#/lib/planning/niveaux.ts'
+import { estAutonome, estPrefere, NIVEAUX } from '#/lib/planning/niveaux.ts'
 import type { Niveaux } from '#/lib/planning/niveaux.ts'
 import { libelleHoraire } from '#/lib/planning/affichage.ts'
 import type { LienReglage } from '#/lib/planning/coherence.ts'
@@ -184,7 +184,7 @@ export function donneesARanger(
   const horaires = new Map(r.horaires.map((h) => [h.id, h]))
   const salaries = new Map(r.salaries.map((s) => [s.id, s]))
   const verrous = new Set(r.verrous)
-  const niveaux = lireNiveaux(r.niveaux)
+  const niveaux = NIVEAUX
 
   interface Brouillon {
     sorte: SorteRangement

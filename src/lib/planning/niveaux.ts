@@ -1,42 +1,57 @@
 /*
- * Les NIVEAUX de l'établissement (2026-11-06, lot 2, A7) : le niveau d'une
- * personne sur un poste (`planning_niveaux`). Le calcul ne lit jamais un nom
- * ni une clé de niveau : seulement ses cases.
+ * Les TROIS NIVEAUX d'une personne sur un poste, FIXES (décision de
+ * l'utilisateur du 2026-11-06, qui renverse les niveaux réglables du lot 2,
+ * A7 : « tu peux le mettre en dur dans le moteur et non paramétrable, car
+ * c'est un truc qui couvre tous les cas »). Ne pas les rendre réglables.
  *
- * - `ordre` : le premier niveau autonome est préféré ; chaque niveau autonome
- *   suivant coûte une part du prix du dépannage (`part`), la dernière le prix
- *   entier. À l'hôtel : Titulaire (0), Dépannage (le prix entier).
- * - `autonome` : tient une place seul, compte dans le tableau, les trous, la
- *   relève, les passations. Non autonome : une place de soutien seulement.
- * - `jamais_seul` : toujours avec une personne autonome qui n'est pas elle-même
- *   « jamais seule », sur le même poste, aux mêmes heures (D9 : le soutien).
+ * - Titulaire : placé en priorité, autonome (tient une place seul ; peut
+ *   avoir un dépannage ou un soutien avec lui, sans obligation).
+ * - Dépannage (clé `occasionnel`) : placé à défaut de titulaire, autonome ;
+ *   coûte la part fixe du dépannage (`coutDepannage`). Les heures du contrat
+ *   passent avant : un dépannage qui manque d'heures passe devant un
+ *   titulaire qui a les siennes.
+ * - Soutien : jamais seul, toujours avec un titulaire ou un dépannage, sur le
+ *   même poste, aux mêmes heures (D9).
  *
- * Seul fichier qui écrit les niveaux de l'hôtel (mêmes lignes que la
- * migration 20261106140000).
+ * SEUL fichier du code qui écrit les clés de niveau. La table
+ * `planning_niveaux` porte les mêmes lignes, figées par la migration
+ * 20261106160000 ; le calcul ne la lit pas.
  */
 
-import type { NiveauEtab } from '#/lib/planning/types.ts'
+/** Un des trois niveaux fixes. */
+export interface NiveauFixe {
+  id: string
+  nom: string
+  /** La phrase de la fiche, sous le niveau choisi. */
+  phrase: string
+  autonome: boolean
+  jamais_seul: boolean
+}
 
-/** Les niveaux de l'hôtel, quand la base n'en porte aucun (données de test). */
-export const NIVEAUX_PAR_DEFAUT: readonly NiveauEtab[] = [
+export const NIVEAU_TITULAIRE = 'titulaire'
+export const NIVEAU_DEPANNAGE = 'occasionnel'
+export const NIVEAU_SOUTIEN = 'soutien'
+
+/** Les trois niveaux, du préféré au dernier. */
+export const LISTE_NIVEAUX: readonly NiveauFixe[] = [
   {
-    id: 'titulaire',
+    id: NIVEAU_TITULAIRE,
     nom: 'Titulaire',
-    ordre: 0,
+    phrase: 'Placé en priorité sur ce poste. Peut être seul.',
     autonome: true,
     jamais_seul: false,
   },
   {
-    id: 'occasionnel',
+    id: NIVEAU_DEPANNAGE,
     nom: 'Dépannage',
-    ordre: 1,
+    phrase: 'Placé si aucun titulaire n’est disponible. Peut être seul.',
     autonome: true,
     jamais_seul: false,
   },
   {
-    id: 'soutien',
+    id: NIVEAU_SOUTIEN,
     nom: 'Soutien',
-    ordre: 2,
+    phrase: 'Jamais seul : toujours avec un titulaire ou un dépannage.',
     autonome: false,
     jamais_seul: true,
   },
@@ -46,34 +61,28 @@ export const NIVEAUX_PAR_DEFAUT: readonly NiveauEtab[] = [
 export interface NiveauSolveur {
   id: string
   nom: string
+  phrase: string
   autonome: boolean
   jamaisSeul: boolean
-  /** Rang parmi les niveaux autonomes (0 : le préféré) ; -1 pour un niveau
-   * non autonome. */
+  /** Rang parmi les niveaux autonomes (0 : titulaire, 1 : dépannage) ; -1
+   * pour le soutien. */
   rang: number
-  /** Part du prix du dépannage : 0 pour le premier niveau autonome, 1 pour
-   * le dernier, entre les deux à parts égales ; 0 hors autonomes. */
+  /** Part du prix du dépannage : 0 pour le titulaire, 1 pour le dépannage,
+   * 0 pour le soutien. */
   part: number
-  /** Rang dans la liste complète (tri des affichages). */
+  /** Rang dans la liste (tri des affichages). */
   position: number
 }
 
-/** Les niveaux de l'établissement, rangés, et leur lecture par id. */
+/** Les trois niveaux, rangés, et leur lecture par id. */
 export interface Niveaux {
-  liste: readonly NiveauEtab[]
+  liste: readonly NiveauFixe[]
   parId: ReadonlyMap<string, NiveauSolveur>
-  /** Les niveaux autonomes, du préféré au dernier. */
+  /** Les niveaux autonomes : titulaire, puis dépannage. */
   autonomes: readonly NiveauSolveur[]
 }
 
-/** Les niveaux d'une liste de la base (ordre, puis id) ; vide : ceux de
- * l'hôtel. */
-export function lireNiveaux(
-  lignes: readonly NiveauEtab[] | null | undefined,
-): Niveaux {
-  const liste = [...(lignes?.length ? lignes : NIVEAUX_PAR_DEFAUT)].sort(
-    (a, b) => a.ordre - b.ordre || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
-  )
+function construire(liste: readonly NiveauFixe[]): Niveaux {
   const nA = liste.filter((n) => n.autonome).length
   const parId = new Map<string, NiveauSolveur>()
   const autonomes: NiveauSolveur[] = []
@@ -83,6 +92,7 @@ export function lireNiveaux(
     const s: NiveauSolveur = {
       id: n.id,
       nom: n.nom,
+      phrase: n.phrase,
       autonome: n.autonome,
       jamaisSeul: n.jamais_seul,
       rang: r,
@@ -95,8 +105,8 @@ export function lireNiveaux(
   return { liste, parId, autonomes }
 }
 
-/** Les niveaux de l'hôtel, lus. */
-export const NIVEAUX_HOTEL: Niveaux = lireNiveaux(NIVEAUX_PAR_DEFAUT)
+/** Les trois niveaux, lus. */
+export const NIVEAUX: Niveaux = construire(LISTE_NIVEAUX)
 
 /** Le niveau d'un id ; inconnu : null (la compétence ne compte pas). */
 export function niveauLu(

@@ -3,7 +3,7 @@
  * `lignesDuPoste`, `trouver`, `correspond`). Pur.
  */
 
-import { NIVEAUX_HOTEL, niveauLu } from '#/lib/planning/niveaux.ts'
+import { NIVEAUX, niveauLu } from '#/lib/planning/niveaux.ts'
 import type { Niveaux } from '#/lib/planning/niveaux.ts'
 import type {
   Besoin,
@@ -44,7 +44,7 @@ export const parNiveau = (r: Reglage) => (r.niveaux?.length ?? 0) > 0
  * autonome qui n'est pas le dernier) ; null sinon. */
 export function niveauRestreint(
   r: Reglage,
-  niveaux: Niveaux = NIVEAUX_HOTEL,
+  niveaux: Niveaux = NIVEAUX,
 ): string | null {
   if (parNiveau(r)) return null
   const n = niveauLu(niveaux, r.niveau_min)
@@ -56,7 +56,7 @@ export function niveauRestreint(
  * niveau demandé). */
 export function lignesNiveaux(
   r: Reglage,
-  niveaux: Niveaux = NIVEAUX_HOTEL,
+  niveaux: Niveaux = NIVEAUX,
 ): BesoinNiveau[] {
   if (parNiveau(r)) return r.niveaux ?? []
   if (r.effectif <= 0) return []
@@ -72,7 +72,7 @@ export function reglerNiveauCase(
   r: Reglage,
   niveau: string,
   nombre: number,
-  niveaux: Niveaux = NIVEAUX_HOTEL,
+  niveaux: Niveaux = NIVEAUX,
 ): Reglage {
   const lignes = lignesNiveaux(r, niveaux).filter((l) => l.niveau !== niveau)
   if (nombre > 0) lignes.push({ niveau, nombre })
@@ -87,7 +87,7 @@ export function reglerNiveauCase(
  * demandés. */
 export function sansDetailNiveaux(
   r: Reglage,
-  niveaux: Niveaux = NIVEAUX_HOTEL,
+  niveaux: Niveaux = NIVEAUX,
 ): Reglage {
   const lignes = lignesNiveaux(r, niveaux)
   const pire = lignes

@@ -15,11 +15,7 @@
 
 import { lireMoments, MOMENTS_HOTEL } from '#/lib/planning/moment.ts'
 import type { Moments } from '#/lib/planning/moment.ts'
-import {
-  estPrefere,
-  lireNiveaux,
-  positionNiveau,
-} from '#/lib/planning/niveaux.ts'
+import { estPrefere, NIVEAUX, positionNiveau } from '#/lib/planning/niveaux.ts'
 import {
   dureeHoraire,
   heures,
@@ -113,9 +109,7 @@ export function actuelNonPermis(
 
 interface EntreeCase {
   referentiel: Pick<Referentiel, 'horaires' | 'postes' | 'motifs'> &
-    Partial<
-      Pick<Referentiel, 'reglages' | 'modelesContrat' | 'niveaux' | 'moments'>
-    >
+    Partial<Pick<Referentiel, 'reglages' | 'modelesContrat' | 'moments'>>
   personne: Salarie
   posteId: number | undefined
   jour: number
@@ -214,7 +208,7 @@ export function ouvertureSpecifique(
     shift?.poste_id,
     e.placePosteId,
     ...personne.competences
-      .filter((c) => estPrefere(lireNiveaux(referentiel.niveaux), c.niveau))
+      .filter((c) => estPrefere(NIVEAUX, c.niveau))
       .map((c) => c.poste_id),
     ...postes.map((p) => p.id),
   ].filter(
@@ -356,7 +350,7 @@ export function rubriquesDeLaCase({
   garderActuel?: boolean
 }): RubriquesCase {
   const { postes, horaires } = referentiel
-  const niveaux = lireNiveaux(referentiel.niveaux)
+  const niveaux = NIVEAUX
   const moments = lireMoments(referentiel.moments)
   const rang = (id: number) => postes.findIndex((p) => p.id === id)
   const candidats: Array<{ poste: Poste; niveau: Niveau | null }> = [

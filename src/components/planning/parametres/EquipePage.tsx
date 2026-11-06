@@ -7,7 +7,7 @@
  * Lisible par tous ; ajouter et modifier : gestion seule.
  */
 
-import { estPrefere, NIVEAUX_HOTEL, nomNiveau } from '#/lib/planning/niveaux.ts'
+import { estPrefere, NIVEAUX, nomNiveau } from '#/lib/planning/niveaux.ts'
 import type { Niveaux } from '#/lib/planning/niveaux.ts'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
@@ -68,7 +68,7 @@ const GRIS = '#98a2b3'
 function postePrincipal(
   s: Pick<Salarie, 'competences'>,
   postes: Poste[],
-  niveaux: Niveaux = NIVEAUX_HOTEL,
+  niveaux: Niveaux = NIVEAUX,
 ): Poste | undefined {
   const c =
     s.competences.find((x) => estPrefere(niveaux, x.niveau)) ??

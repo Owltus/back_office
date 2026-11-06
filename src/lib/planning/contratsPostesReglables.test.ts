@@ -453,6 +453,21 @@ describe('aucun code de contrat ni catégorie lu par le code (lot 1a)', () => {
     ).toEqual([])
   })
 
+  // Les trois niveaux FIXES (décision de l'utilisateur du 2026-11-06) :
+  // leurs clés ne s'écrivent que dans `niveaux.ts`, la seule source.
+  it('les clés de niveau ne s’écrivent que dans niveaux.ts', () => {
+    expect(
+      lignes(/['"`](?:titulaire|occasionnel|depannage|soutien)['"`]/, [
+        'lib/planning/niveaux.ts',
+      ]).filter(
+        // La colonne `soutien` d'un besoin (et l'ancre de sa case), pas un
+        // niveau.
+        (l) =>
+          !/regler\(ligne, jour, 'soutien'|idCible\(cible, 'soutien'\)/.test(l),
+      ),
+    ).toEqual([])
+  })
+
   it('les jours du week-end viennent des règles', () => {
     expect(
       lignes(/\[5, ?6\]|jour >= 5|jourDe\(c\) >= 5|has\(5\) \|\||j !== 5/, [

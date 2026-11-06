@@ -7,7 +7,7 @@
  * les autres (`etoileDeLaCase`, `codesCase.ts`).
  */
 
-import { estPrefere, NIVEAUX_HOTEL } from '#/lib/planning/niveaux.ts'
+import { estPrefere, NIVEAUX } from '#/lib/planning/niveaux.ts'
 import type { Niveaux } from '#/lib/planning/niveaux.ts'
 import { dureeHoraire, heures, jourDeRepos } from '#/lib/planning/affichage.ts'
 import { estJfr } from '#/lib/planning/feries.ts'
@@ -256,7 +256,7 @@ export function indiceDe(
   jour: number,
   bilan: BilanOut | undefined,
   statut: ContenuStatut | null,
-  niveaux: Niveaux = NIVEAUX_HOTEL,
+  niveaux: Niveaux = NIVEAUX,
 ): Indice {
   if (!vol) return null
   if (statut?.genre === 'hors') return 'deconseille'
