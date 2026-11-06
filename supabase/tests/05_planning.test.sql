@@ -143,7 +143,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':J', (select j from t_ids)::text);
 $$;
 
-select plan(182);
+select plan(183);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -582,16 +582,14 @@ select is(pg_temp.essai('gestion', array[
   'select weekend_jours::text from public.planning_reglages']),
   '{4,5,6}', 'week-end : vendredi, samedi et dimanche sont acceptés');
 
--- ------------------------------ niveaux de l'établissement (2026-11-06) ---
+-- ------------------- les trois niveaux, FIXES (décision du 2026-11-06) ---
 select is((select string_agg(id || ':' || nom || ':' || autonome || ':' || jamais_seul, ',' order by ordre)
     from public.planning_niveaux),
   'titulaire:Titulaire:true:false,occasionnel:Dépannage:true:false,soutien:Soutien:false:true',
-  'niveaux : ceux de l''hôtel, le soutien jamais seul');
+  'niveaux : titulaire, dépannage, soutien jamais seul');
 select is(pg_temp.essai('gestion', array[
-  'insert into public.planning_niveaux (id, nom, ordre) values (''confirme'', ''Confirmé'', 1)',
-  pg_temp.q('update public.planning_salaries set competences = ''[{"poste_id": :PA, "niveau": "confirme"}]'' where id = :S1'),
-  pg_temp.q('select competences -> 0 ->> ''niveau'' from public.planning_salaries where id = :S1')]),
-  'confirme', 'niveaux : la gestion crée « Confirmé », une fiche le prend');
+  'insert into public.planning_niveaux (id, nom, ordre) values (''confirme'', ''Confirmé'', 1)']),
+  'err=PL409', 'niveaux : la base refuse d''ajouter un niveau, même à la gestion');
 select is(pg_temp.essai('gestion', array[
   pg_temp.q('update public.planning_salaries set competences = ''[{"poste_id": :PA, "niveau": "licorne"}]'' where id = :S1')]),
   'err=PL400', 'niveaux : un niveau inconnu est refusé dans une fiche');
@@ -599,26 +597,27 @@ select is(pg_temp.essai('gestion', array[
   'delete from public.planning_niveaux where id = ''titulaire''']),
   'err=PL409', 'niveaux : un niveau utilisé ne se retire pas');
 select is(pg_temp.essai('gestion', array[
-  'insert into public.planning_niveaux (id, nom, ordre) values (''essai'', ''Essai'', 9)',
-  'delete from public.planning_niveaux where id = ''essai''']),
-  '1', 'niveaux : un niveau inutilisé se retire');
+  'delete from public.planning_niveaux where id = ''soutien''']),
+  'err=PL409', 'niveaux : aucun niveau ne se retire');
 select is(pg_temp.essai('gestion', array[
-  'update public.planning_niveaux set autonome = false where id = ''occasionnel''',
-  'update public.planning_niveaux set autonome = false where id = ''titulaire''']),
-  'err=PL409', 'niveaux : il reste toujours un niveau qui tient une place seul');
-select is(pg_temp.essai('ecriture', array[
-  'insert into public.planning_niveaux (id, nom) values (''essai'', ''Essai'')']),
-  'err=42501', 'niveaux : l''écriture ne les règle pas');
+  'update public.planning_niveaux set autonome = false where id = ''occasionnel''']),
+  'err=PL409', 'niveaux : « peut être seul » ne change pas');
+select is(pg_temp.essai('gestion', array[
+  'update public.planning_niveaux set ordre = 5 where id = ''titulaire''']),
+  'err=PL409', 'niveaux : l''ordre ne change pas');
+select is(pg_temp.essai('gestion', array[
+  'update public.planning_niveaux set jamais_seul = false where id = ''soutien''']),
+  'err=PL409', 'niveaux : « jamais seul » ne change pas');
+select is(pg_temp.essai('gestion', array[
+  'update public.planning_niveaux set id = ''chef'' where id = ''titulaire''']),
+  'err=PL409', 'niveaux : la clé ne change pas');
 select is(pg_temp.essai('aucun', array['select count(*) from public.planning_niveaux']),
   '0', 'niveaux : aucun ne les lit');
-select is(pg_temp.essai('gestion', array[
-  'insert into public.planning_niveaux (id, nom) values (''Essai !'', ''Essai'')']),
-  'err=23514', 'niveaux : un identifiant hors format est refusé');
 select is(pg_temp.essai('gestion', array[
   pg_temp.q('insert into public.planning_besoins (poste_id, jour, debut, fin, effectif, niveaux) values (:PA, 0, ''09:00'', ''17:00'', 3, ''[{"niveau": "titulaire", "nombre": 1}, {"niveau": "occasionnel", "nombre": 2}]'')'),
   pg_temp.q('select niveaux::text from public.planning_besoins where poste_id = :PA and niveaux <> ''[]''')]),
   '[{"niveau": "titulaire", "nombre": 1}, {"niveau": "occasionnel", "nombre": 2}]',
-  'besoins : un nombre par niveau (1 Titulaire + 2 Dépannage)');
+  'besoins : un nombre par niveau (1 titulaire et 2 en plus)');
 select is(pg_temp.essai('gestion', array[
   pg_temp.q('insert into public.planning_besoins (poste_id, jour, debut, fin, niveaux) values (:PA, 0, ''09:00'', ''17:00'', ''[{"niveau": "licorne", "nombre": 1}]'')')]),
   'err=PL400', 'besoins : un niveau inconnu est refusé');
@@ -627,12 +626,11 @@ select is(pg_temp.essai('gestion', array[
   'err=PL400', 'besoins : un niveau demandé deux fois est refusé');
 select is((select coalesce(column_default, 'null') || '/' || is_nullable from information_schema.columns
             where table_schema = 'public' and table_name = 'planning_besoins' and column_name = 'niveau_min'),
-  'null/YES', 'besoins : sans niveau demandé, tout niveau autonome');
+  'null/YES', 'besoins : sans niveau demandé, titulaire ou dépannage');
 select is(pg_temp.essai('gestion', array[
-  'insert into public.planning_niveaux (id, nom, ordre) values (''chef'', ''Chef'', 5)',
-  pg_temp.q('insert into public.planning_besoins (poste_id, jour, debut, fin, niveaux) values (:PA, 1, ''09:00'', ''17:00'', ''[{"niveau": "chef", "nombre": 1}]'')'),
-  'delete from public.planning_niveaux where id = ''chef''']),
-  'err=PL409', 'niveaux : un niveau demandé par un besoin ne se retire pas');
+  pg_temp.q('insert into public.planning_besoins (poste_id, jour, debut, fin, effectif, niveau_min) values (:PA, 1, ''09:00'', ''17:00'', 1, ''titulaire'')'),
+  pg_temp.q('select niveau_min from public.planning_besoins where poste_id = :PA and jour = 1 and debut = ''09:00''')]),
+  'titulaire', 'besoins : titulaire seulement');
 
 -- ----------------------------- moments des horaires (2026-10-28) ---
 select is(pg_temp.essai('gestion', array[
