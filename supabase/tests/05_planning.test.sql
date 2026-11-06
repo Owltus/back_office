@@ -143,7 +143,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':J', (select j from t_ids)::text);
 $$;
 
-select plan(148);
+select plan(154);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -498,7 +498,30 @@ select is(pg_temp.essai('gestion', array[
 select is(pg_temp.essai('gestion', array[
   'delete from public.planning_consignes',
   'insert into public.planning_consignes (jour, periode, minimum, maximum) values (0, ''midi'', 1, 1)']),
-  'err=23514', 'consignes : une période inconnue est refusée');
+  'err=23503', 'consignes : un moment inconnu est refusé (clé étrangère, 2026-11-06)');
+
+-- ------------------------------ moments de l'établissement (2026-11-06) ---
+select is((select string_agg(id || ':' || compte_dans_tableau || ':' || est_nuit, ',' order by ordre)
+    from public.planning_moments),
+  'matin:true:false,middle:false:false,soir:true:false,nuit:true:true',
+  'moments : ceux de l''hôtel, le middle hors du tableau, la nuit');
+select is(pg_temp.essai('gestion', array[
+  'insert into public.planning_moments (id, nom, ordre, priorite, debut_de, debut_a, compte_dans_tableau) values (''midi'', ''Midi'', 5, 0, 600, 780, true)',
+  'delete from public.planning_consignes',
+  'insert into public.planning_consignes (jour, periode, minimum, maximum) values (0, ''midi'', 2, 2)',
+  'select periode || ''-'' || minimum from public.planning_consignes']),
+  'midi-2', 'moments : la gestion crée « Midi », il a son chiffre au tableau');
+select is(pg_temp.essai('ecriture', array[
+  'insert into public.planning_moments (id, nom) values (''midi'', ''Midi'')']),
+  'err=42501', 'moments : l''écriture ne les règle pas');
+select is(pg_temp.essai('aucun', array['select count(*) from public.planning_moments']),
+  '0', 'moments : aucun ne les lit');
+select is(pg_temp.essai('gestion', array[
+  'delete from public.planning_moments where id = ''matin''']),
+  'err=23503', 'moments : un moment qui a des horaires ne se retire pas');
+select is(pg_temp.essai('gestion', array[
+  'insert into public.planning_moments (id, nom) values (''Midi !'', ''Midi'')']),
+  'err=23514', 'moments : un identifiant hors format est refusé');
 
 -- ----------------------------- moments des horaires (2026-10-28) ---
 select is(pg_temp.essai('gestion', array[
@@ -507,10 +530,10 @@ select is(pg_temp.essai('gestion', array[
   'middle', 'moments : un horaire se range en middle');
 select is(pg_temp.essai('gestion', array[
   'update public.planning_horaires set periode = ''court'' where nom = ''Matin test''']),
-  'err=23514', 'moments : plus de « court », un horaire court se range d''après son début (2026-10-31)');
+  'err=23503', 'moments : plus de « court », un horaire court se range d''après son début (2026-10-31)');
 select is(pg_temp.essai('gestion', array[
   'update public.planning_horaires set periode = ''midi'' where nom = ''Matin test''']),
-  'err=23514', 'moments : un moment inconnu est refusé');
+  'err=23503', 'moments : un moment inconnu est refusé');
 
 -- ------------------------------- journée d'école (révisé le 2026-10-29) ---
 -- Décision utilisateur : un jour d'école compte comme une journée de travail
