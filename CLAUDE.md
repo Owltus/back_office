@@ -2713,7 +2713,7 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   Souhaité » et « Niveau demandé » (repères « souhaité », « titulaire », Annuler / Rétablir comme
   le reste), « Ouverture et fermeture » des postes de l'accueil sous le tableau
   (`HeuresAccueil`, bouton Enregistrer, `reglerHeuresPoste`, mêmes colonnes que Postes),
-  « Passation entre les équipes » (continuité) avec la relève, importance rappelée en tête de
+  « Passation entre les équipes » (continuité) avec la relève (RETIRÉE le 2026-11-06 : passation fixe), importance rappelée en tête de
   l'onglet d'un poste, repli « Dans quel ordre… » ÉCRIT d'après l'importance
   (`besoins/ordreDecision.ts`).
 - **IMPORTANCE OUI / NON + PAGE BESOINS EN SECTIONS (décision utilisateur du 2026-11-05 : « soit
@@ -2747,7 +2747,7 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   vérifier » cible `moments` sur Besoins) : aperçu des horaires qui changent de moment AVANT
   d'enregistrer, puis `enregistrerMomentsHoraires` (colonne `periode` seule) ; Annuler /
   Enregistrer n'apparaissent qu'une fois une limite changée.
-  Besoins → passation avec le Veilleur, équipe du soir ensemble (`ReglageReleve`), durée tenue à
+  Besoins → ~~passation avec le Veilleur, équipe du soir ensemble (`ReglageReleve`)~~ (retirés le 2026-11-06, passation fixe), durée tenue à
   l'ouverture (`HeuresAccueil`). Jamais montrés : poids, `personnes_nuit`, `journee_courte`,
   `journees_courtes_max`. Brouillon + Enregistrer (tiroir, Moments), gestion seule.
 - **JOUR ÉTOILE DANS LA FICHE (2026-11-05, étape 6, D6)** : « Jour de la journée courte : Au
@@ -2825,6 +2825,23 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   encore levé). Écrans : choix Zone dans Postes, un tableau et une passation par
   zone et la section Zones dans Besoins. Identique prouvé (empreinte 8874c146,
   banc 0 écart) ; `zonesReglables.test.ts` (Room service).
+- **PASSATION ENTRE LES ÉQUIPES FIXE (décision utilisateur du 2026-11-06 : « cette notion n'a
+  pas besoin d'être paramétrable… toujours, par défaut, la transition parfaite, genre terminer à
+  15h00 et l'autre commence à 15h00, mais si possible de chevauchement, privilégie le
+  chevauchement. Donc retire le paramétrage de cela. »). NE PAS la rendre réglable.** Dans toute
+  zone tenue en continu, et seulement là : continuité OBLIGATOIRE au prix d'une place (D8), nuit
+  comprise ; passation avec la nuit ; relève préférée de `RELEVE_MINUTES` (30) ; équipe du soir
+  ensemble à `EQUIPE_TOLERANCE` (30) près. UNE source : les constantes de `regles.ts` (bloc
+  commenté). `RegleEtablissement.passations` ne garde que `dureeOuverture` ; `ZoneRegle` =
+  id, nom, continue. Colonnes `planning_reglages.continuite_obligatoire`, `releve_minutes`,
+  `passation_veilleur`, `equipe_tolerance` et `planning_zones.releve_minutes`, `passation_nuit`,
+  `equipe_tolerance` GARDÉES en base (aucune migration), plus lues (figé par
+  `contratsPostesReglables.test.ts`). Un poste hors zone garde la continuité obligatoire de ses
+  besoins. Écran : section « Passation entre les équipes » de Besoins et `ReglageReleve` retirés,
+  une phrase à la place sous les tableaux ; zones = nom et « Tenue en continu ». « À vérifier » :
+  `releve-impossible` reformulé (« Le planning préfère… Ajoutez des horaires qui se croisent »),
+  vers Horaires ; plus de cible `releve`. Identique prouvé (00ffc28f) : empreinte 8874c146, banc
+  décembre (5 semaines : modèle LP, analyse, solution à graine égale) 0 écart.
 - **TROIS NIVEAUX FIXES (décision utilisateur du 2026-11-06, qui RENVERSE les
   niveaux réglables du lot 2, A7 : « tu peux le mettre en dur dans le moteur et
   non paramétrable, car c'est un truc qui couvre tous les cas »). NE PAS les

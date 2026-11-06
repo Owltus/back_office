@@ -92,3 +92,18 @@ monde doit faire ses heures en fonction de son contrat 35 h ou 39 h ».
 - Ordre de décision gardé : heures du contrat avant « titulaire avant dépannage ».
 - Table `planning_niveaux` gardée et figée (PL409), plus lue ; nombre par niveau d'un besoin et
   `niveau_min` gardés.
+
+**2026-11-06, passation entre les équipes fixe (décision utilisateur).** À propos de la section
+« Passation entre les équipes » de Besoins (aucun trou entre deux équipes, passation avec la
+nuit, relève 0 à 60 min, équipe du soir ensemble 15 à 60 min) : « cette notion n'a pas besoin
+d'être paramétrable. Dis-toi simplement que c'est toujours, par défaut, la transition parfaite,
+genre terminer à 15h00 et l'autre commence à 15h00, mais si possible de chevauchement, privilégie
+le chevauchement. Donc retire le paramétrage de cela. »
+
+- Règles FIXES aux valeurs de l'hôtel (vérifiées en base locale : continuité vraie, relève 30,
+  passation vraie, tolérance 30, zone Accueil identique) : constantes `RELEVE_MINUTES` et
+  `EQUIPE_TOLERANCE` de `regles.ts` ; continuité et passation avec la nuit toujours actives.
+  Elles valent pour toute zone tenue en continu, pas pour une autre.
+- Base inchangée : les colonnes restent, plus lues (pas de retrait).
+- Écran : réglages retirés de Besoins et des zones, une phrase les dit. Renverse D8 « réglable »
+  (la continuité reste obligatoire) et les réglages de relève, passation, tolérance par zone (A5).

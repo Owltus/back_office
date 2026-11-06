@@ -36,7 +36,7 @@ FAIT 0bd5f7a8 (base) et 8af6f8d4 (code). Migration `20261106110000` (RETIRE le C
 
 ## Lot 2 — Le cœur : zones, moments, niveaux
 
-A5 FAIT 677537ad (base, RETIRE la clé unique (jour, moment) des consignes : `--supprimer` et `--avec-donnees`) et 6162f3f8 (code). `presence` et `accueil_nuit` gardées, plus lues. Reste : lever D13 (besoins d'un poste de zone ignorés), passation dans une zone sans nuit (rien à faire), ouverture et fermeture restent des réglages du poste.
+A5 FAIT 677537ad (base, RETIRE la clé unique (jour, moment) des consignes : `--supprimer` et `--avec-donnees`) et 6162f3f8 (code). `presence` et `accueil_nuit` gardées, plus lues. Reste : lever D13 (besoins d'un poste de zone ignorés), passation dans une zone sans nuit (rien à faire), ouverture et fermeture restent des réglages du poste. **Révisé le 2026-11-06 (décision utilisateur)** : relève, passation avec la nuit et tolérance d'équipe ne sont plus réglables, ni par zone ni en général ; règles fixes (`regles.ts`) dans toute zone tenue en continu, colonnes gardées et plus lues.
 
 A7 FAIT d74d8fd5 (base, RETIRE le CHECK, le NOT NULL et le défaut de `planning_besoins.niveau_min` : `--supprimer` et `--avec-donnees`) et 093ed711 (code). Niveaux en table (`planning_niveaux`, clés `titulaire`, `occasionnel`, `soutien` gardées), un besoin demande un nombre par niveau (`planning_besoins.niveaux`). D13 NON levé : le moteur le permettrait sans changer l'empreinte (aucun besoin sur un poste de zone à l'hôtel), mais les hôtels d'essai des tests (`hotelAccueil`, 7 tests) en portent, et Besoins n'a pas de grille pour un poste de zone.
 
