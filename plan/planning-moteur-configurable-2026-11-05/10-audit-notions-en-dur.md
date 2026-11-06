@@ -21,6 +21,8 @@ FAIT 68d0a9f4 (base) et c7213ed0 (code). Catégorie gardée en base, plus lue. F
 
 ## Lot 1b — Motifs, équité, écran
 
+FAIT 0bd5f7a8 (base) et 8af6f8d4 (code). Migration `20261106110000` (RETIRE le CHECK `planning_consignes_exact` : livraison `--supprimer` et `--avec-donnees`). `importance` gardée en base, plus lue. Restent en dur, volontairement : le nom par défaut de la zone (`NOM_ZONE_ACCUEIL`, lot 2), la fenêtre de 4 semaines de la règle du week-end libre, « samedi et dimanche » du bouton de copie de Besoins (le calendrier).
+
 | #   | Figé                                                                            | Où                                                                                                                                       | Cible                                                                                                           |
 | --- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | B3  | Codes CP / JF / JFR / EC, motif « forfait » par son nom                         | `semaine.ts:396,401,606`, `feries.ts:109`, fonctions SQL `upper(trim(code)) = 'JFR'` (20261102120000:40,110,159,166), `codesCase.ts:562` | Rôles sur le motif : `libre_weekend`, `role` (férié chômé, férié rattrapé, repos par défaut), `reserve_forfait` |

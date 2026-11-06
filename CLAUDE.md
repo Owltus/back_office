@@ -2776,6 +2776,23 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   toute comparaison à un code de contrat et toute lecture de `categorie` dans les sources.
   Empreinte 8874c146 et banc de décembre identiques. Libellé « Hôtelier » de la Supervision
   réception devenu son nom (la catégorie n'est plus lue).
+- **MOTIFS, ÉQUITÉ, ACCUEIL RÉGLABLES (2026-11-06, lot 1b de `10-audit-notions-en-dur.md`)**.
+  Migration `20261106110000` (RETIRE `planning_consignes_exact` : `--supprimer` et
+  `--avec-donnees`). Motif : `libre_weekend`, `reserve_forfait`, `icone`, `role`
+  (`ferie_chome`, `ferie_rattrape`, `repos_defaut`, un motif par rôle ; `enregistrerMotif`
+  retire le rôle à l'ancien porteur) ; aucun code (CP, JF, JFR, EC) ni nom lu, l'école = sa
+  nature ; les fonctions SQL lisent `role`. `regles.equite` (`weekend_jours` [5,6],
+  `weekend_nuit_veille`, `equite_criteres` dont `nuits`, `equite_semaines` 4 ;
+  `estJourWeekend`, `jourVeilleWeekend`, `repartit`), lu par générateur ET vérificateur,
+  section « Partage et week-end » des Règles. `planning_postes.indispensable` (booléen,
+  `importance` plus lue). Tableau de l'accueil : au moins / au plus (`plafondAccueil`).
+  Ouverture et fermeture de TOUT poste (`ouverturesPostes`, `fermeturesPostes` : hors
+  accueil, les jours où le poste a un besoin obligatoire ; réglées sous sa grille).
+  `planning_feries` (jours fériés en plus, récurrents ou non, `regles.feries.ajoutes`,
+  section de Horaires et absences). Libellés : noms des postes (`nomsPostesAccueil`),
+  `NOM_ZONE_ACCUEIL` seul mot écrit. Empreinte 8874c146 et banc de décembre identiques.
+  `contratsPostesReglables.test.ts` refuse aussi codes de motif, noms de postes,
+  `.importance` et jours du week-end écrits.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 
