@@ -2809,6 +2809,22 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   Identique prouvé : empreinte 8874c146, 28 semaines réelles (LP, analyse) et
   23 résolues, 0 écart ; `momentsReglables.test.ts` compare l'ancien arbre sur
   toute la journée aux 5 min.
+- **ZONES RÉGLABLES (lot 2, A5, 2026-11-06, 677537ad et 6162f3f8)** : table
+  `planning_zones` (nom, ordre, `continue`, `releve_minutes`, `passation_nuit`,
+  `equipe_tolerance`), zone 1 « Accueil » ; `planning_postes.zone_id` remplace
+  `presence` / `accueil_nuit` (gardées en base, plus lues) ;
+  `planning_consignes.zone_id`, clé unique (zone, jour, moment) (RETIRE l'ancienne
+  clé (jour, moment) : `--supprimer`, `--avec-donnees`). `zones.ts` seul :
+  `zoneDuPoste`, `tientLaNuit` / `seulementLaNuit` (lus sur les horaires permis,
+  le poste compte de jour et de nuit selon eux), `vuesZones` (le problème vu
+  d'une zone : ses créneaux, ses chiffres, sa relève, sa passation, sa
+  tolérance) ; trous, relève, équipes, passation, places (`idPlaceAccueil` avec
+  le rang de zone, `posteIdZone` : 0, -1…), équité (`posteEquite`) zone par
+  zone. Sans zone en base (tests) : l'accueil aux réglages généraux
+  (`zoneParDefaut`). Les besoins d'un poste de zone restent ignorés (D13, pas
+  encore levé). Écrans : choix Zone dans Postes, un tableau et une passation par
+  zone et la section Zones dans Besoins. Identique prouvé (empreinte 8874c146,
+  banc 0 écart) ; `zonesReglables.test.ts` (Room service).
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

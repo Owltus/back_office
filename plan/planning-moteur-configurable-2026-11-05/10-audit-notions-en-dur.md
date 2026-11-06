@@ -36,6 +36,8 @@ FAIT 0bd5f7a8 (base) et 8af6f8d4 (code). Migration `20261106110000` (RETIRE le C
 
 ## Lot 2 — Le cœur : zones, moments, niveaux
 
+A5 FAIT 677537ad (base, RETIRE la clé unique (jour, moment) des consignes : `--supprimer` et `--avec-donnees`) et 6162f3f8 (code). `presence` et `accueil_nuit` gardées, plus lues. Reste : lever D13 (besoins d'un poste de zone ignorés), passation dans une zone sans nuit (rien à faire), ouverture et fermeture restent des réglages du poste.
+
 A6 FAIT 89df271e (base, RETIRE les CHECK des périodes : `--supprimer` et `--avec-donnees`) et 19ce5568 (code). Limites des moments de `planning_reglages` gardées, plus lues. Reste en dur : la notion de nuit de la loi (`est_nuit`).
 
 | #   | Figé                                                                                                                                                                         | Où                                                                                                                                                                      | Cible                                                                                                                       |
