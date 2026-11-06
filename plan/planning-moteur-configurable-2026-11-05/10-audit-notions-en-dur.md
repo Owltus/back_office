@@ -38,6 +38,8 @@ FAIT 0bd5f7a8 (base) et 8af6f8d4 (code). Migration `20261106110000` (RETIRE le C
 
 A5 FAIT 677537ad (base, RETIRE la clé unique (jour, moment) des consignes : `--supprimer` et `--avec-donnees`) et 6162f3f8 (code). `presence` et `accueil_nuit` gardées, plus lues. Reste : lever D13 (besoins d'un poste de zone ignorés), passation dans une zone sans nuit (rien à faire), ouverture et fermeture restent des réglages du poste.
 
+A7 FAIT d74d8fd5 (base, RETIRE le CHECK, le NOT NULL et le défaut de `planning_besoins.niveau_min` : `--supprimer` et `--avec-donnees`) et 093ed711 (code). Niveaux en table (`planning_niveaux`, clés `titulaire`, `occasionnel`, `soutien` gardées), un besoin demande un nombre par niveau (`planning_besoins.niveaux`). D13 NON levé : le moteur le permettrait sans changer l'empreinte (aucun besoin sur un poste de zone à l'hôtel), mais les hôtels d'essai des tests (`hotelAccueil`, 7 tests) en portent, et Besoins n'a pas de grille pour un poste de zone.
+
 A6 FAIT 89df271e (base, RETIRE les CHECK des périodes : `--supprimer` et `--avec-donnees`) et 19ce5568 (code). Limites des moments de `planning_reglages` gardées, plus lues. Reste en dur : la notion de nuit de la loi (`est_nuit`).
 
 | #   | Figé                                                                                                                                                                         | Où                                                                                                                                                                      | Cible                                                                                                                       |

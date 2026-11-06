@@ -2825,6 +2825,28 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   encore levé). Écrans : choix Zone dans Postes, un tableau et une passation par
   zone et la section Zones dans Besoins. Identique prouvé (empreinte 8874c146,
   banc 0 écart) ; `zonesReglables.test.ts` (Room service).
+- **NIVEAUX RÉGLABLES (lot 2, A7, 2026-11-06, d74d8fd5 et 093ed711)** : table
+  `planning_niveaux` (id texte, nom, ordre, `autonome`, `jamais_seul`) ;
+  Titulaire, Dépannage, Soutien gardent leurs clés (`titulaire`,
+  `occasionnel`, `soutien`) : aucune fiche réécrite. Niveau inconnu dans une
+  fiche refusé (PL400), niveau utilisé ou dernier autonome jamais retiré
+  (PL409). `planning_besoins.niveau_min` en clé étrangère, nul = tout niveau
+  autonome (RETIRE son CHECK : `--supprimer`, `--avec-donnees`) ;
+  `planning_besoins.niveaux` (jsonb `[{niveau, nombre}]`) : nombre par
+  niveau, vide = effectif / soutien / niveau_min. `niveaux.ts` seul :
+  `lireNiveaux` (dans `regles.niveaux`), `demandeDe` (paliers cumulés),
+  `niveauSur` / `autonomeSur` / `jamaisSeulSur` / `referentSur` / `partSur`
+  (modele.ts) ; un niveau autonome suivant coûte `part` du dépannage (le
+  dernier le prix entier, D13 inchangé) ; « jamais seul » = avec un
+  référent (autonome, pas jamais seul). Créneau : `niveauMax`, `paliers`
+  (contraintes par palier, place précise vide, `correspondances` et
+  `manquants` aussi). Écrans : section Niveaux de Postes
+  (`postes/SectionNiveaux.tsx`), niveau par poste depuis la liste dans la
+  fiche, « Un nombre par niveau » dans le panneau d'une case de Besoins
+  (chiffre de la case = la somme). Indice de glisser `possible` (plus
+  `depannage`). Identique prouvé (empreinte 8874c146, banc 0 écart) ;
+  `niveauxReglables.test.ts` refuse toute clé de niveau écrite. D13 non levé
+  (hôtels d'essai des tests).
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 
