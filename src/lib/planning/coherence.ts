@@ -72,6 +72,7 @@ import {
   rangAuTableau,
 } from '#/lib/planning/moment.ts'
 import type { Moments } from '#/lib/planning/moment.ts'
+import { seulementLaNuit, zoneDuPoste } from '#/lib/planning/zones.ts'
 import {
   dureesImposees,
   journeesDuContrat,
@@ -247,7 +248,7 @@ export function postesComptes(
   periode: PeriodePresence,
 ): Poste[] {
   if (!estNuit(lireRegles(r).moments, periode))
-    return r.postes.filter((p) => p.presence)
+    return r.postes.filter((p) => zoneDuPoste(p) !== null)
   const nuit = postesAvecNuit(r)
   return r.postes.filter((p) => nuit.has(p.id))
 }
@@ -455,7 +456,7 @@ export function verifierReglages(
     if (h.periode !== null) continue
     const concernes = r.postes.filter(
       (p) =>
-        p.presence &&
+        zoneDuPoste(p) !== null &&
         (p.horaires_autorises.includes(h.id) ||
           valides.some((b) => b.poste_id === p.id && b.horaire_id === h.id)),
     )
@@ -532,7 +533,10 @@ export function verifierReglages(
         `poste-${p.id}`,
         PAGE_ECRAN.postes,
       )
-    } else if (p.presence && !tenants(p.id, (n) => n === 'titulaire').length) {
+    } else if (
+      zoneDuPoste(p) !== null &&
+      !tenants(p.id, (n) => n === 'titulaire').length
+    ) {
       ajouter(
         `presence-sans-titulaire:${p.id}`,
         'a-voir',
@@ -850,7 +854,7 @@ export function verifierReglages(
       'accueil-sans-poste',
       'a-voir',
       'besoins',
-      "Le tableau de l'accueil demande du monde, mais aucun poste n'est un poste de l'accueil. Dans Postes, réglez Accueil sur Matin et soir pour les postes qui le tiennent.",
+      'Le tableau demande du monde, mais aucun poste n’a de zone. Dans Postes, choisissez la zone des postes qui le tiennent.',
       undefined,
       PAGE_ECRAN.postes,
     )
@@ -1001,7 +1005,8 @@ export function verifierReglages(
   const duree = regles.passations.dureeOuverture
   for (const p of r.postes) {
     // Tout poste (2026-11-06), sauf la nuit de l'accueil (ses passations).
-    if (p.ferme || (accueil && p.accueil_nuit)) continue
+    if (p.ferme || (accueil && seulementLaNuit(p, r.horaires, regles.moments)))
+      continue
     const permis = codesDuPoste(p, r.horaires)
     const bornesH = (h: Horaire) => {
       const d = minutesDe(h.debut)
@@ -1229,7 +1234,9 @@ function pointsDesRegles(
       )
     if (!releveDemandee) continue
     const duJour = r.postes
-      .filter((p) => p.presence && !p.ferme)
+      .filter(
+        (p) => zoneDuPoste(p) !== null && !seulementLaNuit(p, r.horaires, L),
+      )
       .flatMap((p) => codesDuPoste(p, r.horaires))
     const moment = (h: Horaire) => h.periode ?? momentPropose(h, L)
     const matins = duJour.filter((h) => moment(h) === avant)

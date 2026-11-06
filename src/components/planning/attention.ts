@@ -17,11 +17,16 @@ import {
   raisonsClaires,
 } from '#/lib/planning/raisonsPlaces.ts'
 import type { RaisonClaire } from '#/lib/planning/raisonsPlaces.ts'
-import { POSTE_ID_ACCUEIL } from '#/lib/planning/semaine.ts'
 import type { EquipeOut, SemaineOut } from '#/lib/planning/semaine.ts'
-import { NOM_ZONE_ACCUEIL, tientLaNuit } from '#/lib/planning/presence.ts'
+import {
+  seulementLaNuit,
+  tientLaNuit,
+  zoneDuPoste,
+  zoneDuPosteId,
+} from '#/lib/planning/zones.ts'
 import {
   estNuit,
+  momentPropose,
   leMoment,
   MOMENTS_HOTEL,
   momentDe,
@@ -131,6 +136,8 @@ export interface TrouAttention {
   releve?: boolean
   /** Équipe de l'accueil désynchronisée (règle 17, 2026-11-03). */
   equipe?: EquipeOut
+  /** Nom de la zone d'un trou d'une zone entière (2026-11-06). */
+  zone?: string
 }
 
 export interface PointPersonne {
@@ -236,7 +243,20 @@ export function pointsAttention(
   postes: Poste[],
   portee: Portee = TOUT,
   regles: RegleEtablissement = REGLES_PAR_DEFAUT,
+  /** Les horaires : une place de jour va aux postes de la zone qui tiennent
+   * le jour, une de nuit à ceux qui tiennent la nuit. Absents : toute la
+   * zone. */
+  horaires: ReadonlyArray<Pick<Horaire, 'id' | 'debut' | 'fin'>> = [],
 ): PointsAttention {
+  const hs = horaires.map((h) => ({
+    id: h.id,
+    periode: momentPropose({ ...h, pause: 0 }, regles.moments),
+  }))
+  const tientCeMoment = (p: Poste, moment: PeriodePresence | null) =>
+    !hs.length ||
+    (estNuit(regles.moments, moment)
+      ? tientLaNuit(p, hs, regles.moments)
+      : !seulementLaNuit(p, hs, regles.moments))
   const garder = portee.jour
   const parId = new Map(salaries.map((s) => [s.id, s]))
   // Un contrat placé à la main (l'extra) : à appeler, jamais placé par le
@@ -259,19 +279,18 @@ export function pointsAttention(
       const extras: string[] = []
       const parRaison = new Map<string, string[]>()
       const personnes: PersonnePlace[] = []
-      // Une place de l'accueil (2026-11-01) vaut pour tous ses postes : la
-      // nuit, la veille ; le matin et le soir, les postes cochés « présence ».
-      const moment = t.poste_id === POSTE_ID_ACCUEIL ? (t.moment ?? null) : null
-      const postesPlace =
-        t.poste_id === POSTE_ID_ACCUEIL
-          ? postes
-              .filter((p) =>
-                estNuit(regles.moments, moment)
-                  ? tientLaNuit(p)
-                  : p.presence && !p.ferme,
-              )
-              .map((p) => p.id)
-          : [t.poste_id]
+      // Une place d'une zone (2026-11-01, par zone depuis le 2026-11-06)
+      // vaut pour tous ses postes.
+      const zone = zoneDuPosteId(regles.zones, t.poste_id)
+      const postesPlace = zone
+        ? postes
+            .filter(
+              (p) =>
+                zoneDuPoste(p) === zone.id &&
+                tientCeMoment(p, t.moment ?? null),
+            )
+            .map((p) => p.id)
+        : [t.poste_id]
       for (const r of t.raisons) {
         const x = parId.get(r.salarie_id)
         const competence = x?.competences
@@ -327,7 +346,7 @@ export function pointsAttention(
         posteId: t.poste_id,
         horaireId: t.type_shift_id,
         poste: postes.find((p) => p.id === t.poste_id),
-        moment,
+        moment: zone ? (t.moment ?? null) : null,
         debut: t.debut,
         fin: t.fin,
         manquant: t.manquant,
@@ -365,6 +384,7 @@ export function pointsAttention(
         poste: postes.find((p) => p.id === t.poste_id),
         debut: t.debut,
         fin: t.fin,
+        zone: zoneDuPosteId(regles.zones, t.poste_id)?.nom,
       })
     }
     // Relève (2026-11-01) : un jour où l'équipe du matin et celle de
@@ -622,7 +642,7 @@ export function phraseTrou(
     return `Relève ${jour} : l'équipe du matin et celle de l'après-midi ne se croisent pas`
   // `poste_id` 0 : trou de l'accueil entier, Réception et Club ensemble
   // (`POSTE_ID_ACCUEIL`, décision D15 du 2026-11-01).
-  const ou = t.poste?.nom ?? (t.posteId === 0 ? NOM_ZONE_ACCUEIL : 'Poste')
+  const ou = t.poste?.nom ?? t.zone ?? 'Poste'
   return `${ou} ${jour} : personne de ${heureParlee(t.debut)} à ${heureParlee(t.fin)}`
 }
 

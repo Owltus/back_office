@@ -96,7 +96,7 @@ function apres(n: number): Referentiel {
       jour_max_minutes: 720,
       couleur: '#000000',
       horaires_autorises: [],
-      presence: false,
+      zone_id: null,
     })
   if (n >= 3) r.salaries.push(personne(10, 1))
   if (n >= 4)

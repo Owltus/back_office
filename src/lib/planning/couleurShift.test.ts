@@ -4,8 +4,8 @@ import { couleurShift } from '#/lib/planning/affichage.ts'
 
 describe('couleur d’un shift', () => {
   const matin = { couleur: '#facc15' }
-  const hotelier = { couleur: '#3b82f6', presence: true }
-  const technique = { couleur: '#dc2626', presence: false }
+  const hotelier = { couleur: '#3b82f6', zone_id: 1 }
+  const technique = { couleur: '#dc2626', zone_id: null }
 
   it('hôtelier : la couleur du code', () => {
     expect(couleurShift(matin, hotelier, '#000')).toBe('#facc15')

@@ -21,7 +21,7 @@ const poste = (id: number, nom: string, kw: Partial<Poste> = {}): Poste => ({
   jour_max_minutes: 690,
   couleur: '#000',
   horaires_autorises: [],
-  presence: false,
+  zone_id: null,
   ...kw,
 })
 
@@ -64,8 +64,8 @@ describe('ordre de décision écrit d’après le réglage indispensable', () =>
 
 describe('sections de la page Besoins', () => {
   const accueil = [
-    poste(1, 'Réception', { presence: true, indispensable: true }),
-    poste(2, 'Veille', { accueil_nuit: true, indispensable: true }),
+    poste(1, 'Réception', { zone_id: 1, indispensable: true }),
+    poste(2, 'Veille', { zone_id: 1, indispensable: true }),
   ]
   it('un poste neuf se range tout seul selon son réglage', () => {
     const s = sectionsBesoins([
@@ -81,14 +81,14 @@ describe('sections de la page Besoins', () => {
   })
   it('un accueil sans poste indispensable va dans les autres postes', () => {
     const s = sectionsBesoins([
-      poste(1, 'Réception', { presence: true, indispensable: false }),
+      poste(1, 'Réception', { zone_id: 1, indispensable: false }),
     ])
     expect(s.accueil).toBe(true)
     expect(s.accueilIndispensable).toBe(false)
   })
-  it('sans poste du matin et du soir : pas de tableau, tous ont leur grille', () => {
+  it('sans poste dans une zone : pas de tableau, tous ont leur grille', () => {
     const s = sectionsBesoins([
-      poste(2, 'Veille', { accueil_nuit: true, indispensable: true }),
+      poste(2, 'Veille', { zone_id: null, indispensable: true }),
       poste(4, 'Direction'),
     ])
     expect(s.accueil).toBe(false)

@@ -12,7 +12,9 @@ import {
   trousAccueilDuJour,
   trousDuJour,
 } from '#/lib/planning/cycles.ts'
+import { posteDeZone } from '#/lib/planning/cycles.ts'
 import type { PresencePoste } from '#/lib/planning/cycles.ts'
+import { vuesZones } from '#/lib/planning/zones.ts'
 
 import {
   dernierMoment,
@@ -1105,6 +1107,9 @@ export function trous(
       r.push({ poste, jour, debut: t.debut, fin: t.fin })
     }
   }
+  // Chaque zone tenue en continu (2026-11-06) : « accueil » pour la
+  // première, « accueil:<zone> » pour une autre ; une liste qui contient
+  // `POSTE_ACCUEIL` les voit toutes.
   if (postes.has(POSTE_ACCUEIL)) r.push(...trousAccueil(p, affectations))
   return r.sort(
     (a, b) =>
@@ -1125,6 +1130,19 @@ export function trous(
 export function trousAccueil(
   p: Probleme,
   affectations: AffectationSolveur[],
+): Trou[] {
+  const premiere = (p.regles ?? REGLES_PAR_DEFAUT).zones[0].id
+  return vuesZones(p).flatMap((v) =>
+    v.zone.continue
+      ? trousUneZone(v.p, affectations, posteDeZone(v.zone.id, premiere))
+      : [],
+  )
+}
+
+function trousUneZone(
+  p: Probleme,
+  affectations: AffectationSolveur[],
+  posteTrou: string,
 ): Trou[] {
   const candidats = p.creneaux.filter((c) => c.accueil)
   if (!candidats.length) return []
@@ -1162,7 +1180,7 @@ export function trousAccueil(
       nuitDeLaVeille(candidats, jourDe, jour, nuitDemandee, L),
       L,
     ))
-      r.push({ poste: POSTE_ACCUEIL, jour, debut: t.debut, fin: t.fin })
+      r.push({ poste: posteTrou, jour, debut: t.debut, fin: t.fin })
   }
   return r
 }
@@ -1452,6 +1470,28 @@ export function transmissions(
   p: Probleme,
   affectations: AffectationSolveur[],
   sansReleve: readonly number[],
+  veilleDuLundi: ReadonlyArray<
+    Pick<Creneau, 'debut' | 'fin'> & { zone?: string }
+  > = [],
+): Transmissions[] {
+  // Les liens du mois : la première zone qui a un tableau (à l'hôtel,
+  // l'accueil).
+  const v = vuesZones(p)[0] as
+    ReturnType<typeof vuesZones<Probleme>>[0] | undefined
+  if (!v) return []
+  const premiere = (p.regles ?? REGLES_PAR_DEFAUT).zones[0].id
+  return transmissionsUneZone(
+    v.p,
+    affectations,
+    sansReleve,
+    veilleDuLundi.filter((x) => (x.zone ?? premiere) === v.zone.id),
+  )
+}
+
+function transmissionsUneZone(
+  p: Probleme,
+  affectations: AffectationSolveur[],
+  sansReleve: readonly number[],
   veilleDuLundi: ReadonlyArray<Pick<Creneau, 'debut' | 'fin'>> = [],
 ): Transmissions[] {
   const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
@@ -1517,6 +1557,18 @@ export function transmissions(
  * et pourtant jamais une personne autonome d'un horaire du matin et une d'un
  * horaire du soir ensemble aussi longtemps, d'affilée, au quart d'heure. */
 export function relevesManquantes(
+  p: Probleme,
+  affectations: AffectationSolveur[],
+): number[] {
+  // Zone par zone (2026-11-06) ; un jour n'est dit qu'une fois.
+  const r: number[] = []
+  for (const v of vuesZones(p))
+    for (const j of relevesUneZone(v.p, affectations))
+      if (!r.includes(j)) r.push(j)
+  return r.sort((a, b) => a - b)
+}
+
+function relevesUneZone(
   p: Probleme,
   affectations: AffectationSolveur[],
 ): number[] {
@@ -1610,6 +1662,13 @@ export interface EquipeDesynchro {
  * rien du générateur.
  */
 export function equipesDesynchro(
+  p: Probleme,
+  affectations: AffectationSolveur[],
+): EquipeDesynchro[] {
+  return vuesZones(p).flatMap((v) => equipesUneZone(v.p, affectations))
+}
+
+function equipesUneZone(
   p: Probleme,
   affectations: AffectationSolveur[],
 ): EquipeDesynchro[] {

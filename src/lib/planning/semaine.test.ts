@@ -931,7 +931,7 @@ describe('planning de la semaine (test_api.py)', () => {
       jour_max_minutes: 690,
       couleur: '#000000',
       horaires_autorises: [],
-      presence: false,
+      zone_id: null,
     }
     ref.postes.push(poste)
     ref.besoins.push({
@@ -1576,16 +1576,15 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
       // de l'accueil les remplace), or ce bloc éprouve le rattachement par
       // cycle et les remplaçants, qui ne servent plus qu'aux postes à part.
       // Les tests du tableau de l'accueil sont plus bas (`accueilAvec`).
-      presence: false,
+      zone_id: null,
     },
     {
       id: VEILLE,
       nom: 'Veille',
       jour_max_minutes: 720,
-      accueil_nuit: true,
+      zone_id: 1,
       couleur: '#222222',
       horaires_autorises: [9],
-      presence: false,
     },
   ]
   const personne = (
@@ -1640,7 +1639,7 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
     referentiel: {
       ...d.referentiel,
       postes: d.referentiel.postes.map((p) =>
-        p.id === ACCUEIL ? { ...p, presence: true } : p,
+        p.id === ACCUEIL ? { ...p, zone_id: 1 } : p,
       ),
     },
   })
@@ -1986,8 +1985,15 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
         ecart: 0,
       }),
     ])
-    // Refusé : sans poste coché « présence », pas de tableau, rien ne compte.
-    const sans = analyser(donnees([], [nuit], [veille], consignes))
+    // Refusé : sans poste dans une zone, pas de tableau, rien ne compte.
+    const d0 = donnees([], [nuit], [veille], consignes)
+    const sans = analyser({
+      ...d0,
+      referentiel: {
+        ...d0.referentiel,
+        postes: d0.referentiel.postes.map((p) => ({ ...p, zone_id: null })),
+      },
+    })
     expect(sans.presence[0]).toMatchObject({ compte: 0, ecart: -1 })
   })
 
@@ -2407,7 +2413,7 @@ describe('Martin V3-I : remplaçants, propriété', () => {
             jour_max_minutes: 720,
             couleur: '#000000',
             horaires_autorises: autorises,
-            presence: true,
+            zone_id: 1,
           }
           const ctx = {
             horaires: new Map(horaires.map((h) => [h.id, h])),

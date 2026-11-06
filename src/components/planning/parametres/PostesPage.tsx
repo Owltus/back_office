@@ -61,7 +61,7 @@ import {
 } from '#/components/ui/select.tsx'
 import { Switch } from '#/components/ui/switch.tsx'
 import { Segmente } from '#/components/planning/parametres/equipe/Segmente.tsx'
-import { tientLaNuit } from '#/lib/planning/presence.ts'
+import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
 import { dureeHoraire, heures } from '#/lib/planning/affichage.ts'
 import {
   JOUR_MAX_LOI,
@@ -86,8 +86,7 @@ const saisieDe = (p: Poste): SaisiePoste => ({
   jour_max_minutes: presenceMaxPoste(p),
   couleur: p.couleur,
   horaires_autorises: [...p.horaires_autorises],
-  presence: p.presence,
-  accueil_nuit: tientLaNuit({ ...p, ferme: false }),
+  zone_id: p.zone_id ?? null,
   ferme: p.ferme ?? false,
   ouverture: p.ouverture ?? null,
   feries_chomes: p.feries_chomes ?? false,
@@ -96,20 +95,14 @@ const saisieDe = (p: Poste): SaisiePoste => ({
   fermeture: p.fermeture ?? null,
 })
 
-/** Le choix unique « Accueil » d'un poste (U1 du 2026-11-01). */
-type ChoixAccueil = 'non' | 'jour' | 'nuit'
-const OPTIONS_ACCUEIL = [
-  { valeur: 'non', libelle: 'Non' },
-  { valeur: 'jour', libelle: 'Matin et soir' },
-  { valeur: 'nuit', libelle: 'Nuit' },
-] as const
-const choixAccueil = (p: SaisiePoste): ChoixAccueil =>
-  p.presence ? 'jour' : p.accueil_nuit ? 'nuit' : 'non'
-const TEXTE_ACCUEIL: Record<ChoixAccueil, string> = {
-  non: 'Poste à part : il a sa propre grille dans la page Besoins.',
-  jour: 'Compte le matin et le soir dans le tableau Accueil de la page Besoins, avec les autres postes de l’accueil.',
-  nuit: 'Tient la nuit : compte dans la ligne Nuit du tableau Accueil de la page Besoins.',
-}
+/** La zone d'un poste (2026-11-06, remplace le choix Accueil non / matin et
+ * soir / nuit) : aucune, ou une zone de l'établissement. Le poste compte
+ * dans chaque moment du tableau de sa zone que touchent ses horaires. */
+const AUCUNE_ZONE = 'aucune'
+const nomZone = (r: Referentiel, id: number | null | undefined) =>
+  id == null
+    ? undefined
+    : lireRegles(r).zones.find((z) => z.id === String(id))?.nom
 
 export function PostesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
   const droits = useDroitsPlanning()
@@ -167,8 +160,7 @@ export function PostesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
       jour_max_minutes: JOUR_MAX_POSTE_DEFAUT,
       couleur: PALETTE[ref.data.postes.length % PALETTE.length],
       horaires_autorises: [],
-      presence: false,
-      accueil_nuit: false,
+      zone_id: null,
       ferme: false,
       ouverture: null,
       feries_chomes: false,
@@ -251,9 +243,12 @@ export function PostesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
                     <span className="flex min-w-0 items-center gap-2">
                       <span className="truncate font-medium">{p.nom}</span>
                       {p.ferme && <Etiquette>fermé</Etiquette>}
-                      {!p.ferme && p.presence && <Etiquette>accueil</Etiquette>}
-                      {!p.ferme && !p.presence && tientLaNuit(p) && (
-                        <Etiquette>accueil, nuit</Etiquette>
+                      {!p.ferme && nomZone(ref.data, p.zone_id) && (
+                        <Etiquette>
+                          {nomZone(ref.data, p.zone_id)?.toLocaleLowerCase(
+                            'fr-FR',
+                          )}
+                        </Etiquette>
                       )}
                     </span>
                   }
@@ -479,21 +474,26 @@ function CartePoste({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium">Accueil</span>
-        <Segmente<ChoixAccueil>
-          label="Accueil"
-          valeur={choixAccueil(p)}
-          options={OPTIONS_ACCUEIL}
+        <span className="text-sm font-medium">Zone</span>
+        <Segmente<string>
+          label="Zone"
+          valeur={p.zone_id == null ? AUCUNE_ZONE : String(p.zone_id)}
+          options={[
+            { valeur: AUCUNE_ZONE, libelle: 'Aucune' },
+            ...lireRegles(referentiel).zones.map((z) => ({
+              valeur: z.id,
+              libelle: z.nom,
+            })),
+          ]}
           disabled={!modifiable}
           onChange={(v) =>
-            changer({
-              presence: v === 'jour',
-              accueil_nuit: v === 'nuit',
-            })
+            changer({ zone_id: v === AUCUNE_ZONE ? null : Number(v) })
           }
         />
         <span className="text-xs text-muted-foreground">
-          {TEXTE_ACCUEIL[choixAccueil(p)]}
+          {p.zone_id == null
+            ? 'Poste à part : il a sa propre grille dans la page Besoins.'
+            : `Compte dans le tableau ${nomZone(referentiel, p.zone_id) ?? ''} de la page Besoins, à chaque moment que touchent ses horaires, le jour comme la nuit.`}
         </span>
       </div>
 

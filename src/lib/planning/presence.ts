@@ -42,6 +42,12 @@ import {
   rangAuTableau,
 } from '#/lib/planning/moment.ts'
 import type { Moments } from '#/lib/planning/moment.ts'
+import {
+  seulementLaNuit,
+  tientLaNuit,
+  zoneDuPoste,
+  zonesEnService,
+} from '#/lib/planning/zones.ts'
 import type {
   Besoin,
   Consigne,
@@ -100,7 +106,7 @@ export function posteADesCodesDeNuit(
  * l'en-tête). `nuitComptee` : le poste a au moins un horaire de famille nuit
  * (faux par défaut : la nuit ne compte pas). */
 export function periodePresence(
-  poste: Pick<Poste, 'presence'> | undefined,
+  poste: Pick<Poste, 'zone_id' | 'ferme'> | undefined,
   horaire: Pick<Horaire, 'periode'> | undefined,
   debut: string,
   nuitComptee = false,
@@ -112,7 +118,7 @@ export function periodePresence(
   const p = !horaire ? periodeLibre(debut, l) : famille
   if (estNuit(l, p)) return nuitComptee ? p : null
   if (!deJourAuTableau(l, p)) return null
-  return poste?.presence ? p : null
+  return zoneDuPoste(poste) !== null ? p : null
 }
 
 /** Période d'un shift, sur tout poste : celle de son horaire, ou son heure de
@@ -131,6 +137,8 @@ export function periodeShift(
 
 /** Une consigne et ce que le planning en fait. */
 export interface PresenceOut {
+  /** Zone du chiffre (2026-11-06). Absente : la première. */
+  zone?: string
   jour: number
   periode: PeriodePresence
   compte: number
@@ -155,14 +163,25 @@ export function ecartConsigne(
  * nuit possible) ; ce bilan ne fait que compter. */
 export function bilanPresence(
   consignes: Consigne[],
-  presents: ReadonlyArray<{ jour: number; periode: PeriodePresence }>,
+  presents: ReadonlyArray<{
+    jour: number
+    periode: PeriodePresence
+    zone?: string
+  }>,
   l: Moments = MOMENTS_HOTEL,
+  /** La première zone : celle d'un chiffre ou d'un shift sans zone. */
+  premiere = '1',
 ): PresenceOut[] {
   return [...consignes].sort(triConsignes(l)).map((c) => {
+    const zone = c.zone_id === undefined ? premiere : String(c.zone_id)
     const compte = presents.filter(
-      (p) => p.jour === c.jour && p.periode === c.periode,
+      (p) =>
+        p.jour === c.jour &&
+        p.periode === c.periode &&
+        (p.zone ?? premiere) === zone,
     ).length
     return {
+      zone,
       jour: c.jour,
       periode: c.periode,
       compte,
@@ -198,7 +217,7 @@ export function sommeBesoinsPresence(
   besoins: ReadonlyArray<
     Pick<Besoin, 'poste_id' | 'jour' | 'horaire_id' | 'debut' | 'effectif'>
   >,
-  postes: ReadonlyMap<number, Pick<Poste, 'presence'>>,
+  postes: ReadonlyMap<number, Pick<Poste, 'zone_id' | 'ferme'>>,
   horaires: ReadonlyMap<number, Pick<Horaire, 'periode'>>,
   postesAvecNuit?: ReadonlySet<number>,
   /** Moments (`lireRegles(r).moments`) : un besoin sans horaire se range
@@ -234,33 +253,26 @@ export function sommeBesoinsPresence(
  * réglé garde ses besoins, Veille de nuit comprise.
  */
 
-/** Un poste au moins est coché « présence » : le tableau de l'accueil est en
- * service. */
+/** Un poste ouvert au moins est dans une zone : un tableau est en service
+ * (2026-11-06 : la zone du poste, `zones.ts`). */
 export function accueilActif(
-  postes: Iterable<Pick<Poste, 'presence' | 'ferme'>>,
+  postes: Iterable<Pick<Poste, 'zone_id' | 'ferme'>>,
 ): boolean {
-  for (const p of postes) if (p.presence && !p.ferme) return true
-  return false
+  return zonesEnService(postes).size > 0
 }
 
-type PosteAccueil = Pick<Poste, 'presence' | 'accueil_nuit' | 'ferme'>
+type PosteAccueil = Pick<Poste, 'zone_id' | 'ferme'> &
+  Partial<Pick<Poste, 'horaires_autorises'>>
 
-/** Le poste tient-il la nuit de l'accueil (U1 du 2026-11-01) ? Son réglage
- * « Accueil : nuit », seul (la catégorie n'est plus lue depuis le
- * 2026-11-06). Un poste fermé ne tient rien. */
-export function tientLaNuit(poste: PosteAccueil | undefined): boolean {
-  if (!poste || poste.ferme) return false
-  return poste.accueil_nuit ?? false
-}
+export { seulementLaNuit, tientLaNuit, zoneDuPoste }
 
-/** Le poste est-il de l'accueil (D12, U1) ? `actif` : `accueilActif` de
- * l'hôtel. Un poste fermé (U3) n'en est jamais. */
+/** Le poste est-il d'une zone (D12, U1) ? `actif` : un tableau est en
+ * service. Un poste fermé (U3) n'en est jamais. */
 export function estPosteAccueil(
   poste: PosteAccueil | undefined,
   actif: boolean,
 ): boolean {
-  if (!poste || !actif || poste.ferme) return false
-  return poste.presence || tientLaNuit(poste)
+  return actif && zoneDuPoste(poste) !== null
 }
 
 /** Moments du tableau où compte un shift (ou un créneau candidat) de ce
@@ -284,15 +296,27 @@ export function momentsAccueil(
   actif = true,
   fin?: string,
   l: Moments = MOMENTS_HOTEL,
+  /** Les horaires : la nuit ne compte que sur un poste qui LISTE un horaire
+   * de nuit (D10, D15), le jour sur un poste qui n'est pas de nuit seule.
+   * Absents : tout compte. */
+  horaires?: Iterable<Pick<Horaire, 'id' | 'periode'>>,
 ): PeriodePresence[] {
   if (!estPosteAccueil(poste, actif) || !poste) return []
   const p = horaire ? horaire.periode : momentLibre(debut, fin, l)
 
   if (p === null) return []
-  const r: PeriodePresence[] = []
-  if (poste.presence && deJourAuTableau(l, p)) r.push(p)
-  if (tientLaNuit(poste) && estNuit(l, p) && rangAuTableau(l, p) >= 0) r.push(p)
-  return r
+  // Un poste de zone compte dans chaque moment du tableau que touche son
+  // horaire, le jour comme la nuit (2026-11-06).
+  const hs = horaires ? [...horaires] : null
+  const liste = { ...poste, horaires_autorises: poste.horaires_autorises ?? [] }
+  if (estNuit(l, p))
+    return rangAuTableau(l, p) >= 0 &&
+      (!hs || posteADesCodesDeNuit(liste, hs, l))
+      ? [p]
+      : []
+  return deJourAuTableau(l, p) && (!hs || !seulementLaNuit(liste, hs, l))
+    ? [p]
+    : []
 }
 
 /** Le chiffre d'un moment (D3) : `minimum`, au moins ce nombre. Un chiffre
@@ -310,19 +334,24 @@ export function plafondAccueil(
   return Math.max(chiffreAccueil(c), c.maximum ?? 0)
 }
 
-/** Nom par défaut de la zone de l'accueil (2026-11-06) : le seul mot de
- * l'accueil écrit dans le code ; le lot 2 le prendra dans la table des
- * zones. */
-export const NOM_ZONE_ACCUEIL = 'Accueil'
-
-/** Les noms des postes ouverts de l'accueil le jour (matin et soir) ou la
- * nuit, dans l'ordre reçu : ce que l'écran dit à la place de « Réception et
- * Club » ou « Veilleur ». */
+/** Les noms des postes ouverts d'une zone (la première par défaut) qui
+ * tiennent le jour, ou la nuit, dans l'ordre reçu : ce que l'écran dit à la
+ * place de « Réception et Club » ou « Veilleur ». */
 export function nomsPostesAccueil(
-  postes: Iterable<Pick<Poste, 'nom' | 'presence' | 'accueil_nuit' | 'ferme'>>,
-  quand: 'jour' | 'nuit',
+  postes: Iterable<
+    Pick<Poste, 'nom' | 'zone_id' | 'ferme' | 'horaires_autorises'>
+  >,
+  horaires: Iterable<Pick<Horaire, 'id' | 'periode'>>,
+  laNuit: boolean,
+  l: Moments = MOMENTS_HOTEL,
+  zone?: string,
 ): string[] {
+  const hs = [...horaires]
   return [...postes]
-    .filter((p) => (quand === 'jour' ? p.presence && !p.ferme : tientLaNuit(p)))
+    .filter((p) => {
+      const z = zoneDuPoste(p)
+      if (z === null || (zone !== undefined && z !== zone)) return false
+      return laNuit ? tientLaNuit(p, hs, l) : !seulementLaNuit(p, hs, l)
+    })
     .map((p) => p.nom)
 }

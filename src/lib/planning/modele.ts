@@ -42,6 +42,9 @@ export interface Creneau {
    * chiffre du moment (`Probleme.consignes`) qui fixe combien. Les extras y
    * sont placés en dernier recours (D7), les soutiens y comptent (D5). */
   accueil: boolean
+  /** Zone du poste du créneau (2026-11-06, `zones.ts`) ; null ou absent :
+   * hors zone (un candidat sans zone est de la première zone). */
+  zone?: string | null
   /** Créneau remplaçant (`r…`) : id `b…` du besoin qu'il sert, avec un autre
    * horaire permis du même cycle (plan planning-cycles-2026-10-30, D13). Null
    * pour un besoin ou un shift posé hors besoins. */
@@ -387,6 +390,8 @@ export interface ConsigneSolveur {
   periode: PeriodePresence
   minimum: number
   maximum: number | null
+  /** Zone du chiffre ; absente : la première zone. */
+  zone?: string
 }
 
 export interface Probleme {
@@ -428,7 +433,7 @@ export interface Probleme {
   /** La nuit du dimanche d'avant (shifts de nuit de l'accueil, minutes de
    * cette semaine) : la passation du lundi matin se fait avec elle
    * (`zonesPassation`). Absent : rien à chercher. */
-  veilleDuLundi?: ReadonlyArray<{ debut: number; fin: number }>
+  veilleDuLundi?: ReadonlyArray<{ debut: number; fin: number; zone?: string }>
   /** Horizon glissant (2026-11-04) : la semaine SUIVANTE esquissée dans le
    * même calcul, pour que la semaine écrite ne la mette pas dans une impasse
    * (jours d'affilée, week-end libre, personnes nécessaires). Rien n'en est

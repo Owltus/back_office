@@ -47,10 +47,9 @@ const DUREE_MAX_TEST: Record<CategorieTest, number> = {
 
 export function reglagesCategorie(c: CategorieTest): {
   jour_max_minutes: number
-  accueil_nuit: boolean
 } {
-  return {
-    jour_max_minutes: DUREE_MAX_TEST[c],
-    accueil_nuit: c === 'veille_nuit',
-  }
+  return { jour_max_minutes: DUREE_MAX_TEST[c] }
 }
+
+/** La catégorie d'essai de la nuit de l'accueil (la Veille de nuit). */
+export const estVeilleTest = (c: CategorieTest) => c === 'veille_nuit'

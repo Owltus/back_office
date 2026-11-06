@@ -86,10 +86,9 @@ const poste = (
   id,
   nom,
   jour_max_minutes: 720,
-  accueil_nuit: id === VEILLE,
+  zone_id: id === VEILLE || presence ? 1 : null,
   couleur: '#111111',
   horaires_autorises,
-  presence,
 })
 const POSTES: Poste[] = [
   poste(ACCUEIL, 'Accueil', [1, 2, 3], true),
@@ -190,7 +189,7 @@ const sansAccueil = (d: DonneesSemaine): DonneesSemaine => ({
   ...d,
   referentiel: {
     ...d.referentiel,
-    postes: d.referentiel.postes.map((x) => ({ ...x, presence: false })),
+    postes: d.referentiel.postes.map((x) => ({ ...x, zone_id: null })),
   },
 })
 

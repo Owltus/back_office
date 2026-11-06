@@ -694,7 +694,7 @@ describe('places de l’accueil à pourvoir', () => {
     expect(listes.some((s) => s.type_contrat === 'extra')).toBe(true)
     // La nuit : la Veille et ses dépannages seulement (D10).
     const nuit = places.find((a) => a.jour === 1 && a.moment === 'nuit')!
-    const veille = r.postes.find((p) => p.accueil_nuit)!.id
+    const veille = r.postes.find((p) => p.nom === 'Veille de nuit')!.id
     for (const x of nuit.raisons)
       expect(
         noms.get(x.salarie_id)!.competences.some((c) => c.poste_id === veille),

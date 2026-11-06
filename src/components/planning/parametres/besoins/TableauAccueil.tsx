@@ -9,7 +9,8 @@
  * Écritures et Annuler : `BesoinsPage` (une seule pile pour toute la page).
  */
 
-import { tientLaNuit } from '#/lib/planning/presence.ts'
+import { seulementLaNuit, tientLaNuit } from '#/lib/planning/zones.ts'
+import type { ZoneRegle } from '#/lib/planning/zones.ts'
 import { useState } from 'react'
 import type { Sun } from 'lucide-react'
 
@@ -25,13 +26,9 @@ import { iconeDe } from '#/components/planning/semaine/Presence.tsx'
 import { momentDe, momentsDuTableau } from '#/lib/planning/moment.ts'
 import type { Moments } from '#/lib/planning/moment.ts'
 import { listeEt } from '#/lib/planning/affichage.ts'
-import {
-  clePresence,
-  libelleConsigne,
-  NOM_ZONE_ACCUEIL,
-} from '#/lib/planning/presence.ts'
+import { clePresence, libelleConsigne } from '#/lib/planning/presence.ts'
 import { JOURS } from '#/lib/planning/types.ts'
-import type { Consigne, Poste } from '#/lib/planning/types.ts'
+import type { Consigne, Horaire, Poste } from '#/lib/planning/types.ts'
 import { cn } from '#/lib/utils.ts'
 
 type Periode = Consigne['periode']
@@ -58,37 +55,49 @@ export function periodesDuTableau(l: Moments): ReadonlyArray<{
 }
 
 export function TableauAccueil({
+  zone,
+  premier = true,
   postes,
+  horaires = [],
   modifiable,
   affiche,
   regler,
 }: {
+  /** La zone du tableau (2026-11-06). */
+  zone: Pick<ZoneRegle, 'id' | 'nom'>
+  /** Le premier tableau de la page (il porte les ancres des liens). */
+  premier?: boolean
+  /** Les postes de la zone. */
   postes: ReadonlyArray<Poste>
+  horaires?: ReadonlyArray<Horaire>
   modifiable: boolean
   affiche: (jour: number, periode: Periode) => BornesAccueil
   regler: (jour: number, periode: Periode, b: BornesAccueil) => void
 }) {
   const moments = useMoments()
-  const jour = postes.filter((p) => p.presence && !p.ferme).map((p) => p.nom)
-  const nuit = postes.filter((p) => tientLaNuit(p)).map((p) => p.nom)
+  const jour = postes
+    .filter((p) => !p.ferme && !seulementLaNuit(p, horaires, moments))
+    .map((p) => p.nom)
+  const nuit = postes
+    .filter((p) => tientLaNuit(p, horaires, moments))
+    .map((p) => p.nom)
+  const titre = `titre-zone-${zone.id}`
 
   return (
     <section
-      id="besoins-presence"
-      aria-labelledby="titre-accueil"
+      id={premier ? 'besoins-presence' : `besoins-zone-${zone.id}`}
+      aria-labelledby={titre}
       className="flex min-w-0 flex-col gap-3"
     >
       <div className="flex max-w-3xl flex-col gap-1">
-        <h3 id="titre-accueil" className="text-base font-semibold">
-          {NOM_ZONE_ACCUEIL}
+        <h3 id={titre} className="text-base font-semibold">
+          {zone.nom}
         </h3>
         <p className="text-sm text-muted-foreground">
           {jour.length
-            ? `Matin et soir : ${listeEt(jour)} ensemble, le planning répartit.`
-            : 'Aucun poste du matin et du soir : dans Postes, réglez Accueil sur Matin et soir.'}{' '}
-          {nuit.length
-            ? `Nuit : ${listeEt(nuit)}.`
-            : 'Aucun poste de nuit : dans Postes, réglez Accueil sur Nuit.'}
+            ? `Le jour : ${listeEt(jour)} ensemble, le planning répartit.`
+            : `Aucun poste de jour : dans Postes, choisissez la zone ${zone.nom}.`}{' '}
+          {nuit.length ? `La nuit : ${listeEt(nuit)}.` : 'Aucun poste de nuit.'}
         </p>
         <p className="text-xs text-muted-foreground">
           Les apprentis comptent, jamais seuls. Un tiret orange : personne de
@@ -97,7 +106,7 @@ export function TableauAccueil({
       </div>
       <div className="overflow-x-auto rounded-xl border bg-card">
         <table
-          aria-label={NOM_ZONE_ACCUEIL}
+          aria-label={zone.nom}
           className="w-full min-w-[44rem] table-fixed border-collapse text-sm"
         >
           <thead className="bg-muted/50 text-xs text-muted-foreground">

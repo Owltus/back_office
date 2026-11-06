@@ -54,7 +54,7 @@ function poste(id: number, kw: Partial<Poste> = {}): Poste {
     jour_max_minutes: 720,
     couleur: '#000',
     horaires_autorises: [],
-    presence: false,
+    zone_id: null,
     ...kw,
   }
 }
@@ -273,7 +273,7 @@ describe('6. contrôle des heures : les heures indicatives viennent du modèle',
     const besoins = [
       { poste_id: 1, jour: 0, horaire_id: null, debut: '14:00', effectif: 1 },
     ]
-    const postes = new Map([[1, { presence: true }]])
+    const postes = new Map([[1, { zone_id: 1 }]])
     const aux = sommeBesoinsPresence(besoins, postes, new Map())
     expect([...aux.keys()]).toEqual(['0:soir'])
     const moments = lusAvec({ matin: { libre_avant: 15 * H } })

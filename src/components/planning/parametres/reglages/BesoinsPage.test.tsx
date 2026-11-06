@@ -449,7 +449,9 @@ describe('Besoins', () => {
     const avecAccueil = (): Referentiel => {
       const ref = referentielDemo()
       for (const p of ref.postes)
-        p.presence = p.nom === 'Réception' || p.nom === 'Club'
+        p.zone_id = ['Réception', 'Club', 'Veille de nuit'].includes(p.nom)
+          ? 1
+          : null
       ref.consignes = [
         { id: 1, jour: 5, periode: 'matin', minimum: 3, maximum: 3 },
         { id: 2, jour: 0, periode: 'nuit', minimum: 1, maximum: 1 },
@@ -469,7 +471,7 @@ describe('Besoins', () => {
       )
       const region = screen.getByRole('region', { name: 'Accueil' })
       expect(region.textContent).toContain('Réception et Club ensemble')
-      expect(region.textContent).toContain('Nuit : Veille de nuit.')
+      expect(region.textContent).toContain('La nuit : Veille de nuit.')
       expect(caseAccueil('5:matin')?.textContent).toBe('3')
       expect(caseAccueil('5:matin')?.getAttribute('aria-label')).toBe(
         'Matin, samedi : 3 personnes.',
@@ -500,14 +502,14 @@ describe('Besoins', () => {
       )
       await waitFor(() =>
         expect(service.reglerConsigne).toHaveBeenCalledWith(
-          { jour: 0, periode: 'soir', minimum: 1, maximum: 1 },
+          { zone_id: 1, jour: 0, periode: 'soir', minimum: 1, maximum: 1 },
           undefined,
         ),
       )
       fireEvent.click(screen.getByRole('button', { name: 'Annuler' }))
       await waitFor(() =>
         expect(service.reglerConsigne).toHaveBeenLastCalledWith(
-          { jour: 0, periode: 'soir', minimum: 0, maximum: null },
+          { zone_id: 1, jour: 0, periode: 'soir', minimum: 0, maximum: null },
           undefined,
         ),
       )
@@ -520,7 +522,7 @@ describe('Besoins', () => {
       )
       await waitFor(() =>
         expect(service.reglerConsigne).toHaveBeenLastCalledWith(
-          { jour: 5, periode: 'matin', minimum: 2, maximum: 2 },
+          { zone_id: 1, jour: 5, periode: 'matin', minimum: 2, maximum: 2 },
           expect.objectContaining({ id: 1 }),
         ),
       )
@@ -669,7 +671,9 @@ describe('Besoins', () => {
     it('ouverture et fermeture de l’accueil : réglées ici, par Enregistrer', async () => {
       const ref = etat.referentiel as Referentiel
       for (const p of ref.postes)
-        p.presence = p.nom === 'Réception' || p.nom === 'Club'
+        p.zone_id = ['Réception', 'Club', 'Veille de nuit'].includes(p.nom)
+          ? 1
+          : null
       monter(<BesoinsPage />)
       const region = within(
         screen.getByRole('region', { name: 'Ouverture et fermeture' }),

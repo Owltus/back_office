@@ -34,6 +34,8 @@ export type Changement =
     }
   | {
       type: 'consigne'
+      /** Zone du chiffre (2026-11-06). */
+      zone: number
       jour: number
       periode: Consigne['periode']
       avant: Bornes

@@ -173,7 +173,14 @@ export function PanneauAlertes({
    * seule), pas de bouton. */
   onPlacer?: (d: DemandePlacement) => void
 }) {
-  const p = pointsAttention(semaines, salaries, postes, portee, regles)
+  const p = pointsAttention(
+    semaines,
+    salaries,
+    postes,
+    portee,
+    regles,
+    horaires,
+  )
   const shifts = p.aPourvoir.flatMap((j) => j.shifts)
   const compte = (l: PointPersonne[]) =>
     l.reduce((n, x) => n + x.messages.length, 0)

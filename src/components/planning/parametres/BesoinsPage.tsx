@@ -102,6 +102,8 @@ import { estIndispensable } from '#/lib/planning/modele.ts'
 import { estPosteAccueil } from '#/lib/planning/presence.ts'
 import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
 import { nomsPostesAccueil } from '#/lib/planning/presence.ts'
+import { zoneDuPoste } from '#/lib/planning/zones.ts'
+import { SectionZones } from '#/components/planning/parametres/besoins/SectionZones.tsx'
 import { reglerBesoin, reglerConsigne } from '#/lib/planning/service.ts'
 import { JOURS } from '#/lib/planning/types.ts'
 import type { Consigne, Poste, Referentiel } from '#/lib/planning/types.ts'
@@ -112,7 +114,8 @@ type Section = 'indispensables' | 'autres'
 
 const cleCase = (posteId: number, ligne: LigneBesoin, jour: number) =>
   `${posteId}|${ligne.cle}|${jour}`
-const cleConsigne = (jour: number, periode: Periode) => `${jour}|${periode}`
+const cleConsigne = (zone: number, jour: number, periode: Periode) =>
+  `${zone}|${jour}|${periode}`
 const AUCUNE_BORNE: Bornes = { minimum: 0, maximum: null }
 const AUCUNE: ReadonlySet<string> = new Set()
 
@@ -231,18 +234,21 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
       : RIEN
   }
 
-  const afficheConsigne = (jour: number, periode: Periode): Bornes => {
-    const locale = localesConsignes.get(cleConsigne(jour, periode))
+  /** La zone d'une consigne en base (absente : la première). */
+  const premiereZone = data ? Number(lireRegles(data).zones[0].id) : 1
+  const zoneDe = (c: Consigne) => c.zone_id ?? premiereZone
+  const afficheConsigne = (
+    zone: number,
+    jour: number,
+    periode: Periode,
+  ): Bornes => {
+    const locale = localesConsignes.get(cleConsigne(zone, jour, periode))
     if (locale) return locale
     const c = data?.consignes.find(
-      (x) => x.jour === jour && x.periode === periode,
+      (x) => zoneDe(x) === zone && x.jour === jour && x.periode === periode,
     )
     return c ? { minimum: c.minimum, maximum: c.maximum } : AUCUNE_BORNE
   }
-  /** Une case de l'accueil : au moins, au plus (un chiffre exact par
-   * défaut). */
-  const afficheAccueil = (jour: number, periode: Periode) =>
-    afficheConsigne(jour, periode)
 
   /** Écrit les valeurs APRÈS des changements, dans l'ordre, l'une après
    * l'autre : la même écriture pour une action, son annulation et son
@@ -266,7 +272,7 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
       setLocalesConsignes((m) => {
         const suite = new Map(m)
         for (const c of consignes)
-          suite.set(cleConsigne(c.jour, c.periode), c.apres)
+          suite.set(cleConsigne(c.zone, c.jour, c.periode), c.apres)
         return suite
       })
     enCours.current++
@@ -296,9 +302,12 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
         const r = await ecrire(async () => {
           for (const c of consignes) {
             await reglerConsigne(
-              { jour: c.jour, periode: c.periode, ...c.apres },
+              { zone_id: c.zone, jour: c.jour, periode: c.periode, ...c.apres },
               relu()?.consignes.find(
-                (x) => x.jour === c.jour && x.periode === c.periode,
+                (x) =>
+                  zoneDe(x) === c.zone &&
+                  x.jour === c.jour &&
+                  x.periode === c.periode,
               ),
             )
           }
@@ -436,45 +445,72 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
     ajouterLigne: (cle) => garder(poste.id, [cle]),
   })
 
-  const reglerAccueil = (jour: number, periode: Periode, b: Bornes) => {
-    const avant = afficheConsigne(jour, periode)
+  const reglerAccueil = (
+    zone: number,
+    nom: string,
+    jour: number,
+    periode: Periode,
+    b: Bornes,
+  ) => {
+    const avant = afficheConsigne(zone, jour, periode)
     // Au moins, au plus (un chiffre exact par défaut) ; rien de demandé
     // retire la case.
     const haut = Math.max(b.minimum, b.maximum ?? b.minimum)
     const apres: Bornes =
       haut > 0 ? { minimum: b.minimum, maximum: haut } : AUCUNE_BORNE
     faire({
-      libelle: `accueil, ${JOURS[jour].toLowerCase()} ${periode}`,
-      changements: [{ type: 'consigne', jour, periode, avant, apres }],
+      libelle: `${nom.toLocaleLowerCase('fr-FR')}, ${JOURS[jour].toLowerCase()} ${periode}`,
+      changements: [{ type: 'consigne', zone, jour, periode, avant, apres }],
     })
   }
 
   const regles = data ? lireRegles(data) : undefined
   // Le tableau de l'accueil, ses heures et ses passations : un seul bloc,
   // posé dans la section du réglage de ses postes.
+  // Un tableau par zone (2026-11-06), ses heures et ses passations ; puis
+  // créer, nommer, retirer une zone.
   const accueil = data && regles && (
     <div className="flex flex-col gap-8">
-      <TableauAccueil
-        postes={data.postes}
-        modifiable={modifiable}
-        affiche={afficheAccueil}
-        regler={reglerAccueil}
-      />
-      <div className="grid gap-8 lg:grid-cols-2">
-        <HeuresAccueil
-          postes={data.postes}
-          modifiable={modifiable}
-          duree={regles.passations.dureeOuverture}
-        />
-        <ReglageReleve
-          minutes={regles.passations.releveMinutes}
-          continuite={regles.passations.continuiteObligatoire}
-          veilleur={regles.passations.passationVeilleur}
-          nuit={nomsPostesAccueil(data.postes, 'nuit')}
-          tolerance={regles.passations.equipeTolerance}
-          modifiable={modifiable}
-        />
-      </div>
+      {regles.zones.map((z, i) => {
+        const id = Number(z.id)
+        const siens = data.postes.filter((p) => zoneDuPoste(p) === z.id)
+        return (
+          <div key={z.id} className="flex flex-col gap-8">
+            <TableauAccueil
+              zone={z}
+              premier={i === 0}
+              postes={siens}
+              horaires={data.horaires}
+              modifiable={modifiable}
+              affiche={(j, p) => afficheConsigne(id, j, p)}
+              regler={(j, p, b) => reglerAccueil(id, z.nom, j, p, b)}
+            />
+            <div className="grid gap-8 lg:grid-cols-2">
+              <HeuresAccueil
+                postes={siens}
+                modifiable={modifiable}
+                duree={regles.passations.dureeOuverture}
+              />
+              <ReglageReleve
+                zoneId={data.zones?.length ? id : undefined}
+                premier={i === 0}
+                minutes={z.releveMinutes}
+                continuite={regles.passations.continuiteObligatoire}
+                veilleur={z.passationNuit}
+                nuit={nomsPostesAccueil(
+                  siens,
+                  data.horaires,
+                  true,
+                  regles.moments,
+                )}
+                tolerance={z.equipeTolerance}
+                modifiable={modifiable}
+              />
+            </div>
+          </div>
+        )
+      })}
+      <SectionZones referentiel={data} modifiable={modifiable} />
     </div>
   )
 

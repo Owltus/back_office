@@ -17,6 +17,8 @@
 
 import { lireMoments, MOMENTS_HOTEL } from '#/lib/planning/moment.ts'
 import type { Moments } from '#/lib/planning/moment.ts'
+import { lireZones, zoneParDefaut } from '#/lib/planning/zones.ts'
+import type { ZoneRegle } from '#/lib/planning/zones.ts'
 import type {
   CritereEquite,
   FerieAjoute,
@@ -135,6 +137,10 @@ export interface RegleEtablissement {
    * conditions rangent un horaire (`momentPropose`), le tableau et la nuit
    * se lisent sur leurs cases (`moment.ts`). */
   moments: Moments
+  /** Les zones (`planning_zones`, 2026-11-06, `zones.ts`) : chacune sa
+   * relève, sa passation, sa tolérance. Sans ligne : l'accueil seul, aux
+   * réglages de `passations`. */
+  zones: readonly ZoneRegle[]
   accueil: {
     /** Personnes la nuit au calcul (plafond dur, un deuxième se pose à la
      * main). */
@@ -230,6 +236,13 @@ export const REGLES_PAR_DEFAUT: RegleEtablissement = {
     dureeOuverture: 60,
   },
   moments: MOMENTS_HOTEL,
+  zones: [
+    zoneParDefaut({
+      releveMinutes: 30,
+      passationVeilleur: true,
+      equipeTolerance: 30,
+    }),
+  ],
   accueil: { personnesNuit: 1 },
   ecole: { veilleFin: 21 * H, lendemainDebut: 8 * H },
   conges: { congeLong: 5 },
@@ -296,12 +309,20 @@ export function lireRegles(
   referentiel?: Partial<
     Pick<
       Referentiel,
-      'reglages' | 'modelesContrat' | 'feriesAjoutes' | 'moments'
+      'reglages' | 'modelesContrat' | 'feriesAjoutes' | 'moments' | 'zones'
     >
   > | null,
 ): RegleEtablissement {
   const r: Partial<Reglages> = referentiel?.reglages ?? {}
   const d = REGLES_PAR_DEFAUT
+  const passations = {
+    releveMinutes: r.releve_minutes ?? d.passations.releveMinutes,
+    continuiteObligatoire:
+      r.continuite_obligatoire ?? d.passations.continuiteObligatoire,
+    passationVeilleur: r.passation_veilleur ?? d.passations.passationVeilleur,
+    equipeTolerance: r.equipe_tolerance ?? d.passations.equipeTolerance,
+    dureeOuverture: r.duree_ouverture ?? d.passations.dureeOuverture,
+  }
   return {
     contrats: {
       journees: r.journees_contrats
@@ -331,15 +352,9 @@ export function lireRegles(
       nuitsAffileesMax: r.nuits_affilees_max ?? d.repos.nuitsAffileesMax,
       reposApresNuits: r.repos_apres_nuits ?? d.repos.reposApresNuits,
     },
-    passations: {
-      releveMinutes: r.releve_minutes ?? d.passations.releveMinutes,
-      continuiteObligatoire:
-        r.continuite_obligatoire ?? d.passations.continuiteObligatoire,
-      passationVeilleur: r.passation_veilleur ?? d.passations.passationVeilleur,
-      equipeTolerance: r.equipe_tolerance ?? d.passations.equipeTolerance,
-      dureeOuverture: r.duree_ouverture ?? d.passations.dureeOuverture,
-    },
+    passations,
     moments: lireMoments(referentiel?.moments),
+    zones: lireZones(referentiel?.zones, zoneParDefaut(passations)),
     accueil: {
       personnesNuit: r.personnes_nuit ?? d.accueil.personnesNuit,
     },

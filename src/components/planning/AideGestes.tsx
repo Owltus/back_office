@@ -52,6 +52,9 @@ function Contenu({ lignes }: { lignes: readonly string[] }) {
           .getQueryData<Referentiel>(planningKeys.referentiel())
           ?.postes.filter((p) => !p.ferme) ?? []
       }
+      horaires={
+        qc.getQueryData<Referentiel>(planningKeys.referentiel())?.horaires ?? []
+      }
     />
   )
 }

@@ -99,8 +99,8 @@ describe('fonctions pures', () => {
   })
 
   it('matin et soir : seulement sur un poste qui compte', () => {
-    const oui = { presence: true }
-    const non = { presence: false }
+    const oui = { zone_id: 1 }
+    const non = { zone_id: null }
     // Acceptés.
     expect(periodePresence(oui, { periode: 'matin' }, '15:00')).toBe('matin')
     expect(periodePresence(oui, { periode: 'soir' }, '07:00')).toBe('soir')
@@ -117,7 +117,7 @@ describe('fonctions pures', () => {
   })
 
   it('middle : jamais compté (D11)', () => {
-    const oui = { presence: true }
+    const oui = { zone_id: 1 }
     expect(periodePresence(oui, { periode: 'middle' }, '11:00')).toBeNull()
     expect(periodePresence(oui, { periode: 'middle' }, '13:00')).toBeNull()
     expect(
@@ -130,17 +130,17 @@ describe('fonctions pures', () => {
   it('un horaire court compte avec son moment (plus de « court », 2026-10-31)', () => {
     // Oracle : décision utilisateur, un court se range d'après son début
     // (07:00-10:00 au matin, 19:00-22:00 au soir) et compte comme tel.
-    const oui = { presence: true }
+    const oui = { zone_id: 1 }
     expect(periodePresence(oui, { periode: 'matin' }, '07:00')).toBe('matin')
     expect(periodePresence(oui, { periode: 'soir' }, '19:00')).toBe('soir')
     expect(
-      periodePresence({ presence: false }, { periode: 'matin' }, '07:00'),
+      periodePresence({ zone_id: null }, { periode: 'matin' }, '07:00'),
     ).toBeNull()
   })
 
   it('nuit : sur un poste qui a un code de nuit, coché ou non (D15)', () => {
-    const oui = { presence: true }
-    const non = { presence: false }
+    const oui = { zone_id: 1 }
+    const non = { zone_id: null }
     // Acceptés : code de nuit ou horaire libre de nuit, nuitComptee.
     expect(periodePresence(non, { periode: 'nuit' }, '23:00', true)).toBe(
       'nuit',
@@ -168,7 +168,7 @@ describe('fonctions pures', () => {
           const debut = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
           expect(
             periodePresence(
-              { presence },
+              { zone_id: presence ? 1 : null },
               { periode: 'middle' },
               debut,
               nuitComptee,
@@ -189,8 +189,8 @@ describe('fonctions pures', () => {
   it('somme des besoins : même règle, nuit seulement si le poste en a', () => {
     // Poste 1 : Réception (présence) ; poste 2 : Veille (code de nuit).
     const postes = new Map([
-      [1, { presence: true }],
-      [2, { presence: false }],
+      [1, { zone_id: 1 }],
+      [2, { zone_id: null }],
     ])
     const horaires = new Map<number, { periode: Periode | null }>([
       [10, { periode: 'matin' }],
@@ -404,7 +404,9 @@ describe('une semaine de l’hôtel d’essai', () => {
     // samedi matin.
     const { referentiel, absences } = hotelDemo('2026-11-02')
     for (const p of referentiel.postes)
-      p.presence = p.nom === 'Réception' || p.nom === 'Club'
+      p.zone_id = ['Réception', 'Club', 'Veille de nuit'].includes(p.nom)
+        ? 1
+        : null
     const moment: Record<string, Horaire['periode']> = {
       M: 'matin',
       MI: 'middle',
@@ -433,9 +435,11 @@ describe('une semaine de l’hôtel d’essai', () => {
     // compris ; un middle ne compte nulle part, 2026-11-05 ; D10 : la nuit
     // sur la Veille seule).
     const postes = new Set(
-      referentiel.postes.filter((x) => x.presence).map((x) => x.id),
+      referentiel.postes
+        .filter((x) => x.zone_id != null && x.nom !== 'Veille de nuit')
+        .map((x) => x.id),
     )
-    const veille = referentiel.postes.find((x) => x.accueil_nuit)
+    const veille = referentiel.postes.find((x) => x.nom === 'Veille de nuit')
     const code = new Map(referentiel.horaires.map((h) => [h.id, codeTest(h)]))
     const recompte = (jour: number, periode: string) =>
       sem.affectations.filter((a) => {

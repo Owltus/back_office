@@ -146,7 +146,7 @@ describe('un contrat créé par l’établissement', () => {
         jour_max_minutes: 720,
         couleur: '#111',
         horaires_autorises: [1, 2],
-        presence: false,
+        zone_id: null,
         indispensable: true,
       },
     ]
@@ -299,7 +299,7 @@ describe('un poste neuf à 10 h de service au plus', () => {
           jour_max_minutes: jourMax,
           couleur: '#111',
           horaires_autorises: [1, 2],
-          presence: false,
+          zone_id: null,
           indispensable: true,
         },
       ],
@@ -441,12 +441,15 @@ describe('aucun code de contrat ni catégorie lu par le code (lot 1a)', () => {
       lignes(/(?<!Anchor=)['"`](?:matin|soir|nuit|middle)['"`]/, [
         // Les moments de l'hôtel par défaut (mêmes lignes que la migration).
         'lib/planning/moment.ts',
-        // Jour ou nuit de l'accueil : la notion de zone (lot 2, A5).
-        'lib/planning/presence.ts',
-        'parametres/PostesPage.tsx',
-        'parametres/BesoinsPage.tsx',
-        'planning/AidePlanningContenu.tsx',
       ]),
+    ).toEqual([])
+  })
+
+  it('la zone d’un poste remplace presence et accueil_nuit (lot 2, A5)', () => {
+    expect(
+      lignes(
+        /accueil_nuit|\b(?:p|poste|x|vise)\??\.presence\b(?!\s*[.)])|NOM_ZONE_ACCUEIL/,
+      ),
     ).toEqual([])
   })
 

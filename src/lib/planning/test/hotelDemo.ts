@@ -270,7 +270,8 @@ export function hotelDemo(lundi: string): {
     ...reglagesCategorie(categorie),
     couleur: '#000000',
     horaires_autorises: avecVersions(codes).map(idH),
-    presence: false,
+    // Aucun poste du jour à l'accueil : aucune zone (tableau hors service).
+    zone_id: null,
   }))
   const idP = (n: string) => (postes.find((p) => p.nom === n) as Poste).id
   const groupes: Groupe[] = GROUPES.map(([, nom, permis], i) => ({

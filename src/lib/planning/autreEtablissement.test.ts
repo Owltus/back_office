@@ -121,8 +121,7 @@ function etablissement(reglages: Reglages | undefined): Referentiel {
       jour_max_minutes: 720,
       couleur: '#111',
       horaires_autorises: [1, 2, 3],
-      presence: true,
-      accueil_nuit: false,
+      zone_id: 1,
       ouverture: '07:00',
       fermeture: '22:00',
       indispensable: true,
@@ -133,7 +132,7 @@ function etablissement(reglages: Reglages | undefined): Referentiel {
       jour_max_minutes: 690,
       couleur: '#222',
       horaires_autorises: [1, 3],
-      presence: false,
+      zone_id: null,
       indispensable: true,
     },
     {
@@ -142,7 +141,7 @@ function etablissement(reglages: Reglages | undefined): Referentiel {
       jour_max_minutes: 690,
       couleur: '#333',
       horaires_autorises: [4],
-      presence: false,
+      zone_id: null,
       indispensable: false,
     },
   ]

@@ -3,15 +3,20 @@
  */
 
 import { estJourneeEtoile } from '#/lib/planning/etoile.ts'
-import { MOMENTS_HOTEL, momentDe, rangMoment } from '#/lib/planning/moment.ts'
+import {
+  estNuit,
+  MOMENTS_HOTEL,
+  momentDe,
+  rangMoment,
+} from '#/lib/planning/moment.ts'
 import type { Moments } from '#/lib/planning/moment.ts'
 import {
   estJourWeekend,
   REGLES_PAR_DEFAUT,
 } from '#/lib/planning/reglesEtablissement.ts'
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
-import { NOM_ZONE_ACCUEIL } from '#/lib/planning/presence.ts'
-import { POSTE_ID_ACCUEIL, posteEquite } from '#/lib/planning/semaine.ts'
+import { posteIdZone, zoneDuPoste } from '#/lib/planning/zones.ts'
+import { posteEquite } from '#/lib/planning/semaine.ts'
 import type { BilanOut, SemaineOut } from '#/lib/planning/semaine.ts'
 import {
   ajouterJours,
@@ -128,11 +133,17 @@ export function nomsCourts(
  * Décision utilisateur du 2026-10-27.
  */
 export function couleurShift(
-  horaire: { couleur: string } | undefined,
-  poste: { couleur: string; presence: boolean } | undefined,
+  horaire: { couleur: string; periode?: string | null } | undefined,
+  poste:
+    { couleur: string; zone_id?: number | null; ferme?: boolean } | undefined,
   defaut: string,
+  /** Les moments : un shift de nuit d'une zone garde la couleur du poste. */
+  l: Moments = MOMENTS_HOTEL,
 ): string {
-  if (poste && !poste.presence) return poste.couleur
+  // Le jour d'une zone (l'accueil) : la couleur de l'horaire ; tout autre
+  // poste, et la nuit d'une zone : celle du poste (2026-11-06).
+  if (poste && (zoneDuPoste(poste) === null || estNuit(l, horaire?.periode)))
+    return poste.couleur
   return horaire?.couleur ?? defaut
 }
 
@@ -373,6 +384,8 @@ export function resumeEquite(
   postes: Poste[],
   /** Règles de l'établissement (jours du week-end) ; absentes : défauts. */
   regles: RegleEtablissement = REGLES_PAR_DEFAUT,
+  /** Les horaires (la nuit seule garde son groupe). */
+  horaires: Iterable<Pick<Horaire, 'id' | 'periode'>> = [],
 ): string {
   const presents = new Set<number>()
   const weekends = new Map<number, number>()
@@ -387,14 +400,17 @@ export function resumeEquite(
   const parPoste = new Map<number, number[]>()
   const parId = new Map(postes.map((p) => [p.id, p]))
   for (const x of salaries) {
-    const p = posteEquite(x, parId)
+    const p = posteEquite(x, parId, regles, horaires)
     if (p === null || !presents.has(x.id)) continue
     parPoste.set(p, [...(parPoste.get(p) ?? []), weekends.get(x.id) ?? 0])
   }
   const morceaux: string[] = []
   // L'accueil entier (Q16) d'abord, puis les autres postes.
   for (const poste of [
-    { id: POSTE_ID_ACCUEIL, nom: NOM_ZONE_ACCUEIL },
+    ...regles.zones.map((z) => ({
+      id: posteIdZone(regles.zones, z.id),
+      nom: z.nom,
+    })),
     ...postes,
   ]) {
     const n = parPoste.get(poste.id)

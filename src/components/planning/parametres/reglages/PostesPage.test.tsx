@@ -126,9 +126,9 @@ describe('Postes', () => {
     monter(<PostesPage />)
     const r = carte('Réception')
     fireEvent.click(r.getByRole('button', { name: '23:00–07:45' }))
-    // Un seul choix : Nuit retire Matin et soir, et inversement.
-    fireEvent.click(r.getByRole('radio', { name: 'Nuit' }))
-    fireEvent.click(r.getByRole('radio', { name: 'Matin et soir' }))
+    // Une zone (2026-11-06) : Aucune, puis Accueil.
+    fireEvent.click(r.getByRole('radio', { name: 'Aucune' }))
+    fireEvent.click(r.getByRole('radio', { name: 'Accueil' }))
     fireEvent.click(r.getByRole('switch', { name: 'Poste fermé' }))
     // Jours fériés chômés le jour même (encadrement, 2026-11-04).
     fireEvent.click(
@@ -162,8 +162,7 @@ describe('Postes', () => {
           couleur: '#000000',
           // M, MI, AM, leurs versions étoile (2026-11-02), puis N ajouté.
           horaires_autorises: [1, 2, 3, 8, 9, 10, 4],
-          presence: true,
-          accueil_nuit: false,
+          zone_id: 1,
           ferme: true,
           ouverture: null,
           feries_chomes: true,

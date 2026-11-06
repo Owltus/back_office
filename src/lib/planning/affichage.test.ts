@@ -155,9 +155,9 @@ describe('resumeEquite', () => {
 
   it('tout l’accueil ensemble, apprentis compris (Q16, 2026-11-03)', () => {
     const accueil = [
-      { id: 1, nom: 'Réception', presence: true, ferme: false },
-      { id: 2, nom: 'Club', presence: true, ferme: false },
-      { id: 3, nom: 'Veille de nuit', presence: false, ferme: false },
+      { id: 1, nom: 'Réception', zone_id: 1, ferme: false },
+      { id: 2, nom: 'Club', zone_id: 1, ferme: false },
+      { id: 3, nom: 'Veille de nuit', zone_id: null, ferme: false },
     ] as Poste[]
     const salaries = [
       sal(1, 1),

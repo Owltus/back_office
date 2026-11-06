@@ -4,7 +4,7 @@
  * Identité et contrat : `SectionIdentite.tsx`.
  */
 
-import { NOM_ZONE_ACCUEIL, tientLaNuit } from '#/lib/planning/presence.ts'
+import { zoneDuPoste } from '#/lib/planning/zones.ts'
 import { useMemo, useState } from 'react'
 import { Plus, Star, Trash2, X } from 'lucide-react'
 
@@ -110,8 +110,7 @@ export function SectionCompetences({
   const ajoutables = postesDuGroupe(postes, groupe).filter(
     (p) => !niveaux.has(p.id) && !p.ferme,
   )
-  const deLAccueil = (p: (typeof postes)[number]) =>
-    p.presence || tientLaNuit(p)
+  const deLAccueil = (p: (typeof postes)[number]) => zoneDuPoste(p) !== null
   const courants = ajoutables.filter(deLAccueil)
   const aPart = ajoutables.filter((p) => !deLAccueil(p))
   const regler = (posteId: number, niveau: Niveau | 'aucun') =>
@@ -186,7 +185,11 @@ export function SectionCompetences({
           groupes={[
             {
               titre:
-                aPart.length && courants.length ? NOM_ZONE_ACCUEIL : undefined,
+                aPart.length && courants.length
+                  ? lireRegles(referentiel)
+                      .zones.map((z) => z.nom)
+                      .join(', ')
+                  : undefined,
               options: courants.map((p) => ({
                 valeur: String(p.id),
                 libelle: p.nom,

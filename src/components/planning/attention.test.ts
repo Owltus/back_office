@@ -589,24 +589,26 @@ describe('places de l’accueil (2026-11-01)', () => {
     {
       id: 9,
       nom: 'Réception',
+      horaires_autorises: [1],
       couleur: '#000',
-      presence: true,
+      zone_id: 1,
       jour_max_minutes: 720,
     },
     {
       id: 8,
       nom: 'Club',
+      horaires_autorises: [1],
       couleur: '#111',
-      presence: true,
+      zone_id: 1,
       jour_max_minutes: 690,
     },
     {
       id: 7,
       nom: 'Veille de nuit',
+      horaires_autorises: [2],
       couleur: '#222',
-      presence: false,
       jour_max_minutes: 720,
-      accueil_nuit: true,
+      zone_id: 1,
     },
   ] as Poste[]
   const gens = [
@@ -640,11 +642,21 @@ describe('places de l’accueil (2026-11-01)', () => {
     ],
   })
 
+  // Un horaire du matin, un de nuit (2026-11-06 : qui tient quoi se lit sur
+  // les horaires des postes de la zone).
+  const HORAIRES_PLACES = [
+    { id: 1, debut: '07:00', fin: '15:00' },
+    { id: 2, debut: '23:00', fin: '07:00' },
+  ]
+
   it('le matin : Club, où elle est titulaire, plutôt que la Réception', () => {
     const p = pointsAttention(
       [semaine('2026-10-26', { a_pourvoir: [place('matin')] } as never)],
       gens,
       postes,
+      undefined,
+      undefined,
+      HORAIRES_PLACES,
     )
     const [s] = p.aPourvoir.flatMap((j) => j.shifts)
     expect(s.moment).toBe('matin')
@@ -662,6 +674,9 @@ describe('places de l’accueil (2026-11-01)', () => {
       [semaine('2026-10-26', { a_pourvoir: [place('nuit')] } as never)],
       gens,
       postes,
+      undefined,
+      undefined,
+      HORAIRES_PLACES,
     )
     const [s] = p.aPourvoir.flatMap((j) => j.shifts)
     expect(s.personnes.find((x) => x.id === 2)?.posteId).toBe(7)

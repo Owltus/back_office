@@ -90,6 +90,7 @@ describe('historique', () => {
   it('les présences minimum s’annulent comme les besoins', () => {
     const c: Changement = {
       type: 'consigne',
+      zone: 1,
       jour: 5,
       periode: 'matin',
       avant: { minimum: 2, maximum: null },

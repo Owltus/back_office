@@ -134,7 +134,7 @@ describe('contrôles de saisie (miroir des contraintes de la base)', () => {
       jour_max_minutes: 690,
       couleur: '#22c55e',
       horaires_autorises: [],
-      presence: false,
+      zone_id: null,
     }
     expect(erreursPoste(poste)).toEqual([])
     expect(erreursPoste({ ...poste, nom: '' })).toContain(

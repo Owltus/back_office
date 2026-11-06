@@ -279,7 +279,9 @@ describe('tout l’accueil dans un même groupe (Q16, 2026-11-03)', () => {
   const demo = hotelDemo(LUNDI)
   const groupes = (presence: boolean) => {
     const postes = demo.referentiel.postes.map((p) =>
-      p.nom === 'Réception' || p.nom === 'Club' ? { ...p, presence } : p,
+      p.nom === 'Réception' || p.nom === 'Club'
+        ? { ...p, zone_id: presence ? 1 : null }
+        : p,
     )
     const g = preparerGeneration(
       {

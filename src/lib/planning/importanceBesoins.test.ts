@@ -169,7 +169,7 @@ describe('importance des postes : oui / non (D11, 2026-11-05)', () => {
         jour_max_minutes: 690,
         couleur: '#333',
         horaires_autorises: [1, 2],
-        presence: false,
+        zone_id: null,
         indispensable: true,
       },
       { ...POSTES[1], indispensable: false },
@@ -312,7 +312,7 @@ const POSTES: Poste[] = [
     jour_max_minutes: 720,
     couleur: '#111',
     horaires_autorises: [1, 2],
-    presence: true,
+    zone_id: 1,
     fermeture: '23:00',
   },
   {
@@ -321,7 +321,7 @@ const POSTES: Poste[] = [
     jour_max_minutes: 690,
     couleur: '#222',
     horaires_autorises: [1, 2],
-    presence: false,
+    zone_id: null,
   },
 ]
 const salarie = (id: number, niveau: 'titulaire' | 'occasionnel'): Salarie => ({

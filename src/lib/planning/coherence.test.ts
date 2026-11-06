@@ -63,7 +63,7 @@ function poste(id: number, nom: string, kw: Partial<Poste> = {}): Poste {
     jour_max_minutes: 720,
     couleur: '#000000',
     horaires_autorises: [],
-    presence: false,
+    zone_id: null,
     ...kw,
   }
 }
@@ -328,7 +328,7 @@ describe('verifierReglages', () => {
 
   it('poste qui compte dans la présence sans titulaire', () => {
     const r = propre()
-    r.postes.push(poste(2, 'Club', { presence: true }))
+    r.postes.push(poste(2, 'Club', { zone_id: 1 }))
     expect(seul(r)).toMatchObject({
       id: 'presence-sans-titulaire:2',
       ecran: 'equipe',
@@ -338,7 +338,7 @@ describe('verifierReglages', () => {
 
   it('code sans période sur un poste qui compte dans la présence', () => {
     const r = propre()
-    r.postes[0].presence = true
+    r.postes[0].zone_id = 1
     r.consignes = [LUNDI_MATIN_1]
     r.postes[0].horaires_autorises = [M, S, D]
     expect(seul(r)).toMatchObject({
@@ -352,7 +352,7 @@ describe('verifierReglages', () => {
     // Révisé le 2026-11-01 : sur un poste de l'accueil, le besoin est
     // ignoré par le moteur ; il ne fait plus « utiliser » l'horaire.
     const r = propre()
-    r.postes[0].presence = true
+    r.postes[0].zone_id = 1
     r.consignes = [LUNDI_MATIN_1]
     r.besoins.push(besoin(1, 4, HORAIRES[4], { effectif: 0, renfort: 1 }))
     expect(ids(verifierReglages(r))).toEqual([])
@@ -382,7 +382,7 @@ describe('verifierReglages', () => {
 
   it('une fiche désactivée ou partie ne compte pas', () => {
     const r = propre()
-    r.postes.push(poste(2, 'Club', { presence: true }))
+    r.postes.push(poste(2, 'Club', { zone_id: 1 }))
     r.salaries.push(
       salarie(14, {
         actif: false,
@@ -419,7 +419,7 @@ describe('verifierReglages', () => {
     r.besoins = []
     r.consignes = []
     for (const s of r.salaries) s.competences = []
-    r.postes[0].presence = false
+    r.postes[0].zone_id = null
     expect(ids(verifierReglages(r))).toEqual([
       'bloquant:equipe',
       'bloquant:besoins',
@@ -514,7 +514,7 @@ describe('verifierReglages', () => {
     r.horaires = []
     r.besoins = []
     r.consignes = []
-    r.postes[0].presence = false
+    r.postes[0].zone_id = null
     r.salaries[0].shifts_autorises = [M]
     expect(ids(verifierReglages(r))).toEqual([
       'bloquant:horaires',
@@ -568,7 +568,7 @@ describe('grouperPoints', () => {
     const r = propre()
     r.besoins = []
     r.consignes = []
-    r.postes[0].presence = true
+    r.postes[0].zone_id = 1
     r.postes[0].horaires_autorises = [M, S, D]
     r.salaries[0].shifts_autorises = [N]
     const g = grouperPoints(verifierReglages(r))
@@ -630,7 +630,7 @@ describe('verifierReglages, points complets (test de mutation)', () => {
     ])
     const e = propre()
     for (const x of e.salaries) x.competences = []
-    e.postes[0].presence = false
+    e.postes[0].zone_id = null
     expect(verifierReglages(e)[0]).toEqual(
       point(
         'bloquant:equipe',
@@ -711,7 +711,7 @@ describe('verifierReglages, points complets (test de mutation)', () => {
 
   it('code sans période : texte et lien', () => {
     const r = propre()
-    r.postes[0].presence = true
+    r.postes[0].zone_id = 1
     r.consignes = [LUNDI_MATIN_1]
     r.postes[0].horaires_autorises = [M, S, D]
     expect(seul(r)).toEqual(
@@ -749,7 +749,7 @@ describe('verifierReglages, points complets (test de mutation)', () => {
 
   it('présence : un dépannage ne remplace pas un titulaire', () => {
     const r = propre()
-    r.postes.push(poste(2, 'Club', { presence: true }))
+    r.postes.push(poste(2, 'Club', { zone_id: 1 }))
     r.salaries[0].competences.push({ poste_id: 2, niveau: 'occasionnel' })
     expect(seul(r)).toEqual(
       point(
@@ -763,7 +763,7 @@ describe('verifierReglages, points complets (test de mutation)', () => {
 
   it('partie le jour même : encore dans l’équipe ce jour-là', () => {
     const r = propre()
-    r.postes.push(poste(2, 'Club', { presence: true }))
+    r.postes.push(poste(2, 'Club', { zone_id: 1 }))
     r.salaries.push(
       salarie(15, {
         date_sortie: '2026-03-01',
@@ -953,7 +953,7 @@ describe('verifierReglages, points complets (test de mutation)', () => {
       }),
     )
     r.consignes = []
-    r.postes[0].presence = false
+    r.postes[0].zone_id = null
     r.salaries = [salarie(10, { heures_hebdo: 90 })]
     expect(ids(verifierReglages(r))).not.toContain('heures:1')
     r.salaries[0].heures_hebdo = 89.9
@@ -1049,7 +1049,7 @@ describe('verifierReglages, points complets (test de mutation)', () => {
     expect(momentsAccueilDemandes(r)).toBe(0)
     // Refusé : le poste devient de l'accueil, le moteur ignore son besoin ;
     // ce sont les cases du tableau qui comptent.
-    r.postes = [{ ...r.postes[0], presence: true }]
+    r.postes = [{ ...r.postes[0], zone_id: 1 }]
     r.consignes = [
       LUNDI_MATIN_1,
       { ...LUNDI_MATIN_1, id: 2, periode: 'soir', minimum: 0, maximum: 0 },
@@ -1122,7 +1122,7 @@ describe('verifierReglages, cycles', () => {
     r.postes.push(
       poste(2, 'Veille', {
         jour_max_minutes: 720,
-        accueil_nuit: true,
+        zone_id: 1,
         horaires_autorises: [N],
       }),
     )
@@ -1210,11 +1210,11 @@ describe("verifierReglages, tableau de l'accueil", () => {
       ],
       motifs: [],
       postes: [
-        poste(1, 'Réception', { presence: true, horaires_autorises: [M, S] }),
-        poste(2, 'Club', { presence: true, horaires_autorises: [M, S] }),
+        poste(1, 'Réception', { zone_id: 1, horaires_autorises: [M, S] }),
+        poste(2, 'Club', { zone_id: 1, horaires_autorises: [M, S] }),
         poste(3, 'Veille', {
           jour_max_minutes: 720,
-          accueil_nuit: true,
+          zone_id: 1,
           horaires_autorises: [N],
         }),
       ],
@@ -1429,9 +1429,6 @@ describe("verifierReglages, tableau de l'accueil", () => {
       ),
     ]
     expect(deLAccueil(r)).toEqual(attendu)
-    // Un horaire de nuit permis à la Réception ne fait venir personne.
-    r.postes[0].horaires_autorises = [M, S, N]
-    expect(deLAccueil(r)).toEqual(attendu)
     // Un dépannage de la Veille, si.
     r.salaries[1].competences.push({ poste_id: 3, niveau: 'occasionnel' })
     expect(deLAccueil(r)).toEqual([])
@@ -1539,8 +1536,8 @@ describe("verifierReglages, tableau de l'accueil", () => {
 
   it('aucun poste coché : dit dans Postes', () => {
     const r = accueil()
-    r.postes[0].presence = false
-    r.postes[1].presence = false
+    // Aucun poste dans une zone (2026-11-06 : la zone, plus la case).
+    for (const p of r.postes) p.zone_id = null
     r.besoins.push(besoin(1, 0, hM))
     const p = verifierReglages(r).find((x) => x.id === 'accueil-sans-poste')
     expect(p).toEqual({
@@ -1548,7 +1545,7 @@ describe("verifierReglages, tableau de l'accueil", () => {
       gravite: 'a-voir',
       ecran: 'besoins',
       texte:
-        "Le tableau de l'accueil demande du monde, mais aucun poste n'est un poste de l'accueil. Dans Postes, réglez Accueil sur Matin et soir pour les postes qui le tiennent.",
+        'Le tableau demande du monde, mais aucun poste n’a de zone. Dans Postes, choisissez la zone des postes qui le tiennent.',
       lien: { page: '/planning/postes' },
     })
     r.consignes = r.consignes.map((c) => ({ ...c, minimum: 0, maximum: 0 }))
@@ -1565,7 +1562,7 @@ describe("verifierReglages, tableau de l'accueil", () => {
     r.postes[1].horaires_autorises = [S]
     r.postes = r.postes.filter((p) => p.id !== 3)
     textes.push(...verifierReglages(r).map((x) => x.texte))
-    r.postes = r.postes.map((p) => ({ ...p, presence: false }))
+    r.postes = r.postes.map((p) => ({ ...p, zone_id: null }))
     textes.push(...verifierReglages(r).map((x) => x.texte))
     expect(textes.length).toBeGreaterThan(3)
     for (const t of textes)
@@ -1704,7 +1701,7 @@ describe("règles de l'établissement impossibles (étape 8, 2026-11-05)", () =>
   function accueilReleve(): Referentiel {
     return {
       ...propre(),
-      postes: [poste(1, 'Réception', { presence: true })],
+      postes: [poste(1, 'Réception', { zone_id: 1 })],
       besoins: [],
       consignes: [
         { id: 1, jour: 0, periode: 'matin', minimum: 1, maximum: 1 },

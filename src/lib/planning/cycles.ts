@@ -279,3 +279,20 @@ export function trousAccueilDuJour(
 /** « Poste » d'un trou de l'accueil entier (D15) : il n'appartient à aucun
  * poste en particulier. */
 export const POSTE_ACCUEIL = 'accueil'
+
+/** « Poste » d'un trou d'une zone entière : `POSTE_ACCUEIL` pour la
+ * première zone, `accueil:<zone>` pour une autre. */
+export const posteDeZone = (zone: string, premiere: string) =>
+  zone === premiere ? POSTE_ACCUEIL : `${POSTE_ACCUEIL}:${zone}`
+
+/** La zone d'un « poste » de trou (`posteDeZone`), ou null pour un vrai
+ * poste. */
+export function zoneDuPosteTrou(
+  poste: string,
+  premiere: string,
+): string | null {
+  if (poste === POSTE_ACCUEIL) return premiere
+  return poste.startsWith(`${POSTE_ACCUEIL}:`)
+    ? poste.slice(POSTE_ACCUEIL.length + 1)
+    : null
+}

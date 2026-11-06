@@ -25,7 +25,8 @@
 import {
   nuitDeLaVeille,
   plageAccueil,
-  POSTE_ACCUEIL,
+  posteDeZone,
+  zoneDuPosteTrou,
 } from '#/lib/planning/cycles.ts'
 import {
   codeDeLaFiche,
@@ -67,6 +68,7 @@ import {
   rangMoment,
 } from '#/lib/planning/moment.ts'
 import type { Moments } from '#/lib/planning/moment.ts'
+import { vuesZones, zonesDesPostes } from '#/lib/planning/zones.ts'
 import type {
   AffectationSolveur,
   Creneau,
@@ -1298,9 +1300,16 @@ export function construire(
   // (`coutSurplus`) ; le manque est une place nécessaire (P1, D7), dérivé
   // comme `coutPlaceVide`. Seul le surplus entre dans `presenceLaPlusChere`
   // : le coût du manque en dépend, il ne peut pas en faire partie.
+  // Chaque chiffre ne compte que les créneaux de SA zone (2026-11-06).
+  const premiereZone = R.zones[0].id
+  const desPostes = zonesDesPostes(p)
   const comptent = p.consignes.map((k) =>
     p.creneaux.filter(
-      (c) => c.presence.includes(k.periode) && jourDe(c) === k.jour,
+      (c) =>
+        c.presence.includes(k.periode) &&
+        jourDe(c) === k.jour &&
+        (c.zone ?? desPostes.get(c.poste) ?? premiereZone) ===
+          (k.zone ?? premiereZone),
     ),
   )
   const besoinDe: BesoinDe = (place) => creneaux.get(place)
@@ -1333,7 +1342,7 @@ export function construire(
       // est ce qui peut la casser), le plus bas.
       const nuits = z.nuits.length ? z.nuits : [...relais]
       zones.push({
-        cle: `${z.jour}|${z.cote}`,
+        cle: `${z.zone === premiereZone ? '' : `${z.zone}|`}${z.jour}|${z.cote}`,
         plus,
         rang: nuits.length
           ? Math.min(...nuits.map((c) => rangImportance(c.indispensable)))
@@ -3323,21 +3332,43 @@ function trousEntreEquipes(
       )
     }
   }
-  // Accueil entier (D15) : Réception et Club ensemble, du premier au dernier
-  // moment demandé du jour, d'un veilleur à l'autre quand la nuit est
-  // demandée (`plageAccueil`, la même définition que l'oracle).
-  const candidats = p.creneaux.filter((c) => c.accueil)
+  // Chaque zone tenue en continu (D15, 2026-11-06 : par zone) : ses postes
+  // ensemble, du premier au dernier moment demandé du jour, d'un veilleur à
+  // l'autre quand la nuit est demandée (`plageAccueil`, la même définition
+  // que l'oracle).
+  for (const vue of vuesZones(p)) {
+    if (!vue.zone.continue) continue
+    r.push(...trousDeZone(m, p, vue.p, x, termesDe, vue.zone.id, continuite))
+  }
+  return r
+}
+
+/** Les trous d'une zone (`trousEntreEquipes`) : `q` est le problème vu de
+ * la zone (`vuesZones`), `p` le problème entier. */
+function trousDeZone(
+  m: Modele,
+  p: Probleme,
+  q: Probleme,
+  x: Map<string, string>,
+  termesDe: (c: Creneau, quoi: 'autonomes') => Terme[],
+  zone: string,
+  continuite?: (couvrants: Creneau[]) => number,
+): Array<Trou & { v: string }> {
+  const r: Array<Trou & { v: string }> = []
+  const L = momentsDe(p)
+  const poste = posteDeZone(zone, (p.regles ?? REGLES_PAR_DEFAUT).zones[0].id)
+  const candidats = q.creneaux.filter((c) => c.accueil)
   if (candidats.length) {
     const postesAccueil = new Set(candidats.map((c) => c.poste))
     const tenus = p.creneaux.filter((c) => postesAccueil.has(c.poste))
     const nuitDemandee = (j: number) =>
-      p.consignes.some(
+      q.consignes.some(
         (k) => k.jour === j && estNuit(L, k.periode) && k.minimum > 0,
       )
     const jours = [...new Set(candidats.map(jourDe))].sort((a, b) => a - b)
     for (const jour of jours) {
       const demandes = new Set(
-        p.consignes
+        q.consignes
           .filter((k) => k.jour === jour && k.minimum > 0)
           .map((k) => k.periode),
       )
@@ -3365,7 +3396,7 @@ function trousEntreEquipes(
           p,
           x,
           termesDe,
-          POSTE_ACCUEIL,
+          poste,
           jour,
           plage.debut,
           plage.fin,
@@ -3391,6 +3422,15 @@ function trousEntreEquipes(
  * (`relevesManquantes`, verificateur.ts).
  */
 function relevesAccueil(
+  m: Modele,
+  p: Probleme,
+  termesDe: (c: Creneau, quoi: 'autonomes') => Terme[],
+): Array<{ jour: number; v: string }> {
+  // Zone par zone, chacune sa relève (2026-11-06).
+  return vuesZones(p).flatMap((v) => relevesDeZone(m, v.p, termesDe))
+}
+
+function relevesDeZone(
   m: Modele,
   p: Probleme,
   termesDe: (c: Creneau, quoi: 'autonomes') => Terme[],
@@ -3516,6 +3556,8 @@ function passationsVeilleur(
 
 /** Une zone de passation avec le veilleur (`zonesPassation`). */
 export interface ZonePassation {
+  /** La zone (2026-11-06). */
+  zone: string
   /** Jour où la nuit est écrite (-1 : le dimanche d'avant, côté départ). */
   jour: number
   cote: CotePassation
@@ -3542,7 +3584,18 @@ export function zonesPassation(
   p: Pick<Probleme, 'creneaux' | 'nbJours' | 'consignes' | 'veilleDuLundi'> &
     Partial<Pick<Probleme, 'regles'>>,
 ): ZonePassation[] {
-  // Règle de l'établissement : sans passation avec le veilleur, rien.
+  // Zone par zone, chacune sa passation avec la nuit (2026-11-06).
+  return vuesZones(p).flatMap((v) =>
+    passationsDeZone(v.p, v.zone.id).map((z) => ({ ...z, zone: v.zone.id })),
+  )
+}
+
+function passationsDeZone(
+  p: Pick<Probleme, 'creneaux' | 'nbJours' | 'consignes' | 'veilleDuLundi'> &
+    Partial<Pick<Probleme, 'regles'>>,
+  zone: string,
+): ZonePassation[] {
+  // Règle de la zone : sans passation avec le veilleur, rien.
   if (!(p.regles ?? REGLES_PAR_DEFAUT).passations.passationVeilleur) return []
   const L = momentsDe(p)
   // Le premier moment de jour reprend la nuit, le dernier la lui passe (à
@@ -3577,6 +3630,7 @@ export function zonesPassation(
     }
     if (matins.length)
       r.push({
+        zone,
         jour: -1,
         cote: 'depart',
         nuits: [],
@@ -3596,6 +3650,7 @@ export function zonesPassation(
     )
     if (soirs.length && demande(jour, dernier))
       r.push({
+        zone,
         jour,
         cote: 'arrivee',
         nuits,
@@ -3606,6 +3661,7 @@ export function zonesPassation(
     const matins = matinsDe(jour + 1)
     if (matins.length && demande(jour + 1, premier))
       r.push({
+        zone,
         jour,
         cote: 'depart',
         nuits,
@@ -3645,6 +3701,16 @@ export function zonesPassation(
  * verificateur.ts).
  */
 function equipesSynchro(
+  m: Modele,
+  p: Probleme,
+  termesDe: (c: Creneau, quoi: 'autonomes') => Terme[],
+  borne: (c: Creneau) => number,
+): void {
+  // Zone par zone, chacune sa tolérance et sa relève (2026-11-06).
+  for (const v of vuesZones(p)) equipesDeZone(m, v.p, termesDe, borne)
+}
+
+function equipesDeZone(
   m: Modele,
   p: Probleme,
   termesDe: (c: Creneau, quoi: 'autonomes') => Terme[],
@@ -3740,6 +3806,19 @@ export function equipesAccueil(
   apres: Creneau[]
   releve: boolean
 }> {
+  return vuesZones(p).flatMap((v) => equipesUneZone(v.p))
+}
+
+function equipesUneZone(
+  p: Pick<Probleme, 'creneaux' | 'consignes' | 'nbJours'> &
+    Partial<Pick<Probleme, 'regles'>>,
+): Array<{
+  jour: number
+  moments: [string, string]
+  avant: Creneau[]
+  apres: Creneau[]
+  releve: boolean
+}> {
   const L = momentsDe(p)
   const postesJour = new Set(
     p.creneaux
@@ -3785,6 +3864,18 @@ export function equipesAccueil(
  * chevauchent ; les quarts d'heure (grille absolue) du chevauchement
  * possible. Partagé avec l'oracle. */
 export function zonesReleve(
+  p: Pick<Probleme, 'creneaux' | 'consignes' | 'nbJours' | 'releveMinutes'> &
+    Partial<Pick<Probleme, 'regles'>>,
+): Array<{
+  jour: number
+  quarts: number[]
+  matins: Creneau[]
+  soirs: Creneau[]
+}> {
+  return vuesZones(p).flatMap((v) => releveUneZone(v.p))
+}
+
+function releveUneZone(
   p: Pick<Probleme, 'creneaux' | 'consignes' | 'nbJours' | 'releveMinutes'> &
     Partial<Pick<Probleme, 'regles'>>,
 ): Array<{
@@ -4179,7 +4270,7 @@ function aTenir(r: Resolution): [number, number] {
   return [
     r.manques.reduce((t, m) => t + m.manquant, 0) + r.manqueMinimum,
     r.trous
-      .filter((k) => k.poste !== POSTE_ACCUEIL)
+      .filter((k) => zoneDuPosteTrou(k.poste, '') === null)
       .reduce((t, k) => t + k.fin - k.debut, 0),
   ]
 }

@@ -22,6 +22,7 @@ import {
 } from '#/lib/planning/service.ts'
 import { heuresLisibles } from '#/lib/planning/temps.ts'
 import type { Poste } from '#/lib/planning/types.ts'
+import { zoneDuPoste } from '#/lib/planning/zones.ts'
 
 /** La phrase d'un poste : ce que font son ouverture et sa fermeture. */
 export function phraseHeures(
@@ -54,7 +55,7 @@ export function HeuresAccueil({
   const ecrire = useEcriture()
   const notifier = useNotifier()
   const [envoi, setEnvoi] = useState(false)
-  const accueil = postes.filter((p) => p.presence && !p.ferme)
+  const accueil = postes.filter((p) => zoneDuPoste(p) !== null)
   if (!accueil.length) return null
   const valeur = (DUREES as readonly string[]).includes(String(duree))
     ? (String(duree) as Duree)

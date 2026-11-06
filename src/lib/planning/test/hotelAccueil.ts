@@ -9,7 +9,10 @@
  * Veille), pour mesurer avant / après.
  */
 
-import { reglagesCategorie } from '#/lib/planning/test/codesTest.ts'
+import {
+  estVeilleTest,
+  reglagesCategorie,
+} from '#/lib/planning/test/codesTest.ts'
 import type { CategorieTest } from '#/lib/planning/test/codesTest.ts'
 import type {
   Besoin,
@@ -177,7 +180,9 @@ export function hotelAccueil(accueil = true): Referentiel {
       ...reglagesCategorie(categorie),
       couleur: '#000000',
       horaires_autorises: codes.map(idH),
-      presence: accueil && presence,
+      // La zone de l'accueil (2026-11-06) : les postes du jour et la
+      // veille, quand l'accueil est en service.
+      zone_id: accueil && (presence || estVeilleTest(categorie)) ? 1 : null,
     }),
   )
   const idP = (n: string) => {

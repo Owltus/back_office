@@ -178,7 +178,7 @@ const poste = (horaires_autorises: number[]): Poste => ({
   jour_max_minutes: 720,
   couleur: '#000000',
   horaires_autorises,
-  presence: false,
+  zone_id: null,
 })
 
 describe('journée étoile d’un contrat (D3, D5)', () => {

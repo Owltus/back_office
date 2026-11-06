@@ -480,7 +480,10 @@ export function AidePlanningContenu({
   gestes = [],
   regles: R = REGLES_PAR_DEFAUT,
   postes = [],
+  horaires = [],
 }: {
+  /** Les horaires : qui tient le jour, qui tient la nuit. */
+  horaires?: readonly Horaire[]
   /** Les gestes de la vue ouverte (mois ou semaine), en tête. */
   gestes?: readonly string[]
   /** Les règles de l'établissement (`lireRegles`) ; absent : les défauts. */
@@ -490,10 +493,11 @@ export function AidePlanningContenu({
   postes?: readonly Poste[]
 }) {
   const jourAccueil =
-    listeEt(nomsPostesAccueil(postes, 'jour')) ||
-    'les postes du matin et du soir'
+    listeEt(nomsPostesAccueil(postes, horaires, false, R.moments)) ||
+    'les postes du jour'
   const nuitAccueil =
-    listeEt(nomsPostesAccueil(postes, 'nuit')) || 'les postes de la nuit'
+    listeEt(nomsPostesAccueil(postes, horaires, true, R.moments)) ||
+    'les postes de la nuit'
   const exemples = postes.length
     ? `${postes
         .slice(0, 4)
@@ -734,8 +738,8 @@ export function AidePlanningContenu({
       >
         <Sous titre="L’accueil">
           <p className="text-muted-foreground">
-            Chaque poste a un choix Accueil : non, matin et soir, ou nuit. Les
-            postes de l’accueil ({jourAccueil} le jour, {nuitAccueil} la nuit)
+            Chaque poste a une zone, ou aucune (Postes). Zone {R.zones[0].nom} :{' '}
+            {jourAccueil} le jour, {nuitAccueil} la nuit. Les postes d’une zone
             n’ont pas de grille de besoins : un seul tableau de la page Besoins
             dit combien de personnes il faut exactement le matin, le soir et la
             nuit. L’app répartit entre les postes et choisit les horaires.

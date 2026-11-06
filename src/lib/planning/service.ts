@@ -33,6 +33,7 @@ import type {
   Motif,
   Moment,
   Periode,
+  Zone,
   Poste,
   Referentiel,
   Reglages,
@@ -44,8 +45,10 @@ const COL_HORAIRE = 'id, nom, debut, fin, couleur, pause, periode'
 const COL_MOTIF =
   'id, code, nom, couleur, decompte, nature, libre_weekend, reserve_forfait, role, icone'
 const COL_POSTE =
-  'id, nom, couleur, horaires_autorises, presence, accueil_nuit, ferme, ouverture, ordre, feries_chomes, indispensable, fermeture, jour_max_minutes'
-const COL_CONSIGNE = 'id, jour, periode, minimum, maximum'
+  'id, nom, couleur, horaires_autorises, zone_id, ferme, ouverture, ordre, feries_chomes, indispensable, fermeture, jour_max_minutes'
+const COL_CONSIGNE = 'id, zone_id, jour, periode, minimum, maximum'
+const COL_ZONE =
+  'id, nom, ordre, continue, releve_minutes, passation_nuit, equipe_tolerance'
 const COL_MOMENT =
   'id, nom, ordre, priorite, debut_de, debut_a, fin_de, fin_a, toutes, libre_avant, compte_dans_tableau, est_nuit, couleur'
 const COL_GROUPE = 'id, nom, ordre, postes_autorises, forfait_possible'
@@ -167,6 +170,7 @@ export async function fetchReferentiel(): Promise<Referentiel> {
     modeles,
     feries,
     lignesMoments,
+    lignesZones,
   ] = await Promise.all([
     supabase
       .from('planning_horaires')
@@ -219,6 +223,7 @@ export async function fetchReferentiel(): Promise<Referentiel> {
       .select(COL_MOMENT)
       .order('ordre')
       .order('id'),
+    supabase.from('planning_zones').select(COL_ZONE).order('ordre').order('id'),
   ])
   // La ligne manque (base pas encore migrée) : la relève par défaut ;
   // les autres règles absentes reprennent leurs défauts (`lireRegles`).
@@ -257,6 +262,10 @@ export async function fetchReferentiel(): Promise<Referentiel> {
     modelesContrat: verifier(modeles) as unknown as ModeleContrat[],
     feriesAjoutes: verifier(feries) as FerieAjoute[],
     moments: lesMoments,
+    zones: (verifier(lignesZones) as unknown as Zone[]).map((z) => ({
+      ...z,
+      id: num(z.id),
+    })),
   }
 }
 
@@ -697,6 +706,33 @@ export async function enregistrerMoments(
         })),
       )
       .select('id'),
+  )
+}
+
+/** Une zone : ses réglages (gestion). */
+export async function enregistrerZone(
+  id: number,
+  champs: Partial<Omit<Zone, 'id'>>,
+): Promise<void> {
+  auMoinsUne(
+    await supabase
+      .from('planning_zones')
+      .update(champs)
+      .eq('id', id)
+      .select('id'),
+  )
+}
+
+/** Une zone neuve, tenue en continu, aux réglages de la première. */
+export async function ajouterZone(z: Omit<Zone, 'id'>): Promise<void> {
+  auMoinsUne(await supabase.from('planning_zones').insert(z).select('id'))
+}
+
+/** Retire une zone (gestion) : ses postes n'ont plus de zone, ses chiffres
+ * partent avec elle. */
+export async function supprimerZone(id: number): Promise<void> {
+  auMoinsUne(
+    await supabase.from('planning_zones').delete().eq('id', id).select('id'),
   )
 }
 

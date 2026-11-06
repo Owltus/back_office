@@ -29,6 +29,12 @@ import {
 } from '#/lib/planning/moment.ts'
 import type { Moments } from '#/lib/planning/moment.ts'
 import {
+  posteIdZone,
+  rangZone,
+  seulementLaNuit,
+  zoneDuPoste,
+} from '#/lib/planning/zones.ts'
+import {
   aJourneeCourteImposee,
   estJourWeekend,
   jourVeilleWeekend,
@@ -99,7 +105,6 @@ import {
   momentsAccueil,
   momentLibre,
   periodeShift,
-  tientLaNuit,
 } from '#/lib/planning/presence.ts'
 import type { PresenceOut } from '#/lib/planning/presence.ts'
 // Cycle d'import voulu (semaine → raisonsPlaces → coherence → semaine) :
@@ -236,7 +241,15 @@ export const idPlaceAccueil = (
   jour: number,
   periode: PeriodePresence,
   l: Moments = MOMENTS_HOTEL,
-) => -(1 + jour * tailleTableau(l) + rangAuTableau(l, periode))
+  /** Rang de la zone (0 : la première). */
+  zone = 0,
+) =>
+  -(
+    1 +
+    zone * 7 * tailleTableau(l) +
+    jour * tailleTableau(l) +
+    rangAuTableau(l, periode)
+  )
 
 /** Un trou entre deux équipes, pour l'écran. */
 export interface TrouOut {
@@ -827,6 +840,12 @@ export function posteDeLAccueil(
   return estPosteAccueil(ctx.postes.get(posteId), accueilEnService(ctx))
 }
 
+/** La zone d'un poste dans le calcul (null : hors zone, ou aucun tableau en
+ * service). */
+function zoneDeCtx(ctx: Contexte, posteId: number): string | null {
+  return accueilEnService(ctx) ? zoneDuPoste(ctx.postes.get(posteId)) : null
+}
+
 /** Moments du tableau où compte un shift ou un candidat (`momentsAccueil`). */
 function presenceDe(
   ctx: Contexte,
@@ -844,6 +863,7 @@ function presenceDe(
     accueilEnService(ctx),
     x.fin,
     ctx.regles.moments,
+    ctx.horaires.values(),
   )
 }
 
@@ -963,6 +983,7 @@ export function creneauBesoin(
     presenceMax: presenceMaxDe(ctx, b.poste_id),
     nuit: toucheLaNuit(b.jour, b.debut, b.fin),
     presence: presenceDe(ctx, b),
+    zone: zoneDeCtx(ctx, b.poste_id),
     ...equiteDe(ctx, b),
     ...niveauxDe(ctx, b.poste_id, b),
   })
@@ -986,6 +1007,7 @@ export function creneauAffectation(ctx: Contexte, a: Affectation): Creneau {
     presenceMax: presenceMaxDe(ctx, a.poste_id),
     nuit: toucheLaNuit(a.jour, a.debut, a.fin),
     presence: presenceDe(ctx, a),
+    zone: zoneDeCtx(ctx, a.poste_id),
     ...equiteDe(ctx, a),
     ...niveauxDe(ctx, a.poste_id),
   })
@@ -1129,6 +1151,7 @@ export function creneauCandidat(
     presenceMax: presenceMaxPoste(poste),
     nuit: toucheLaNuit(jour, ecrit.debut, ecrit.fin),
     presence: presenceDe(ctx, x),
+    zone: zoneDeCtx(ctx, poste.id),
     accueil: true,
     ...equiteDe(ctx, x),
     ...niveauxDe(ctx, poste.id),
@@ -1147,10 +1170,15 @@ export function creneauCandidat(
  * n'est pas en service. */
 export function candidatsAccueil(ctx: Contexte, depuis = 0): Creneau[] {
   if (!accueilEnService(ctx)) return []
+  // Ce qui est demandé, zone par zone (2026-11-06).
+  const premiere = ctx.regles.zones[0].id
   const demandes = new Set(
     ctx.consignes
       .filter((k) => chiffreAccueil(k) > 0)
-      .map((k) => `${k.jour}|${k.periode}`),
+      .map(
+        (k) =>
+          `${k.zone_id === undefined ? premiere : String(k.zone_id)}|${k.jour}|${k.periode}`,
+      ),
   )
   const horaires = [...ctx.horaires.values()].sort((a, b) => a.id - b.id)
   const postes = [...ctx.postes.values()]
@@ -1163,12 +1191,13 @@ export function candidatsAccueil(ctx: Contexte, depuis = 0): Creneau[] {
         const c = creneauCandidat(ctx, jour, poste, h)
         // Un coup de main (hors tableau, pas la nuit : le middle) est
         // candidat dès qu'un moment de jour du tableau est demandé.
+        const zone = c.zone ?? premiere
         const enCoupDeMain =
-          poste.presence &&
           coupDeMain(ctx.regles.moments, c.moment) &&
           [...demandes].some((d) => {
-            const [j, m] = d.split('|')
+            const [z, j, m] = d.split('|')
             return (
+              z === zone &&
               Number(j) === jour &&
               !momentDeNuit(ctx.regles.moments, m) &&
               rangAuTableau(ctx.regles.moments, m) >= 0
@@ -1176,7 +1205,7 @@ export function candidatsAccueil(ctx: Contexte, depuis = 0): Creneau[] {
           })
         if (
           !enCoupDeMain &&
-          !c.presence.some((m) => demandes.has(`${jour}|${m}`))
+          !c.presence.some((m) => demandes.has(`${zone}|${jour}|${m}`))
         )
           continue
         if (alerteBesoin(poste, duree(c))) continue
@@ -1197,7 +1226,8 @@ function joursOuverts(
   periode: PeriodePresence | null,
 ): number[] {
   const jours: number[] = []
-  const accueil = poste.presence && accueilEnService(ctx)
+  const zone = zoneDeCtx(ctx, poste.id)
+  const accueil = zone !== null
   const besoins = accueil
     ? []
     : besoinsDuMoteur(ctx).valides.filter(
@@ -1208,7 +1238,10 @@ function joursOuverts(
     const ouvert = accueil
       ? ctx.consignes.some(
           (k) =>
-            k.jour === jour && k.periode === periode && chiffreAccueil(k) > 0,
+            String(k.zone_id ?? ctx.regles.zones[0].id) === zone &&
+            k.jour === jour &&
+            k.periode === periode &&
+            chiffreAccueil(k) > 0,
         )
       : besoins.some((b) => b.jour === jour)
     if (ouvert) jours.push(jour)
@@ -1219,7 +1252,11 @@ function joursOuverts(
 /** Un poste qui compte pour l'ouverture et la fermeture : ouvert, et pas
  * la nuit de l'accueil (le veilleur a ses passations). */
 const aDesHeures = (ctx: Contexte, p: Poste) =>
-  !p.ferme && !(p.accueil_nuit && accueilEnService(ctx))
+  !p.ferme &&
+  !(
+    accueilEnService(ctx) &&
+    seulementLaNuit(p, ctx.horaires.values(), ctx.regles.moments)
+  )
 
 /** L'ouverture de chaque poste qui a une heure d'ouverture (2026-11-01,
  * « à 7 h, quelqu'un en réception et quelqu'un au club » ; tout poste
@@ -1279,6 +1316,7 @@ function chiffresAccueil(ctx: Contexte): Probleme['consignes'] {
     periode: c.periode,
     minimum: chiffreAccueil(c),
     maximum: plafondAccueil(c),
+    zone: c.zone_id === undefined ? ctx.regles.zones[0].id : String(c.zone_id),
   }))
 }
 
@@ -2042,23 +2080,26 @@ export function debutApresReposHebdo(
  * (extra, forfait jours, sans poste tenu). */
 export function posteEquite(
   x: Salarie,
-  postes?: ReadonlyMap<number, Pick<Poste, 'presence' | 'ferme'>>,
+  postes?: ReadonlyMap<
+    number,
+    Pick<Poste, 'zone_id' | 'ferme' | 'horaires_autorises'>
+  >,
   regles: RegleEtablissement = REGLES_PAR_DEFAUT,
+  horaires: Iterable<Pick<Horaire, 'id' | 'periode'>> = [],
 ): number | null {
   if (modeleDe(regles, x.type_contrat).placementManuel || x.forfait_jours)
     return null
-  if (
-    postes &&
-    x.competences.some((c) => {
+  // Toute la zone ensemble (2026-11-06 : par zone), sauf ses postes de nuit
+  // seule (la Veille de nuit garde son groupe).
+  const hs = [...horaires]
+  if (postes)
+    for (const c of x.competences) {
+      if (c.niveau !== 'titulaire' && c.niveau !== 'soutien') continue
       const p = postes.get(c.poste_id)
-      return (
-        (c.niveau === 'titulaire' || c.niveau === 'soutien') &&
-        !!p?.presence &&
-        !p.ferme
-      )
-    })
-  )
-    return POSTE_ID_ACCUEIL
+      const z = zoneDuPoste(p)
+      if (z === null || seulementLaNuit(p, hs, regles.moments)) continue
+      return posteIdZone(regles.zones, z)
+    }
   return x.competences.find((c) => c.niveau === 'titulaire')?.poste_id ?? null
 }
 
@@ -2758,17 +2799,27 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
   // Tableau de l'accueil : chaque shift dans chacun de ses moments (un
   // middle au matin et au soir, D11), soutiens compris (D5), contre le
   // chiffre EXACT (D3).
-  const presents: Array<{ jour: number; periode: PeriodePresence }> = []
+  const presents: Array<{
+    jour: number
+    periode: PeriodePresence
+    zone?: string
+  }> = []
   for (const a of ctx.affectations) {
+    const zone = zoneDeCtx(ctx, a.poste_id) ?? undefined
     for (const periode of presenceDe(ctx, a))
-      presents.push({ jour: a.jour, periode })
+      presents.push({ jour: a.jour, periode, zone })
   }
   const chiffres = ctx.consignes.map((c) => ({
     ...c,
     minimum: chiffreAccueil(c),
     maximum: plafondAccueil(c),
   }))
-  const presence = bilanPresence(chiffres, presents, ctx.regles.moments)
+  const presence = bilanPresence(
+    chiffres,
+    presents,
+    ctx.regles.moments,
+    ctx.regles.zones[0].id,
+  )
   // Places de l'accueil (D1) : le chiffre de chaque moment, pourvu jusqu'à
   // lui ; s'ajoutent aux places des besoins des postes à part.
   const accueil = accueilEnService(ctx)
@@ -2792,10 +2843,15 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
       ...p,
       creneaux: [...p.creneaux, ...candidatsDuMoment],
     }
+    const zones = ctx.regles.zones
     for (const x of presence) {
       if (x.compte >= x.minimum) continue
+      const zone = x.zone ?? zones[0].id
       const ids = candidatsDuMoment.filter(
-        (c) => jourDe(c) === x.jour && c.presence.includes(x.periode),
+        (c) =>
+          jourDe(c) === x.jour &&
+          c.presence.includes(x.periode) &&
+          (c.zone ?? zones[0].id) === zone,
       )
       const raisons = raisonsBlocageAccueil(
         pAccueil,
@@ -2803,9 +2859,14 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
         ids.map((c) => c.id),
       )
       aPourvoir.push({
-        besoin_id: idPlaceAccueil(x.jour, x.periode, ctx.regles.moments),
+        besoin_id: idPlaceAccueil(
+          x.jour,
+          x.periode,
+          ctx.regles.moments,
+          Math.max(0, rangZone(zones, zone)),
+        ),
         moment: x.periode,
-        poste_id: POSTE_ID_ACCUEIL,
+        poste_id: posteIdZone(zones, zone),
         jour: x.jour,
         type_shift_id: null,
         debut: ids.length
@@ -2827,14 +2888,20 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
   // au dernier moment demandé (`trousAccueilDuJour`, l'oracle de
   // `cycles.ts`) ; présences autonomes, aux heures écrites du shift.
   const trousAccueil: TrouOut[] = []
-  if (accueil) {
-    const candidats = candidatsDuMoment
+  for (const zone of accueil ? ctx.regles.zones : []) {
+    if (!zone.continue) continue
+    const candidats = candidatsDuMoment.filter(
+      (c) => (c.zone ?? ctx.regles.zones[0].id) === zone.id,
+    )
+    if (!candidats.length) continue
+    const consignesZone = ctx.consignes.filter(
+      (k) => String(k.zone_id ?? ctx.regles.zones[0].id) === zone.id,
+    )
     const presences: PresencePoste[] = []
     for (const a of ctx.affectations) {
-      const poste = ctx.postes.get(a.poste_id)
       const sol = salaries.get(a.salarie_id)
       // La veille de nuit compte aussi : elle tient le soir jusqu'à 23:00.
-      if (!estPosteAccueil(poste, accueil) || !sol) continue
+      if (zoneDeCtx(ctx, a.poste_id) !== zone.id || !sol) continue
       const c = creneaux.get(`a${a.id}`) as Creneau
       presences.push({
         debut: c.debut,
@@ -2843,7 +2910,7 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
       })
     }
     const nuitDemandee = (j: number) =>
-      ctx.consignes.some(
+      consignesZone.some(
         (k) =>
           k.jour === j &&
           momentDeNuit(ctx.regles.moments, k.periode) &&
@@ -2851,7 +2918,7 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
       )
     for (let jour = 0; jour < 7; jour++) {
       const demandes = new Set(
-        ctx.consignes
+        consignesZone
           .filter((k) => k.jour === jour && chiffreAccueil(k) > 0)
           .map((k) => k.periode),
       )
@@ -2869,7 +2936,7 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
         ctx.regles.moments,
       ))
         trousAccueil.push({
-          poste_id: POSTE_ID_ACCUEIL,
+          poste_id: posteIdZone(ctx.regles.zones, zone.id),
           jour,
           debut: heureMurale(lundi, t.debut),
           fin: heureMurale(lundi, t.fin),
@@ -3052,14 +3119,20 @@ function empreinte(aEviter: Set<string>): number {
 function veilleDuLundiDe(
   d: DonneesSemaine,
   lundi: string,
-): Array<{ debut: number; fin: number }> {
+): Array<{ debut: number; fin: number; zone: string }> {
   const postesParId = new Map(d.referentiel.postes.map((x) => [x.id, x]))
-  return d.avant
-    .filter((a) => a.jour === 6 && tientLaNuit(postesParId.get(a.poste_id)))
-    .map((a) => {
-      const [debut, fin] = bornes(lundi, -1, a.debut, a.fin)
-      return { debut, fin }
-    })
+  const horaires = new Map(d.referentiel.horaires.map((h) => [h.id, h]))
+  const l = lireRegles(d.referentiel).moments
+  // Les nuits du dimanche d'avant sur un poste de zone (2026-11-06).
+  return d.avant.flatMap((a) => {
+    const zone = zoneDuPoste(postesParId.get(a.poste_id))
+    if (a.jour !== 6 || zone === null) return []
+    const h = a.horaire_id !== null ? horaires.get(a.horaire_id) : undefined
+    const moment = h ? h.periode : momentLibre(a.debut, a.fin, l)
+    if (!momentDeNuit(l, moment)) return []
+    const [debut, fin] = bornes(lundi, -1, a.debut, a.fin)
+    return [{ debut, fin, zone }]
+  })
 }
 
 export function preparerGeneration(
@@ -3247,7 +3320,7 @@ export function preparerGeneration(
   const groupes = new Map<number, Array<{ x: Salarie; minutes: number }>>()
   for (const x of ctx.staff) {
     const sol = salaries.get(x.id)
-    const groupe = posteEquite(x, ctx.postes, ctx.regles)
+    const groupe = posteEquite(x, ctx.postes, ctx.regles, ctx.horaires.values())
     if (!sol || groupe === null) continue
     groupes.set(groupe, [
       ...(groupes.get(groupe) ?? []),
@@ -3638,11 +3711,14 @@ export function esquisseSuivante(
     if (membres.size && reste.some((v) => v > 0))
       groupes.push({ membres, postes, besoins: reste })
   }
-  if (accueilEnService(ctx)) {
-    const voulus = [0, 0, 0, 0, 0, 0, 0]
-    for (const c of ctx.consignes) voulus[c.jour] += chiffreAccueil(c)
-    ajoute((id) => posteDeLAccueil(ctx, id), voulus)
-  }
+  if (accueilEnService(ctx))
+    for (const zone of ctx.regles.zones) {
+      const voulus = [0, 0, 0, 0, 0, 0, 0]
+      for (const c of ctx.consignes)
+        if (String(c.zone_id ?? ctx.regles.zones[0].id) === zone.id)
+          voulus[c.jour] += chiffreAccueil(c)
+      ajoute((id) => zoneDeCtx(ctx, id) === zone.id, voulus)
+    }
   const parPoste = new Map<number, number[]>()
   for (const b of besoins) {
     const v = parPoste.get(b.poste_id) ?? [0, 0, 0, 0, 0, 0, 0]

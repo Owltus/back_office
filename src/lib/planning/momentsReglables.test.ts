@@ -114,7 +114,7 @@ describe('un moment « Midi » créé par l’établissement', () => {
     couleur: null,
   }
   const l = lusAvec({ middle: { ordre: 2.5 } }, [midi])
-  const poste = { presence: true, accueil_nuit: false, ferme: false }
+  const poste = { zone_id: 1, ferme: false }
 
   it('reçoit ses horaires, le reste ne bouge pas', () => {
     expect(momentPropose({ debut: '11:00', fin: '16:00', pause: 0 }, l)).toBe(

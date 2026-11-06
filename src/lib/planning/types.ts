@@ -122,9 +122,10 @@ export interface Poste {
    * à la place de la catégorie), bornée par la loi (`JOUR_MAX_LOI`).
    * Absent (données de test) : `JOUR_MAX_POSTE_DEFAUT`. */
   jour_max_minutes?: number
-  presence: boolean // poste de l'accueil le matin et le soir
-  /** Poste de l'accueil la nuit (U1 du 2026-11-01). Absent : non. */
-  accueil_nuit?: boolean
+  /** Zone du poste (`planning_zones`, 2026-11-06, lot 2, A5 : remplace
+   * `presence` et `accueil_nuit`, gardées en base, plus lues). Null ou
+   * absent : hors zone, le poste a ses besoins. */
+  zone_id?: number | null
   /** Poste fermé (U3) : plus proposé nulle part, historique gardé. */
   ferme?: boolean
   /** Heure d'ouverture (HH:MM) : ce poste de l'accueil est tenu dès cette
@@ -288,6 +289,21 @@ export interface Consigne {
   periode: PeriodePresence
   minimum: number
   maximum: number | null
+  /** Zone du chiffre (2026-11-06) ; absent (données de test) : la
+   * première zone. */
+  zone_id?: number
+}
+
+/** Une zone de l'établissement (`planning_zones`, 2026-11-06, `zones.ts`). */
+export interface Zone {
+  id: number
+  nom: string
+  ordre: number
+  /** Tenue en continu (trous, personne seule, d'un veilleur à l'autre). */
+  continue: boolean
+  releve_minutes: number
+  passation_nuit: boolean
+  equipe_tolerance: number
 }
 
 /** Un jour d'absence (une ligne par jour). */
@@ -355,6 +371,9 @@ export interface Referentiel {
   /** Moments de la journée (`planning_moments`, 2026-11-06) ; absents
    * (données de test) : ceux de l'hôtel (`MOMENTS_PAR_DEFAUT`). */
   moments?: Moment[]
+  /** Zones (`planning_zones`, 2026-11-06) ; absentes (données de test) :
+   * l'accueil seul, aux réglages de passation (`zoneParDefaut`). */
+  zones?: Zone[]
 }
 
 export const JOURS = [

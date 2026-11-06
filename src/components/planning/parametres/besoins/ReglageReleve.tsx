@@ -18,7 +18,8 @@ import { useEcriture } from '#/components/planning/hooks/usePlanning.ts'
 import { useNotifier } from '#/components/planning/Messages.tsx'
 import { Segmente } from '#/components/planning/parametres/equipe/Segmente.tsx'
 import { Switch } from '#/components/ui/switch.tsx'
-import { enregistrerReglages } from '#/lib/planning/service.ts'
+import { enregistrerReglages, enregistrerZone } from '#/lib/planning/service.ts'
+import type { Zone } from '#/lib/planning/types.ts'
 
 const CHOIX = ['0', '15', '30', '45', '60'] as const
 type Choix = (typeof CHOIX)[number]
@@ -27,6 +28,8 @@ const TOLERANCES = ['15', '30', '45', '60'] as const
 type Tolerance = (typeof TOLERANCES)[number]
 
 export function ReglageReleve({
+  zoneId,
+  premier = true,
   minutes,
   continuite,
   veilleur = true,
@@ -34,6 +37,12 @@ export function ReglageReleve({
   tolerance = 30,
   modifiable,
 }: {
+  /** La zone réglée (2026-11-06) ; absente : les réglages généraux
+   * (données de test). */
+  zoneId?: number
+  /** Le premier bloc de la page : il porte la continuité (une règle de
+   * l'établissement) et l'ancre des liens. */
+  premier?: boolean
   minutes: number
   /** Continuité entre équipes obligatoire (`continuite_obligatoire`). */
   continuite: boolean
@@ -53,11 +62,24 @@ export function ReglageReleve({
   const valeur = (CHOIX as readonly string[]).includes(String(minutes))
     ? (String(minutes) as Choix)
     : '30'
+  /** Un réglage de la zone (ou général sans zone en base). */
+  const ecrireZone = (
+    champs: Partial<
+      Pick<Zone, 'releve_minutes' | 'passation_nuit' | 'equipe_tolerance'>
+    >,
+  ) =>
+    zoneId !== undefined
+      ? enregistrerZone(zoneId, champs)
+      : enregistrerReglages({
+          releve_minutes: champs.releve_minutes,
+          passation_veilleur: champs.passation_nuit,
+          equipe_tolerance: champs.equipe_tolerance,
+        })
   const choisir = async (v: Choix) => {
     if (envoi || v === valeur) return
     setEnvoi(true)
     const r = await ecrire(
-      () => enregistrerReglages({ releve_minutes: Number(v) }),
+      () => ecrireZone({ releve_minutes: Number(v) }),
       "La relève n'a pas pu être enregistrée",
     )
     setEnvoi(false)
@@ -76,12 +98,12 @@ export function ReglageReleve({
     if (!r.ok) notifier(r.message, 'danger')
   }
   const ecrireChamp = async (
-    champs: Parameters<typeof enregistrerReglages>[0],
+    champs: Parameters<typeof ecrireZone>[0],
     echec: string,
   ) => {
     if (envoi) return
     setEnvoi(true)
-    const r = await ecrire(() => enregistrerReglages(champs), echec)
+    const r = await ecrire(() => ecrireZone(champs), echec)
     setEnvoi(false)
     if (!r.ok) notifier(r.message, 'danger')
   }
@@ -92,13 +114,16 @@ export function ReglageReleve({
     : null
   return (
     <section
-      aria-labelledby="titre-releve"
+      aria-labelledby={premier ? 'titre-releve' : `titre-releve-${zoneId}`}
       className="flex min-w-0 flex-col gap-1.5"
     >
-      <h3 id="titre-releve" className="text-base font-semibold">
+      <h3
+        id={premier ? 'titre-releve' : `titre-releve-${zoneId}`}
+        className="text-base font-semibold"
+      >
         Passation entre les équipes
       </h3>
-      <label className="flex items-start gap-2 text-sm">
+      <label className={premier ? 'flex items-start gap-2 text-sm' : 'hidden'}>
         <Switch
           checked={continuite}
           disabled={!modifiable || envoi}
@@ -121,7 +146,7 @@ export function ReglageReleve({
           disabled={!modifiable || envoi}
           onCheckedChange={(v) =>
             void ecrireChamp(
-              { passation_veilleur: v },
+              { passation_nuit: v },
               "La passation avec la nuit n'a pas pu être enregistrée",
             )
           }

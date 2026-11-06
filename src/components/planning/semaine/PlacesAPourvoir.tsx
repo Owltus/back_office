@@ -32,8 +32,11 @@ import type { LienReglage } from '#/lib/planning/coherence.ts'
 import type { RaisonClaire } from '#/lib/planning/raisonsPlaces.ts'
 import { libelleHoraire } from '#/lib/planning/affichage.ts'
 import { estNuit, leMoment, motMoment } from '#/lib/planning/moment.ts'
-import { NOM_ZONE_ACCUEIL } from '#/lib/planning/presence.ts'
-import { useMoments } from '#/components/planning/hooks/useMoments.ts'
+import { zoneDuPosteId } from '#/lib/planning/zones.ts'
+import {
+  useMoments,
+  useRegles,
+} from '#/components/planning/hooks/useMoments.ts'
 import { cn } from '#/lib/utils.ts'
 
 /** La case à ouvrir : la personne choisie, le jour de la place. `x`, `y` :
@@ -184,8 +187,9 @@ function Groupe({
   const nom = g.poste?.nom ?? 'Poste'
   // Une place de l'accueil n'a ni poste ni horaire : son moment (2026-11-01).
   const moments = useMoments()
+  const zones = useRegles().zones
   const titre = g.moment
-    ? `${NOM_ZONE_ACCUEIL}, ${estNuit(moments, g.moment) ? leMoment(moments, g.moment) : motMoment(moments, g.moment)}`
+    ? `${zoneDuPosteId(zones, g.posteId)?.nom ?? zones[0].nom}, ${estNuit(moments, g.moment) ? leMoment(moments, g.moment) : motMoment(moments, g.moment)}`
     : `${nom}, ${g.code ?? heures}`
   const jours = joursDesPlaces(g.places.map((p) => p.date))
   return (
