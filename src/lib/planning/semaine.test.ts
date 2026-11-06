@@ -393,11 +393,11 @@ describe('garde-fous (test_garde_fous.py)', () => {
     nom,
   })
 
-  it('école par nature, ou par repli sur le code et le nom', () => {
+  it('école par sa nature seule, jamais par son code ni son nom (2026-11-06)', () => {
     expect(estEcole(motif('ecole'))).toBe(true)
     expect(estEcole(motif('absence'))).toBe(false)
-    expect(estEcole(motif('absence', 'EC'))).toBe(true)
-    expect(estEcole(motif('absence', 'ZZ', 'École du soir'))).toBe(true)
+    expect(estEcole(motif('absence', 'EC'))).toBe(false)
+    expect(estEcole(motif('absence', 'ZZ', 'École du soir'))).toBe(false)
     expect(estEcole(motif('absence', 'SS', 'Sans solde'))).toBe(false)
   })
 

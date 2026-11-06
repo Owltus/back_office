@@ -410,6 +410,12 @@ describe('Horaires et absences', () => {
           couleur: '#000000',
           decompte: true,
           nature: 'ecole',
+          // Cases du motif (2026-11-06) : l'école ne libère jamais le
+          // week-end, aucun rôle.
+          libre_weekend: false,
+          reserve_forfait: false,
+          role: null,
+          icone: null,
         },
         3,
       ),

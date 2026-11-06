@@ -457,19 +457,21 @@ describe('codesUniques : chaque code une fois, poste déduit', () => {
 describe('motifsDuJour', () => {
   // Oracle : décision utilisateur du 2026-10-31 — le repos (nature
   // « repos ») à part, en tête ; « Repos exceptionnel » est une absence ;
-  // l'école jamais ; un motif « forfait » pour le forfait jours seulement.
+  // l'école jamais ; un motif réservé au forfait jours (sa case, plus son
+  // nom depuis le 2026-11-06) pour le forfait jours seulement.
   const m = (
     id: number,
     code: string,
     nom: string,
     nature: 'absence' | 'ecole' | 'repos' = 'absence',
-  ) => ({ id, code, nom, nature })
+    reserve_forfait = false,
+  ) => ({ id, code, nom, nature, reserve_forfait })
   const motifs = [
     m(1, 'CP', 'Congé payé'),
     m(2, 'EC', 'École - CFA', 'ecole'),
     m(3, 'RP', 'Repos exceptionnel'),
     m(4, 'R', 'Repos', 'repos'),
-    m(5, 'RF', 'Repos forfait'),
+    m(5, 'RF', 'Repos forfait', 'absence', true),
     m(6, 'MA', 'Maladie'),
   ]
   it('le repos à part, les absences dans l’ordre, l’école retirée', () => {
@@ -482,9 +484,17 @@ describe('motifsDuJour', () => {
     expect(r.repos.map((x) => x.code)).toEqual(['R'])
     expect(r.autres.map((x) => x.code)).toEqual(['CP', 'RP', 'MA'])
   })
-  it("une école mal typée (code EC) n'est jamais proposée", () => {
-    const r = motifsDuJour([m(1, 'EC', 'Cours')], { forfait_jours: true })
-    expect(r.repos).toEqual([])
-    expect(r.autres).toEqual([])
+  it('la case du motif fait foi, jamais son nom ni son code', () => {
+    const r = motifsDuJour(
+      [
+        m(1, 'ZZ', 'Jour cadre', 'absence', true),
+        m(2, 'RF', 'Repos forfait'),
+        m(3, 'EC', 'Cours'),
+      ],
+      { forfait_jours: false },
+    )
+    // Réservé par la case : caché ; « forfait » dans le nom : proposé ;
+    // code EC d'une absence : une absence comme une autre.
+    expect(r.autres.map((x) => x.code)).toEqual(['RF', 'EC'])
   })
 })

@@ -147,7 +147,7 @@ describe('un contrat créé par l’établissement', () => {
         couleur: '#111',
         horaires_autorises: [1, 2],
         presence: false,
-        importance: 'indispensable',
+        indispensable: true,
       },
     ]
     return {
@@ -300,7 +300,7 @@ describe('un poste neuf à 10 h de service au plus', () => {
           couleur: '#111',
           horaires_autorises: [1, 2],
           presence: false,
-          importance: 'indispensable',
+          indispensable: true,
         },
       ],
       groupes: [],
@@ -394,5 +394,57 @@ describe('aucun code de contrat ni catégorie lu par le code (lot 1a)', () => {
       /estDirection|=== 'direction'/.test(texte),
     )
     expect(trouves.map((x) => x.p)).toEqual([])
+  })
+
+  // Lot 1b (2026-11-06) : motifs, libellés métier, importance, week-end.
+  /** Les lignes de code (hors commentaires) qui répondent à `re`. */
+  const lignes = (re: RegExp, exclus: readonly string[] = []) =>
+    sources
+      .filter(
+        ({ p }) => !exclus.some((e) => p.replaceAll('\\', '/').endsWith(e)),
+      )
+      .flatMap(({ p, texte }) =>
+        texte
+          .split('\n')
+          .filter((l) => !/^\s*(\/\/|\*|\/\*|\{\/\*)/.test(l) && re.test(l))
+          .map((l) => `${p}: ${l.trim()}`),
+      )
+
+  it('aucun code de motif écrit dans le code (CP, JF, JFR, EC…)', () => {
+    expect(lignes(/['"`](?:CP|JF|JFR|EC|RF|RP|RJ|MA|FO|SS|R)['"`]/)).toEqual([])
+  })
+
+  it('aucun nom de motif ne décide de rien (forfait, école)', () => {
+    expect(
+      lignes(/\.(?:includes|startsWith)\(\s*['"](?:forfait|ecole|école)['"]/),
+    ).toEqual([])
+  })
+
+  it('aucun libellé métier ni nom de poste écrit dans le code', () => {
+    expect(
+      lignes(
+        /Veilleur|Hôtelier|hôtelier|Réception|\bClub\b|Veille de nuit|Direction|Supervision|Adjoint/,
+        [
+          // Le seul nom d'un réglage de la base, pas un libellé.
+          'reglesEtablissement.ts',
+        ],
+      ).filter((l) => !/passations?Veilleur|passation_veilleur/.test(l)),
+    ).toEqual([])
+  })
+
+  it('l’importance d’un poste n’est plus lue : la case indispensable', () => {
+    expect(lignes(/\.importance\b|importance:/)).toEqual([])
+  })
+
+  it('les jours du week-end viennent des règles', () => {
+    expect(
+      lignes(/\[5, ?6\]|jour >= 5|jourDe\(c\) >= 5|has\(5\) \|\||j !== 5/, [
+        // Les défauts de l'établissement.
+        'reglesEtablissement.ts',
+        // « Appliquer à samedi et dimanche » : le calendrier, pas le
+        // week-end de l'établissement.
+        'besoins/historique.ts',
+      ]),
+    ).toEqual([])
   })
 })

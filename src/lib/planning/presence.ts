@@ -299,8 +299,34 @@ export function momentsAccueil(
   return r
 }
 
-/** Le chiffre EXACT d'un moment (D3) : `minimum` (après la migration,
- * minimum = maximum ; si le maximum diffère, le minimum fait foi, D9). */
+/** Le chiffre d'un moment (D3) : `minimum`, au moins ce nombre. Un chiffre
+ * exact par défaut (minimum = maximum) ; « au moins … au plus … » sur
+ * demande depuis le 2026-11-06. */
 export function chiffreAccueil(c: Pick<Consigne, 'minimum'>): number {
   return Math.max(0, c.minimum)
+}
+
+/** Au plus (2026-11-06) : le maximum s'il est renseigné et au-dessus du
+ * minimum, sinon le minimum (un chiffre exact). */
+export function plafondAccueil(
+  c: Pick<Consigne, 'minimum' | 'maximum'>,
+): number {
+  return Math.max(chiffreAccueil(c), c.maximum ?? 0)
+}
+
+/** Nom par défaut de la zone de l'accueil (2026-11-06) : le seul mot de
+ * l'accueil écrit dans le code ; le lot 2 le prendra dans la table des
+ * zones. */
+export const NOM_ZONE_ACCUEIL = 'Accueil'
+
+/** Les noms des postes ouverts de l'accueil le jour (matin et soir) ou la
+ * nuit, dans l'ordre reçu : ce que l'écran dit à la place de « Réception et
+ * Club » ou « Veilleur ». */
+export function nomsPostesAccueil(
+  postes: Iterable<Pick<Poste, 'nom' | 'presence' | 'accueil_nuit' | 'ferme'>>,
+  quand: 'jour' | 'nuit',
+): string[] {
+  return [...postes]
+    .filter((p) => (quand === 'jour' ? p.presence && !p.ferme : tientLaNuit(p)))
+    .map((p) => p.nom)
 }

@@ -554,17 +554,15 @@ export function nomLigneCode(c: {
  * sans travail que celui de la semaine type, décision utilisateur du
  * 2026-10-31) à part, pour être en tête ; puis les absences dans l'ordre
  * des réglages, l'école jamais (elle se pose dans la fiche). Un motif
- * « forfait » (repos forfait) est réservé aux personnes au forfait jours. */
-export function motifsDuJour<M extends Pick<Motif, 'nature' | 'code' | 'nom'>>(
+ * réservé au forfait jours (case du motif, 2026-11-06, à la place du nom
+ * « forfait ») n'est proposé qu'aux personnes au forfait jours. */
+export function motifsDuJour<
+  M extends Pick<Motif, 'nature' | 'reserve_forfait'>,
+>(
   motifs: ReadonlyArray<M>,
   personne: Pick<Salarie, 'forfait_jours'>,
 ): { repos: M[]; autres: M[] } {
-  const forfait = (m: M) =>
-    m.nom
-      .normalize('NFD')
-      .replace(/\p{M}/gu, '')
-      .toLowerCase()
-      .includes('forfait')
+  const forfait = (m: M) => !!m.reserve_forfait
   return {
     repos: motifs.filter((m) => m.nature === 'repos'),
     autres: motifs.filter(

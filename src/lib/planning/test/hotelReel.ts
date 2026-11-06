@@ -292,6 +292,8 @@ export function hotelReel(): { referentiel: Referentiel; absences: Absence[] } {
     couleur: '#000000',
     decompte,
     nature,
+    // Un congé payé laisse le week-end libre (case du motif, 2026-11-06).
+    libre_weekend: code === 'CP' || !decompte,
   }))
   const idM = (c: string) => (motifs.find((m) => m.code === c) as Motif).id
   const postes: Poste[] = POSTES.map(([nom, categorie, codes], i) => ({

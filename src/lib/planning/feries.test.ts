@@ -2,7 +2,6 @@ import highsLoader from 'highs'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import {
-  CODE_JFR,
   estJfr,
   feriesARattraper,
   feriesEntre,
@@ -86,10 +85,11 @@ describe('jours fériés de France', () => {
     expect(feriesEntre('2026-11-12', '2026-11-30')).toEqual([])
   })
 
-  it('le motif JFR se reconnaît à son code', () => {
-    expect(estJfr({ code: CODE_JFR })).toBe(true)
-    expect(estJfr({ code: ' jfr ' })).toBe(true)
-    expect(estJfr({ code: 'JF' })).toBe(false)
+  it('le motif JFR se reconnaît à son rôle, jamais à son code', () => {
+    expect(estJfr({ role: 'ferie_rattrape' })).toBe(true)
+    expect(estJfr({ role: 'ferie_chome' })).toBe(false)
+    expect(estJfr({ role: null })).toBe(false)
+    expect(estJfr({})).toBe(false)
   })
 
   it('les vues lisent vingt-six semaines avant le lundi', () => {
@@ -297,6 +297,8 @@ const JFR: Motif = {
   couleur: '#c084fc',
   decompte: true,
   nature: 'absence',
+  libre_weekend: true,
+  role: 'ferie_rattrape',
 }
 // Une personne à 39 h, Réception et Club, qui a travaillé le 11/11.
 const ID = 3
@@ -734,6 +736,8 @@ const JF: Motif = {
   couleur: '#a78bfa',
   decompte: true,
   nature: 'absence',
+  libre_weekend: true,
+  role: 'ferie_chome',
 }
 
 function semaineDu11(

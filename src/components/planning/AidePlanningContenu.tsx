@@ -28,7 +28,7 @@ import {
 import type { ContenuCarte } from '#/components/planning/semaine/Cartes.tsx'
 import { NEUTRE } from '#/components/planning/semaine/edition.ts'
 import type { ContenuStatut } from '#/components/planning/semaine/edition.ts'
-import { SEMAINES_EQUITE } from '#/lib/planning/modele.ts'
+import { nomsPostesAccueil } from '#/lib/planning/presence.ts'
 import {
   FORFAIT_JOUR_MAX,
   JOUR_MAX_LOI,
@@ -44,9 +44,11 @@ import {
   TEMPS_PLEIN,
 } from '#/lib/planning/regles.ts'
 import {
+  jourVeilleWeekend,
   joursDuContrat,
   listeContrats,
   REGLES_PAR_DEFAUT,
+  repartit,
 } from '#/lib/planning/reglesEtablissement.ts'
 import type {
   JourneesContrat,
@@ -54,7 +56,8 @@ import type {
   RegleEtablissement,
 } from '#/lib/planning/reglesEtablissement.ts'
 import { heuresLisibles as h } from '#/lib/planning/temps.ts'
-import type { Horaire } from '#/lib/planning/types.ts'
+import type { Horaire, Poste } from '#/lib/planning/types.ts'
+import { listeEt } from '#/lib/planning/affichage.ts'
 
 /** Les parties de la page, dans l'ordre du sommaire. */
 export const SECTIONS_FONCTIONNEMENT = [
@@ -475,12 +478,47 @@ function phraseContrat(m: ModeleContratRegle): string {
 export function AidePlanningContenu({
   gestes = [],
   regles: R = REGLES_PAR_DEFAUT,
+  postes = [],
 }: {
   /** Les gestes de la vue ouverte (mois ou semaine), en tête. */
   gestes?: readonly string[]
   /** Les règles de l'établissement (`lireRegles`) ; absent : les défauts. */
   regles?: RegleEtablissement
+  /** Les postes de l'établissement : l'aide dit leurs noms (2026-11-06,
+   * aucun nom de poste écrit dans le code). */
+  postes?: readonly Poste[]
 }) {
+  const jourAccueil =
+    listeEt(nomsPostesAccueil(postes, 'jour')) ||
+    'les postes du matin et du soir'
+  const nuitAccueil =
+    listeEt(nomsPostesAccueil(postes, 'nuit')) || 'les postes de la nuit'
+  const exemples = postes.length
+    ? `${postes
+        .slice(0, 4)
+        .map((p) => p.nom)
+        .join(', ')}…`
+    : 'les postes de l’établissement'
+  const E = R.equite
+  const NOMS_J = [
+    'lundi',
+    'mardi',
+    'mercredi',
+    'jeudi',
+    'vendredi',
+    'samedi',
+    'dimanche',
+  ]
+  const joursWeekend = listeEt(E.weekendJours.map((j) => NOMS_J[j]))
+  const dernier = E.weekendJours.at(-1) ?? 6
+  const partages = listeEt(
+    [
+      repartit(R, 'weekends') && 'des week-ends',
+      repartit(R, 'soirs') && 'des soirs',
+      repartit(R, 'matins_tot') && 'des matins tôt',
+      repartit(R, 'nuits') && 'des nuits',
+    ].filter((x): x is string => !!x),
+  )
   const M = R.moments
   const P = R.passations
   const Rp = R.repos
@@ -540,8 +578,7 @@ export function AidePlanningContenu({
           </li>
           <li>
             <span className="font-medium text-foreground">Postes</span> :
-            Réception, Club, Veille de nuit, Direction… et les horaires permis
-            sur chacun.
+            {exemples} et les horaires permis sur chacun.
           </li>
           <li>
             <span className="font-medium text-foreground">Équipe</span> : une
@@ -705,37 +742,36 @@ export function AidePlanningContenu({
         <Sous titre="L’accueil">
           <p className="text-muted-foreground">
             Chaque poste a un choix Accueil : non, matin et soir, ou nuit. Les
-            postes de l’accueil (Réception et Club le jour, Veille de nuit la
-            nuit) n’ont pas de grille de besoins : un seul tableau de la page
-            Besoins dit combien de personnes il faut exactement le matin, le
-            soir et la nuit. L’app répartit entre les postes et choisit les
-            horaires.
+            postes de l’accueil ({jourAccueil} le jour, {nuitAccueil} la nuit)
+            n’ont pas de grille de besoins : un seul tableau de la page Besoins
+            dit combien de personnes il faut exactement le matin, le soir et la
+            nuit. L’app répartit entre les postes et choisit les horaires.
           </p>
           <Liste
             items={[
-              'D’un veilleur à l’autre : quand la nuit est demandée, l’accueil est tenu sans trou du départ du veilleur au matin jusqu’à l’arrivée du suivant le soir.',
-              `Ouverture : un poste de l’accueil peut avoir une heure d’ouverture (07:00 pour la Réception et le Club). Quelqu’un y est dès cette heure, pendant au moins ${duree(P.dureeOuverture)}.`,
+              'D’une nuit à l’autre : quand la nuit est demandée, l’accueil est tenu sans trou du départ de la nuit au matin jusqu’à l’arrivée de la suivante le soir.',
+              `Ouverture et fermeture : tout poste peut avoir une heure d’ouverture et de fermeture (page Besoins). Quelqu’un y est dès l’ouverture et jusqu’à la fermeture, pendant au moins ${duree(P.dureeOuverture)}, les jours où il est ouvert.`,
               P.releveMinutes > 0
                 ? `Relève : l’équipe du matin et celle du soir sont ensemble ${duree(P.releveMinutes)} chaque jour (réglé sur la page Besoins).`
                 : 'Relève : aucune n’est demandée. Son temps se règle sur la page Besoins.',
               P.passationVeilleur
-                ? 'Passation avec le veilleur : le dernier du soir part à son arrivée, le premier du matin arrive avant son départ.'
-                : 'Passation avec le veilleur : pas demandée (réglage de la page Besoins).',
+                ? 'Passation avec la nuit : le dernier du soir part à son arrivée, le premier du matin arrive avant son départ.'
+                : 'Passation avec la nuit : pas demandée (réglage de la page Besoins).',
               `Une équipe ensemble : le soir, les personnes arrivent à ${duree(P.equipeTolerance)} près et partent à ${duree(P.equipeTolerance)} près, pour que personne ne reste seul. Chacune croise le matin le temps de la relève. Le matin, l’équipe arrive à l’heure d’ouverture du poste, comme dans les plannings faits à la main. Quand il manque du monde, le manque est partagé entre le matin et le soir plutôt que de laisser une personne seule. Une alerte dit quand ce n’est pas possible.`,
               'Un apprenti ou un stagiaire compte dans le chiffre de l’accueil, mais n’est jamais seul sur son poste.',
             ]}
           />
           <Exemple>
-            matin 3, soir 2, nuit 1 : l’app pose trois personnes du matin entre
-            Réception et Club, deux du soir et un veilleur, et vérifie qu’aucun
+            matin 3, soir 2, nuit 1 : l’app pose trois personnes du matin entre{' '}
+            {jourAccueil}, deux du soir et une la nuit, et vérifie qu’aucun
             quart d’heure ne reste sans personne.
           </Exemple>
         </Sous>
         <Sous titre="Les postes à part">
           <p className="text-muted-foreground">
-            Direction, Adjoint, Supervision, Technique… gardent leur propre
-            grille de besoins : un chiffre par horaire et par jour. La Direction
-            ne se remplace pas : quand la personne au forfait jours qui la tient
+            Les autres postes gardent leur propre grille de besoins : un chiffre
+            par horaire et par jour. Un poste tenu seulement par des cadres au
+            forfait jours ne se remplace pas : quand la personne qui le tient
             est absente, la place n’existe pas ce jour-là, rien n’est à
             pourvoir.
           </p>
@@ -975,7 +1011,7 @@ export function AidePlanningContenu({
               : ', quand c’est possible'}
             .
             {P.passationVeilleur &&
-              ' La passation avec le veilleur aussi : le soir reste jusqu’à son arrivée, à la minute près (fin à 23:00 pour une nuit à 23:00), et le matin arrive avant son départ.'}
+              ' La passation avec la nuit aussi : le soir reste jusqu’à son arrivée, à la minute près (fin à 23:00 pour une nuit à 23:00), et le matin arrive avant son départ.'}
           </li>
           <li>
             <span className="font-medium text-foreground">Les contrats</span> :
@@ -986,7 +1022,7 @@ export function AidePlanningContenu({
             <span className="font-medium text-foreground">La fatigue</span> :{' '}
             {h(Rp.reposConfort)} entre deux services, {Rp.reposApresNuits} jours
             après des nuits avant de reprendre de jour, un week-end libre sur{' '}
-            {SEMAINES_EQUITE} semaines. Elle passe après les heures dues : quand
+            {E.semaines} semaines. Elle passe après les heures dues : quand
             seules des heures en moins la sauveraient, les heures passent devant
             et une alerte orange le dit. Elle passe avant un 6e jour et les
             heures au-delà du contrat. Plus de {Rp.joursAffilesMax} jours
@@ -1095,7 +1131,7 @@ export function AidePlanningContenu({
             ],
             [
               'Nuits',
-              'Un mineur ne travaille jamais la nuit. Un veilleur se compte sur ses vraies heures, changement d’heure compris.',
+              'Un mineur ne travaille jamais la nuit. Une nuit se compte sur ses vraies heures, changement d’heure compris.',
             ],
             [
               'Un shift par jour',
@@ -1124,7 +1160,7 @@ export function AidePlanningContenu({
                   : 'Deux repos qui se suivent ne sont pas demandés, sauf pour un mineur (la loi).',
               `${Rp.joursAffilesConseilles} jours de travail d’affilée au plus pour un contrat de ${rythme} et plus, semaines voisines comprises (${Rp.joursAffilesMax} pour les autres). L’école compte comme du travail.`,
               `Au moins ${h(Rp.reposConfort)} entre la fin d’un service et le début du suivant (la loi en demande ${h(REPOS_QUOTIDIEN)}).`,
-              `Un week-end complet libre, samedi et dimanche, au moins une fois sur ${SEMAINES_EQUITE} semaines. Un congé ou un repos compte comme libre ; une maladie, une formation, un sans solde ou l’école, non. La nuit du dimanche au lundi est écrite le dimanche : elle rend le week-end travaillé.`,
+              `Un week-end complet libre, ${joursWeekend}, au moins une fois sur 4 semaines. Un motif qui laisse le week-end libre (congé, repos) compte comme libre ; une maladie, une formation, un sans solde ou l’école, non. La nuit du ${NOMS_J[dernier]} est écrite le ${NOMS_J[dernier]} : elle rend le week-end travaillé${jourVeilleWeekend(R) !== null ? `, comme celle du ${NOMS_J[jourVeilleWeekend(R) as number]}` : ''}.`,
               'Un repos fixe, posé ou validé n’est jamais repris par le calcul.',
             ]}
           />
@@ -1154,10 +1190,12 @@ export function AidePlanningContenu({
         <Sous titre="La justice">
           <Liste
             items={[
-              `Partage des week-ends, des soirs et des matins tôt, sur les ${SEMAINES_EQUITE} dernières semaines, entre tout l’accueil (Réception et Club, apprentis compris), à la part de contrat de chacun. Une semaine d’absence ne met personne en retard.`,
+              partages
+                ? `Partage ${partages}, sur les ${E.semaines} dernières semaines, entre tout l’accueil (${jourAccueil}, apprentis compris), à la part de contrat de chacun. Une semaine d’absence ne met personne en retard.`
+                : 'Rien n’est partagé à part égale (réglage des règles des contrats).',
               'Le week-end libre passe avant la semaine type : un samedi ou un dimanche fixé en Travaille dans la fiche est libéré une fois sur 4 semaines, et les repos fixes de cette semaine-là peuvent bouger. Une alerte le dit.',
               'Le calcul ne place jamais un extra : il faut d’abord l’appeler. Une place que l’équipe ne peut pas tenir reste vide, et les ronds et triangles du mois le montrent en rouge.',
-              `Les heures au-delà du contrat vont d’abord à qui en a fait le moins sur les ${SEMAINES_EQUITE} dernières semaines. Au-delà du contrat ${R.heures.semainesEnPlusAlerte} semaines sur ${SEMAINES_EQUITE} : une alerte.`,
+              `Les heures au-delà du contrat vont d’abord à qui en a fait le moins sur les ${E.semaines} dernières semaines. Au-delà du contrat ${R.heures.semainesEnPlusAlerte} semaines sur ${E.semaines} : une alerte.`,
               'Les jours fériés travaillés sont rattrapés dans les semaines qui suivent, même sur un jour habituel de la semaine type.',
             ]}
           />
@@ -1200,7 +1238,7 @@ export function AidePlanningContenu({
             ],
             [
               'Besoins',
-              'Le tableau de l’accueil, chaque besoin obligatoire ou souhaité et son niveau, l’ouverture et la fermeture, la relève, la passation avec le veilleur, l’équipe du soir ensemble.',
+              'Le tableau de l’accueil, chaque besoin obligatoire ou souhaité et son niveau, l’ouverture et la fermeture, la relève, la passation avec la nuit, l’équipe du soir ensemble.',
             ],
             [
               'Besoins, partie Moments',

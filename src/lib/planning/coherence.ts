@@ -831,7 +831,7 @@ export function verifierReglages(
       'accueil-sans-poste',
       'a-voir',
       'besoins',
-      "Le tableau de l'accueil demande du monde, mais aucun poste n'est un poste de l'accueil. Dans Postes, activez Poste de l'accueil sur Réception et Club.",
+      "Le tableau de l'accueil demande du monde, mais aucun poste n'est un poste de l'accueil. Dans Postes, réglez Accueil sur Matin et soir pour les postes qui le tiennent.",
       undefined,
       PAGE_ECRAN.postes,
     )
@@ -981,7 +981,8 @@ export function verifierReglages(
   // calcul ne la rend jamais dure (D3), la case reste vide.
   const duree = regles.passations.dureeOuverture
   for (const p of r.postes) {
-    if (!accueil || !p.presence || p.ferme) continue
+    // Tout poste (2026-11-06), sauf la nuit de l'accueil (ses passations).
+    if (p.ferme || (accueil && p.accueil_nuit)) continue
     const permis = codesDuPoste(p, r.horaires)
     const bornesH = (h: Horaire) => {
       const d = minutesDe(h.debut)

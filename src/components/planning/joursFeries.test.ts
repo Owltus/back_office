@@ -26,8 +26,9 @@ const JFR: Motif = {
   couleur: '#c084fc',
   decompte: true,
   nature: 'absence',
+  role: 'ferie_rattrape',
 }
-const CP: Motif = { ...JFR, id: 1, code: 'CP', nom: 'Congés' }
+const CP: Motif = { ...JFR, id: 1, code: 'CP', nom: 'Congés', role: null }
 const motifs = [JFR, CP]
 
 const bilan = (b: Partial<BilanOut> = {}): BilanOut => ({

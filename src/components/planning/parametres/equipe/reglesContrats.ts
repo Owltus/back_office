@@ -24,6 +24,7 @@ import {
 } from '#/lib/planning/regles.ts'
 import { heuresLisibles } from '#/lib/planning/temps.ts'
 import type {
+  CritereEquite,
   ForceRegle,
   JourIsole,
   JourneesContratLigne,
@@ -72,6 +73,12 @@ export interface SaisieReglesContrats {
   semaines_en_plus_alerte: number
   ferie_anciennete_mois: number
   ferie_rattrapage_jours: number
+  /** Équité (2026-11-06) : jours du week-end (0 = lundi), nuit de la
+   * veille, ce qui est réparti, semaines regardées. */
+  weekend_jours: number[]
+  weekend_nuit_veille: boolean
+  equite_criteres: CritereEquite[]
+  equite_semaines: number
   /** Les types de contrat de l'établissement, dans l'ordre des listes. Un
    * contrat ajouté ici est créé à l'enregistrement, un contrat retiré est
    * supprimé (la base refuse s'il sert encore). */
@@ -96,7 +103,9 @@ export const BORNES = {
   nuitsMax: 6,
   reposApresNuitsMax: 3,
   congeLongMax: 30,
-  semainesEnPlusMax: 4,
+  semainesEnPlusMax: 12,
+  equiteSemainesMax: 12,
+  weekendJoursMax: 3,
   lignesMax: 10,
   contratsMax: 20,
   nomContratMax: 40,
@@ -173,6 +182,10 @@ export function saisieDepuis(
     semaines_en_plus_alerte: r.heures.semainesEnPlusAlerte,
     ferie_anciennete_mois: r.feries.ancienneteMois,
     ferie_rattrapage_jours: r.feries.rattrapageJours,
+    weekend_jours: [...r.equite.weekendJours],
+    weekend_nuit_veille: r.equite.nuitVeille,
+    equite_criteres: [...r.equite.criteres],
+    equite_semaines: r.equite.semaines,
     modeles: listeContrats(r).map(modeleDeLaBase),
   }
 }
@@ -264,8 +277,25 @@ export function reglagesDepuis(s: SaisieReglesContrats): Partial<Reglages> {
     semaines_en_plus_alerte: s.semaines_en_plus_alerte,
     ferie_anciennete_mois: s.ferie_anciennete_mois,
     ferie_rattrapage_jours: s.ferie_rattrapage_jours,
+    weekend_jours: [...s.weekend_jours].sort((a, b) => a - b),
+    weekend_nuit_veille: s.weekend_nuit_veille,
+    equite_criteres: CRITERES_EQUITE.map((c) => c.cle).filter((c) =>
+      s.equite_criteres.includes(c),
+    ),
+    equite_semaines: s.equite_semaines,
   }
 }
+
+/** Ce que le planning peut répartir à part égale, dans l'ordre du calcul. */
+export const CRITERES_EQUITE: ReadonlyArray<{
+  cle: CritereEquite
+  libelle: string
+}> = [
+  { cle: 'weekends', libelle: 'Les week-ends travaillés' },
+  { cle: 'soirs', libelle: 'Les soirs' },
+  { cle: 'matins_tot', libelle: 'Les matins tôt' },
+  { cle: 'nuits', libelle: 'Les nuits' },
+]
 
 /** Les types de contrat dont les règles ont changé. */
 export function modelesChanges(
@@ -408,6 +438,19 @@ export function erreursSaisie(s: SaisieReglesContrats): string[] {
   )
     erreurs.push(
       `Un jour férié se rattrape dans les ${BORNES.rattrapageMin} à ${BORNES.rattrapageMax} jours.`,
+    )
+  if (
+    !s.weekend_jours.length ||
+    s.weekend_jours.length > BORNES.weekendJoursMax
+  )
+    erreurs.push(`Le week-end compte de 1 à ${BORNES.weekendJoursMax} jours.`)
+  if (s.equite_semaines < 1 || s.equite_semaines > BORNES.equiteSemainesMax)
+    erreurs.push(
+      `Le partage regarde de 1 à ${BORNES.equiteSemainesMax} semaines.`,
+    )
+  if (s.semaines_en_plus_alerte > s.equite_semaines)
+    erreurs.push(
+      `L'alerte des heures en plus compte au plus ${s.equite_semaines} semaines, celles du partage.`,
     )
   return erreurs
 }

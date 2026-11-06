@@ -12,7 +12,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { codeErreur, messageErreur } from '#/lib/planning/erreurs.ts'
-import { fenetreFeries } from '#/lib/planning/feries.ts'
+import { fenetreFeries, motifReposDefaut } from '#/lib/planning/feries.ts'
 import { planningKeys } from '#/lib/planning/keys.ts'
 import { SEMAINES_EQUITE } from '#/lib/planning/modele.ts'
 import {
@@ -294,7 +294,7 @@ export function useGenerer() {
       // vides. Jamais pour la pose des horaires fixes (`seulement`).
       const motifRepos = options.seulement
         ? undefined
-        : referentiel.motifs?.find((m) => m.nature === 'repos')
+        : motifReposDefaut(referentiel.motifs)
       if (motifRepos) {
         const repos = reposAProposer(
           analyser(donneesSemaine(lundi, referentiel, apres), aujourdhui),

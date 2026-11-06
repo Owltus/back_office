@@ -30,11 +30,11 @@ const noms = (ps: Poste[]) => ps.map((p) => p.nom)
 describe('ordre de décision écrit d’après le réglage indispensable', () => {
   it('les postes indispensables en dernier, les autres avant', () => {
     const ph = phrasesOrdreDecision([
-      poste(1, 'Direction', { importance: 'si_possible' }),
-      poste(2, 'Réception', { importance: 'indispensable' }),
-      poste(3, 'Club', { importance: 'indispensable' }),
-      poste(4, 'Technique', { importance: 'important' }),
-      poste(5, 'Ancien', { importance: 'si_possible', ferme: true }),
+      poste(1, 'Direction', { indispensable: false }),
+      poste(2, 'Réception', { indispensable: true }),
+      poste(3, 'Club', { indispensable: true }),
+      poste(4, 'Technique', { indispensable: false }),
+      poste(5, 'Ancien', { indispensable: false, ferme: true }),
     ])
     expect(ph[1]).toBe(
       "Quand il manque du monde, une place reste vide dans cet ordre : d'abord les besoins souhaités, puis les autres postes (Direction et Technique), et les postes indispensables (Réception et Club) en dernier.",
@@ -46,8 +46,8 @@ describe('ordre de décision écrit d’après le réglage indispensable', () =>
   })
   it('tous au même réglage : une seule phrase', () => {
     const ph = phrasesOrdreDecision([
-      poste(1, 'A', { importance: 'indispensable' }),
-      poste(2, 'B', { importance: 'indispensable' }),
+      poste(1, 'A', { indispensable: true }),
+      poste(2, 'B', { indispensable: true }),
     ])
     expect(ph[1]).toContain("Aucun poste n'est plus indispensable")
   })
@@ -55,7 +55,7 @@ describe('ordre de décision écrit d’après le réglage indispensable', () =>
     const r = postesParImportance([
       poste(1, 'A'),
       poste(2, 'B', { ferme: true }),
-      poste(3, 'C', { importance: 'important' }),
+      poste(3, 'C', { indispensable: false }),
     ])
     expect(noms(r.indispensables)).toEqual([])
     expect(noms(r.autres)).toEqual(['A', 'C'])
@@ -64,15 +64,15 @@ describe('ordre de décision écrit d’après le réglage indispensable', () =>
 
 describe('sections de la page Besoins', () => {
   const accueil = [
-    poste(1, 'Réception', { presence: true, importance: 'indispensable' }),
-    poste(2, 'Veille', { accueil_nuit: true, importance: 'indispensable' }),
+    poste(1, 'Réception', { presence: true, indispensable: true }),
+    poste(2, 'Veille', { accueil_nuit: true, indispensable: true }),
   ]
   it('un poste neuf se range tout seul selon son réglage', () => {
     const s = sectionsBesoins([
       ...accueil,
-      poste(3, 'Zéphyr', { importance: 'indispensable' }),
-      poste(4, 'Direction', { importance: 'si_possible' }),
-      poste(5, 'Fermé', { importance: 'indispensable', ferme: true }),
+      poste(3, 'Zéphyr', { indispensable: true }),
+      poste(4, 'Direction', { indispensable: false }),
+      poste(5, 'Fermé', { indispensable: true, ferme: true }),
     ])
     expect(s.accueil).toBe(true)
     expect(s.accueilIndispensable).toBe(true)
@@ -81,14 +81,14 @@ describe('sections de la page Besoins', () => {
   })
   it('un accueil sans poste indispensable va dans les autres postes', () => {
     const s = sectionsBesoins([
-      poste(1, 'Réception', { presence: true, importance: 'si_possible' }),
+      poste(1, 'Réception', { presence: true, indispensable: false }),
     ])
     expect(s.accueil).toBe(true)
     expect(s.accueilIndispensable).toBe(false)
   })
   it('sans poste du matin et du soir : pas de tableau, tous ont leur grille', () => {
     const s = sectionsBesoins([
-      poste(2, 'Veille', { accueil_nuit: true, importance: 'indispensable' }),
+      poste(2, 'Veille', { accueil_nuit: true, indispensable: true }),
       poste(4, 'Direction'),
     ])
     expect(s.accueil).toBe(false)

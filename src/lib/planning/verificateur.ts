@@ -39,7 +39,10 @@ import {
   rythmeHumain,
   apresContrat,
 } from '#/lib/planning/regles.ts'
-import { REGLES_PAR_DEFAUT } from '#/lib/planning/reglesEtablissement.ts'
+import {
+  jourVeilleWeekend,
+  REGLES_PAR_DEFAUT,
+} from '#/lib/planning/reglesEtablissement.ts'
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import { heuresLisibles as h } from '#/lib/planning/temps.ts'
 import type { Periode, PeriodePresence } from '#/lib/planning/types.ts'
@@ -704,23 +707,24 @@ function alertesMorales(
         )
     }
 
-    // Règle 4 : un week-end complet libre sur 4 semaines.
+    // Règle 4 : un week-end complet libre sur 4 semaines. Les jours du
+    // week-end et sa veille sont ceux de l'établissement (2026-11-06).
+    const WE = R.equite.weekendJours
+    const veille = jourVeilleWeekend(R)
+    const duWeekend = (c: Creneau) =>
+      WE.includes(jourDe(c)) || (jourDe(c) === veille && c.moment === 'nuit')
     if (
       premiere &&
       complete &&
       s.weekendLibreAvant === false &&
-      (travaille(5) ||
-        travaille(6) ||
-        // La nuit du vendredi au samedi rend le week-end travaillé
-        // (2026-11-03), comme celle du dimanche (Q15).
-        semaine.some((c) => jourDe(c) === 4 && c.moment === 'nuit'))
+      // La nuit du vendredi au samedi rend le week-end travaillé
+      // (2026-11-03), comme celle du dimanche (Q15).
+      (WE.some((j) => travaille(j)) || semaine.some(duWeekend))
     )
       ajoute(
         'WEEKEND-LIBRE',
         'aucun week-end complet libre depuis 4 semaines',
-        semaine.filter(
-          (c) => jourDe(c) >= 5 || (jourDe(c) === 4 && c.moment === 'nuit'),
-        ),
+        semaine.filter(duWeekend),
       )
 
     // Règle 6 : une semaine stable.
@@ -767,8 +771,7 @@ function alertesMorales(
       !(
         s.weekendTravailleAvant &&
         complete &&
-        !travaille(jours[5]) &&
-        !travaille(jours[6])
+        WE.every((j) => !travaille(jours[j]))
       )
     ) {
       const repris = [...s.reposAvant].filter((j) => parJour.has(j))
@@ -791,7 +794,7 @@ function alertesMorales(
       )
         ajoute(
           'HEURES-PLUS',
-          `au-delà de son contrat ${avant + 1} semaines sur 4 : les heures en plus se partagent`,
+          `au-delà de son contrat ${avant + 1} semaines sur ${R.equite.semaines} : les heures en plus se partagent`,
           semaine,
         )
     }
@@ -814,7 +817,7 @@ function alertesMorales(
           courtIci,
         )
       const reprise = semaine.find((c) => jourDe(c) >= r)
-      if (reprise && jourDe(reprise) >= 5)
+      if (reprise && WE.includes(jourDe(reprise)))
         ajoute('RETOUR-CONGE', 'reprend un week-end après son congé', [reprise])
     }
   }

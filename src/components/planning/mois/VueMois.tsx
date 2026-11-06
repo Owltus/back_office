@@ -406,6 +406,7 @@ export function VueMois({
             [...faites.values()],
             referentiel.salaries,
             referentiel.postes,
+            lireRegles(referentiel),
           )
         : ''
       // Places vides ou équité à relire : le message reste jusqu'à ce

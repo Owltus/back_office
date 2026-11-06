@@ -1547,7 +1547,7 @@ describe("verifierReglages, tableau de l'accueil", () => {
       gravite: 'a-voir',
       ecran: 'besoins',
       texte:
-        "Le tableau de l'accueil demande du monde, mais aucun poste n'est un poste de l'accueil. Dans Postes, activez Poste de l'accueil sur Réception et Club.",
+        "Le tableau de l'accueil demande du monde, mais aucun poste n'est un poste de l'accueil. Dans Postes, réglez Accueil sur Matin et soir pour les postes qui le tiennent.",
       lien: { page: '/planning/postes' },
     })
     r.consignes = r.consignes.map((c) => ({ ...c, minimum: 0, maximum: 0 }))

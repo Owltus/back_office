@@ -16,6 +16,8 @@
  */
 
 import type {
+  CritereEquite,
+  FerieAjoute,
   ModeleContrat,
   Referentiel,
   Reglages,
@@ -172,6 +174,21 @@ export interface RegleEtablissement {
     ancienneteMois: number
     /** Un jour férié travaillé reste à rattraper ce nombre de jours. */
     rattrapageJours: number
+    /** Jours fériés en plus des 11 calculés (2026-11-06). */
+    ajoutes: readonly FerieAjoute[]
+  }
+  /** Partage à part égale et week-end (2026-11-06, lot 1b). */
+  equite: {
+    /** Jours du week-end (0 = lundi), dans l'ordre : règle du week-end
+     * libre, partage des week-ends, reprise après un congé. */
+    weekendJours: readonly number[]
+    /** Une nuit écrite la veille du premier jour du week-end (du vendredi
+     * au samedi) rend le week-end travaillé. */
+    nuitVeille: boolean
+    /** Ce que le planning répartit à part égale dans un groupe. */
+    criteres: readonly CritereEquite[]
+    /** Semaines regardées pour le partage et les heures en plus. */
+    semaines: number
   }
   /** Les types de contrat de l'établissement, par identifiant. */
   modeles: Readonly<Record<TypeContrat, ModeleContratRegle>>
@@ -239,7 +256,13 @@ export const REGLES_PAR_DEFAUT: RegleEtablissement = {
   ecole: { veilleFin: 21 * H, lendemainDebut: 8 * H },
   conges: { congeLong: 5 },
   heures: { semainesEnPlusAlerte: 3 },
-  feries: { ancienneteMois: 12, rattrapageJours: 91 },
+  feries: { ancienneteMois: 12, rattrapageJours: 91, ajoutes: [] },
+  equite: {
+    weekendJours: [5, 6],
+    nuitVeille: true,
+    criteres: ['weekends', 'soirs', 'matins_tot'],
+    semaines: 4,
+  },
   // Mêmes lignes que les migrations 20261105100000 et 20261106100000.
   modeles: {
     cdi: { ...MODELE_ORDINAIRE, code: 'cdi', nom: 'CDI', ordre: 0 },
@@ -293,7 +316,7 @@ export const REGLES_PAR_DEFAUT: RegleEtablissement = {
  * valeur par défaut. */
 export function lireRegles(
   referentiel?: Partial<
-    Pick<Referentiel, 'reglages' | 'modelesContrat'>
+    Pick<Referentiel, 'reglages' | 'modelesContrat' | 'feriesAjoutes'>
   > | null,
 ): RegleEtablissement {
   const r: Partial<Reglages> = referentiel?.reglages ?? {}
@@ -359,6 +382,15 @@ export function lireRegles(
     feries: {
       ancienneteMois: r.ferie_anciennete_mois ?? d.feries.ancienneteMois,
       rattrapageJours: r.ferie_rattrapage_jours ?? d.feries.rattrapageJours,
+      ajoutes: referentiel?.feriesAjoutes ?? d.feries.ajoutes,
+    },
+    equite: {
+      weekendJours: r.weekend_jours?.length
+        ? [...new Set(r.weekend_jours.map(Number))].sort((a, b) => a - b)
+        : d.equite.weekendJours,
+      nuitVeille: r.weekend_nuit_veille ?? d.equite.nuitVeille,
+      criteres: r.equite_criteres ?? d.equite.criteres,
+      semaines: r.equite_semaines ?? d.equite.semaines,
     },
     modeles: lireModeles(referentiel?.modelesContrat),
   }
@@ -486,4 +518,29 @@ export function aJourneeCourteImposee(
 ): boolean {
   const j = journeesDuContrat(regles, minutesHebdo)
   return !!j && j.courtesMax > 0 && j.durees.length > 1
+}
+
+// ------------------------------------------------- week-end et partage
+
+/** Le jour `j` (0 = lundi ; au-delà de 6, une semaine suivante) est-il un
+ * jour du week-end de l'établissement ? */
+export function estJourWeekend(regles: RegleEtablissement, j: number): boolean {
+  return regles.equite.weekendJours.includes(((j % 7) + 7) % 7)
+}
+
+/** Le jour dont la NUIT rend le week-end travaillé (la veille du premier
+ * jour du week-end, le vendredi à l'hôtel), ou null : réglage coupé, ou
+ * week-end qui commence le lundi (sa veille est dans la semaine d'avant). */
+export function jourVeilleWeekend(regles: RegleEtablissement): number | null {
+  if (!regles.equite.nuitVeille) return null
+  const premier = regles.equite.weekendJours[0]
+  return premier !== undefined && premier > 0 ? premier - 1 : null
+}
+
+/** Le planning répartit-il ce critère à part égale ? */
+export function repartit(
+  regles: RegleEtablissement,
+  critere: (typeof regles.equite.criteres)[number],
+): boolean {
+  return regles.equite.criteres.includes(critere)
 }

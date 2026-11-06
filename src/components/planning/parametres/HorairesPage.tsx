@@ -109,7 +109,12 @@ import type {
   NatureMotif,
   Periode,
   Referentiel,
+  RoleMotif,
 } from '#/lib/planning/types.ts'
+import { cn } from '#/lib/utils.ts'
+import { ICONES_MOTIF, iconeMotif } from '#/components/planning/iconeMotif.ts'
+import { FeriesAjoutes } from '#/components/planning/parametres/reglages/FeriesAjoutes.tsx'
+import type { LucideIcon } from 'lucide-react'
 
 const NATURES: ReadonlyArray<{
   valeur: NatureMotif
@@ -171,7 +176,7 @@ const PERIODES: ReadonlyArray<{
   {
     valeur: 'nuit',
     libelle: 'Nuit',
-    aide: 'Compte la nuit dans le tableau Accueil, sur le poste Veille de nuit',
+    aide: 'Compte la nuit dans le tableau Accueil, sur les postes de la nuit',
   },
 ]
 
@@ -181,7 +186,43 @@ const saisieMotif = (m: Motif): SaisieMotif => ({
   couleur: m.couleur,
   decompte: m.decompte,
   nature: m.nature,
+  libre_weekend: m.libre_weekend ?? (m.nature === 'repos' || !m.decompte),
+  reserve_forfait: !!m.reserve_forfait,
+  role: m.role ?? null,
+  icone: m.icone ?? null,
 })
+
+/** Le rôle d'un motif dans le planning (2026-11-06, à la place des codes
+ * JF, JFR, R), selon sa nature ; un seul motif par rôle. */
+const ROLES: Record<
+  NatureMotif,
+  ReadonlyArray<{ valeur: RoleMotif | 'aucun'; libelle: string; texte: string }>
+> = {
+  absence: [
+    { valeur: 'aucun', libelle: 'Aucun', texte: 'Un motif comme un autre.' },
+    {
+      valeur: 'ferie_chome',
+      libelle: 'Jour férié chômé',
+      texte:
+        'Posé par le planning les jours fériés, pour qui les prend le jour même (stagiaires, encadrement).',
+    },
+    {
+      valeur: 'ferie_rattrape',
+      libelle: 'Jour férié rattrapé',
+      texte:
+        "Proposé par le planning quand quelqu'un a travaillé un jour férié.",
+    },
+  ],
+  repos: [
+    { valeur: 'aucun', libelle: 'Aucun', texte: 'Un repos comme un autre.' },
+    {
+      valeur: 'repos_defaut',
+      libelle: 'Repos du planning',
+      texte: 'Le repos que le planning pose et valide.',
+    },
+  ],
+  ecole: [],
+}
 
 export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
   const droits = useDroitsPlanning()
@@ -248,6 +289,10 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
       couleur: PALETTE[(data.motifs.length + 5) % PALETTE.length],
       decompte: true,
       nature: 'absence',
+      libre_weekend: false,
+      reserve_forfait: false,
+      role: null,
+      icone: null,
     })
   }
 
@@ -383,6 +428,11 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
               })}
             </div>
           </section>
+
+          <FeriesAjoutes
+            feries={data.feriesAjoutes ?? []}
+            modifiable={modifiable}
+          />
 
           <Sheet
             open={
@@ -1021,7 +1071,15 @@ function CarteMotif({
           valeur={m.nature}
           options={NATURES}
           disabled={desactive}
-          onChange={(v) => changer({ nature: v })}
+          onChange={(v) =>
+            changer({
+              nature: v,
+              // Un rôle ne vaut que pour sa nature ; l'école n'est jamais
+              // un jour libre.
+              role: null,
+              libre_weekend: v === 'ecole' ? false : m.libre_weekend,
+            })
+          }
         />
         <span className="text-xs text-muted-foreground">{nature.texte}</span>
       </div>
@@ -1056,6 +1114,75 @@ function CarteMotif({
           </span>
         </label>
       )}
+
+      {m.nature !== 'ecole' && (
+        <label className="flex items-start gap-2 text-sm">
+          <Switch
+            checked={!!m.libre_weekend}
+            disabled={desactive}
+            onCheckedChange={(libre_weekend) => changer({ libre_weekend })}
+            aria-label="Laisse le week-end libre"
+            className="mt-0.5"
+          />
+          <span>
+            Laisse le week-end libre
+            <span className="block text-xs text-muted-foreground">
+              Un week-end avec ce motif compte comme un week-end libre, comme un
+              congé ou un repos. Pas une maladie ni une formation.
+            </span>
+          </span>
+        </label>
+      )}
+
+      {m.nature === 'absence' && (
+        <label className="flex items-start gap-2 text-sm">
+          <Switch
+            checked={!!m.reserve_forfait}
+            disabled={desactive}
+            onCheckedChange={(reserve_forfait) => changer({ reserve_forfait })}
+            aria-label="Réservé au forfait jours"
+            className="mt-0.5"
+          />
+          <span>
+            Réservé au forfait jours
+            <span className="block text-xs text-muted-foreground">
+              Proposé seulement aux personnes au forfait jours.
+            </span>
+          </span>
+        </label>
+      )}
+
+      {ROLES[m.nature].length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium">Rôle dans le planning</span>
+          <Segmente
+            etiquette="Rôle dans le planning"
+            valeur={m.role ?? 'aucun'}
+            options={ROLES[m.nature].map((r) => ({
+              valeur: r.valeur,
+              libelle: r.libelle,
+              aide: r.texte,
+            }))}
+            disabled={desactive}
+            onChange={(v) => changer({ role: v === 'aucun' ? null : v })}
+          />
+          <span className="text-xs text-muted-foreground">
+            {ROLES[m.nature].find((r) => r.valeur === (m.role ?? 'aucun'))
+              ?.texte ?? ''}{' '}
+            {m.role ? 'Un seul motif a ce rôle : il passe à celui-ci.' : ''}
+          </span>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium">Icône</span>
+        <ChoixIcone
+          valeur={m.icone ?? null}
+          devinee={iconeMotif({ code: m.code, nom: m.nom })}
+          disabled={desactive}
+          onChange={(icone) => changer({ icone })}
+        />
+      </div>
 
       <ErreursSaisie erreurs={modifiable ? erreurs : []} />
 
@@ -1094,5 +1221,50 @@ function CarteMotif({
         onConfirm={() => void supprimer()}
       />
     </CarteReglage>
+  )
+}
+
+/** L'icône d'un motif (2026-11-06) : « Automatique » garde celle devinée
+ * d'après le nom, sinon une des icônes de `ICONES_MOTIF`. */
+function ChoixIcone({
+  valeur,
+  devinee: Devinee,
+  disabled,
+  onChange,
+}: {
+  valeur: string | null
+  devinee: LucideIcon
+  disabled: boolean
+  onChange: (cle: string | null) => void
+}) {
+  const bouton = (cle: string | null, libelle: string, Icone: LucideIcon) => (
+    <Tip key={cle ?? 'auto'} label={libelle}>
+      <button
+        type="button"
+        role="radio"
+        aria-checked={valeur === cle}
+        aria-label={`Icône : ${libelle}`}
+        disabled={disabled}
+        onClick={() => onChange(cle)}
+        className={cn(
+          'flex size-8 items-center justify-center rounded-md border transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed',
+          valeur === cle
+            ? 'border-primary bg-primary/10 text-foreground'
+            : 'border-transparent text-muted-foreground hover:border-border hover:text-foreground',
+        )}
+      >
+        <Icone aria-hidden className="size-4" />
+      </button>
+    </Tip>
+  )
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Icône du motif"
+      className="flex flex-wrap gap-1"
+    >
+      {bouton(null, "Automatique, d'après le nom", Devinee)}
+      {ICONES_MOTIF.map((i) => bouton(i.cle, i.libelle, i.Icone))}
+    </div>
   )
 }

@@ -600,8 +600,7 @@ describe('Besoins', () => {
       monter(<BesoinsPage />)
       expect(texte()).toContain("Aucun poste n'est plus indispensable")
       cleanup()
-      for (const p of ref.postes)
-        p.importance = p.nom === 'Réception' ? 'indispensable' : 'si_possible'
+      for (const p of ref.postes) p.indispensable = p.nom === 'Réception'
       monter(<BesoinsPage />)
       expect(texte()).toMatch(
         /d'abord les besoins souhaités, puis les autres postes \([^)]*Direction[^)]*\), et les postes indispensables \(Réception\) en dernier\./,
@@ -615,13 +614,12 @@ describe('Besoins', () => {
       // Oracle : « imaginons demain je crée des nouveaux postes, je n'ai pas
       // envie de devoir refabriquer un moteur ».
       const ref = etat.referentiel as Referentiel
-      for (const p of ref.postes)
-        p.importance = p.nom === 'Réception' ? 'indispensable' : 'si_possible'
+      for (const p of ref.postes) p.indispensable = p.nom === 'Réception'
       ref.postes.push({
         ...ref.postes[0],
         id: 9999,
         nom: 'Zéphyr',
-        importance: 'indispensable',
+        indispensable: true,
       })
       monter(<BesoinsPage />)
       const indispensables = within(

@@ -11,6 +11,7 @@
  * comprise) est réglée ici, à côté de la relève qui reste une préférence.
  */
 
+import { listeEt } from '#/lib/planning/affichage.ts'
 import { useState } from 'react'
 
 import { useEcriture } from '#/components/planning/hooks/usePlanning.ts'
@@ -29,14 +30,18 @@ export function ReglageReleve({
   minutes,
   continuite,
   veilleur = true,
+  nuit = [],
   tolerance = 30,
   modifiable,
 }: {
   minutes: number
   /** Continuité entre équipes obligatoire (`continuite_obligatoire`). */
   continuite: boolean
-  /** Passation avec le Veilleur (`passation_veilleur`). */
+  /** Passation avec la nuit (`passation_veilleur`). */
   veilleur?: boolean
+  /** Noms des postes de la nuit de l'accueil (2026-11-06 : plus de
+   * « Veilleur » écrit dans le code). */
+  nuit?: readonly string[]
   /** Équipe du soir ensemble à tant de minutes près (`equipe_tolerance`). */
   tolerance?: number
   modifiable: boolean
@@ -44,6 +49,7 @@ export function ReglageReleve({
   const ecrire = useEcriture()
   const notifier = useNotifier()
   const [envoi, setEnvoi] = useState(false)
+  const quiNuit = nuit.length ? ` (${listeEt([...nuit])})` : ''
   const valeur = (CHOIX as readonly string[]).includes(String(minutes))
     ? (String(minutes) as Choix)
     : '30'
@@ -104,7 +110,7 @@ export function ReglageReleve({
           <span className="font-medium">Aucun trou entre deux équipes</span>
           <span className="text-xs text-muted-foreground">
             {continuite
-              ? "L'équipe suivante arrive au plus tard quand la précédente part, veilleur compris. Un trou ne reste que si personne ne peut le tenir."
+              ? "L'équipe suivante arrive au plus tard quand la précédente part, nuit comprise. Un trou ne reste que si personne ne peut le tenir."
               : 'Un trou entre deux équipes est évité, mais passe après les heures des contrats.'}
           </span>
         </span>
@@ -116,18 +122,18 @@ export function ReglageReleve({
           onCheckedChange={(v) =>
             void ecrireChamp(
               { passation_veilleur: v },
-              "La passation avec le Veilleur n'a pas pu être enregistrée",
+              "La passation avec la nuit n'a pas pu être enregistrée",
             )
           }
-          aria-label="Passation avec le Veilleur"
+          aria-label="Passation avec la nuit"
           className="mt-0.5"
         />
         <span className="flex flex-col gap-0.5">
-          <span className="font-medium">Passation avec le Veilleur</span>
+          <span className="font-medium">Passation avec la nuit{quiNuit}</span>
           <span className="text-xs text-muted-foreground">
             {veilleur
-              ? "Le dernier du soir attend l'arrivée du Veilleur, le premier du matin arrive avant son départ."
-              : 'Aucune passation demandée avec le Veilleur.'}
+              ? "Le dernier du soir attend l'arrivée de la nuit, le premier du matin arrive avant son départ."
+              : 'Aucune passation demandée avec la nuit.'}
           </span>
         </span>
       </label>

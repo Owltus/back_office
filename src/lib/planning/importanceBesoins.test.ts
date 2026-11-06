@@ -22,7 +22,8 @@ import {
   analyser,
   contexte,
   creneauBesoin,
-  fermeturesAccueil,
+  fermeturesPostes,
+  ouverturesPostes,
 } from '#/lib/planning/semaine.ts'
 import type { DonneesSemaine } from '#/lib/planning/semaine.ts'
 import { avecCode } from '#/lib/planning/test/codesTest.ts'
@@ -30,7 +31,6 @@ import type {
   Affectation,
   Besoin,
   Horaire,
-  Importance,
   Poste,
   Salarie,
 } from '#/lib/planning/types.ts'
@@ -94,9 +94,10 @@ describe('importance des postes : oui / non (D11, 2026-11-05)', () => {
   // Une seule personne sans heures dues, deux places à la même heure : la
   // place de « a » est plus longue, donc plus chère à laisser vide. Sans
   // importance, le calcul la prend.
-  const places = (ia: Importance, ib: Importance) => [
-    cr('a', 'a', 9, 17, { importance: ia }),
-    cr('b', 'b', 9, 13, { importance: ib }),
+  // « oui » : indispensable (booléen depuis le 2026-11-06).
+  const places = (ia: string, ib: string) => [
+    cr('a', 'a', 9, 17, { indispensable: ia === 'indispensable' }),
+    cr('b', 'b', 9, 13, { indispensable: ib === 'indispensable' }),
   ]
   const resoudre = (cs: Creneau[], n = 1) =>
     generer(
@@ -108,13 +109,13 @@ describe('importance des postes : oui / non (D11, 2026-11-05)', () => {
       highs,
     )
 
-  it('deux réglages seulement ; l’ancienne valeur « important » se lit non', () => {
-    expect(estIndispensable('indispensable')).toBe(true)
-    expect(estIndispensable('si_possible')).toBe(false)
-    expect(estIndispensable('important')).toBe(false)
+  it('un booléen, absent = non (2026-11-06)', () => {
+    expect(estIndispensable({ indispensable: true })).toBe(true)
+    expect(estIndispensable({ indispensable: false })).toBe(false)
+    expect(estIndispensable({})).toBe(false)
     expect(estIndispensable(undefined)).toBe(false)
-    expect(rangImportance('important')).toBe(rangImportance('si_possible'))
-    expect(rangImportance('indispensable')).toBeGreaterThan(RANG_AUTRE)
+    expect(rangImportance(false)).toBe(RANG_AUTRE)
+    expect(rangImportance(true)).toBeGreaterThan(RANG_AUTRE)
   })
   it('à réglage égal : la place la plus chère à laisser vide', () => {
     expect(tenus(resoudre(places('si_possible', 'si_possible')))).toEqual(['a'])
@@ -145,7 +146,7 @@ describe('importance des postes : oui / non (D11, 2026-11-05)', () => {
     expect(seul.decalage(RANG_AUTRE)).toBe(0)
     const deux = paliersPlaces(
       places('si_possible', 'indispensable'),
-      [{ cle: 'z', plus: 10, rang: rangImportance('indispensable') }],
+      [{ cle: 'z', plus: 10, rang: rangImportance(true) }],
       (c) => (c.id === 'a' ? 100 : 50),
     )
     expect(deux.presents).toEqual([1, 2])
@@ -169,20 +170,18 @@ describe('importance des postes : oui / non (D11, 2026-11-05)', () => {
         couleur: '#333',
         horaires_autorises: [1, 2],
         presence: false,
-        importance: 'indispensable',
+        indispensable: true,
       },
-      { ...POSTES[1], importance: 'si_possible' },
+      { ...POSTES[1], indispensable: false },
     ]
     const ctx = contexte(donnees([], [], [], postes))
     const z = creneauBesoin(ctx, besoin(1, { poste_id: ZEPHYR }))
     const t = creneauBesoin(ctx, besoin(2, { poste_id: TECH }))
     const reception = creneauBesoin(
-      contexte(
-        donnees([], [], [], [{ ...POSTES[0], importance: 'indispensable' }]),
-      ),
+      contexte(donnees([], [], [], [{ ...POSTES[0], indispensable: true }])),
       besoin(3, { poste_id: ACCUEIL }),
     )
-    expect(z.importance).toBe('indispensable')
+    expect(z.indispensable).toBe(true)
     expect(rangPlace(z)).toBe(rangPlace(reception))
     expect(rangPlace(t)).toBeLessThan(rangPlace(z))
     // Au calcul : une seule personne, Zéphyr (plus court) passe devant
@@ -211,8 +210,8 @@ describe('besoin souhaité (obligatoire = false, D4)', () => {
     // Le souhaité est plus long (plus cher à laisser vide) et d'un poste
     // indispensable : l'obligatoire « Si possible » passe quand même devant.
     const cs = [
-      cr('s', 'a', 9, 17, { souhaite: true, importance: 'indispensable' }),
-      cr('o', 'b', 9, 13, { importance: 'si_possible' }),
+      cr('s', 'a', 9, 17, { souhaite: true, indispensable: true }),
+      cr('o', 'b', 9, 13, { indispensable: false }),
     ]
     const r = generer(
       probleme({ creneaux: cs, salaries: [personne('p', 0)], graine: 1 }),
@@ -434,7 +433,7 @@ describe('analyse de la semaine', () => {
   })
   it('fermeture : la dernière heure du soir, comptée comme une ouverture', () => {
     const ctx = contexte(donnees([], [], []))
-    const f = fermeturesAccueil(ctx) ?? []
+    const f = fermeturesPostes(ctx) ?? []
     expect(f).toHaveLength(7)
     expect(f[0]).toMatchObject({ poste: String(ACCUEIL), jour: 0 })
     expect(f[0].fin - f[0].debut).toBe(60)
@@ -443,13 +442,13 @@ describe('analyse de la semaine', () => {
     const tard = contexte(
       donnees([], [], [], [{ ...POSTES[0], fermeture: '00:30' }, POSTES[1]]),
     )
-    const g = (fermeturesAccueil(tard) ?? [])[0]
+    const g = (fermeturesPostes(tard) ?? [])[0]
     expect([g.debut, g.fin]).toEqual([23.5 * H, 24.5 * H])
     // Sans fermeture : rien.
     const sans = contexte(
       donnees([], [], [], [{ ...POSTES[0], fermeture: null }, POSTES[1]]),
     )
-    expect(fermeturesAccueil(sans)).toEqual([])
+    expect(fermeturesPostes(sans)).toEqual([])
     // Le vérificateur la dit vide, et la semaine aussi.
     const p = probleme({ creneaux: [], salaries: [], graine: 1, fermetures: f })
     expect(ouverturesManquees(p, [])).toHaveLength(7)
@@ -457,6 +456,42 @@ describe('analyse de la semaine', () => {
     expect(
       sem.trous.filter((t) => t.poste_id === ACCUEIL && t.fin === '23:00'),
     ).toHaveLength(7)
+  })
+  it('un poste hors accueil avec une ouverture a un trou s’il n’est pas tenu (2026-11-06)', () => {
+    // La Technique ouvre à 07:00 ; elle a un besoin le mardi (jour 1)
+    // seulement : son ouverture vaut ce jour-là, pas les autres.
+    const postes: Poste[] = [POSTES[0], { ...POSTES[1], ouverture: '07:00' }]
+    const ctx = contexte(donnees([besoin(1)], [], [], postes))
+    const o = ouverturesPostes(ctx) ?? []
+    const tech = o.filter((x) => x.poste === String(TECH))
+    expect(tech).toHaveLength(1)
+    expect(tech[0]).toMatchObject({ jour: 1 })
+    expect(tech[0].fin - tech[0].debut).toBe(60)
+    // Personne : le vérificateur la dit vide, la semaine aussi.
+    const p = probleme({
+      creneaux: [],
+      salaries: [],
+      graine: 1,
+      ouvertures: tech,
+    })
+    expect(ouverturesManquees(p, [])).toHaveLength(1)
+    const vide = analyser(donnees([besoin(1)], [], [], postes))
+    expect(
+      vide.trous.filter((t) => t.poste_id === TECH && t.debut === '07:00'),
+    ).toHaveLength(1)
+    // Tenue par un titulaire : plus de trou.
+    const tenue = analyser(
+      donnees([besoin(1)], [shift(1, 7)], [salarie(7, 'titulaire')], postes),
+    )
+    expect(
+      tenue.trous.filter((t) => t.poste_id === TECH && t.debut === '07:00'),
+    ).toHaveLength(0)
+    // Sans ouverture : rien.
+    expect(
+      (ouverturesPostes(contexte(donnees([besoin(1)], [], []))) ?? []).filter(
+        (x) => x.poste === String(TECH),
+      ),
+    ).toEqual([])
   })
   it('fermeture tenue par le calcul : la personne du soir reste jusqu’à la fin', () => {
     // Une personne sans heures dues ; le soir finit à 21 h, la fermeture à

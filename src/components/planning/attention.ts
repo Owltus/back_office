@@ -19,7 +19,11 @@ import {
 import type { RaisonClaire } from '#/lib/planning/raisonsPlaces.ts'
 import { POSTE_ID_ACCUEIL } from '#/lib/planning/semaine.ts'
 import type { EquipeOut, SemaineOut } from '#/lib/planning/semaine.ts'
-import { ORDRE_PERIODES, tientLaNuit } from '#/lib/planning/presence.ts'
+import {
+  NOM_ZONE_ACCUEIL,
+  ORDRE_PERIODES,
+  tientLaNuit,
+} from '#/lib/planning/presence.ts'
 import {
   modeleDe,
   REGLES_PAR_DEFAUT,
@@ -608,7 +612,7 @@ export function phraseTrou(t: TrouAttention, jour: string): string {
     return `Relève ${jour} : l'équipe du matin et celle de l'après-midi ne se croisent pas`
   // `poste_id` 0 : trou de l'accueil entier, Réception et Club ensemble
   // (`POSTE_ID_ACCUEIL`, décision D15 du 2026-11-01).
-  const ou = t.poste?.nom ?? (t.posteId === 0 ? 'Accueil' : 'Poste')
+  const ou = t.poste?.nom ?? (t.posteId === 0 ? NOM_ZONE_ACCUEIL : 'Poste')
   return `${ou} ${jour} : personne de ${heureParlee(t.debut)} à ${heureParlee(t.fin)}`
 }
 

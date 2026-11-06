@@ -92,7 +92,7 @@ const saisieDe = (p: Poste): SaisiePoste => ({
   ouverture: p.ouverture ?? null,
   feries_chomes: p.feries_chomes ?? false,
   // Oui / non (2026-11-05) : l'ancienne valeur « important » se lit non.
-  importance: estIndispensable(p.importance) ? 'indispensable' : 'si_possible',
+  indispensable: estIndispensable(p),
   fermeture: p.fermeture ?? null,
 })
 
@@ -172,7 +172,7 @@ export function PostesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
       ferme: false,
       ouverture: null,
       feries_chomes: false,
-      importance: 'si_possible',
+      indispensable: false,
       fermeture: null,
     })
   }
@@ -489,10 +489,6 @@ function CartePoste({
             changer({
               presence: v === 'jour',
               accueil_nuit: v === 'nuit',
-              // L'ouverture et la fermeture ne valent que pour un poste du
-              // matin et du soir.
-              ouverture: v === 'jour' ? (p.ouverture ?? null) : null,
-              fermeture: v === 'jour' ? (p.fermeture ?? null) : null,
             })
           }
         />
@@ -503,29 +499,23 @@ function CartePoste({
 
       <label className="flex items-start gap-2 text-sm">
         <Switch
-          checked={estIndispensable(p.importance)}
+          checked={estIndispensable(p)}
           disabled={!modifiable}
-          onCheckedChange={(oui) =>
-            changer({ importance: oui ? 'indispensable' : 'si_possible' })
-          }
+          onCheckedChange={(oui) => changer({ indispensable: oui })}
           aria-label="Indispensable au fonctionnement"
           className="mt-0.5"
         />
         <span className="flex flex-col gap-0.5">
           <span className="font-medium">Indispensable au fonctionnement</span>
           <span className="text-xs text-muted-foreground">
-            {estIndispensable(p.importance)
-              ? AIDE_INDISPENSABLE
-              : AIDE_NON_INDISPENSABLE}
+            {estIndispensable(p) ? AIDE_INDISPENSABLE : AIDE_NON_INDISPENSABLE}
           </span>
         </span>
       </label>
 
-      {p.presence && (
-        <p className="text-xs text-muted-foreground">
-          L'ouverture et la fermeture se règlent dans Besoins.
-        </p>
-      )}
+      <p className="text-xs text-muted-foreground">
+        L'ouverture et la fermeture se règlent dans Besoins.
+      </p>
 
       <label className="flex items-start gap-2 text-sm">
         <Switch

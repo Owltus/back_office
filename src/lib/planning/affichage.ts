@@ -3,8 +3,12 @@
  */
 
 import { estJourneeEtoile } from '#/lib/planning/etoile.ts'
+import {
+  estJourWeekend,
+  REGLES_PAR_DEFAUT,
+} from '#/lib/planning/reglesEtablissement.ts'
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
-import { tientLaNuit } from '#/lib/planning/presence.ts'
+import { NOM_ZONE_ACCUEIL } from '#/lib/planning/presence.ts'
 import { POSTE_ID_ACCUEIL, posteEquite } from '#/lib/planning/semaine.ts'
 import type { BilanOut, SemaineOut } from '#/lib/planning/semaine.ts'
 import {
@@ -244,9 +248,9 @@ export function postesTenus(
     .join(' · ')
 }
 
-/** Libellé métier de la colonne staff : « Veilleur » (poste de la nuit de
- * l'accueil), « Hôtelier » (poste de l'accueil le jour), ou le poste. Aucun
- * nom de poste en dur, et plus la catégorie (2026-11-06). */
+/** Libellé métier de la colonne staff : les NOMS de ses postes, du
+ * titulaire au soutien (2026-11-06 : plus de « Veilleur » ni « Hôtelier »
+ * écrits dans le code ; le nom du poste de nuit dit déjà ce qu'il est). */
 export function metier(
   s: Pick<Salarie, 'competences'>,
   postes: Poste[],
@@ -254,15 +258,8 @@ export function metier(
   const ordre = { titulaire: 0, occasionnel: 1, soutien: 2 }
   const noms = [...s.competences]
     .sort((a, b) => ordre[a.niveau] - ordre[b.niveau])
-    .map((c) => postes.find((p) => p.id === c.poste_id))
-    .filter((p): p is Poste => !!p)
-    .map((p) =>
-      tientLaNuit({ ...p, ferme: false })
-        ? 'Veilleur'
-        : p.presence
-          ? 'Hôtelier'
-          : p.nom,
-    )
+    .map((c) => postes.find((p) => p.id === c.poste_id)?.nom)
+    .filter((n): n is string => !!n)
   return [...new Set(noms)].join(' · ')
 }
 
@@ -355,6 +352,8 @@ export function resumeEquite(
   semaines: ReadonlyArray<Pick<SemaineOut, 'affectations'>>,
   salaries: Salarie[],
   postes: Poste[],
+  /** Règles de l'établissement (jours du week-end) ; absentes : défauts. */
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
 ): string {
   const presents = new Set<number>()
   const weekends = new Map<number, number>()
@@ -362,7 +361,7 @@ export function resumeEquite(
     const ceWeekend = new Set<number>()
     for (const a of s.affectations) {
       presents.add(a.salarie_id)
-      if (a.jour >= 5) ceWeekend.add(a.salarie_id)
+      if (estJourWeekend(regles, a.jour)) ceWeekend.add(a.salarie_id)
     }
     for (const id of ceWeekend) weekends.set(id, (weekends.get(id) ?? 0) + 1)
   }
@@ -375,7 +374,10 @@ export function resumeEquite(
   }
   const morceaux: string[] = []
   // L'accueil entier (Q16) d'abord, puis les autres postes.
-  for (const poste of [{ id: POSTE_ID_ACCUEIL, nom: 'Accueil' }, ...postes]) {
+  for (const poste of [
+    { id: POSTE_ID_ACCUEIL, nom: NOM_ZONE_ACCUEIL },
+    ...postes,
+  ]) {
     const n = parPoste.get(poste.id)
     if (!n || n.length < 2) continue
     const min = Math.min(...n)

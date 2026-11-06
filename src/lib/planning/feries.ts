@@ -8,7 +8,9 @@
  *
  * Pur : dates AAAA-MM-JJ, aucun fuseau (un jour férié est une date du
  * calendrier). Les 11 jours fériés de France métropolitaine, calculés ici
- * (Pâques par l'algorithme de Meeus, Jones et Butcher) : rien à saisir.
+ * (Pâques par l'algorithme de Meeus, Jones et Butcher) ; l'établissement en
+ * ajoute (`planning_feries`, 2026-11-06 : fête locale, jour chômé), traités
+ * exactement comme eux.
  *
  * Le droit (`droitAuRattrapage`) et la fenêtre de rattrapage sont des règles
  * du contrat : elles vivent dans `regles.ts`.
@@ -21,7 +23,12 @@ import {
 import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import { ajouterJours, lundiDe } from '#/lib/planning/temps.ts'
-import type { Motif, Referentiel, Salarie } from '#/lib/planning/types.ts'
+import type {
+  FerieAjoute,
+  Motif,
+  Referentiel,
+  Salarie,
+} from '#/lib/planning/types.ts'
 
 export interface JourFerie {
   date: string // AAAA-MM-JJ
@@ -52,8 +59,35 @@ export function paques(annee: number): string {
 
 const cache = new Map<number, JourFerie[]>()
 
-/** Les 11 jours fériés de l'année, dans l'ordre du calendrier. */
-export function joursFeries(annee: number): JourFerie[] {
+/** Les jours fériés de l'année, dans l'ordre du calendrier : les 11 calculés,
+ * plus ceux que l'établissement ajoute (`ajoutes` : une date, ou chaque
+ * année au même jour et au même mois). Une date déjà fériée garde son nom. */
+export function joursFeries(
+  annee: number,
+  ajoutes: readonly Pick<FerieAjoute, 'jour' | 'nom' | 'recurrent'>[] = [],
+): JourFerie[] {
+  const base = joursFeriesLegaux(annee)
+  if (!ajoutes.length) return base
+  const pris = new Set(base.map((f) => f.date))
+  const plus: JourFerie[] = []
+  for (const a of ajoutes) {
+    const date = a.recurrent ? `${annee}${a.jour.slice(4, 10)}` : a.jour
+    if (date.slice(0, 4) !== String(annee) || pris.has(date)) continue
+    // Un 29 février récurrent n'existe pas les autres années.
+    if (a.recurrent && date.endsWith('-02-29') && !bissextile(annee)) continue
+    pris.add(date)
+    plus.push({ date, nom: a.nom })
+  }
+  return [...base, ...plus].sort((x, y) =>
+    x.date < y.date ? -1 : x.date > y.date ? 1 : 0,
+  )
+}
+
+const bissextile = (a: number) =>
+  (a % 4 === 0 && a % 100 !== 0) || a % 400 === 0
+
+/** Les 11 jours fériés de la loi, dans l'ordre du calendrier. */
+function joursFeriesLegaux(annee: number): JourFerie[] {
   const deja = cache.get(annee)
   if (deja) return deja
   const p = paques(annee)
@@ -79,17 +113,25 @@ export function joursFeries(annee: number): JourFerie[] {
 }
 
 /** Le nom du jour férié de cette date, ou null. */
-export function ferieDe(date: string): string | null {
+export function ferieDe(
+  date: string,
+  ajoutes?: Parameters<typeof joursFeries>[1],
+): string | null {
   const annee = Number(date.slice(0, 4))
-  return joursFeries(annee).find((f) => f.date === date)?.nom ?? null
+  return joursFeries(annee, ajoutes).find((f) => f.date === date)?.nom ?? null
 }
 
 /** Jours fériés de `du` à `au` inclus, dans l'ordre. */
-export function feriesEntre(du: string, au: string): JourFerie[] {
+export function feriesEntre(
+  du: string,
+  au: string,
+  ajoutes?: Parameters<typeof joursFeries>[1],
+): JourFerie[] {
   if (au < du) return []
   const r: JourFerie[] = []
   for (let a = Number(du.slice(0, 4)); a <= Number(au.slice(0, 4)); a++)
-    for (const f of joursFeries(a)) if (f.date >= du && f.date <= au) r.push(f)
+    for (const f of joursFeries(a, ajoutes))
+      if (f.date >= du && f.date <= au) r.push(f)
   return r
 }
 
@@ -119,12 +161,22 @@ export function fenetreFeries(
     : FERIE_RATTRAPAGE_JOURS
 }
 
-/** Code du motif « Jour férié rattrapé ». À ne pas confondre avec JF, le
- * jour férié chômé. */
-export const CODE_JFR = 'JFR'
+/** Le motif « Jour férié rattrapé » : son RÔLE (2026-11-06, à la place du
+ * code JFR). À ne pas confondre avec le jour férié chômé (`ferie_chome`). */
+export function estJfr(m: Pick<Motif, 'role'>): boolean {
+  return m.role === 'ferie_rattrape'
+}
 
-export function estJfr(m: Pick<Motif, 'code'>): boolean {
-  return m.code.trim().toUpperCase() === CODE_JFR
+/** Le motif du repos posé par le planning : celui qui en a le rôle, sinon
+ * le premier motif de nature repos (même choix que la base). */
+export function motifReposDefaut<
+  M extends Pick<Motif, 'id' | 'nature' | 'role'>,
+>(motifs: readonly M[] | undefined): M | undefined {
+  const repos = (motifs ?? []).filter((m) => m.nature === 'repos')
+  return (
+    repos.find((m) => m.role === 'repos_defaut') ??
+    [...repos].sort((a, b) => a.id - b.id)[0]
+  )
 }
 
 /** « 11/11 ». */
@@ -155,7 +207,11 @@ export function feriesARattraper(args: {
 }): JourFerie[] {
   const depuis =
     args.depuis !== undefined && args.depuis < args.du ? args.depuis : args.du
-  const droits = feriesEntre(depuis, args.au).filter(
+  const droits = feriesEntre(
+    depuis,
+    args.au,
+    args.regles?.feries.ajoutes,
+  ).filter(
     (f) =>
       droitAuRattrapage(args.salarie, f.date, args.regles) &&
       args.travailles.has(f.date),

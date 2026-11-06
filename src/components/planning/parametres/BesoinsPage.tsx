@@ -60,7 +60,10 @@ import type {
 } from '#/components/planning/parametres/besoins/historique.ts'
 import { TableauAccueil } from '#/components/planning/parametres/besoins/TableauAccueil.tsx'
 import { ReglageReleve } from '#/components/planning/parametres/besoins/ReglageReleve.tsx'
-import { HeuresAccueil } from '#/components/planning/parametres/besoins/HeuresAccueil.tsx'
+import {
+  HeuresAccueil,
+  HeuresPoste,
+} from '#/components/planning/parametres/besoins/HeuresAccueil.tsx'
 import {
   phrasesOrdreDecision,
   sectionsBesoins,
@@ -98,6 +101,7 @@ import { planningKeys } from '#/lib/planning/keys.ts'
 import { estIndispensable } from '#/lib/planning/modele.ts'
 import { estPosteAccueil } from '#/lib/planning/presence.ts'
 import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
+import { nomsPostesAccueil } from '#/lib/planning/presence.ts'
 import { reglerBesoin, reglerConsigne } from '#/lib/planning/service.ts'
 import { JOURS } from '#/lib/planning/types.ts'
 import type { Consigne, Poste, Referentiel } from '#/lib/planning/types.ts'
@@ -193,7 +197,7 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
         window.setTimeout(() => allerA('besoins-presence'), 0)
         return true
       }
-      const section: Section = estIndispensable(vise.importance)
+      const section: Section = estIndispensable(vise)
         ? 'indispensables'
         : 'autres'
       setChoisis((c) => ({ ...c, [section]: vise.id }))
@@ -235,9 +239,10 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
     )
     return c ? { minimum: c.minimum, maximum: c.maximum } : AUCUNE_BORNE
   }
-  /** Le chiffre exact d'une case de l'accueil (minimum = maximum). */
+  /** Une case de l'accueil : au moins, au plus (un chiffre exact par
+   * défaut). */
   const afficheAccueil = (jour: number, periode: Periode) =>
-    afficheConsigne(jour, periode).minimum
+    afficheConsigne(jour, periode)
 
   /** Écrit les valeurs APRÈS des changements, dans l'ordre, l'une après
    * l'autre : la même écriture pour une action, son annulation et son
@@ -431,10 +436,13 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
     ajouterLigne: (cle) => garder(poste.id, [cle]),
   })
 
-  const reglerAccueil = (jour: number, periode: Periode, n: number) => {
+  const reglerAccueil = (jour: number, periode: Periode, b: Bornes) => {
     const avant = afficheConsigne(jour, periode)
-    // Un chiffre exact (contrainte `planning_consignes_exact`) ; 0 retire la case.
-    const apres: Bornes = n > 0 ? { minimum: n, maximum: n } : AUCUNE_BORNE
+    // Au moins, au plus (un chiffre exact par défaut) ; rien de demandé
+    // retire la case.
+    const haut = Math.max(b.minimum, b.maximum ?? b.minimum)
+    const apres: Bornes =
+      haut > 0 ? { minimum: b.minimum, maximum: haut } : AUCUNE_BORNE
     faire({
       libelle: `accueil, ${JOURS[jour].toLowerCase()} ${periode}`,
       changements: [{ type: 'consigne', jour, periode, avant, apres }],
@@ -462,6 +470,7 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
           minutes={regles.passations.releveMinutes}
           continuite={regles.passations.continuiteObligatoire}
           veilleur={regles.passations.passationVeilleur}
+          nuit={nomsPostesAccueil(data.postes, 'nuit')}
           tolerance={regles.passations.equipeTolerance}
           modifiable={modifiable}
         />
@@ -515,7 +524,10 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
             </TabsTrigger>
           ))}
         </TabsList>
-        <TabsContent value={String(poste.id)} className="min-w-0">
+        <TabsContent
+          value={String(poste.id)}
+          className="flex min-w-0 flex-col gap-4"
+        >
           <GrilleBesoins
             poste={poste}
             referentiel={data}
@@ -527,6 +539,13 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
             modifiable={modifiable}
             affiche={affiche}
             actions={actionsPour(poste)}
+          />
+          {/* Ouverture et fermeture de tout poste (2026-11-06) ; ceux de
+              l'accueil ont les leurs sous le tableau. */}
+          <HeuresPoste
+            poste={poste}
+            modifiable={modifiable}
+            duree={lireRegles(data).passations.dureeOuverture}
           />
         </TabsContent>
       </Tabs>

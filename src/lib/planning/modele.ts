@@ -5,11 +5,7 @@
  */
 
 import { MINUTES_PAR_JOUR, NUIT_DEBUT, NUIT_FIN } from '#/lib/planning/temps.ts'
-import type {
-  Importance,
-  Periode,
-  PeriodePresence,
-} from '#/lib/planning/types.ts'
+import type { Periode, PeriodePresence } from '#/lib/planning/types.ts'
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 
 /** Un poste à tenir sur une plage horaire, avec le nombre de personnes. */
@@ -71,10 +67,10 @@ export interface Creneau {
    * 23:00 à 07:00 reste une journée de 8 h la nuit d'un changement d'heure,
    * où ses minutes réelles font 7 h ou 9 h. Null : les minutes réelles. */
   travailMural: number | null
-  /** Importance du poste (D11, oui / non depuis le 2026-11-05) : un poste
-   * indispensable passe devant les autres quand il manque du monde
-   * (`paliersPlaces`, générateur). Toute autre valeur : non indispensable. */
-  importance: Importance
+  /** Poste indispensable (D11, oui / non ; booléen depuis le 2026-11-06) :
+   * il passe devant les autres quand il manque du monde (`paliersPlaces`,
+   * générateur). */
+  indispensable: boolean
   /** Besoin souhaité (`obligatoire = false`, 2026-11-05) : rempli si
    * possible, vide avant toute place obligatoire, jamais une place à
    * pourvoir ni une plage de continuité. Faux partout ailleurs. */
@@ -86,15 +82,18 @@ export interface Creneau {
 
 /** Le poste est-il indispensable au fonctionnement ? Un choix oui / non
  * (décision utilisateur du 2026-11-05 : « soit un poste est important, soit
- * il ne l'est pas »). L'ancienne valeur « important » se lit non. */
-export function estIndispensable(i: Importance | null | undefined): boolean {
-  return i === 'indispensable'
+ * il ne l'est pas »), la case `indispensable` du poste (2026-11-06). Absente :
+ * non. */
+export function estIndispensable(
+  p: { indispensable?: boolean | null } | null | undefined,
+): boolean {
+  return p?.indispensable === true
 }
 
-/** Rang d'une importance : plus il est haut, plus la place reste vide tard.
- * Deux paliers seulement : indispensable (2), le reste (1). */
-export function rangImportance(i: Importance | null | undefined): number {
-  return estIndispensable(i) ? 2 : 1
+/** Rang d'une place : plus il est haut, plus la place reste vide tard. Deux
+ * paliers seulement : indispensable (2), le reste (1). */
+export function rangImportance(indispensable: boolean): number {
+  return indispensable ? 2 : 1
 }
 
 export function creneau(
@@ -118,7 +117,7 @@ export function creneau(
     matinTot: false,
     moment: null,
     travailMural: null,
-    importance: 'si_possible',
+    indispensable: false,
     souhaite: false,
     titulaireSeul: false,
     ...c,
@@ -271,13 +270,16 @@ export interface SalarieSolveur {
 }
 
 /** Équité (D15) : semaines d'avant comptées, à poids égal (mois glissant,
- * décision utilisateur du 2026-10-29). */
+ * décision utilisateur du 2026-10-29). Le DÉFAUT : l'établissement le règle
+ * (`regles.equite.semaines`, 2026-11-06). */
 export const SEMAINES_EQUITE = 4
 
 export interface EquiteFaite {
   weekends: number
   soirs: number
   matinsTot: number
+  /** Nuits faites (partage des nuits, coché dans les règles ; absent : 0). */
+  nuits?: number
   /** Règle 12 du PRD : minutes au-delà du contrat sur les semaines d'avant
    * (absent : 0). */
   minutesEnPlus?: number

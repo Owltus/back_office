@@ -167,7 +167,7 @@ describe('Postes', () => {
           ferme: true,
           ouverture: null,
           feries_chomes: true,
-          importance: 'indispensable',
+          indispensable: true,
           fermeture: null,
         },
         2,

@@ -27,6 +27,7 @@ import {
   avertissementsSaisie,
   BORNES,
   changementsContrats,
+  CRITERES_EQUITE,
   contratNeuf,
   erreursSaisie,
   ligneNeuve,
@@ -46,6 +47,7 @@ import {
   ErreursSaisie,
 } from '#/components/planning/parametres/reglages/controles.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
+import { cn } from '#/lib/utils.ts'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import {
@@ -141,6 +143,85 @@ const feriesDe = (m: ModeleContrat): Feries =>
   m.ferie_rattrape ? 'rattrapes' : m.feries_jour_meme ? 'jour_meme' : 'aucun'
 
 /** Un réglage : son intitulé, son contrôle, et la phrase de ce qu'il fait. */
+const NOMS_JOURS = [
+  'lundi',
+  'mardi',
+  'mercredi',
+  'jeudi',
+  'vendredi',
+  'samedi',
+  'dimanche',
+] as const
+
+/** « le samedi et le dimanche ». */
+function listeJours(jours: readonly number[]): string {
+  const noms = [...jours]
+    .sort((a, b) => a - b)
+    .map((j) => `le ${NOMS_JOURS[j]}`)
+  return noms.length > 1
+    ? `${noms.slice(0, -1).join(', ')} et ${noms.at(-1)}`
+    : (noms[0] ?? 'aucun jour')
+}
+
+/** « le vendredi soir » : la veille du premier jour du week-end. */
+function veilleDe(jours: readonly number[]): string {
+  const premier = Math.min(...jours)
+  return premier > 0
+    ? `le ${NOMS_JOURS[premier - 1]} soir`
+    : 'la veille au soir'
+}
+
+/** Les jours du week-end, à cocher (1 à 3). */
+function JoursWeekend({
+  jours,
+  disabled,
+  onChange,
+}: {
+  jours: readonly number[]
+  disabled: boolean
+  onChange: (jours: number[]) => void
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Jours du week-end"
+      className="inline-flex rounded-md border bg-background/60 p-0.5"
+    >
+      {NOMS_JOURS.map((nom, j) => {
+        const pris = jours.includes(j)
+        return (
+          <button
+            key={nom}
+            type="button"
+            aria-pressed={pris}
+            aria-label={nom}
+            disabled={
+              disabled ||
+              (pris && jours.length === 1) ||
+              (!pris && jours.length >= BORNES.weekendJoursMax)
+            }
+            onClick={() =>
+              onChange(
+                pris
+                  ? jours.filter((x) => x !== j)
+                  : [...jours, j].sort((a, b) => a - b),
+              )
+            }
+            className={cn(
+              'w-8 rounded py-1 text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed',
+              pris
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:text-foreground disabled:opacity-60',
+            )}
+          >
+            {nom.slice(0, 2)}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 function Reglage({
   titre,
   effet,
@@ -816,7 +897,7 @@ export function ReglesContrats({
             </Reglage>
             <Reglage
               titre="Nuits d'affilée, au plus"
-              effet={`Le Veilleur fait au plus ${b.nuits_affilees_max} nuits de suite, puis ${b.repos_apres_nuits} jour${b.repos_apres_nuits > 1 ? 's' : ''} sans travail.`}
+              effet={`Personne ne fait plus de ${b.nuits_affilees_max} nuits de suite. Ensuite, ${b.repos_apres_nuits} jour${b.repos_apres_nuits > 1 ? 's' : ''} sans travail.`}
             >
               <span className="flex items-center gap-2 text-sm">
                 <Compteur
@@ -913,6 +994,78 @@ export function ReglesContrats({
             </Reglage>
           </Section>
 
+          <Section titre="Partage et week-end">
+            <Reglage
+              titre="Jours du week-end"
+              effet={`Un week-end libre, c'est ${listeJours(b.weekend_jours)} sans travail. Le partage des week-ends compte ces jours.`}
+            >
+              <JoursWeekend
+                jours={b.weekend_jours}
+                disabled={off}
+                onChange={(weekend_jours) => changer({ weekend_jours })}
+              />
+            </Reglage>
+            <Reglage
+              titre="La nuit de la veille compte"
+              effet={
+                b.weekend_nuit_veille
+                  ? `Une nuit commencée ${veilleDe(b.weekend_jours)} rend le week-end travaillé.`
+                  : 'Seuls les jours du week-end comptent.'
+              }
+            >
+              <Interrupteur
+                coche={b.weekend_nuit_veille}
+                disabled={off}
+                onChange={(weekend_nuit_veille) =>
+                  changer({ weekend_nuit_veille })
+                }
+              >
+                <span className="sr-only">La nuit de la veille compte</span>
+              </Interrupteur>
+            </Reglage>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium">Partagés à part égale</span>
+              <div className="flex flex-col gap-1.5">
+                {CRITERES_EQUITE.map((c) => (
+                  <Interrupteur
+                    key={c.cle}
+                    coche={b.equite_criteres.includes(c.cle)}
+                    disabled={off}
+                    onChange={(oui) =>
+                      changer({
+                        equite_criteres: oui
+                          ? [...b.equite_criteres, c.cle]
+                          : b.equite_criteres.filter((x) => x !== c.cle),
+                      })
+                    }
+                  >
+                    {c.libelle}
+                  </Interrupteur>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Chacun en fait sa part, selon ses heures de contrat. Une semaine
+                d'absence ne met personne en retard.
+              </p>
+            </div>
+            <Reglage
+              titre="Semaines regardées"
+              effet={`Le partage compte les ${b.equite_semaines} dernières semaines.`}
+            >
+              <span className="flex items-center gap-2 text-sm">
+                <Compteur
+                  etiquette="Semaines regardées pour le partage"
+                  valeur={b.equite_semaines}
+                  min={Math.max(1, b.semaines_en_plus_alerte)}
+                  max={BORNES.equiteSemainesMax}
+                  disabled={off}
+                  onChange={(v) => changer({ equite_semaines: v })}
+                />
+                semaines
+              </span>
+            </Reglage>
+          </Section>
+
           <Section titre="Congés et heures">
             <Reglage
               titre="Retour de congé en douceur"
@@ -932,18 +1085,18 @@ export function ReglesContrats({
             </Reglage>
             <Reglage
               titre="Heures en plus"
-              effet={`Une alerte quand quelqu'un dépasse son contrat ${b.semaines_en_plus_alerte} semaine${b.semaines_en_plus_alerte > 1 ? 's' : ''} sur les 4 dernières.`}
+              effet={`Une alerte quand quelqu'un dépasse son contrat ${b.semaines_en_plus_alerte} semaine${b.semaines_en_plus_alerte > 1 ? 's' : ''} sur les ${b.equite_semaines} dernières.`}
             >
               <span className="flex items-center gap-2 text-sm">
                 <Compteur
                   etiquette="Heures en plus, alerte après"
                   valeur={b.semaines_en_plus_alerte}
                   min={1}
-                  max={BORNES.semainesEnPlusMax}
+                  max={Math.min(BORNES.semainesEnPlusMax, b.equite_semaines)}
                   disabled={off}
                   onChange={(v) => changer({ semaines_en_plus_alerte: v })}
                 />
-                sur 4
+                sur {b.equite_semaines}
               </span>
             </Reglage>
           </Section>

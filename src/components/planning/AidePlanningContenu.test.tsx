@@ -187,9 +187,7 @@ describe('AidePlanningContenu (aide du bouton ?)', () => {
     expect(texteDe('postes')).toContain('ensemble 30 minutes chaque jour')
     expect(texteDe('generation')).toContain('Deux repos de suite')
     expect(texteDe('generation')).toContain('au plus 5 jours de travail')
-    expect(texteDe('generation')).toContain(
-      'La passation avec le veilleur aussi',
-    )
+    expect(texteDe('generation')).toContain('La passation avec la nuit aussi')
   })
 
   it('le texte suit un réglage changé', () => {
@@ -226,13 +224,13 @@ describe('AidePlanningContenu (aide du bouton ?)', () => {
     expect(texteDe('horaires')).toContain('finit à 16 h au plus tard')
     const postes = texteDe('postes')
     expect(postes).toContain('ensemble 45 minutes chaque jour')
-    expect(postes).toContain('Passation avec le veilleur : pas demandée')
+    expect(postes).toContain('Passation avec la nuit : pas demandée')
     const ordre = texteDe('generation')
     expect(ordre).toContain('Le rythme')
     expect(ordre).not.toContain('Deux repos de suite pour chacun')
     expect(ordre).toContain('au plus 4 jours de travail')
     expect(ordre).toContain('ensemble 45 minutes')
-    expect(ordre).not.toContain('La passation avec le veilleur aussi')
+    expect(ordre).not.toContain('La passation avec la nuit aussi')
     expect(ordre).toContain('13 h entre deux services')
     const bien = texteDe('bien-etre')
     expect(bien).toContain('Deux repos qui se suivent quand c’est possible')

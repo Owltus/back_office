@@ -120,7 +120,7 @@ function etablissement(reglages: Reglages | undefined): Referentiel {
       accueil_nuit: false,
       ouverture: '07:00',
       fermeture: '22:00',
-      importance: 'indispensable',
+      indispensable: true,
     },
     {
       id: PDJ,
@@ -129,7 +129,7 @@ function etablissement(reglages: Reglages | undefined): Referentiel {
       couleur: '#222',
       horaires_autorises: [1, 3],
       presence: false,
-      importance: 'indispensable',
+      indispensable: true,
     },
     {
       id: DIRECTION,
@@ -138,7 +138,7 @@ function etablissement(reglages: Reglages | undefined): Referentiel {
       couleur: '#333',
       horaires_autorises: [4],
       presence: false,
-      importance: 'si_possible',
+      indispensable: false,
     },
   ]
   const h = (id: number) => horaires.find((x) => x.id === id)!

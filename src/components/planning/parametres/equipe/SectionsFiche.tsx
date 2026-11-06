@@ -4,7 +4,7 @@
  * Identité et contrat : `SectionIdentite.tsx`.
  */
 
-import { tientLaNuit } from '#/lib/planning/presence.ts'
+import { NOM_ZONE_ACCUEIL, tientLaNuit } from '#/lib/planning/presence.ts'
 import { useMemo, useState } from 'react'
 import { Plus, Star, Trash2, X } from 'lucide-react'
 
@@ -185,7 +185,8 @@ export function SectionCompetences({
           }
           groupes={[
             {
-              titre: aPart.length && courants.length ? 'Accueil' : undefined,
+              titre:
+                aPart.length && courants.length ? NOM_ZONE_ACCUEIL : undefined,
               options: courants.map((p) => ({
                 valeur: String(p.id),
                 libelle: p.nom,
@@ -230,7 +231,7 @@ export function SectionHoraires({
   return (
     <Section
       titre="Horaires autorisés"
-      aide="Les horaires qu'elle fait, parmi ceux de ses postes : par exemple seulement le soir pour quelqu'un qui ne fait jamais le matin, ou la nuit seule pour un veilleur. Les horaires d'un poste se règlent dans Postes."
+      aide="Les horaires qu'elle fait, parmi ceux de ses postes : par exemple seulement le soir pour quelqu'un qui ne fait jamais le matin, ou la nuit seule pour quelqu'un qui ne fait que des nuits. Les horaires d'un poste se règlent dans Postes."
     >
       {parPoste.length > 0 && (
         <ul

@@ -224,10 +224,10 @@ export function GestionCategories({
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
           <p className="text-xs text-muted-foreground">
             Un groupe range les personnes et dit quels postes elles peuvent
-            tenir : la fiche ne propose que ceux-là (un hôtelier ne tient pas la
-            direction). Tous : ses membres peuvent tenir tous les postes. Le
-            groupe de chacun se choisit dans sa fiche. Retirer un poste à un
-            groupe le retire aussi de la fiche de ses membres.
+            tenir : la fiche ne propose que ceux-là. Tous : ses membres peuvent
+            tenir tous les postes. Le groupe de chacun se choisit dans sa fiche.
+            Retirer un poste à un groupe le retire aussi de la fiche de ses
+            membres.
           </p>
           {liste.length === 0 && (
             <p className="text-sm text-muted-foreground">

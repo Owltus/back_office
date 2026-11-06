@@ -26,6 +26,7 @@ import type {
   Affectation,
   Besoin,
   Consigne,
+  FerieAjoute,
   Groupe,
   Horaire,
   ModeleContrat,
@@ -39,9 +40,10 @@ import type {
 import { supabase } from '#/lib/supabase.ts'
 
 const COL_HORAIRE = 'id, nom, debut, fin, couleur, pause, periode'
-const COL_MOTIF = 'id, code, nom, couleur, decompte, nature'
+const COL_MOTIF =
+  'id, code, nom, couleur, decompte, nature, libre_weekend, reserve_forfait, role, icone'
 const COL_POSTE =
-  'id, nom, couleur, horaires_autorises, presence, accueil_nuit, ferme, ouverture, ordre, feries_chomes, importance, fermeture, jour_max_minutes'
+  'id, nom, couleur, horaires_autorises, presence, accueil_nuit, ferme, ouverture, ordre, feries_chomes, indispensable, fermeture, jour_max_minutes'
 const COL_CONSIGNE = 'id, jour, periode, minimum, maximum'
 const COL_GROUPE = 'id, nom, ordre, postes_autorises, forfait_possible'
 const COL_SALARIE =
@@ -88,6 +90,10 @@ const CHAMPS_REGLAGES = [
   'journees_courtes_max',
   'ferie_anciennete_mois',
   'ferie_rattrapage_jours',
+  'weekend_jours',
+  'weekend_nuit_veille',
+  'equite_criteres',
+  'equite_semaines',
 ] as const satisfies ReadonlyArray<keyof Reglages>
 const COL_REGLAGES = CHAMPS_REGLAGES.join(', ')
 const CHAMPS_MODELE = [
@@ -163,6 +169,7 @@ export async function fetchReferentiel(): Promise<Referentiel> {
     verrous,
     reglages,
     modeles,
+    feries,
   ] = await Promise.all([
     supabase
       .from('planning_horaires')
@@ -206,6 +213,10 @@ export async function fetchReferentiel(): Promise<Referentiel> {
       .select(COL_MODELE_CONTRAT)
       .order('ordre')
       .order('type_contrat'),
+    supabase
+      .from('planning_feries')
+      .select('id, jour, nom, recurrent')
+      .order('jour'),
   ])
   // La ligne manque (base pas encore migrée) : la relève par défaut ;
   // les autres règles absentes reprennent leurs défauts (`lireRegles`).
@@ -242,6 +253,7 @@ export async function fetchReferentiel(): Promise<Referentiel> {
     ),
     reglages: lesReglages,
     modelesContrat: verifier(modeles) as unknown as ModeleContrat[],
+    feriesAjoutes: verifier(feries) as FerieAjoute[],
   }
 }
 
@@ -656,8 +668,32 @@ export async function enregistrerMomentsHoraires(
   }
 }
 
-export const enregistrerMotif = (v: SansId<Motif>, id: number | null) =>
-  enregistrer<Motif>('planning_motifs', v, id)
+/** Un motif ; s'il prend un rôle, l'ancien porteur le perd d'abord (un
+ * motif par rôle, index unique). */
+export async function enregistrerMotif(
+  v: SansId<Motif>,
+  id: number | null,
+): Promise<number> {
+  if (v.role) {
+    let r = supabase
+      .from('planning_motifs')
+      .update({ role: null })
+      .eq('role', v.role)
+    if (id !== null) r = r.neq('id', id)
+    verifier(await r.select('id'))
+  }
+  return enregistrer<Motif>('planning_motifs', v, id)
+}
+
+/** Les jours fériés en plus (gestion). */
+export const enregistrerFerie = (v: SansId<FerieAjoute>, id: number | null) =>
+  enregistrer<FerieAjoute>('planning_feries', v, id)
+
+export async function supprimerFerie(id: number): Promise<void> {
+  auMoinsUne(
+    await supabase.from('planning_feries').delete().eq('id', id).select('id'),
+  )
+}
 export const enregistrerPoste = (v: SansId<Poste>, id: number | null) =>
   enregistrer<Poste>('planning_postes', v, id)
 export const enregistrerGroupe = (v: SansId<Groupe>, id: number | null) =>

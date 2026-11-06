@@ -50,7 +50,11 @@ import {
   rythmeHumain,
   apresContrat,
 } from '#/lib/planning/regles.ts'
-import { REGLES_PAR_DEFAUT } from '#/lib/planning/reglesEtablissement.ts'
+import {
+  jourVeilleWeekend,
+  REGLES_PAR_DEFAUT,
+  repartit,
+} from '#/lib/planning/reglesEtablissement.ts'
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import type {
   AffectationSolveur,
@@ -894,17 +898,17 @@ export function coutManqueMinimum(
 
 /** Palier d'un besoin souhaité, et d'un poste non indispensable. */
 export const RANG_SOUHAITE = 0
-export const RANG_AUTRE = rangImportance('si_possible')
+export const RANG_AUTRE = rangImportance(false)
 
 /** Palier d'une place (le besoin qui la fixe). */
 export const rangPlace = (c: Creneau) =>
-  c.souhaite ? RANG_SOUHAITE : rangImportance(c.importance)
+  c.souhaite ? RANG_SOUHAITE : rangImportance(c.indispensable)
 
 /** Palier d'un manque ou d'un trou : le plus haut des postes de ses
  * créneaux (non indispensable sans créneau). */
 export const rangDe = (cs: readonly Creneau[]) =>
   cs.length
-    ? Math.max(...cs.map((c) => rangImportance(c.importance)))
+    ? Math.max(...cs.map((c) => rangImportance(c.indispensable)))
     : RANG_AUTRE
 
 /** Une passation avec le veilleur, pour les paliers : sa clé, son prix
@@ -941,7 +945,7 @@ export function paliersPlaces(
   const presents = [
     ...new Set([
       ...ouverts.map(rangPlace),
-      ...ouverts.map((c) => rangImportance(c.importance)),
+      ...ouverts.map((c) => rangImportance(c.indispensable)),
       ...zones.map((z) => z.rang),
     ]),
   ].sort((a, b) => a - b)
@@ -1314,7 +1318,7 @@ export function construire(
         cle: `${z.jour}|${z.cote}`,
         plus,
         rang: nuits.length
-          ? Math.min(...nuits.map((c) => rangImportance(c.importance)))
+          ? Math.min(...nuits.map((c) => rangImportance(c.indispensable)))
           : RANG_AUTRE,
       })
     }
@@ -1501,6 +1505,8 @@ export function construire(
   // minimum fait foi).
   p.consignes.forEach((k, i) => {
     const n = Math.max(0, k.minimum)
+    // Au plus (2026-11-06) : le maximum ; un chiffre exact par défaut.
+    const haut = Math.max(n, k.maximum ?? n)
     const termes: Terme[] = []
     // Le plus grand compte possible : une personne par variable.
     let possibles = 0
@@ -1530,11 +1536,11 @@ export function construire(
           t + p.salaries.filter((s) => imposees.has(cle(s.id, c.id))).length,
         0,
       )
-      if (possibles > Math.max(n, poses))
-        m.ajoute(termes, '<=', Math.max(n, poses))
-    } else if (possibles > n) {
+      if (possibles > Math.max(haut, poses))
+        m.ajoute(termes, '<=', Math.max(haut, poses))
+    } else if (possibles > haut) {
       const vp = m.continu(0, possibles)
-      m.ajoute([...termes, [-1, vp]], '<=', n)
+      m.ajoute([...termes, [-1, vp]], '<=', haut)
       m.cout(coutsSurplus[i], vp)
     }
   })
@@ -2298,8 +2304,12 @@ export function construire(
         sk,
         travaille,
         // La nuit du vendredi au samedi rend le week-end travaillé (comme
-        // `weekend()` de la règle 4).
-        siens.filter((c) => jourDe(c) === 4 && c.moment === 'nuit').map(xv),
+        // `weekend()` de la règle 4 ; la veille du week-end réglé).
+        siens
+          .filter(
+            (c) => jourDe(c) === jourVeilleWeekend(R) && c.moment === 'nuit',
+          )
+          .map(xv),
       )
   }
   // Horizon glissant : les personnes nécessaires chaque jour de la semaine
@@ -2500,16 +2510,26 @@ function equite(
     if (s.groupeEquite === null) continue
     groupes.set(s.groupeEquite, [...(groupes.get(s.groupeEquite) ?? []), s])
   }
+  const R = p.regles ?? REGLES_PAR_DEFAUT
+  // Ce que l'établissement répartit (2026-11-06) ; l'hôtel : week-ends,
+  // soirs, matins tôt, dans cet ordre (le modèle d'avant au caractère près).
+  const lineaires: Array<
+    readonly [(c: Creneau) => boolean, (s: SalarieSolveur) => number]
+  > = []
+  if (repartit(R, 'soirs'))
+    lineaires.push([(c) => c.soir, (s) => s.equiteAvant.soirs])
+  if (repartit(R, 'matins_tot'))
+    lineaires.push([(c) => c.matinTot, (s) => s.equiteAvant.matinsTot])
+  if (repartit(R, 'nuits'))
+    lineaires.push([
+      (c) => c.moment === 'nuit',
+      (s) => s.equiteAvant.nuits ?? 0,
+    ])
   for (const membres of groupes.values()) {
     if (membres.length < 2) continue
-    weekendsEquitables(m, p, membres, travailleDe, nbSemaines)
-    for (const [garde, avant] of [
-      [(c: Creneau) => c.soir, (s: SalarieSolveur) => s.equiteAvant.soirs],
-      [
-        (c: Creneau) => c.matinTot,
-        (s: SalarieSolveur) => s.equiteAvant.matinsTot,
-      ],
-    ] as const) {
+    if (repartit(R, 'weekends'))
+      weekendsEquitables(m, p, membres, travailleDe, nbSemaines)
+    for (const [garde, avant] of lineaires) {
       // Écart à sa part (heures dues sur celles du groupe) : sur 4 semaines,
       // un temps partiel en fait moins sans être en retard.
       const heures = membres.reduce(
@@ -2549,17 +2569,19 @@ function weekendsEquitables(
     0,
   )
   if (heures <= 0) return
+  const jours = (p.regles ?? REGLES_PAR_DEFAUT).equite.weekendJours
   const n = membres.map((s) => {
     const termes: Terme[] = []
     const travaille = travailleDe.get(s.id) ?? new Map<number, string>()
     for (let k = 0; k < nbSemaines; k++) {
-      const vars = [7 * k + 5, 7 * k + 6]
+      const vars = jours
+        .map((j) => 7 * k + j)
         .filter((j) => j < p.nbJours)
         .map((j) => travaille.get(j))
         .filter((v): v is string => !!v)
       if (vars.length === 1) termes.push([1, vars[0]])
-      else if (vars.length === 2) {
-        // we = samedi OU dimanche.
+      else if (vars.length >= 2) {
+        // we = un jour du week-end OU l'autre (samedi OU dimanche).
         const we = m.bool()
         for (const v of vars)
           m.ajoute(
@@ -2643,8 +2665,9 @@ function esquisserSuivante(
     m.cout(POIDS_JOUR_MANQUANT, ecart)
   }
   if (e.weekendLibreAvant !== false) return
-  // Week-end du calcul (samedi 5, dimanche 6 ; l'école compte travaillée)
-  // et week-end d'après (nbJours + 5, + 6).
+  // Week-end du calcul (samedi 5, dimanche 6 à l'hôtel ; l'école compte
+  // travaillée) et week-end d'après (nbJours + 5, + 6).
+  const WE = (p.regles ?? REGLES_PAR_DEFAUT).equite.weekendJours
   const cote = (
     jours: number[],
     valeur: (j: number) => string | 1 | undefined,
@@ -2668,7 +2691,7 @@ function esquisserSuivante(
       )
     return we
   }
-  const ici = cote([5, 6, -1], (j) =>
+  const ici = cote([...WE, -1], (j) =>
     j === -1
       ? undefined
       : s.joursHorsSite.has(j) || e.nonLibresIci.has(j)
@@ -2701,8 +2724,9 @@ function esquisserSuivante(
             )
           return we
         })()
-  const apres = cote([p.nbJours + 5, p.nbJours + 6], (j) =>
-    e.nonLibres.has(j - p.nbJours) ? 1 : sk.get(j),
+  const apres = cote(
+    WE.map((j) => p.nbJours + j),
+    (j) => (e.nonLibres.has(j - p.nbJours) ? 1 : sk.get(j)),
   )
   if (iciTout === 0 || apres === 0) return
   if (iciTout === 1 && apres === 1) return
@@ -2757,6 +2781,11 @@ function reglesMoralesSemaine(
   estImpose: (c: Creneau) => boolean,
 ): void {
   const dans = new Set(jours)
+  // Les jours du week-end de l'établissement (samedi 5, dimanche 6 à
+  // l'hôtel, 2026-11-06) : tous dans la semaine, aucun hors du site.
+  const WE = R.equite.weekendJours
+  const weekendEntier = WE.every((j) => dans.has(j) && !s.joursHorsSite.has(j))
+  const veille = jourVeilleWeekend(R)
   // La nuit du vendredi au samedi rend le week-end travaillé (2026-11-03,
   // comme celle du dimanche, Q15) : on finit le samedi matin.
   // Écrite seulement quand une règle du week-end la lit (même modèle sinon).
@@ -2765,12 +2794,11 @@ function reglesMoralesSemaine(
     nuitVendredi ??= sommeDe(
       m,
       siens
-        .filter((c) => jourDe(c) === 4 && c.moment === 'nuit')
+        .filter((c) => jourDe(c) === veille && c.moment === 'nuit')
         .map((c) => [1, xv(c)] as Terme),
     )
     return [
-      ...[5, 6]
-        .map((j) => travaille.get(j))
+      ...WE.map((j) => travaille.get(j))
         .filter((v): v is string => !!v)
         .map((t) => [1, t] as Terme),
       ...nuitVendredi,
@@ -2786,14 +2814,7 @@ function reglesMoralesSemaine(
       .filter((j) => dans.has(j))
       .map((j) => travaille.get(j))
       .filter((v): v is string => !!v)
-    if (
-      repris.length &&
-      s.weekendTravailleAvant &&
-      dans.has(5) &&
-      dans.has(6) &&
-      !s.joursHorsSite.has(5) &&
-      !s.joursHorsSite.has(6)
-    ) {
+    if (repris.length && s.weekendTravailleAvant && weekendEntier) {
       // wl <= 1 - t(samedi), wl <= 1 - t(dimanche) : week-end libre.
       const wl = m.continu(0, 1)
       for (const t of weekend()) m.ajoute([[1, wl], t], '<=', 1)
@@ -2811,13 +2832,7 @@ function reglesMoralesSemaine(
     // semaine type qui fixe le week-end ne l'exempte plus (partage d'abord,
     // décision utilisateur du 2026-11-03 ; `weekendLibere` lève ses repos et
     // jours fixes cette semaine-là).
-    if (
-      s.weekendLibreAvant === false &&
-      dans.has(5) &&
-      dans.has(6) &&
-      !s.joursHorsSite.has(5) &&
-      !s.joursHorsSite.has(6)
-    ) {
+    if (s.weekendLibreAvant === false && weekendEntier) {
       const ts = weekend()
       if (ts.length === 1 && ts[0][0] === 1)
         m.cout(POIDS_WEEKEND_LIBRE, ts[0][1])
@@ -2829,19 +2844,24 @@ function reglesMoralesSemaine(
     }
     if (s.retourConge !== null) {
       const r = s.retourConge
-      const avant: Terme[] = []
-      for (let j = r; j <= 4; j++) {
-        const t = travaille.get(j)
-        if (t && dans.has(j)) avant.push([1, t])
+      // Jours de semaine du retour avant un jour `wd` du week-end.
+      const avantDe = (wd: number): Terme[] => {
+        const t: Terme[] = []
+        for (let j = r; j < wd; j++) {
+          const v = travaille.get(j)
+          if (v && dans.has(j) && !WE.includes(j)) t.push([1, v])
+        }
+        return t
       }
-      const fin = [5, 6]
-        .filter((j) => j >= r && dans.has(j))
-        .map((j) => travaille.get(j))
-        .filter((v): v is string => !!v)
+      const fin = WE.filter((j) => j >= r && dans.has(j)).flatMap((j) => {
+        const v = travaille.get(j)
+        return v ? [[j, v] as const] : []
+      })
       if (fin.length) {
         const w = m.continu(0, 1)
         // w >= t(week-end) - Σ t(jours de semaine du retour)
-        for (const t of fin) m.ajoute([[1, w], [-1, t], ...avant], '>=', 0)
+        for (const [j, t] of fin)
+          m.ajoute([[1, w], [-1, t], ...avantDe(j)], '>=', 0)
         m.cout(POIDS_RETOUR_WEEKEND, w)
       }
     }

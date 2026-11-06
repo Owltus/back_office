@@ -15,8 +15,6 @@ export type NatureMotif = 'absence' | 'ecole' | 'repos'
  * La LISTE des contrats est celle de l'établissement (2026-11-06) : aucun
  * code n'est lu par le calcul, seulement les cases du modèle. */
 export type TypeContrat = string
-/** Importance d'un poste (D11 du 2026-11-05). */
-export type Importance = 'indispensable' | 'important' | 'si_possible'
 /** Force d'une règle de l'établissement (colonne texte en base). */
 export type ForceRegle = 'obligatoire' | 'souhaite' | 'aucune'
 export type JourIsole = 'interdit' | 'a_eviter' | 'aucune'
@@ -49,6 +47,34 @@ export interface Motif {
   couleur: string
   decompte: boolean // compté dans les heures (R-ABSENCE-HEURES)
   nature: NatureMotif
+  /** Compte comme un jour libre pour le week-end (2026-11-06, à la place
+   * des codes CP, JF, JFR). Absent (données de test) : un repos ou un motif
+   * sans décompte (`libreWeekend`). */
+  libre_weekend?: boolean
+  /** Proposé seulement aux personnes au forfait jours (à la place du nom
+   * « forfait »). Absent : non. */
+  reserve_forfait?: boolean
+  /** Rôle du motif pour le planning, un motif par rôle (à la place des
+   * codes JF, JFR, R). Absent : aucun. */
+  role?: RoleMotif | null
+  /** Icône choisie (`ICONES_MOTIF`) ; absente : devinée d'après le nom. */
+  icone?: string | null
+}
+
+/** Rôle d'un motif : jour férié pris le jour même, jour férié rattrapé,
+ * repos posé par le planning. */
+export type RoleMotif = 'ferie_chome' | 'ferie_rattrape' | 'repos_defaut'
+
+/** Critère réparti à part égale entre les personnes d'un même groupe. */
+export type CritereEquite = 'weekends' | 'soirs' | 'matins_tot' | 'nuits'
+
+/** Un jour férié en plus des 11 calculés (table `planning_feries`). */
+export interface FerieAjoute {
+  id: number
+  jour: string // AAAA-MM-JJ
+  nom: string
+  /** Chaque année au même jour et au même mois. */
+  recurrent: boolean
 }
 
 export interface Poste {
@@ -75,11 +101,12 @@ export interface Poste {
    * direction, adjoints, technique ; décision utilisateur du 2026-11-04).
    * Vaut pour qui a ce poste en PREMIER poste de titulaire. Absent : faux. */
   feries_chomes?: boolean
-  /** Importance du poste quand il manque du monde (D11, 2026-11-05) :
-   * « si possible » reste vide en premier. Absent : important. */
-  importance?: Importance
+  /** Indispensable au fonctionnement (D11, oui / non) : ses places passent
+   * devant les autres quand il manque du monde. Absent : non. La colonne
+   * `importance` n'est plus lue (2026-11-06). */
+  indispensable?: boolean
   /** Heure de fermeture (HH:MM) : ce poste est tenu jusqu'à cette heure
-   * chaque soir (2026-11-05, `fermeturesAccueil`). Null : aucune. */
+   * chaque soir (2026-11-05, `fermeturesPostes`). Null : aucune. */
   fermeture?: string | null
 }
 
@@ -134,6 +161,14 @@ export interface Reglages {
   ferie_anciennete_mois?: number
   /** Un jour férié travaillé reste à rattraper ce nombre de jours. */
   ferie_rattrapage_jours?: number
+  /** Jours du week-end (0 = lundi), règle du week-end libre et partage. */
+  weekend_jours?: number[]
+  /** La nuit de la veille du week-end le rend travaillé. */
+  weekend_nuit_veille?: boolean
+  /** Ce qui est réparti à part égale. */
+  equite_criteres?: CritereEquite[]
+  /** Semaines regardées pour le partage et les heures en plus. */
+  equite_semaines?: number
 }
 
 /** Un type de contrat de l'établissement et ses règles (table
@@ -285,6 +320,8 @@ export interface Referentiel {
   /** Règles par type de contrat ; absentes (données de test) : les
    * défauts (`REGLES_PAR_DEFAUT`). */
   modelesContrat?: ModeleContrat[]
+  /** Jours fériés en plus des 11 calculés ; absents : aucun. */
+  feriesAjoutes?: FerieAjoute[]
 }
 
 export const JOURS = [

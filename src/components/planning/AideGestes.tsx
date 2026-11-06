@@ -47,6 +47,11 @@ function Contenu({ lignes }: { lignes: readonly string[] }) {
     <AidePlanningContenu
       gestes={[...lignes, ...aidePoints(regles)]}
       regles={regles}
+      postes={
+        qc
+          .getQueryData<Referentiel>(planningKeys.referentiel())
+          ?.postes.filter((p) => !p.ferme) ?? []
+      }
     />
   )
 }

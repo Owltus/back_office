@@ -28,8 +28,8 @@ export function postesParImportance(postes: readonly Poste[]): {
 } {
   const ouverts = postes.filter((p) => !p.ferme)
   return {
-    indispensables: ouverts.filter((p) => estIndispensable(p.importance)),
-    autres: ouverts.filter((p) => !estIndispensable(p.importance)),
+    indispensables: ouverts.filter((p) => estIndispensable(p)),
+    autres: ouverts.filter((p) => !estIndispensable(p)),
   }
 }
 
@@ -53,10 +53,9 @@ export function sectionsBesoins(postes: readonly Poste[]): {
   const aPart = ouverts.filter((p) => !estPosteAccueil(p, actif))
   return {
     accueil: actif,
-    accueilIndispensable:
-      actif && duTableau.some((p) => estIndispensable(p.importance)),
-    indispensables: aPart.filter((p) => estIndispensable(p.importance)),
-    autres: aPart.filter((p) => !estIndispensable(p.importance)),
+    accueilIndispensable: actif && duTableau.some((p) => estIndispensable(p)),
+    indispensables: aPart.filter((p) => estIndispensable(p)),
+    autres: aPart.filter((p) => !estIndispensable(p)),
   }
 }
 

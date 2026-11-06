@@ -20,6 +20,8 @@ import {
 import type { PresencePoste } from '#/lib/planning/cycles.ts'
 import {
   aJourneeCourteImposee,
+  estJourWeekend,
+  jourVeilleWeekend,
   lireRegles,
   modeleDe,
   REGLES_PAR_DEFAUT,
@@ -43,13 +45,13 @@ import type { JourFerie } from '#/lib/planning/feries.ts'
 import {
   creneau,
   duree,
+  estIndispensable,
   jourDe,
   probleme,
   role,
   travail,
   cle,
   cleAEviter,
-  SEMAINES_EQUITE,
 } from '#/lib/planning/modele.ts'
 import type {
   AffectationSolveur,
@@ -82,6 +84,7 @@ import {
   accueilActif,
   bilanPresence,
   chiffreAccueil,
+  plafondAccueil,
   estPosteAccueil,
   momentsAccueil,
   momentLibre,
@@ -381,7 +384,7 @@ export interface Contexte {
   absences: Map<number, Map<string, number>>
   /** Repos posés encore en proposition : « salarié|date ». */
   reposProposes: Set<string>
-  /** Motifs « Jour férié rattrapé » (code JFR, `estJfr`). */
+  /** Motifs « Jour férié rattrapé » (rôle du motif, `estJfr`). */
   motifsJfr: Set<number>
   /** JFR posés encore en proposition : « salarié|date ». */
   jfrProposes: Set<string>
@@ -389,35 +392,23 @@ export interface Contexte {
   regles: RegleEtablissement
 }
 
-export function estEcole(m: Pick<Motif, 'nature' | 'code' | 'nom'>): boolean {
-  if (m.nature === 'ecole') return true
-  const nom = m.nom.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
-  return m.code === 'EC' || nom.startsWith('ecole')
+/** Un motif d'école : sa nature, rien d'autre (2026-11-06 : ni code ni
+ * nom lus). */
+export function estEcole(m: Pick<Motif, 'nature'>): boolean {
+  return m.nature === 'ecole'
 }
 
-/** Codes des absences choisies qui laissent un jour vraiment libre :
- * congé payé, jour férié chômé, jour férié rattrapé. */
-export const CODES_CONGE_LIBRE: ReadonlySet<string> = new Set([
-  'CP',
-  'JF',
-  'JFR',
-])
-
 /** Règle 4 du PRD : une absence qui compte comme un jour libre pour le
- * week-end. Oui : un repos (motif de nature repos), une absence sans
- * décompte (repos exceptionnel, récupération, repos forfait), un congé
- * choisi (`CODES_CONGE_LIBRE`). Non : maladie, formation, sans solde,
- * absence autorisée, congé pour décès, école (relecture du 2026-11-03 :
- * un week-end malade n'est pas un week-end avec les siens). */
+ * week-end. La case du motif (`libre_weekend`, 2026-11-06, à la place des
+ * codes CP, JF, JFR) ; l'école jamais. Sans case (données de test) : un
+ * repos ou un motif sans décompte. Non à l'hôtel : maladie, formation, sans
+ * solde, absence autorisée, congé pour décès (relecture du 2026-11-03 : un
+ * week-end malade n'est pas un week-end avec les siens). */
 export function absenceLibre(
-  m: Pick<Motif, 'code' | 'nature' | 'decompte'>,
+  m: Pick<Motif, 'nature' | 'decompte' | 'libre_weekend'>,
 ): boolean {
   if (m.nature === 'ecole') return false
-  return (
-    m.nature === 'repos' ||
-    !m.decompte ||
-    CODES_CONGE_LIBRE.has(m.code.trim().toUpperCase())
-  )
+  return m.libre_weekend ?? (m.nature === 'repos' || !m.decompte)
 }
 
 export function indexerAbsences(
@@ -603,11 +594,15 @@ export function avecFeriesDuJour(
   lundi: string,
 ): Map<number, Map<string, number>> {
   const r = indexerAbsences(d.absences)
-  const jf = d.referentiel.motifs.find((m) => m.code === 'JF')
+  const jf = d.referentiel.motifs.find((m) => m.role === 'ferie_chome')
   if (!jf) return r
-  const feries = feriesEntre(ajouterJours(lundi, -28), ajouterJours(lundi, 20))
-  const postes = new Map(d.referentiel.postes.map((p) => [p.id, p]))
   const regles = lireRegles(d.referentiel)
+  const feries = feriesEntre(
+    ajouterJours(lundi, -28),
+    ajouterJours(lundi, 20),
+    regles.feries.ajoutes,
+  )
+  const postes = new Map(d.referentiel.postes.map((p) => [p.id, p]))
   for (const x of d.referentiel.salaries) {
     const stagiaire = modeleDe(regles, x.type_contrat).feriesJourMeme
     const encadrement = !stagiaire && feriesChomes(x, postes)
@@ -793,7 +788,9 @@ export function fiche(
     // dérogation, décision utilisateur du 2026-11-02).
     feriesEvites: x.mineur
       ? new Set(
-          [0, 1, 2, 3, 4, 5, 6].filter((j) => ferieDe(ajouterJours(lundi, j))),
+          [0, 1, 2, 3, 4, 5, 6].filter((j) =>
+            ferieDe(ajouterJours(lundi, j), ctx.regles?.feries.ajoutes),
+          ),
         )
       : undefined,
   }
@@ -915,9 +912,9 @@ function niveauxDe(
   ctx: Pick<Contexte, 'postes'>,
   posteId: number,
   b?: Pick<Besoin, 'obligatoire' | 'niveau_min'>,
-): Pick<Creneau, 'importance' | 'souhaite' | 'titulaireSeul'> {
+): Pick<Creneau, 'indispensable' | 'souhaite' | 'titulaireSeul'> {
   return {
-    importance: ctx.postes.get(posteId)?.importance ?? 'si_possible',
+    indispensable: estIndispensable(ctx.postes.get(posteId)),
     souhaite: b?.obligatoire === false,
     titulaireSeul: b?.niveau_min === 'titulaire',
   }
@@ -1166,23 +1163,51 @@ export function candidatsAccueil(ctx: Contexte, depuis = 0): Creneau[] {
   return r
 }
 
-/** L'ouverture de chaque poste de l'accueil qui a une heure d'ouverture
- * (2026-11-01, « à 7 h, quelqu'un en réception et quelqu'un au club ») :
- * chaque jour où le matin est demandé, de l'heure d'ouverture à une heure
- * plus tard, en minutes réelles. Rien si le tableau n'est pas en service. */
-export function ouverturesAccueil(ctx: Contexte): Probleme['ouvertures'] {
-  if (!accueilEnService(ctx)) return []
+/** Les jours où un poste est ouvert, pour son ouverture et sa fermeture
+ * (2026-11-06, tout poste) : un poste du matin et du soir de l'accueil en
+ * service, les jours où ce moment (`periode`) est demandé au tableau ; tout
+ * autre poste, les jours où il a un besoin obligatoire. */
+function joursOuverts(
+  ctx: Contexte,
+  poste: Poste,
+  periode: 'matin' | 'soir',
+): number[] {
+  const jours: number[] = []
+  const accueil = poste.presence && accueilEnService(ctx)
+  const besoins = accueil
+    ? []
+    : besoinsDuMoteur(ctx).valides.filter(
+        (b) =>
+          b.poste_id === poste.id && b.obligatoire !== false && b.effectif > 0,
+      )
+  for (let jour = 0; jour < 7; jour++) {
+    const ouvert = accueil
+      ? ctx.consignes.some(
+          (k) =>
+            k.jour === jour && k.periode === periode && chiffreAccueil(k) > 0,
+        )
+      : besoins.some((b) => b.jour === jour)
+    if (ouvert) jours.push(jour)
+  }
+  return jours
+}
+
+/** Un poste qui compte pour l'ouverture et la fermeture : ouvert, et pas
+ * la nuit de l'accueil (le veilleur a ses passations). */
+const aDesHeures = (ctx: Contexte, p: Poste) =>
+  !p.ferme && !(p.accueil_nuit && accueilEnService(ctx))
+
+/** L'ouverture de chaque poste qui a une heure d'ouverture (2026-11-01,
+ * « à 7 h, quelqu'un en réception et quelqu'un au club » ; tout poste
+ * depuis le 2026-11-06) : chaque jour où il est ouvert (`joursOuverts`), de
+ * l'heure d'ouverture à une heure plus tard, en minutes réelles. */
+export function ouverturesPostes(ctx: Contexte): Probleme['ouvertures'] {
   const r: NonNullable<Probleme['ouvertures']> = []
   for (const poste of [...ctx.postes.values()].sort((a, b) => a.id - b.id)) {
-    if (!poste.ouverture || poste.ferme || !poste.presence) continue
+    if (!poste.ouverture || !aDesHeures(ctx, poste)) continue
     const m = minutes(poste.ouverture) + ctx.regles.passations.dureeOuverture
     const fin = `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
-    for (let jour = 0; jour < 7; jour++) {
-      const matin = ctx.consignes.some(
-        (k) =>
-          k.jour === jour && k.periode === 'matin' && chiffreAccueil(k) > 0,
-      )
-      if (!matin) continue
+    for (const jour of joursOuverts(ctx, poste, 'matin')) {
       const [debut, f] = bornes(ctx.lundi, jour, poste.ouverture, fin)
       r.push({ poste: String(poste.id), jour, debut, fin: f })
     }
@@ -1190,25 +1215,19 @@ export function ouverturesAccueil(ctx: Contexte): Probleme['ouvertures'] {
   return r
 }
 
-/** La fermeture de chaque poste de l'accueil qui a une heure de fermeture
- * (2026-11-05, symétrique de l'ouverture) : chaque jour où le soir est
- * demandé, la dernière heure avant la fermeture, tenue sur CE poste, en
- * minutes réelles. Une fermeture après minuit appartient au soir de la
- * veille (« 00:30 » : de 23:30 à 00:30). Rien si le tableau n'est pas en
- * service. */
-export function fermeturesAccueil(ctx: Contexte): Probleme['fermetures'] {
-  if (!accueilEnService(ctx)) return []
+/** La fermeture de chaque poste qui a une heure de fermeture (2026-11-05,
+ * symétrique de l'ouverture ; tout poste depuis le 2026-11-06) : chaque
+ * jour où il est ouvert, la dernière heure avant la fermeture, tenue sur CE
+ * poste, en minutes réelles. Une fermeture après minuit appartient au soir
+ * de la veille (« 00:30 » : de 23:30 à 00:30). */
+export function fermeturesPostes(ctx: Contexte): Probleme['fermetures'] {
   const r: NonNullable<Probleme['fermetures']> = []
   const duree = ctx.regles.passations.dureeOuverture
   for (const poste of [...ctx.postes.values()].sort((a, b) => a.id - b.id)) {
-    if (!poste.fermeture || poste.ferme || !poste.presence) continue
+    if (!poste.fermeture || !aDesHeures(ctx, poste)) continue
     const m = (minutes(poste.fermeture) - duree + 1440) % 1440
     const debut = `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
-    for (let jour = 0; jour < 7; jour++) {
-      const soir = ctx.consignes.some(
-        (k) => k.jour === jour && k.periode === 'soir' && chiffreAccueil(k) > 0,
-      )
-      if (!soir) continue
+    for (const jour of joursOuverts(ctx, poste, 'soir')) {
       const [d, f] = bornes(ctx.lundi, jour, debut, poste.fermeture)
       r.push({ poste: String(poste.id), jour, debut: d, fin: f })
     }
@@ -1227,7 +1246,7 @@ function chiffresAccueil(ctx: Contexte): Probleme['consignes'] {
     jour: c.jour,
     periode: c.periode,
     minimum: chiffreAccueil(c),
-    maximum: chiffreAccueil(c),
+    maximum: plafondAccueil(c),
   }))
 }
 
@@ -1658,9 +1677,15 @@ export function avecSemainesVoisines(
   return r
 }
 
-/** Règle 4 : la semaine type fixe le samedi ou le dimanche Travaille. */
-export function estWeekendFixe(x: Pick<Salarie, 'semaine_type'>): boolean {
-  return [5, 6].some((j) => x.semaine_type.at(j)?.mode === 'travail')
+/** Règle 4 : la semaine type fixe un jour du week-end Travaille (samedi
+ * ou dimanche à l'hôtel, `equite.weekendJours`). */
+export function estWeekendFixe(
+  x: Pick<Salarie, 'semaine_type'>,
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
+): boolean {
+  return regles.equite.weekendJours.some(
+    (j) => x.semaine_type.at(j)?.mode === 'travail',
+  )
 }
 
 /** Des repos fixés dans la semaine type : ils passent avant le partage des
@@ -1684,7 +1709,7 @@ export function aDesReposFixes(x: Pick<Salarie, 'semaine_type'>): boolean {
 export function weekendLibreAvantDe(
   x: Salarie,
   lundi: string,
-  ctx: Pick<Contexte, 'absences' | 'ecole'>,
+  ctx: Pick<Contexte, 'absences' | 'ecole'> & Partial<Pick<Contexte, 'regles'>>,
   semaine: (k: number) => readonly Affectation[],
   motifs: ReadonlyMap<number, Motif>,
   estNuit: (a: Affectation) => boolean,
@@ -1692,13 +1717,16 @@ export function weekendLibreAvantDe(
    * troisième est celle du calcul : `esquisseSuivante`). */
   semaines = 3,
 ): boolean | null {
+  const regles = ctx.regles ?? REGLES_PAR_DEFAUT
+  const jours = regles.equite.weekendJours
+  const veille = jourVeilleWeekend(regles)
   for (let k = 1; k <= semaines; k++) {
     const l = ajouterJours(lundi, -7 * k)
     const hors = joursHorsContrat(x, l)
-    if (!semaine(k).length || hors.has(5) || hors.has(6)) return null
+    if (!semaine(k).length || jours.some((j) => hors.has(j))) return null
     const siens = semaine(k).filter((a) => a.salarie_id === x.id)
     const pris = new Set(siens.map((a) => a.jour))
-    if (siens.some((a) => a.jour === 4 && estNuit(a))) continue
+    if (siens.some((a) => a.jour === veille && estNuit(a))) continue
     const absents = joursAbsents(x, l, ctx.absences)
     const libre = (j: number) => {
       if (pris.has(j)) return false
@@ -1707,7 +1735,7 @@ export function weekendLibreAvantDe(
       const motif = motifs.get(m)
       return motif ? absenceLibre(motif) : !ctx.ecole.has(m)
     }
-    if (libre(5) && libre(6)) return true
+    if (jours.every(libre)) return true
   }
   return false
 }
@@ -1730,12 +1758,12 @@ export function weekendsLiberes(d: DonneesSemaine): Set<number> {
   for (const x of ctx.staff) {
     if (
       modeleDe(ctx.regles, x.type_contrat).placementManuel ||
-      !estWeekendFixe(x) ||
+      !estWeekendFixe(x, ctx.regles) ||
       aDesReposFixes(x)
     )
       continue
     const hors = joursHorsContrat(x, lundi)
-    if (hors.has(5) || hors.has(6)) continue
+    if (ctx.regles.equite.weekendJours.some((j) => hors.has(j))) continue
     const estNuit = (a: Affectation) => equiteDe(ctx, a).moment === 'nuit'
     if (weekendLibreAvantDe(x, lundi, ctx, semaine, motifs, estNuit) === false)
       r.add(x.id)
@@ -1806,21 +1834,24 @@ export function avecHistoire(
             motifs,
             (a) => equiteDe(ctx, a).moment === 'nuit',
           )
-    const weekendFixe = estWeekendFixe(x)
+    const WE = ctx.regles.equite.weekendJours
+    const veille = jourVeilleWeekend(ctx.regles)
+    const weekendFixe = estWeekendFixe(x, ctx.regles)
     const weekendLibere =
       weekendFixe &&
       !aDesReposFixes(x) &&
       weekendLibreAvant === false &&
-      !sol.horsContrat.has(5) &&
-      !sol.horsContrat.has(6)
+      !WE.some((j) => sol.horsContrat.has(j))
     // Règles 8 et 7 : la semaine d'avant.
     const lAvant = ajouterJours(lundi, -7)
     const avant = siens(1)
     const reposAvant = new Set<number>()
-    // La nuit du vendredi au samedi rend le week-end travaillé (2026-11-03).
+    // La nuit du vendredi au samedi rend le week-end travaillé (2026-11-03 ;
+    // la veille du week-end réglé, `jourVeilleWeekend`).
     const weekendTravailleAvant = avant.some(
       (a) =>
-        a.jour >= 5 || (a.jour === 4 && equiteDe(ctx, a).moment === 'nuit'),
+        WE.includes(a.jour) ||
+        (a.jour === veille && equiteDe(ctx, a).moment === 'nuit'),
     )
     if (avant.length) {
       const absents = joursAbsents(x, lAvant, ctx.absences)
@@ -1890,7 +1921,7 @@ export function avecHistoire(
     let minutesEnPlus = 0
     let semainesEnPlus = 0
     if (!sol.contratIndicatif) {
-      for (let k = 1; k <= SEMAINES_EQUITE; k++) {
+      for (let k = 1; k <= ctx.regles.equite.semaines; k++) {
         if (!semaine(k).length) continue
         const l = ajouterJours(lundi, -7 * k)
         const dues = versSolveur(fiche(x, l, ctx)).minutesHebdoContrat
@@ -1915,7 +1946,7 @@ export function avecHistoire(
       ...(weekendLibere
         ? {
             travailFixe: new Set(
-              [...sol.travailFixe].filter((j) => j !== 5 && j !== 6),
+              [...sol.travailFixe].filter((j) => !WE.includes(j)),
             ),
           }
         : {}),
@@ -2039,10 +2070,13 @@ export function equitesAvant(
   membres: Array<{ x: Salarie; minutes: number }>,
 ): Map<number, EquiteFaite> {
   const r = new Map<number, EquiteFaite>(
-    membres.map(({ x }) => [x.id, { weekends: 0, soirs: 0, matinsTot: 0 }]),
+    membres.map(({ x }) => [
+      x.id,
+      { weekends: 0, soirs: 0, matinsTot: 0, nuits: 0 },
+    ]),
   )
-  const champs = ['weekends', 'soirs', 'matinsTot'] as const
-  const nb = d.historique ? SEMAINES_EQUITE : 1
+  const champs = ['weekends', 'soirs', 'matinsTot', 'nuits'] as const
+  const nb = d.historique ? ctx.regles.equite.semaines : 1
   for (let k = 1; k <= nb; k++) {
     const lundi = ajouterJours(ctx.lundi, -7 * k)
     const semaine = d.historique
@@ -2050,12 +2084,13 @@ export function equitesAvant(
       : d.avant
     const faits = membres.map(({ x }) => {
       const siens = semaine.filter((a) => a.salarie_id === x.id)
-      const e = { weekends: 0, soirs: 0, matinsTot: 0 }
-      if (siens.some((a) => a.jour >= 5)) e.weekends = 1
+      const e = { weekends: 0, soirs: 0, matinsTot: 0, nuits: 0 }
+      if (siens.some((a) => estJourWeekend(ctx.regles, a.jour))) e.weekends = 1
       for (const a of siens) {
         const q = equiteDe(ctx, a)
         if (q.soir) e.soirs++
         if (q.matinTot) e.matinsTot++
+        if (q.moment === 'nuit') e.nuits++
       }
       return e
     })
@@ -2075,7 +2110,7 @@ export function equitesAvant(
           const total = faits.reduce((t, e, j) => t + (la[j] ? e[c] : 0), 0)
           part = Math.max(part, (total * sienne) / (heures + sienne))
         }
-        cumul[c] = arrondi(cumul[c] + part)
+        cumul[c] = arrondi((cumul[c] ?? 0) + part)
       }
     })
   }
@@ -2598,8 +2633,7 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
     if (
       sol.weekendLibere &&
       siens.length &&
-      !travailles.has(5) &&
-      !travailles.has(6)
+      !ctx.regles.equite.weekendJours.some((j) => travailles.has(j))
     )
       alertes.push({
         regle: 'WEEKEND-LIBERE',
@@ -2701,7 +2735,7 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
   const chiffres = ctx.consignes.map((c) => ({
     ...c,
     minimum: chiffreAccueil(c),
-    maximum: chiffreAccueil(c),
+    maximum: plafondAccueil(c),
   }))
   const presence = bilanPresence(chiffres, presents)
   // Places de l'accueil (D1) : le chiffre de chaque moment, pourvu jusqu'à
@@ -2808,8 +2842,8 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
     ...p,
     creneaux: [...p.creneaux, ...candidatsDuMoment],
     consignes: chiffresAccueil(ctx),
-    ouvertures: ouverturesAccueil(ctx),
-    fermetures: fermeturesAccueil(ctx),
+    ouvertures: ouverturesPostes(ctx),
+    fermetures: fermeturesPostes(ctx),
     releveMinutes: accueil ? ctx.regles.passations.releveMinutes : 0,
   }
   const ouverturesVides: TrouOut[] = ouverturesManquees(pReglages, affs).map(
@@ -3295,8 +3329,8 @@ export function preparerGeneration(
     imposees,
     aEviter,
     consignes: chiffresAccueil(ctx),
-    ouvertures: ouverturesAccueil(ctx),
-    fermetures: fermeturesAccueil(ctx),
+    ouvertures: ouverturesPostes(ctx),
+    fermetures: fermeturesPostes(ctx),
     ...(horizon
       ? { suivante: esquisseSuivante(d2, ctx, salaries, besoins) }
       : {}),
@@ -3424,9 +3458,10 @@ export function joursFixesManquants(
   const absents = joursAbsents(x, lundi, absences)
   const hors = joursHorsContrat(x, lundi)
   const libere = liberes.has(x.id)
+  const regles = lireRegles(d.referentiel)
   return x.semaine_type.flatMap((e, j) =>
     e.mode === 'travail' &&
-    !(libere && j >= 5) &&
+    !(libere && estJourWeekend(regles, j)) &&
     j >= depuis &&
     !pris.has(j) &&
     !absents.has(j) &&
@@ -3497,13 +3532,15 @@ export function esquisseSuivante(
           fixes.set(j, 1)
           horsSite.add(j)
         } else fixes.set(j, 0)
-        if ((j === 5 || j === 6) && !libre(m)) nonLibres.add(j)
+        if (estJourWeekend(ctx.regles, j) && !libre(m)) nonLibres.add(j)
       } else if (x.semaine_type.at(j)?.mode === 'repos') fixes.set(j, 0)
     }
     // Le week-end du calcul : une absence qui ne libère pas compte travaillé.
     const absentsIci = joursAbsents(x, lundi, ctx.absences)
     const nonLibresIci = new Set(
-      [5, 6].filter((j) => absentsIci.has(j) && !libre(absentsIci.get(j))),
+      ctx.regles.equite.weekendJours.filter(
+        (j) => absentsIci.has(j) && !libre(absentsIci.get(j)),
+      ),
     )
     if (hors.size === 7) continue
     const rythme =
@@ -3522,7 +3559,8 @@ export function esquisseSuivante(
           )
         : 0,
       weekendLibreAvant:
-        aDesReposFixes(x) || hors.has(5) || hors.has(6)
+        aDesReposFixes(x) ||
+        ctx.regles.equite.weekendJours.some((j) => hors.has(j))
           ? null
           : weekendLibreAvantDe(x, lundi, ctx, semaine, motifs, estNuit, 2),
     })
