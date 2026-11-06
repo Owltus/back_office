@@ -143,7 +143,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':J', (select j from t_ids)::text);
 $$;
 
-select plan(154);
+select plan(159);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -472,32 +472,32 @@ select is(pg_temp.essai('aucun', array['select count(*) from public.planning_con
 select is(pg_temp.essai('lecture', array['select count(*) from public.planning_consignes']),
   (select count(*)::text from public.planning_consignes), 'consignes : la lecture les lit toutes');
 select is(pg_temp.essai('ecriture', array[
-  'insert into public.planning_consignes (jour, periode, minimum, maximum) values (0, ''matin'', 1, 1)']),
+  'insert into public.planning_consignes (zone_id, jour, periode, minimum, maximum) values (1, 0, ''matin'', 1, 1)']),
   'err=42501', 'consignes : l''écriture ne les règle pas');
 select is(pg_temp.essai('gestion', array[
   'delete from public.planning_consignes',
-  'insert into public.planning_consignes (jour, periode, minimum, maximum) values (5, ''matin'', 3, 3)',
+  'insert into public.planning_consignes (zone_id, jour, periode, minimum, maximum) values (1, 5, ''matin'', 3, 3)',
   'select minimum || ''-'' || maximum from public.planning_consignes']),
   '3-3', 'consignes : la gestion règle un chiffre exact (3 le samedi matin, 2026-11-01)');
 select is(pg_temp.essai('gestion', array[
   'delete from public.planning_consignes',
-  'insert into public.planning_consignes (jour, periode, minimum, maximum) values (5, ''matin'', 3, 4)',
+  'insert into public.planning_consignes (zone_id, jour, periode, minimum, maximum) values (1, 5, ''matin'', 3, 4)',
   'select minimum || ''-'' || maximum from public.planning_consignes']),
   '3-4', 'consignes : au moins 3, au plus 4 (2026-11-06, CHECK exact retiré)');
 select is((select count(*)::text from pg_constraint where conname = 'planning_consignes_exact'),
   '0', 'consignes : plus de contrainte de chiffre exact');
 select is(pg_temp.essai('gestion', array[
   'delete from public.planning_consignes',
-  'insert into public.planning_consignes (jour, periode, minimum, maximum) values (0, ''soir'', 3, 2)']),
+  'insert into public.planning_consignes (zone_id, jour, periode, minimum, maximum) values (1, 0, ''soir'', 3, 2)']),
   'err=23514', 'consignes : un plafond sous le minimum est refusé');
 select is(pg_temp.essai('gestion', array[
   'delete from public.planning_consignes',
-  'insert into public.planning_consignes (jour, periode, minimum, maximum) values (0, ''nuit'', 1, 1)',
+  'insert into public.planning_consignes (zone_id, jour, periode, minimum, maximum) values (1, 0, ''nuit'', 1, 1)',
   'select periode || ''-'' || minimum from public.planning_consignes']),
   'nuit-1', 'consignes : la nuit est acceptée (2026-10-30)');
 select is(pg_temp.essai('gestion', array[
   'delete from public.planning_consignes',
-  'insert into public.planning_consignes (jour, periode, minimum, maximum) values (0, ''midi'', 1, 1)']),
+  'insert into public.planning_consignes (zone_id, jour, periode, minimum, maximum) values (1, 0, ''midi'', 1, 1)']),
   'err=23503', 'consignes : un moment inconnu est refusé (clé étrangère, 2026-11-06)');
 
 -- ------------------------------ moments de l'établissement (2026-11-06) ---
@@ -508,7 +508,7 @@ select is((select string_agg(id || ':' || compte_dans_tableau || ':' || est_nuit
 select is(pg_temp.essai('gestion', array[
   'insert into public.planning_moments (id, nom, ordre, priorite, debut_de, debut_a, compte_dans_tableau) values (''midi'', ''Midi'', 5, 0, 600, 780, true)',
   'delete from public.planning_consignes',
-  'insert into public.planning_consignes (jour, periode, minimum, maximum) values (0, ''midi'', 2, 2)',
+  'insert into public.planning_consignes (zone_id, jour, periode, minimum, maximum) values (1, 0, ''midi'', 2, 2)',
   'select periode || ''-'' || minimum from public.planning_consignes']),
   'midi-2', 'moments : la gestion crée « Midi », il a son chiffre au tableau');
 select is(pg_temp.essai('ecriture', array[
@@ -522,6 +522,27 @@ select is(pg_temp.essai('gestion', array[
 select is(pg_temp.essai('gestion', array[
   'insert into public.planning_moments (id, nom) values (''Midi !'', ''Midi'')']),
   'err=23514', 'moments : un identifiant hors format est refusé');
+
+-- -------------------------------- zones de l'établissement (2026-11-06) ---
+select is((select nom || ':' || continue from public.planning_zones where id = 1),
+  'Accueil:true', 'zones : l''accueil est la zone 1, tenue en continu');
+select is(pg_temp.essai('gestion', array[
+  'insert into public.planning_zones (id, nom, ordre) values (2, ''Room service'', 1)',
+  'delete from public.planning_consignes',
+  'insert into public.planning_consignes (zone_id, jour, periode, minimum, maximum) values (1, 0, ''matin'', 2, 2)',
+  'insert into public.planning_consignes (zone_id, jour, periode, minimum, maximum) values (2, 0, ''matin'', 1, 1)',
+  'select string_agg(zone_id || ''-'' || minimum, '','' order by zone_id) from public.planning_consignes']),
+  '1-2,2-1', 'zones : une seconde zone a son chiffre, le même matin que l''accueil');
+select is(pg_temp.essai('gestion', array[
+  'delete from public.planning_consignes',
+  'insert into public.planning_consignes (zone_id, jour, periode, minimum, maximum) values (1, 0, ''matin'', 2, 2)',
+  'insert into public.planning_consignes (zone_id, jour, periode, minimum, maximum) values (1, 0, ''matin'', 1, 1)']),
+  'err=23505', 'zones : un seul chiffre par zone, jour et moment');
+select is(pg_temp.essai('ecriture', array[
+  'insert into public.planning_zones (nom) values (''Essai'')']),
+  'err=42501', 'zones : l''écriture ne les règle pas');
+select is(pg_temp.essai('aucun', array['select count(*) from public.planning_zones']),
+  '0', 'zones : aucun ne les lit');
 
 -- ----------------------------- moments des horaires (2026-10-28) ---
 select is(pg_temp.essai('gestion', array[

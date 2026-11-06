@@ -2720,6 +2720,7 @@ function genererPlanning(f: Fenetre, tables: Table[], apres: string[]): void {
     'ouverture',
     'indispensable',
     'jour_max_minutes',
+    'zone_id',
   ])
   postes.identiteForcee = true
   const idPoste = new Map<string, number>()
@@ -2741,6 +2742,8 @@ function genererPlanning(f: Fenetre, tables: Table[], apres: string[]): void {
       plIndispensable(nom, categorie),
       // Durée max d'un service (2026-11-06) : celle de l'ancienne catégorie.
       PL_JOUR_MAX[categorie] ?? 690,
+      // La zone 1 (Accueil, créée par la migration 20261106130000).
+      PL_PRESENCE.has(nom) || categorie === 'veille_nuit' ? 1 : null,
     ])
   })
   const groupes = table('public.planning_groupes', [
@@ -2790,13 +2793,14 @@ function genererPlanning(f: Fenetre, tables: Table[], apres: string[]): void {
     }
   }
   const consignes = table('public.planning_consignes', [
+    'zone_id',
     'jour',
     'periode',
     'minimum',
     'maximum',
   ])
   for (const [periode, parJour] of PL_ACCUEIL) {
-    parJour.forEach((n, j) => consignes.lignes.push([j, periode, n, n]))
+    parJour.forEach((n, j) => consignes.lignes.push([1, j, periode, n, n]))
   }
   const salaries = table('public.planning_salaries', [
     'id',
