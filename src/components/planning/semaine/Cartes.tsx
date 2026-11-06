@@ -8,6 +8,8 @@
 import { useRegles } from '#/components/planning/hooks/useMoments.ts'
 import { NIVEAUX_HOTEL, niveauLu } from '#/lib/planning/niveaux.ts'
 import type { Niveaux } from '#/lib/planning/niveaux.ts'
+import { MOMENTS_HOTEL } from '#/lib/planning/moment.ts'
+import type { Moments } from '#/lib/planning/moment.ts'
 import { memo } from 'react'
 import type { CSSProperties } from 'react'
 import { useDraggable } from '@dnd-kit/core'
@@ -73,10 +75,12 @@ export function ligneAuLieuDe(
 export function texteCarte(
   c: ContenuCarte,
   niveaux: Niveaux = NIVEAUX_HOTEL,
+  /** Les moments de l'établissement (`useRegles().moments`). */
+  moments: Moments = MOMENTS_HOTEL,
 ): string[] {
   const n = niveauLu(niveaux, c.role)
   return [
-    `${!c.horaire ? 'Horaire spécifique · ' : c.horaire.periode ? `${libelleMoment(c.horaire.periode)} · ` : ''}${heureAffichee(c.debut)}–${heureAffichee(c.fin)}`,
+    `${!c.horaire ? 'Horaire spécifique · ' : c.horaire.periode ? `${libelleMoment(c.horaire.periode, moments)} · ` : ''}${heureAffichee(c.debut)}–${heureAffichee(c.fin)}`,
     ligneAuLieuDe(c.horaire, c.demande),
     c.poste?.nom,
     c.etoile && 'Journée étoile : un horaire de 7 h',
@@ -104,7 +108,8 @@ function Infobulle({ lignes }: { lignes: string[] }) {
 /** La carte d'un shift. `enVol` : le fantôme qui suit la souris. */
 export function CarteShift({ c, enVol }: { c: ContenuCarte; enVol?: boolean }) {
   const loi = c.alertes.some((a) => a.nature === 'loi')
-  const nv = niveauLu(useRegles().niveaux, c.role)
+  const regles = useRegles()
+  const nv = niveauLu(regles.niveaux, c.role)
   const secours = nv?.autonome && nv.rang > 0 ? nv : null
   return (
     <div
@@ -112,7 +117,7 @@ export function CarteShift({ c, enVol }: { c: ContenuCarte; enVol?: boolean }) {
       data-proposition={c.epinglee ? undefined : ''}
       style={
         {
-          '--couleur': couleurShift(c.horaire, c.poste, NEUTRE),
+          '--couleur': couleurShift(c.horaire, c.poste, NEUTRE, regles.moments),
         } as CSSProperties
       }
     >
@@ -180,7 +185,8 @@ export const CarteShiftDeplacable = memo(function CarteShiftDeplacable({
     id,
     disabled: !actif,
   })
-  const libelle = texteCarte(c, useRegles().niveaux)
+  const regles = useRegles()
+  const libelle = texteCarte(c, regles.niveaux, regles.moments)
   return (
     <Tip label={<Infobulle lignes={libelle} />} side="top">
       <div

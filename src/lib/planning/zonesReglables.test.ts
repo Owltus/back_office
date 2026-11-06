@@ -26,7 +26,12 @@ import {
   REGLES_PAR_DEFAUT,
 } from '#/lib/planning/reglesEtablissement.ts'
 import type { Zone } from '#/lib/planning/types.ts'
-import { trousAccueil } from '#/lib/planning/verificateur.ts'
+import {
+  presenceParCycle,
+  transmissions,
+  trousAccueil,
+  violationsAccueil,
+} from '#/lib/planning/verificateur.ts'
 import {
   posteIdZone,
   vuesZones,
@@ -200,5 +205,58 @@ describe('une seconde zone, Room service', () => {
       releveMinutes: 30,
       passationNuit: true,
     })
+  })
+})
+
+describe('relecture du 2026-11-06 : le vérificateur compte zone par zone', () => {
+  const seulAccueil = [
+    { salarieId: 'a', creneauId: 'am' },
+    { salarieId: 'b', creneauId: 'as' },
+  ]
+
+  it('le matin de Room service ne compte pas celui de l’Accueil', () => {
+    const x = presenceParCycle(pb(), seulAccueil)
+    // Dans l'ordre des chiffres : Accueil matin, soir, nuit, puis Room service.
+    expect(x.map((e) => e.compte)).toEqual([1, 1, 0, 0, 0])
+    expect(x[3].ecart).toBe(-1)
+  })
+
+  it('« 2 à 3 » : trois personnes ne sont pas de trop', () => {
+    const p = probleme({
+      ...pb(),
+      salaries: [...pb().salaries, sal('c', ['rec'])],
+      creneaux: [...creneaux, cand('am2', 'rec', '1', 7, 15, ['matin'])],
+      consignes: [
+        { zone: '1', jour: 0, periode: 'matin', minimum: 1, maximum: 2 },
+      ],
+    })
+    const deux = [
+      { salarieId: 'a', creneauId: 'am' },
+      { salarieId: 'c', creneauId: 'am2' },
+    ]
+    expect(presenceParCycle(p, deux)[0].ecart).toBe(0)
+    expect(
+      violationsAccueil(p, deux).filter((v) => v.regle === 'ACCUEIL-SURPLUS'),
+    ).toEqual([])
+  })
+
+  it('les transmissions regardent toutes les zones tenues en continu', () => {
+    const tous = creneaux.map((c) => ({
+      salarieId: { am: 'a', as: 'b', an: 'v', rm: 'r', rs: 's' }[
+        c.id
+      ] as string,
+      creneauId: c.id,
+    }))
+    // L'accueil passe la main (matin 7-15, soir 14 h 30) ; Room service non
+    // (matin 7-14, soir 17 h) : le lien du jour manque.
+    expect(transmissions(pb(), tous, [])[0].matinSoir).toBe('manque')
+    // Accepté : la seconde zone qui n'est pas tenue en continu ne compte pas.
+    const sansContinu = probleme({
+      ...pb(),
+      regles: lireRegles({
+        zones: ZONES.map((z) => (z.id === 2 ? { ...z, continue: false } : z)),
+      }),
+    })
+    expect(transmissions(sansContinu, tous, [])[0].matinSoir).toBe('ok')
   })
 })

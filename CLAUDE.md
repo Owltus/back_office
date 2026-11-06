@@ -2847,6 +2847,7 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   `depannage`). Identique prouvé (empreinte 8874c146, banc 0 écart) ;
   `niveauxReglables.test.ts` refuse toute clé de niveau écrite. D13 non levé
   (hôtels d'essai des tests).
+- **Relecture adverse des lots 1a-2b (2026-11-06)** : `relectureLots.test.ts`, migration `20261106150000` (ajouts seuls : moment à chiffres hors tableau PL409, week-end consécutif, `planning_moments.article`) ; 48 h au seul contrat sans heures posé à la main ; échange de noms par nom d'attente (UNIQUE non différable : un retrait).
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

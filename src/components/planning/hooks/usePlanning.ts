@@ -14,7 +14,7 @@ import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { codeErreur, messageErreur } from '#/lib/planning/erreurs.ts'
 import { fenetreFeries, motifReposDefaut } from '#/lib/planning/feries.ts'
 import { planningKeys } from '#/lib/planning/keys.ts'
-import { SEMAINES_EQUITE } from '#/lib/planning/modele.ts'
+import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
 import {
   aJoursFixes,
   analyser,
@@ -124,15 +124,21 @@ export function donneesSemaine(
   }
 }
 
+/** Semaines du partage à lire pour une génération : le réglage de
+ * l'établissement, ou le plus long possible (12) sans référentiel. */
+const semainesALire = (r: Referentiel | undefined) =>
+  r ? lireRegles(r).equite.semaines : 12
+
 /** Pour une génération : la semaine et l'historique d'équité (les
- * `SEMAINES_EQUITE` semaines d'avant, lues par `fetchSemainePourGeneration`). */
+ * `equite.semaines` semaines d'avant réglées par l'établissement, lues par
+ * `fetchSemainePourGeneration`). */
 export function donneesGeneration(
   lundi: string,
   referentiel: Referentiel,
   shifts: DonneesShifts,
 ): DonneesSemaine {
   const fenetre = new Set(
-    Array.from({ length: SEMAINES_EQUITE }, (_, k) =>
+    Array.from({ length: lireRegles(referentiel).equite.semaines }, (_, k) =>
       ajouterJours(lundi, -7 * (k + 1)),
     ),
   )
@@ -257,6 +263,10 @@ export function useGenerer() {
         fetchSemainePourGeneration(
           lundi,
           fenetreFeries(
+            qc.getQueryData<Referentiel>(planningKeys.referentiel()),
+          ),
+          // Le réglage du cache ; sans lui, le plus long possible (12).
+          semainesALire(
             qc.getQueryData<Referentiel>(planningKeys.referentiel()),
           ),
         ),

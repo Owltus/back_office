@@ -444,6 +444,14 @@ export function erreursSaisie(s: SaisieReglesContrats): string[] {
     s.weekend_jours.length > BORNES.weekendJoursMax
   )
     erreurs.push(`Le week-end compte de 1 à ${BORNES.weekendJoursMax} jours.`)
+  // Des jours qui se suivent dans la semaine, du lundi au dimanche
+  // (relecture du 2026-11-06 : dimanche et lundi étaient mal compris). La
+  // base refuse aussi.
+  const we = [...new Set(s.weekend_jours)].sort((a, b) => a - b)
+  if (we.some((j, i) => i > 0 && j !== we[i - 1] + 1))
+    erreurs.push(
+      'Les jours du week-end se suivent dans la semaine, du lundi au dimanche.',
+    )
   if (s.equite_semaines < 1 || s.equite_semaines > BORNES.equiteSemainesMax)
     erreurs.push(
       `Le partage regarde de 1 à ${BORNES.equiteSemainesMax} semaines.`,

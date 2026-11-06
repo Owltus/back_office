@@ -14,7 +14,8 @@ import {
 } from '#/lib/planning/cycles.ts'
 import { posteDeZone } from '#/lib/planning/cycles.ts'
 import type { PresencePoste } from '#/lib/planning/cycles.ts'
-import { vuesZones } from '#/lib/planning/zones.ts'
+import { ecartConsigne } from '#/lib/planning/presence.ts'
+import { vuesZones, zoneDuCreneau } from '#/lib/planning/zones.ts'
 
 import {
   dernierMoment,
@@ -1218,6 +1219,8 @@ function trousUneZone(
 
 /** Une consigne de présence et ce que le planning en fait. */
 export interface EcartPresence {
+  /** Zone du chiffre. */
+  zone: string
   jour: number
   periode: PeriodePresence
   compte: number
@@ -1248,19 +1251,28 @@ export function presenceParCycle(
   const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
   const salaries = new Map(p.salaries.map((s) => [s.id, s]))
   const presents = new Map<string, number>()
+  // Zone par zone (relecture du 2026-11-06 : le matin d'une zone comptait
+  // celui d'une autre) ; un créneau sans zone est de la première.
+  const premiere = (p.regles ?? REGLES_PAR_DEFAUT).zones[0].id
   for (const a of affectationsCompletes(p, affectations)) {
     const c = creneaux.get(a.creneauId)
     const s = salaries.get(a.salarieId)
     if (!c || !s) continue
+    const zone = zoneDuCreneau(p, c) ?? premiere
     for (const moment of c.presence) {
-      const k = `${jourDe(c)}|${moment}`
+      const k = `${zone}|${jourDe(c)}|${moment}`
       presents.set(k, (presents.get(k) ?? 0) + 1)
     }
   }
   return p.consignes.map((k) => {
-    const compte = presents.get(`${k.jour}|${k.periode}`) ?? 0
-    const ecart = compte - Math.max(0, k.minimum)
+    const compte =
+      presents.get(`${k.zone ?? premiere}|${k.jour}|${k.periode}`) ?? 0
+    // « Au moins … au plus … » comme le calcul : sans maximum (ou plus bas),
+    // le chiffre est exact.
+    const n = Math.max(0, k.minimum)
+    const ecart = ecartConsigne(compte, n, Math.max(n, k.maximum ?? n))
     return {
+      zone: k.zone ?? premiere,
       jour: k.jour,
       periode: k.periode,
       compte,
@@ -1286,11 +1298,21 @@ export function violationsAccueil(
     .map((a) => creneaux.get(a.creneauId))
     .filter((c): c is Creneau => c !== undefined)
   const r: Violation[] = []
+  const premiere = (p.regles ?? REGLES_PAR_DEFAUT).zones[0].id
   for (const x of presenceParCycle(p, affectations)) {
     if (x.ecart === 0) continue
-    const n = Math.max(0, x.minimum)
+    // Le chiffre manqué : le minimum, ou le maximum dépassé.
+    const n =
+      x.ecart > 0
+        ? Math.max(0, x.minimum, x.maximum ?? 0)
+        : Math.max(0, x.minimum)
     const ids = tenus
-      .filter((c) => jourDe(c) === x.jour && c.presence.includes(x.periode))
+      .filter(
+        (c) =>
+          jourDe(c) === x.jour &&
+          c.presence.includes(x.periode) &&
+          (zoneDuCreneau(p, c) ?? premiere) === x.zone,
+      )
       .map((c) => c.id)
     r.push({
       salarieId: null,
@@ -1504,17 +1526,33 @@ export function transmissions(
     Pick<Creneau, 'debut' | 'fin'> & { zone?: string }
   > = [],
 ): Transmissions[] {
-  // Les liens du mois : la première zone qui a un tableau (à l'hôtel,
-  // l'accueil).
-  const v = vuesZones(p)[0] as
-    ReturnType<typeof vuesZones<Probleme>>[0] | undefined
-  if (!v) return []
+  // Les liens du mois : toutes les zones tenues en continu (relecture du
+  // 2026-11-06 : seule la première était lue). Un lien manque dès qu'il
+  // manque dans une zone ; il tient s'il tient dans toutes celles qui en ont.
   const premiere = (p.regles ?? REGLES_PAR_DEFAUT).zones[0].id
-  return transmissionsUneZone(
-    v.p,
-    affectations,
-    sansReleve,
-    veilleDuLundi.filter((x) => (x.zone ?? premiere) === v.zone.id),
+  const parZone = vuesZones(p)
+    .filter((v) => v.zone.continue)
+    .map((v) =>
+      transmissionsUneZone(
+        v.p,
+        affectations,
+        sansReleve,
+        veilleDuLundi.filter((x) => (x.zone ?? premiere) === v.zone.id),
+      ),
+    )
+  if (!parZone.length) return []
+  const pire = (a: EtatTransmission, b: EtatTransmission): EtatTransmission =>
+    a === 'manque' || b === 'manque' ? 'manque' : (a ?? b)
+  return parZone[0].map((t, i) =>
+    parZone.slice(1).reduce(
+      (acc, z) => ({
+        jour: acc.jour,
+        nuitMatin: pire(acc.nuitMatin, z[i].nuitMatin),
+        matinSoir: pire(acc.matinSoir, z[i].matinSoir),
+        soirNuit: pire(acc.soirNuit, z[i].soirNuit),
+      }),
+      t,
+    ),
   )
 }
 

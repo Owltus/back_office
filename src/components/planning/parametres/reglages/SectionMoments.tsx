@@ -26,8 +26,10 @@ import {
   differenceMoments,
   erreursMoments,
   momentsDepuis,
+  nomsDAttente,
   nouveauMoment,
   raisonGarde,
+  raisonHorsTableau,
 } from '#/components/planning/parametres/reglages/moments.ts'
 import {
   heureValide,
@@ -37,14 +39,19 @@ import { Button } from '#/components/ui/button.tsx'
 import { Switch } from '#/components/ui/switch.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { libelleHoraire, libelleMoment } from '#/lib/planning/affichage.ts'
-import { lireMoments } from '#/lib/planning/moment.ts'
+import { partielle } from '#/lib/planning/erreurs.ts'
+import { articleMoment, lireMoments } from '#/lib/planning/moment.ts'
 import {
   enregistrerMoments,
   enregistrerMomentsHoraires,
   supprimerMoment,
 } from '#/lib/planning/service.ts'
 import { hhmm, minutes } from '#/lib/planning/temps.ts'
-import type { Moment, Referentiel } from '#/lib/planning/types.ts'
+import type {
+  ArticleMoment,
+  Moment,
+  Referentiel,
+} from '#/lib/planning/types.ts'
 
 /** Une heure saisie (HH:MM) ou vide (aucune condition). */
 function ChampHeure({
@@ -104,7 +111,7 @@ export function SectionMoments({
   const [nom, setNom] = useState('')
   const [envoi, setEnvoi] = useState(false)
   const off = !modifiable || envoi
-  const erreurs = erreursMoments(liste)
+  const erreurs = erreursMoments(liste, referentiel.consignes)
   const changes = modifie
     ? changementsDeMoment(referentiel.horaires, enregistres, liste)
     : []
@@ -128,12 +135,29 @@ export function SectionMoments({
     if (!modifiable || envoi || erreurs.length) return
     setEnvoi(true)
     const { ecrire: aEcrire, retirer } = differenceMoments(enregistres, liste)
+    const attente = nomsDAttente(enregistres, aEcrire)
     const r = await ecrire(async () => {
-      await enregistrerMoments(aEcrire)
-      await enregistrerMomentsHoraires(
-        changes.map((c) => ({ id: c.horaire.id, periode: c.apres })),
+      // Plusieurs écritures : après la première, un échec le dit (la
+      // saisie reste, enregistrer à nouveau reprend où la base en est).
+      let fait = false
+      const etape = async (action: () => Promise<unknown>) => {
+        try {
+          await action()
+          fait = true
+        } catch (err) {
+          throw fait ? partielle(err) : err
+        }
+      }
+      // Deux noms échangés : d'abord un nom d'attente (la base refuse deux
+      // moments du même nom, même un instant).
+      if (attente.length) await etape(() => enregistrerMoments(attente))
+      await etape(() => enregistrerMoments(aEcrire))
+      await etape(() =>
+        enregistrerMomentsHoraires(
+          changes.map((c) => ({ id: c.horaire.id, periode: c.apres })),
+        ),
       )
-      for (const id of retirer) await supprimerMoment(id)
+      for (const id of retirer) await etape(() => supprimerMoment(id))
     }, "Les moments n'ont pas pu être enregistrés")
     setEnvoi(false)
     if (r.ok) {
@@ -165,6 +189,11 @@ export function SectionMoments({
               liste,
               referentiel.consignes,
             )
+            // Sortir du tableau un moment qui a des chiffres : refusé
+            // (ses places deviendraient impossibles).
+            const tableauFige =
+              m.compte_dans_tableau &&
+              raisonHorsTableau(m.id, referentiel.consignes)
             return (
               <li
                 key={m.id}
@@ -204,10 +233,29 @@ export function SectionMoments({
                   >
                     <ArrowDown className="size-3.5" />
                   </Button>
-                  <label className="flex items-center gap-1.5">
+                  <select
+                    aria-label={`Article de ${m.nom}`}
+                    title="Dans une phrase : le matin, la soirée"
+                    className="h-7 rounded-md border bg-background px-1 text-foreground"
+                    value={articleMoment(l, m.id)}
+                    disabled={off}
+                    onChange={(e) =>
+                      regler(m.id, {
+                        article: e.target.value as ArticleMoment,
+                      })
+                    }
+                  >
+                    <option value="le">le</option>
+                    <option value="la">la</option>
+                    <option value="l'">l'</option>
+                  </select>
+                  <label
+                    className="flex items-center gap-1.5"
+                    title={tableauFige || undefined}
+                  >
                     <Switch
                       checked={m.compte_dans_tableau}
-                      disabled={off}
+                      disabled={off || !!tableauFige}
                       onCheckedChange={(v: boolean) =>
                         regler(m.id, { compte_dans_tableau: v === true })
                       }

@@ -121,12 +121,35 @@ export function raisonGarde(
   return null
 }
 
+/** Pourquoi un moment ne peut pas sortir du tableau (null : il peut). Ses
+ * chiffres ne compteraient plus (relecture du 2026-11-06 : places
+ * impossibles, ligne invisible) ; la base refuse aussi (PL409). */
+export function raisonHorsTableau(
+  id: string,
+  consignes: readonly Pick<Consigne, 'periode' | 'minimum' | 'maximum'>[],
+): string | null {
+  return consignes.some(
+    (c) => c.periode === id && (c.minimum > 0 || (c.maximum ?? 0) > 0),
+  )
+    ? 'Il a des chiffres au tableau. Mettez-les à 0 d’abord.'
+    : null
+}
+
 const heureOk = (v: number | null, max: number) =>
   v === null || (Number.isInteger(v) && v >= 0 && v <= max)
 
 /** Ce qui empêche d'enregistrer (vide : rien). */
-export function erreursMoments(liste: readonly Moment[]): string[] {
+export function erreursMoments(
+  liste: readonly Moment[],
+  /** Les chiffres du tableau : un moment qui en a reste au tableau. */
+  consignes: readonly Pick<Consigne, 'periode' | 'minimum' | 'maximum'>[] = [],
+): string[] {
   const erreurs: string[] = []
+  for (const m of liste)
+    if (!m.compte_dans_tableau && raisonHorsTableau(m.id, consignes))
+      erreurs.push(
+        `${m.nom.trim() || 'Ce moment'} a des chiffres au tableau. Mettez-les à 0 avant de le sortir du tableau.`,
+      )
   if (!liste.length) erreurs.push('Il faut au moins un moment.')
   const noms = liste.map((m) => m.nom.trim().toLocaleLowerCase('fr-FR'))
   if (noms.some((n) => !n)) erreurs.push('Chaque moment a un nom.')
@@ -144,6 +167,35 @@ export function erreursMoments(liste: readonly Moment[]): string[] {
   )
     erreurs.push('Une heure va de 00:00 à 24:00.')
   return erreurs
+}
+
+/** Les moments à écrire d'abord sous un nom d'attente : deux noms qui
+ * s'échangent (la base refuse deux moments du même nom, ligne par ligne).
+ * Vide sans échange : une seule écriture. Le nom d'attente n'est celui
+ * d'aucun moment. */
+export function nomsDAttente(
+  avant: readonly Moment[],
+  ecrire: readonly Moment[],
+): Moment[] {
+  const nomAvant = new Map(avant.map((m) => [m.id, m.nom.trim()]))
+  const renommes = ecrire.filter(
+    (m) => nomAvant.has(m.id) && nomAvant.get(m.id) !== m.nom.trim(),
+  )
+  const echange = ecrire.some((m) =>
+    avant.some((a) => a.id !== m.id && a.nom.trim() === m.nom.trim()),
+  )
+  if (!echange) return []
+  const pris = new Set([
+    ...avant.map((m) => m.nom.trim()),
+    ...ecrire.map((m) => m.nom.trim()),
+  ])
+  return renommes.map((m) => {
+    let nom = `~${m.id}`.slice(0, 40)
+    for (let i = 2; pris.has(nom); i++) nom = `~${i}${m.id}`.slice(0, 40)
+    pris.add(nom)
+    const a = avant.find((x) => x.id === m.id) as Moment
+    return { ...a, nom }
+  })
 }
 
 /** Les lignes à écrire : moments neufs ou changés, et ceux à retirer. */

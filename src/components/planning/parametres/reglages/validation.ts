@@ -7,6 +7,7 @@
 
 import { COULEUR_VALIDE } from '#/components/planning/parametres/reglages/controles.tsx'
 import { momentPropose, nomHoraire } from '#/lib/planning/affichage.ts'
+import { MOMENTS_HOTEL } from '#/lib/planning/moment.ts'
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import { JOUR_MAX_LOI } from '#/lib/planning/regles.ts'
 import { heuresLisibles, minutes, presence } from '#/lib/planning/temps.ts'
@@ -217,7 +218,11 @@ export function nettoyerHoraire(
   h: SaisieHoraire,
   l?: RegleEtablissement['moments'],
 ): Omit<Horaire, 'id'> {
-  return { ...h, periode: momentPropose(h, l), nom: nomHoraire(h) }
+  return {
+    ...h,
+    periode: momentPropose(h, l),
+    nom: nomHoraire(h, l ?? MOMENTS_HOTEL),
+  }
 }
 
 export function nettoyerMotif(m: SaisieMotif): SaisieMotif {

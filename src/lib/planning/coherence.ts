@@ -844,15 +844,30 @@ export function verifierReglages(
   // Soutien demandé sans personne nécessaire ni en plus :
   // jamais placés (un apprenti n'est jamais seul).
   for (const p of r.postes) {
-    const jours = valides
-      .filter((b) => b.poste_id === p.id && b.soutien > 0 && !avecBase(b))
-      .map((b) => b.jour)
+    const seuls = valides.filter(
+      (b) => b.poste_id === p.id && b.soutien > 0 && !avecBase(b),
+    )
+    const jours = seuls.map((b) => b.jour)
     if (!jours.length) continue
+    // Un nombre par niveau dont le niveau ne tient plus une place seul
+    // (relecture du 2026-11-06) : la cause est dite.
+    const niveauxSeuls = [
+      ...new Set(
+        seuls.flatMap((b) =>
+          (b.niveaux ?? [])
+            .map((l) => niv.parId.get(l.niveau))
+            .filter((n) => !!n && !n.autonome)
+            .map((n) => n?.nom ?? ''),
+        ),
+      ),
+    ]
     ajouter(
       `soutien-seul:${p.id}`,
       'a-voir',
       'besoins',
-      `Le poste ${p.nom} demande des personnes en soutien sans personne à côté (${listeJours(jours)}). Ces places ne seront jamais pourvues : retirez-les ou ajoutez une personne nécessaire.`,
+      niveauxSeuls.length
+        ? `Le poste ${p.nom} demande le niveau ${listeOu(niveauxSeuls)}, qui ne tient pas une place seul (${listeJours(jours)}). Ces places ne seront jamais pourvues : demandez aussi une personne qui tient la place seule, ou laissez ce niveau tenir seul dans Postes.`
+        : `Le poste ${p.nom} demande des personnes en soutien sans personne à côté (${listeJours(jours)}). Ces places ne seront jamais pourvues : retirez-les ou ajoutez une personne nécessaire.`,
       `soutien-${p.id}`,
     )
   }
@@ -1077,6 +1092,32 @@ export function verifierReglages(
       `${p.nom} : des besoins demandent le niveau ${q.nom}, mais personne n'a ce niveau sur ce poste.`,
       `poste-${id}`,
     )
+  }
+
+  // Une zone en service sans aucun chiffre quand une autre en a (relecture
+  // du 2026-11-06) : les besoins de ses postes ne sont plus lus, rien n'y
+  // sera planifié. Sans aucun chiffre nulle part, les moments vides le
+  // disent déjà.
+  if (accueil && chiffres.length) {
+    const premiere = regles.zones[0].id
+    for (const z of regles.zones) {
+      const sesPostes = r.postes.filter(
+        (p) => !p.ferme && p.zone_id != null && String(p.zone_id) === z.id,
+      )
+      if (!sesPostes.length) continue
+      if (
+        chiffres.some(
+          (c) => (c.zone_id == null ? premiere : String(c.zone_id)) === z.id,
+        )
+      )
+        continue
+      ajouter(
+        `zone-sans-chiffres:${z.id}`,
+        'a-voir',
+        'besoins',
+        `La zone ${z.nom} n'a aucun chiffre au tableau : ${listeEt(sesPostes.map((p) => p.nom))} n'${sesPostes.length > 1 ? 'ont' : 'a'} aucune place à tenir. Donnez ses chiffres dans Besoins.`,
+      )
+    }
   }
 
   pointsDesRegles(r, regles, equipe, chiffres, accueil, ajouter)

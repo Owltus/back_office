@@ -14,7 +14,12 @@
  */
 
 import { heuresLisibles, minutes } from '#/lib/planning/temps.ts'
-import type { Horaire, Moment, Periode } from '#/lib/planning/types.ts'
+import type {
+  ArticleMoment,
+  Horaire,
+  Moment,
+  Periode,
+} from '#/lib/planning/types.ts'
 
 const H = 60
 
@@ -295,9 +300,16 @@ export function conditionsEnClair(
   return parties.join(m.toutes ? ' et ' : ', ou ')
 }
 
-/** « le matin », « la nuit » (dans une phrase). */
-export const leMoment = (l: Moments, p: Periode) =>
-  `${estNuit(l, p) ? 'la' : 'le'} ${motMoment(l, p)}`
+/** L'article d'un moment : celui réglé, sinon « la » pour la nuit et « le »
+ * pour le reste (l'ancienne règle, les moments de l'hôtel). */
+export const articleMoment = (l: Moments, p: Periode): ArticleMoment =>
+  momentDe(l, p)?.article ?? (estNuit(l, p) ? 'la' : 'le')
+
+/** « le matin », « la nuit », « l'après-midi » (dans une phrase). */
+export const leMoment = (l: Moments, p: Periode) => {
+  const a = articleMoment(l, p)
+  return `${a === "l'" ? a : `${a} `}${motMoment(l, p)}`
+}
 
 /** Les moments de l'établissement d'un problème (ou de ses règles) ;
  * absents : ceux de l'hôtel. */

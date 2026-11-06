@@ -199,6 +199,7 @@ export function GrilleMois({
       horaireDe(a.type_shift_id),
       referentiel.postes.find((p) => p.id === a.poste_id),
       GRIS,
+      regles.moments,
     )
   const verrouillee = (lundi: string) => !!etats.get(lundi)?.verrouillee
 

@@ -1133,7 +1133,7 @@ describe('tableau de l’accueil (vérificateur)', () => {
       'soir:1:0',
       'nuit:0:-1',
     ])
-    // Un maximum différent (null, plus grand) est ignoré.
+    // Sans maximum : le chiffre est exact (comme le calcul).
     const large = {
       ...p,
       consignes: [

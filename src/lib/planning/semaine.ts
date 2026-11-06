@@ -19,6 +19,7 @@ import {
 } from '#/lib/planning/cycles.ts'
 import type { PresencePoste } from '#/lib/planning/cycles.ts'
 import {
+  auTableau,
   coupDeMain,
   dernierMoment,
   estNuit as momentDeNuit,
@@ -56,6 +57,7 @@ import {
   ferieDe,
   feriesARattraper,
   feriesEntre,
+  premierLundiLu,
 } from '#/lib/planning/feries.ts'
 import type { JourFerie } from '#/lib/planning/feries.ts'
 import {
@@ -255,13 +257,14 @@ export const idPlaceAccueil = (
   l: Moments = MOMENTS_HOTEL,
   /** Rang de la zone (0 : la première). */
   zone = 0,
-) =>
-  -(
-    1 +
-    zone * 7 * tailleTableau(l) +
-    jour * tailleTableau(l) +
-    rangAuTableau(l, periode)
-  )
+) => {
+  // Un moment hors du tableau n'a pas de place (relecture du 2026-11-06 : son
+  // rang -1 donnait l'identifiant d'un autre moment) ; `contexte` écarte ses
+  // chiffres, jamais lus.
+  const rang = rangAuTableau(l, periode)
+  if (rang < 0) throw new Error(`Moment hors du tableau : ${periode}`)
+  return -(1 + zone * 7 * tailleTableau(l) + jour * tailleTableau(l) + rang)
+}
 
 /** Un trou entre deux équipes, pour l'écran. */
 export interface TrouOut {
@@ -492,7 +495,12 @@ export function contexte(d: DonneesSemaine): Contexte {
       .sort((a, b) => a.id - b.id)
       .filter((x) => x.actif || presents.has(x.id)),
     besoins,
-    consignes: d.referentiel.consignes,
+    // Les chiffres d'un moment sorti du tableau sont gardés en base mais
+    // jamais lus (relecture du 2026-11-06 : places impossibles, ligne
+    // invisible).
+    consignes: d.referentiel.consignes.filter((c) =>
+      auTableau(regles.moments, c.periode),
+    ),
     affectations: d.affectations,
     sansDecompte: new Set(
       d.referentiel.motifs.filter((m) => !m.decompte).map((m) => m.id),
@@ -513,6 +521,20 @@ export function contexte(d: DonneesSemaine): Contexte {
     ),
     regles,
   }
+}
+
+/** Le premier lundi que lit une génération : les semaines du partage
+ * (`equite.semaines`, de 1 à 12, au moins 2 pour le week-end libre) et celles
+ * des jours fériés à rattraper (relecture du 2026-11-06 : la lecture était
+ * bornée à 4 semaines quel que soit le réglage). */
+export function premierLundiGeneration(
+  lundi: string,
+  fenetreFeries: number | undefined,
+  semainesEquite: number,
+): string {
+  const equite = ajouterJours(lundi, -7 * Math.max(2, semainesEquite))
+  const ferie = premierLundiLu(lundi, fenetreFeries)
+  return ferie < equite ? ferie : equite
 }
 
 // ------------------------------------------------- jours fériés rattrapés

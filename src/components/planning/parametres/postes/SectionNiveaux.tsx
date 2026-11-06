@@ -48,6 +48,21 @@ export function usagesNiveau(
   }
 }
 
+/** Ce qu'il faut savoir avant qu'un niveau cesse de tenir une place seul
+ * (relecture du 2026-11-06) : les besoins qui le demandent n'auront plus que
+ * des places de soutien. Null : aucun besoin ne le demande. */
+export function avertissementNiveau(
+  r: Pick<Referentiel, 'salaries' | 'besoins'>,
+  id: string,
+  nom: string,
+): string | null {
+  const n = r.besoins.filter((b) =>
+    (b.niveaux ?? []).some((l) => l.niveau === id && l.nombre > 0),
+  ).length
+  if (!n) return null
+  return `${n} besoin${n > 1 ? 's demandent' : ' demande'} le niveau ${nom}. S'il ne tient plus une place seul, ces places deviennent des places de soutien. Voir À vérifier.`
+}
+
 export function SectionNiveaux({
   referentiel,
   modifiable,
@@ -161,7 +176,15 @@ export function SectionNiveaux({
                   checked={x.autonome}
                   disabled={off || dernierAutonome}
                   aria-label={`${x.nom} peut tenir seul`}
-                  onCheckedChange={(v: boolean) => regler(x, { autonome: v })}
+                  onCheckedChange={(v: boolean) => {
+                    const avis = v
+                      ? null
+                      : avertissementNiveau(referentiel, x.id, x.nom)
+                    void agir(
+                      () => enregistrerNiveau(x.id, { autonome: v }),
+                      "Le niveau n'a pas pu être enregistré",
+                    ).then((ok) => ok && avis && notifier(avis, 'attention'))
+                  }}
                 />
                 Peut tenir seul
               </label>

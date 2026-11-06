@@ -16,6 +16,7 @@
  * 15 h à 16 h »).
  */
 
+import { REGLES_PAR_DEFAUT } from '#/lib/planning/reglesEtablissement.ts'
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import type { ReactNode } from 'react'
 import { useRouter } from '@tanstack/react-router'
@@ -181,6 +182,7 @@ export function PanneauAlertes({
     regles,
     horaires,
   )
+  const moments = (regles ?? REGLES_PAR_DEFAUT).moments
   const shifts = p.aPourvoir.flatMap((j) => j.shifts)
   const compte = (l: PointPersonne[]) =>
     l.reduce((n, x) => n + x.messages.length, 0)
@@ -253,7 +255,7 @@ export function PanneauAlertes({
                   )}
                 />
                 <span className="min-w-0">
-                  {phraseCycle(e, jourCycle(e.date))}
+                  {phraseCycle(e, jourCycle(e.date), moments)}
                 </span>
                 <span className="ml-auto shrink-0 text-xs text-muted-foreground tabular-nums">
                   {e.compte} pour {libelleConsigne(e.minimum, e.maximum)}
@@ -273,7 +275,7 @@ export function PanneauAlertes({
                   style={{ background: t.poste?.couleur }}
                 />
                 <span className="min-w-0">
-                  {phraseTrou(t, jourTrou(t.date))}
+                  {phraseTrou(t, jourTrou(t.date), moments)}
                 </span>
               </li>
             ))}

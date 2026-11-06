@@ -243,8 +243,10 @@ export function plafondHebdo(f: Fiche): number {
   // VÉRIFIER) : le plafond absolu. Tout autre contrat suit la loi du temps
   // partiel, heures indicatives ou non (relecture du 2026-11-05 : « Heures
   // indicatives » sur un CDI de 24 h ouvrait 48 h). La loi n'est jamais
-  // réglable (B1).
-  if (modeleFiche(f).placementManuel) return SEMAINE_MAX
+  // réglable (B1). Seul un contrat SANS heures fixées (0 h) prend le plafond
+  // absolu : une case ne lève jamais la loi d'un contrat qui a des heures
+  // (relecture du 2026-11-06 : un CDI de 24 h « posé à la main » ouvrait 48 h).
+  if (modeleFiche(f).placementManuel && f.minutesHebdo <= 0) return SEMAINE_MAX
   return plafondTempsPartiel(f)
 }
 

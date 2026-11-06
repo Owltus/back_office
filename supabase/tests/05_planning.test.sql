@@ -143,7 +143,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':J', (select j from t_ids)::text);
 $$;
 
-select plan(173);
+select plan(182);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -522,6 +522,33 @@ select is(pg_temp.essai('gestion', array[
 select is(pg_temp.essai('gestion', array[
   'insert into public.planning_moments (id, nom) values (''Midi !'', ''Midi'')']),
   'err=23514', 'moments : un identifiant hors format est refusé');
+select is(pg_temp.essai('gestion', array[
+  'delete from public.planning_consignes',
+  'insert into public.planning_consignes (zone_id, jour, periode, minimum, maximum) values (1, 0, ''soir'', 2, 2)',
+  'update public.planning_moments set compte_dans_tableau = false where id = ''soir''']),
+  'err=PL409', 'moments : un moment qui a des chiffres ne sort pas du tableau (relecture du 2026-11-06)');
+select is(pg_temp.essai('gestion', array[
+  'delete from public.planning_consignes',
+  'insert into public.planning_consignes (zone_id, jour, periode, minimum, maximum) values (1, 0, ''soir'', 0, 0)',
+  'update public.planning_moments set compte_dans_tableau = false where id = ''soir''',
+  'select compte_dans_tableau::text from public.planning_moments where id = ''soir''']),
+  'false', 'moments : des chiffres à 0 ne le retiennent pas');
+select is(pg_temp.essai('gestion', array[
+  'update public.planning_moments set nom = ''Soir'' where id = ''matin''']),
+  'err=23505', 'moments : deux moments ne portent pas le même nom');
+select is(pg_temp.essai('gestion', array[
+  'update public.planning_moments set nom = ''~matin'' where id = ''matin''',
+  'update public.planning_moments set nom = ''Matin'' where id = ''soir''',
+  'update public.planning_moments set nom = ''Soir'' where id = ''matin''',
+  'select string_agg(id || ''='' || nom, '','' order by id) from public.planning_moments where id in (''matin'', ''soir'')']),
+  'matin=Soir,soir=Matin', 'moments : deux noms s''échangent par un nom d''attente (comme l''app)');
+select is(pg_temp.essai('gestion', array[
+  'update public.planning_moments set article = ''la'' where id = ''soir''',
+  'select article from public.planning_moments where id = ''soir''']),
+  'la', 'moments : l''article du nom se règle');
+select is(pg_temp.essai('gestion', array[
+  'update public.planning_moments set article = ''les'' where id = ''soir''']),
+  'err=23514', 'moments : un article inconnu est refusé');
 
 -- -------------------------------- zones de l'établissement (2026-11-06) ---
 select is((select nom || ':' || continue from public.planning_zones where id = 1),
@@ -543,6 +570,17 @@ select is(pg_temp.essai('ecriture', array[
   'err=42501', 'zones : l''écriture ne les règle pas');
 select is(pg_temp.essai('aucun', array['select count(*) from public.planning_zones']),
   '0', 'zones : aucun ne les lit');
+
+select is(pg_temp.essai('gestion', array[
+  'update public.planning_reglages set weekend_jours = ''{6,0}''']),
+  'err=23514', 'week-end : des jours qui ne se suivent pas dans la semaine sont refusés');
+select is(pg_temp.essai('gestion', array[
+  'update public.planning_reglages set weekend_jours = ''{4,4,6}''']),
+  'err=23514', 'week-end : un jour en double qui ferait croire à trois jours est refusé');
+select is(pg_temp.essai('gestion', array[
+  'update public.planning_reglages set weekend_jours = ''{4,5,6}''',
+  'select weekend_jours::text from public.planning_reglages']),
+  '{4,5,6}', 'week-end : vendredi, samedi et dimanche sont acceptés');
 
 -- ------------------------------ niveaux de l'établissement (2026-11-06) ---
 select is((select string_agg(id || ':' || nom || ':' || autonome || ':' || jamais_seul, ',' order by ordre)

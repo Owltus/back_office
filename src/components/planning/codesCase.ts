@@ -13,6 +13,8 @@
  * horaires de 7 h qui remplacent l'horaire de 8 h d'un shift, ou l'inverse.
  */
 
+import { lireMoments, MOMENTS_HOTEL } from '#/lib/planning/moment.ts'
+import type { Moments } from '#/lib/planning/moment.ts'
 import {
   estPrefere,
   lireNiveaux,
@@ -111,7 +113,9 @@ export function actuelNonPermis(
 
 interface EntreeCase {
   referentiel: Pick<Referentiel, 'horaires' | 'postes' | 'motifs'> &
-    Partial<Pick<Referentiel, 'reglages' | 'modelesContrat' | 'niveaux'>>
+    Partial<
+      Pick<Referentiel, 'reglages' | 'modelesContrat' | 'niveaux' | 'moments'>
+    >
   personne: Salarie
   posteId: number | undefined
   jour: number
@@ -317,6 +321,9 @@ export interface RubriquesCase {
   /** Code actuel du shift qui n'est plus choisissable sur son poste : montré
    * grisé, marqué actuel, avec la raison (null : rien à montrer). */
   actuel: { horaire: Horaire; texte: string } | null
+  /** Les moments de l'établissement, pour ranger les horaires. Absents :
+   * ceux de l'hôtel. */
+  moments?: Moments
 }
 
 /**
@@ -350,6 +357,7 @@ export function rubriquesDeLaCase({
 }): RubriquesCase {
   const { postes, horaires } = referentiel
   const niveaux = lireNiveaux(referentiel.niveaux)
+  const moments = lireMoments(referentiel.moments)
   const rang = (id: number) => postes.findIndex((p) => p.id === id)
   const candidats: Array<{ poste: Poste; niveau: Niveau | null }> = [
     ...personne.competences,
@@ -391,9 +399,10 @@ export function rubriquesDeLaCase({
       if (hors && garderActuel) alertes.set(hors.horaire.id, hors.texte)
       else actuel = hors
     }
-    const lignes = trierHoraires(horaires.filter((h) => alertes.has(h.id))).map(
-      (h) => ({ horaire: h, alerte: alertes.get(h.id) ?? null }),
-    )
+    const lignes = trierHoraires(
+      horaires.filter((h) => alertes.has(h.id)),
+      moments,
+    ).map((h) => ({ horaire: h, alerte: alertes.get(h.id) ?? null }))
     return { poste, niveau, lignes, permis }
   })
   const rubriques = toutes.filter((r) => r.lignes.length > 0)
@@ -404,7 +413,7 @@ export function rubriquesDeLaCase({
       : toutes.every((r) => r.permis.raison === 'aucun-commun')
         ? 'Aucun horaire commun entre sa fiche et ses postes'
         : (toutes[0].permis.texte ?? "Aucun horaire n'est permis ce jour-là")
-  return { rubriques, texte, actuel }
+  return { rubriques, texte, actuel, moments }
 }
 
 /** La rubrique et la ligne d'un code sur un poste (null : pas proposé). */
@@ -505,7 +514,10 @@ export function codesUniques(
   const vus = new Map<number, Horaire>()
   for (const rub of r.rubriques)
     for (const l of rub.lignes) vus.set(l.horaire.id, l.horaire)
-  const codes = trierHoraires([...vus.values()]).flatMap((h): CodeUnique[] => {
+  const codes = trierHoraires(
+    [...vus.values()],
+    r.moments ?? MOMENTS_HOTEL,
+  ).flatMap((h): CodeUnique[] => {
     const poste = posteDeduit(r.rubriques, h.id, prefere, impose)
     if (!poste) return []
     const ligne = ligneDe(r, poste.id, h.id)

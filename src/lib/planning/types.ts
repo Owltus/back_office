@@ -80,7 +80,13 @@ export interface Moment {
    * d'affilée, reprise après des nuits) et par la passation. */
   est_nuit: boolean
   couleur: string | null
+  /** Article du nom dans une phrase (relecture du 2026-11-06) ; absent ou
+   * null : « la » pour la nuit, « le » sinon (l'ancienne règle). */
+  article?: ArticleMoment | null
 }
+
+/** L'article d'un moment : « le matin », « la soirée », « l'après-midi ». */
+export type ArticleMoment = 'le' | 'la' | "l'"
 
 /** Un horaire se lit par ses heures et son moment : plus de code depuis le
  * 2026-10-31 (décision utilisateur). Deux horaires n'ont jamais les mêmes

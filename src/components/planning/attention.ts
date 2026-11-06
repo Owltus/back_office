@@ -63,7 +63,12 @@ export interface RolePlace {
   ordre: number
   libelle: string | null
 }
-export const ROLE_EXTRA: RolePlace = { ordre: 1e6, libelle: 'extra' }
+/** La personne à appeler (contrat posé à la main) : le nom de son contrat
+ * (relecture du 2026-11-06 : « extra » était écrit dans le code). */
+export const roleAAppeler = (nomContrat: string): RolePlace => ({
+  ordre: 1e6,
+  libelle: nomContrat.toLocaleLowerCase('fr-FR'),
+})
 
 /** Une personne qui tient le poste, face à UNE place. */
 export interface PersonnePlace {
@@ -304,7 +309,7 @@ export function pointsAttention(
           nom: nom(r.salarie_id),
           posteId: competence?.poste_id ?? t.poste_id,
           role: aAppeler(r.salarie_id)
-            ? ROLE_EXTRA
+            ? roleAAppeler(modeleDe(regles, x?.type_contrat ?? '').nom)
             : niveau?.autonome && niveau.rang > 0
               ? { ordre: niveau.rang, libelle: niveau.nom.toLowerCase() }
               : { ordre: 0, libelle: null },

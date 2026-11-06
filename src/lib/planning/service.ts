@@ -9,7 +9,7 @@
  * absences, validation, vider, suppressions avec cascades.
  */
 
-import { refusDroits } from '#/lib/planning/erreurs.ts'
+import { partielle, refusDroits } from '#/lib/planning/erreurs.ts'
 import { SEMAINES_EQUITE } from '#/lib/planning/modele.ts'
 import { avecMomentCalcule } from '#/lib/planning/moment.ts'
 import { triConsignes } from '#/lib/planning/presence.ts'
@@ -19,6 +19,7 @@ import {
 } from '#/lib/planning/reglesEtablissement.ts'
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import { premierLundiLu } from '#/lib/planning/feries.ts'
+import { premierLundiGeneration } from '#/lib/planning/semaine.ts'
 import type { NouveauShift, NouvelleAbsence } from '#/lib/planning/semaine.ts'
 import { ajouterJours, lundiDe } from '#/lib/planning/temps.ts'
 import type {
@@ -51,7 +52,7 @@ const COL_CONSIGNE = 'id, zone_id, jour, periode, minimum, maximum'
 const COL_ZONE =
   'id, nom, ordre, continue, releve_minutes, passation_nuit, equipe_tolerance'
 const COL_MOMENT =
-  'id, nom, ordre, priorite, debut_de, debut_a, fin_de, fin_a, toutes, libre_avant, compte_dans_tableau, est_nuit, couleur'
+  'id, nom, ordre, priorite, debut_de, debut_a, fin_de, fin_a, toutes, libre_avant, compte_dans_tableau, est_nuit, couleur, article'
 const COL_NIVEAU = 'id, nom, ordre, autonome, jamais_seul'
 const COL_GROUPE = 'id, nom, ordre, postes_autorises, forfait_possible'
 const COL_SALARIE =
@@ -404,17 +405,16 @@ export function fetchSemaine(
   return fetchShifts(lundis, premier, ajouterJours(lundi, 13))
 }
 
-/** Pour une génération : comme `fetchSemaine`, plus les `SEMAINES_EQUITE`
- * semaines d'avant (équité, mois glissant) et leurs absences, en UNE
+/** Pour une génération : comme `fetchSemaine`, plus les semaines du
+ * partage (`equite.semaines` de l'établissement) et leurs absences, en UNE
  * lecture. Pas mise en cache : la génération relit toujours la base. */
 export function fetchSemainePourGeneration(
   lundi: string,
   fenetreFeries?: number,
+  semainesEquite = SEMAINES_EQUITE,
 ): Promise<DonneesShifts> {
   // Au moins jusqu'à `premierLundiLu` : jours fériés à rattraper.
-  const equite = ajouterJours(lundi, -7 * Math.max(2, SEMAINES_EQUITE))
-  const ferie = premierLundiLu(lundi, fenetreFeries)
-  const premier = ferie < equite ? ferie : equite
+  const premier = premierLundiGeneration(lundi, fenetreFeries, semainesEquite)
   const lundis: string[] = []
   for (let l = premier; l <= ajouterJours(lundi, 7); l = ajouterJours(l, 7))
     lundis.push(l)
@@ -712,6 +712,7 @@ export async function enregistrerMoments(
           compte_dans_tableau: m.compte_dans_tableau,
           est_nuit: m.est_nuit,
           couleur: m.couleur,
+          article: m.article ?? null,
         })),
       )
       .select('id'),
@@ -767,14 +768,19 @@ export async function enregistrerNiveau(
 /** Range les niveaux (ordre = position dans la liste) : le premier est
  * préféré par le calcul. */
 export async function ordonnerNiveaux(ids: string[]): Promise<void> {
-  for (const [ordre, id] of ids.entries())
-    auMoinsUne(
-      await supabase
-        .from('planning_niveaux')
-        .update({ ordre })
-        .eq('id', id)
-        .select('id'),
-    )
+  for (const [ordre, id] of ids.entries()) {
+    try {
+      auMoinsUne(
+        await supabase
+          .from('planning_niveaux')
+          .update({ ordre })
+          .eq('id', id)
+          .select('id'),
+      )
+    } catch (err) {
+      throw ordre > 0 ? partielle(err) : err
+    }
+  }
 }
 
 /** Retire un niveau (gestion) : refusé par la base s'il sert encore. */
@@ -797,15 +803,29 @@ export async function enregistrerMotif(
   v: SansId<Motif>,
   id: number | null,
 ): Promise<number> {
-  if (v.role) {
-    let r = supabase
+  if (!v.role) return enregistrer<Motif>('planning_motifs', v, id)
+  let r = supabase
+    .from('planning_motifs')
+    .update({ role: null })
+    .eq('role', v.role)
+  if (id !== null) r = r.neq('id', id)
+  const anciens = verifier(await r.select('id')) as Array<{ id: number }>
+  try {
+    return await enregistrer<Motif>('planning_motifs', v, id)
+  } catch (err) {
+    // Le rôle revient à l'ancien motif : l'établissement n'en reste jamais
+    // privé (relecture du 2026-11-06).
+    if (!anciens.length) throw err
+    const retour = await supabase
       .from('planning_motifs')
-      .update({ role: null })
-      .eq('role', v.role)
-    if (id !== null) r = r.neq('id', id)
-    verifier(await r.select('id'))
+      .update({ role: v.role })
+      .in(
+        'id',
+        anciens.map((a) => a.id),
+      )
+      .select('id')
+    throw retour.error ? partielle(err) : err
   }
-  return enregistrer<Motif>('planning_motifs', v, id)
 }
 
 /** Les jours fériés en plus (gestion). */

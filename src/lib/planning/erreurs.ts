@@ -18,10 +18,30 @@ export function codeErreur(err: unknown): string | undefined {
     : undefined
 }
 
+/** Une écriture en plusieurs temps qui a échoué APRÈS un premier temps
+ * réussi (relecture du 2026-11-06) : le message le dit. */
+export function partielle(err: unknown): unknown {
+  return typeof err === 'object' && err !== null
+    ? Object.assign(err, { partielle: true })
+    : Object.assign(new Error(String(err)), { partielle: true })
+}
+
+const PARTIELLE =
+  ' Une partie a pu être enregistrée : votre saisie est gardée, vérifiez puis enregistrez à nouveau.'
+
 export function messageErreur(
   err: unknown,
   action = 'Opération impossible',
 ): string {
+  const m = messageSimple(err, action)
+  return typeof err === 'object' &&
+    err !== null &&
+    (err as { partielle?: boolean }).partielle
+    ? `${m}${PARTIELLE}`
+    : m
+}
+
+function messageSimple(err: unknown, action: string): string {
   const code = codeErreur(err)
   if (code === '42501') {
     return `${action} : vos droits sur la page Planning ne le permettent pas.`
@@ -36,6 +56,8 @@ export function messageErreur(
     const brut = `${(err as ErreurPostgres).message ?? ''} ${(err as { details?: string }).details ?? ''}`
     if (brut.includes('horaires_heures'))
       return `${action} : un horaire aux mêmes heures existe déjà.`
+    if (brut.includes('nom_unique'))
+      return `${action} : un autre élément porte déjà ce nom. Pour échanger deux noms, donnez d'abord un autre nom à l'un d'eux.`
     if (brut.includes('un_par_jour') || !brut.trim())
       return `${action} : cette personne a déjà un shift ce jour-là, un seul par jour.`
     return `${action} : cet élément existe déjà.`
