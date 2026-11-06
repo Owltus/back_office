@@ -2793,6 +2793,22 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   `NOM_ZONE_ACCUEIL` seul mot écrit. Empreinte 8874c146 et banc de décembre identiques.
   `contratsPostesReglables.test.ts` refuse aussi codes de motif, noms de postes,
   `.importance` et jours du week-end écrits.
+- **MOMENTS RÉGLABLES (lot 2, A6, 2026-11-06, 89df271e et 19ce5568)** : table
+  `planning_moments` (id texte, nom, ordre, priorité, conditions `debut_de` /
+  `debut_a` / `fin_de` / `fin_a`, `toutes`, `libre_avant`, `compte_dans_tableau`,
+  `est_nuit`) ; `planning_horaires.periode` et `planning_consignes.periode` en clé
+  étrangère (RETIRE les deux CHECK : `--supprimer`, `--avec-donnees`). Les
+  limites de `planning_reglages` (`nuit_debut`…) restent en base, plus lues.
+  `moment.ts` seul : `momentPropose` essaie les moments par priorité ; le reste du
+  calcul ne lit que `estNuit`, `deJourAuTableau`, `coupDeMain`,
+  `premierMoment` / `dernierMoment` (ouverture, fermeture, passation, équité,
+  arrivée du matin), `pairesDeJour` (relève, équipes), `rangMoment` (semaine
+  stable), `tailleTableau` (`idPlaceAccueil`). Passation : côtés `arrivee` /
+  `depart`. Écran : section Moments de Besoins en liste (créer, renommer,
+  ranger, retirer si inutilisé, aperçu) ; `useMoments()` pour l'affichage.
+  Identique prouvé : empreinte 8874c146, 28 semaines réelles (LP, analyse) et
+  23 résolues, 0 écart ; `momentsReglables.test.ts` compare l'ancien arbre sur
+  toute la journée aux 5 min.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

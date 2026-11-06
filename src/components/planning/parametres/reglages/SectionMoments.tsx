@@ -285,12 +285,17 @@ export function SectionMoments({
                   <Input
                     aria-label={`${m.nom} : rang du classement`}
                     type="number"
-                    min={1}
+                    min={0}
                     max={20}
                     value={m.priorite}
                     disabled={off}
                     onChange={(e) =>
-                      regler(m.id, { priorite: Number(e.target.value) || 1 })
+                      regler(m.id, {
+                        priorite: Math.max(
+                          0,
+                          Math.round(Number(e.target.value) || 0),
+                        ),
+                      })
                     }
                     className="h-7 w-14 px-1 text-center"
                   />
