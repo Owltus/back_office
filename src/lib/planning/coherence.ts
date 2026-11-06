@@ -62,7 +62,16 @@ import {
   horairesEtoileDuJour,
   travailHoraire,
 } from '#/lib/planning/etoile.ts'
-import { momentPropose } from '#/lib/planning/moment.ts'
+import {
+  estNuit,
+  MOMENTS_HOTEL,
+  momentPropose,
+  momentsDuTableau,
+  motMoment,
+  pairesDeJour,
+  rangAuTableau,
+} from '#/lib/planning/moment.ts'
+import type { Moments } from '#/lib/planning/moment.ts'
 import {
   dureesImposees,
   journeesDuContrat,
@@ -75,7 +84,6 @@ import {
   accueilActif,
   chiffreAccueil,
   estPosteAccueil,
-  ORDRE_PERIODES,
   posteADesCodesDeNuit,
   sommeBesoinsPresence,
 } from '#/lib/planning/presence.ts'
@@ -183,9 +191,16 @@ const majuscule = (t: string) => t.charAt(0).toUpperCase() + t.slice(1)
 export function momentDesJours(
   jours: Iterable<number>,
   periode: PeriodePresence,
+  l: Moments = MOMENTS_HOTEL,
 ): string {
   const quand = listeJours(jours)
-  return periode === 'nuit' ? `la nuit de ${quand}` : `${quand} ${periode}`
+  const mot = motMoment(l, periode)
+  return estNuit(l, periode) ? `la ${mot} de ${quand}` : `${quand} ${mot}`
+}
+
+/** « du matin », « de nuit » : le complément d'un horaire. */
+export function duMoment(periode: PeriodePresence, l: Moments = MOMENTS_HOTEL) {
+  return `${estNuit(l, periode) ? 'de' : 'du'} ${motMoment(l, periode)}`
 }
 
 /** « lundi », « lundi et mardi », « lundi, mardi et jeudi ». */
@@ -213,11 +228,13 @@ function presentDans(s: Salarie, aujourdhui?: string): boolean {
  * (`posteADesCodesDeNuit`, un poste « Tous » n'en a pas) : la nuit n'est
  * comptée que là (D15). Même règle que le moteur (`semaine.ts`). */
 export function postesAvecNuit(
-  r: Pick<Referentiel, 'postes' | 'horaires'>,
+  r: Pick<Referentiel, 'postes' | 'horaires'> &
+    Partial<Pick<Referentiel, 'moments'>>,
 ): Set<number> {
+  const l = lireRegles(r).moments
   return new Set(
     r.postes
-      .filter((p) => posteADesCodesDeNuit(p, r.horaires))
+      .filter((p) => posteADesCodesDeNuit(p, r.horaires, l))
       .map((p) => p.id),
   )
 }
@@ -225,10 +242,12 @@ export function postesAvecNuit(
 /** Postes comptés dans un cycle : cochés « présence » le matin et le soir,
  * ceux qui ont un horaire de nuit la nuit (D15). */
 export function postesComptes(
-  r: Pick<Referentiel, 'postes' | 'horaires'>,
+  r: Pick<Referentiel, 'postes' | 'horaires'> &
+    Partial<Pick<Referentiel, 'moments'>>,
   periode: PeriodePresence,
 ): Poste[] {
-  if (periode !== 'nuit') return r.postes.filter((p) => p.presence)
+  if (!estNuit(lireRegles(r).moments, periode))
+    return r.postes.filter((p) => p.presence)
   const nuit = postesAvecNuit(r)
   return r.postes.filter((p) => nuit.has(p.id))
 }
@@ -839,7 +858,7 @@ export function verifierReglages(
   // 24 h sur 24 (audit du 2026-11-01) : un moment sans personne demandée
   // laisse l'hôtel vide. Un point par moment, avec ses jours.
   if (accueil) {
-    for (const periode of ['matin', 'soir', 'nuit'] as const) {
+    for (const periode of momentsDuTableau(regles.moments)) {
       const vides = [0, 1, 2, 3, 4, 5, 6].filter(
         (j) => !chiffres.some((c) => c.jour === j && c.periode === periode),
       )
@@ -848,7 +867,7 @@ export function verifierReglages(
         `accueil-vide:${periode}`,
         'a-voir',
         'besoins',
-        `${majuscule(momentDesJours(vides, periode))} : personne de demandé à l'accueil. L'hôtel peut rester sans personne à ce moment.`,
+        `${majuscule(momentDesJours(vides, periode, regles.moments))} : personne de demandé à l'accueil. L'hôtel peut rester sans personne à ce moment.`,
         'presence',
       )
     }
@@ -901,9 +920,9 @@ export function verifierReglages(
     n: number
     k: number
   }> = []
+  const rang = (p: PeriodePresence) => rangAuTableau(regles.moments, p)
   for (const c of [...chiffres].sort(
-    (a, b) =>
-      a.jour - b.jour || ORDRE_PERIODES[a.periode] - ORDRE_PERIODES[b.periode],
+    (a, b) => a.jour - b.jour || rang(a.periode) - rang(b.periode),
   )) {
     const n = chiffreAccueil(c)
     const duMoment = candidats.filter(
@@ -950,14 +969,14 @@ export function verifierReglages(
     if (k < n) capacites.push({ jour: c.jour, periode: c.periode, n, k })
   }
   for (const periode of [...sansHoraire.keys()].sort(
-    (a, b) => ORDRE_PERIODES[a] - ORDRE_PERIODES[b],
+    (a, b) => rang(a) - rang(b),
   )) {
     const jours = sansHoraire.get(periode) ?? []
     ajouter(
       `cycle-sans-code:${periode}`,
       'a-voir',
       'besoins',
-      `${majuscule(momentDesJours(jours, periode))} : aucun horaire ${periode === 'nuit' ? 'de nuit' : `du ${periode}`} n'est possible à l'accueil.`,
+      `${majuscule(momentDesJours(jours, periode, regles.moments))} : aucun horaire ${duMoment(periode, regles.moments)} n'est possible à l'accueil.`,
       'presence',
     )
   }
@@ -970,7 +989,7 @@ export function verifierReglages(
       `accueil-capacite:${j}:${periode}`,
       'a-voir',
       'besoins',
-      `${majuscule(momentDesJours([j], periode))} : il faut ${pluriel(n, 'personne')}, mais ${qui} venir à l'accueil.`,
+      `${majuscule(momentDesJours([j], periode, regles.moments))} : il faut ${pluriel(n, 'personne')}, mais ${qui} venir à l'accueil.`,
       'presence',
     )
   }
@@ -1198,72 +1217,66 @@ function pointsDesRegles(
 
   // ---------------------------------------------------------------- relève
   const releve = regles.passations.releveMinutes
-  const releveDemandee =
-    accueil &&
-    releve > 0 &&
-    [0, 1, 2, 3, 4, 5, 6].some(
-      (j) =>
-        chiffres.some((c) => c.jour === j && c.periode === 'matin') &&
-        chiffres.some((c) => c.jour === j && c.periode === 'soir'),
-    )
-  if (releveDemandee) {
+  const L = regles.moments
+  for (const [avant, apres] of pairesDeJour(L)) {
+    const releveDemandee =
+      accueil &&
+      releve > 0 &&
+      [0, 1, 2, 3, 4, 5, 6].some(
+        (j) =>
+          chiffres.some((c) => c.jour === j && c.periode === avant) &&
+          chiffres.some((c) => c.jour === j && c.periode === apres),
+      )
+    if (!releveDemandee) continue
     const duJour = r.postes
       .filter((p) => p.presence && !p.ferme)
       .flatMap((p) => codesDuPoste(p, r.horaires))
-    const moment = (h: Horaire) => h.periode ?? momentPropose(h, regles.moments)
-    const matins = duJour.filter((h) => moment(h) === 'matin')
-    const soirs = duJour.filter((h) => moment(h) === 'soir')
-    // Sans horaire du matin ou du soir, `cycle-sans-code` le dit déjà.
+    const moment = (h: Horaire) => h.periode ?? momentPropose(h, L)
+    const matins = duJour.filter((h) => moment(h) === avant)
+    const soirs = duJour.filter((h) => moment(h) === apres)
+    // Sans horaire d'un des deux moments, `cycle-sans-code` le dit déjà.
     if (matins.length && soirs.length) {
       const finMatin = Math.max(...matins.map((h) => minutes(h.fin)))
       const debutSoir = Math.min(...soirs.map((h) => minutes(h.debut)))
+      const a = motMoment(L, avant)
+      const b = motMoment(L, apres)
       if (finMatin - debutSoir < releve)
         ajouter(
-          'releve-impossible',
+          pairesDeJour(L).length > 1
+            ? `releve-impossible:${avant}`
+            : 'releve-impossible',
           'a-voir',
           'besoins',
-          `La relève demande ${dureeCourte(releve)} ensemble entre le matin et le soir, mais à l'accueil le matin finit au plus tard à ${hhmm(finMatin)} et le soir commence au plus tôt à ${hhmm(debutSoir)}. Ajoutez des horaires qui se croisent, ou réduisez la relève.`,
+          `La relève demande ${dureeCourte(releve)} ensemble entre le ${a} et le ${b}, mais à l'accueil le ${a} finit au plus tard à ${hhmm(finMatin)} et le ${b} commence au plus tôt à ${hhmm(debutSoir)}. Ajoutez des horaires qui se croisent, ou réduisez la relève.`,
           'releve',
         )
     }
   }
 
   // --------------------------------------------------------------- moments
-  const m = regles.moments
-  const heure = (x: number) => hhmm(x % 1440)
-  const moment = (id: string, texte: string) =>
-    ajouter(`moments:${id}`, 'a-voir', 'besoins', texte, 'moments')
-  if (m.nuitFin >= m.nuitDebut) {
-    moment(
-      'nuit',
-      `Les limites de la nuit se chevauchent : elle finit à ${heure(m.nuitFin)}, après l'heure où elle commence (${heure(m.nuitDebut)}). Tous les horaires sont rangés la nuit.`,
+  // Un moment qu'aucun horaire ne peut atteindre (ses conditions sont
+  // couvertes par un moment essayé avant lui) : ses réglages ne servent à
+  // rien. Essayé sur tous les horaires possibles au quart d'heure.
+  for (const id of momentsInatteignables(L))
+    ajouter(
+      `moments:${id}`,
+      'a-voir',
+      'besoins',
+      `Avec ces réglages, aucun horaire ne peut être ${duMoment(id, L)}. Revoyez ses heures, ou l'ordre de classement des moments.`,
+      'moments',
     )
-    return
-  }
-  const premierSoir = Math.min(m.matinDebutAvant, m.soirDebut, m.nuitDebut)
-  const finMatin = Math.min(m.matinFinMax, m.soirFin)
-  if (premierSoir <= m.nuitFin || finMatin <= m.nuitFin) {
-    moment(
-      'matin',
-      'Avec ces limites, aucun horaire ne peut être du matin. Revoyez les limites du matin et de la nuit.',
-    )
-    return
-  }
-  if (m.soirDebut < m.matinDebutAvant)
-    moment(
-      'soir-debut',
-      `Les limites du matin et du soir se chevauchent : un horaire qui commence entre ${heure(m.soirDebut)} et ${heure(m.matinDebutAvant)} est rangé au soir, jamais au matin.`,
-    )
-  if (m.soirFin <= m.matinFinMax)
-    moment(
-      'soir-fin',
-      `Les limites du matin et du soir se chevauchent : un horaire qui finit entre ${heure(m.soirFin)} et ${heure(m.matinFinMax)} est rangé au soir, jamais au matin.`,
-    )
-  if (m.nuitDebut <= m.soirDebut)
-    moment(
-      'nuit-soir',
-      `Les limites du soir et de la nuit se chevauchent : un horaire qui commence à ${heure(m.nuitDebut)} ou plus tard est rangé la nuit, et la limite du soir à ${heure(m.soirDebut)} ne sert plus.`,
-    )
+}
+
+/** Les moments qu'aucun horaire (début et fin au quart d'heure) ne peut
+ * recevoir (`momentPropose`). */
+export function momentsInatteignables(l: Moments): string[] {
+  const atteints = new Set<string>()
+  for (let d = 0; d < 1440; d += 15)
+    for (let f = 0; f < 1440; f += 15) {
+      if (f === d) continue
+      atteints.add(momentPropose({ debut: hhmm(d), fin: hhmm(f), pause: 0 }, l))
+    }
+  return l.liste.map((m) => m.id).filter((id) => !atteints.has(id))
 }
 
 /** « 07:30 » → minutes depuis minuit. */

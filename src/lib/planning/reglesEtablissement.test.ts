@@ -79,14 +79,18 @@ describe('REGLES_PAR_DEFAUT : l’hôtel d’aujourd’hui, chiffre pour chiffre
   })
 
   it('limites des moments : celles de momentPropose et periodeLibre', () => {
-    expect(REGLES_PAR_DEFAUT.moments).toEqual({
-      nuitDebut: 21 * H,
-      nuitFin: 5 * H,
-      soirFin: 21 * H,
-      soirDebut: 15 * H,
-      matinDebutAvant: 9 * H,
-      matinFinMax: 17 * H + 45,
-      libreMatinAvant: 12 * H + 30,
+    // Les moments de l'hôtel (2026-11-06 : une liste, mêmes limites).
+    const lim = Object.fromEntries(
+      REGLES_PAR_DEFAUT.moments.liste.map((x) => [
+        x.id,
+        [x.debut_de, x.debut_a, x.fin_de, x.fin_a, x.toutes, x.libre_avant],
+      ]),
+    )
+    expect(lim).toEqual({
+      nuit: [21 * H, 5 * H, null, null, false, null],
+      soir: [15 * H, null, 21 * H, null, false, null],
+      matin: [null, 9 * H, null, 17 * H + 45, true, 12 * H + 30],
+      middle: [null, null, null, null, true, null],
     })
     const m = (debut: string, fin: string) =>
       momentPropose({ debut, fin, pause: 0 })
@@ -144,13 +148,6 @@ describe('lireRegles', () => {
       passation_veilleur: true,
       equipe_tolerance: 30,
       duree_ouverture: 60,
-      nuit_debut: 1260,
-      nuit_fin: 300,
-      soir_fin: 1260,
-      soir_debut: 900,
-      matin_debut_avant: 540,
-      matin_fin_max: 1065,
-      libre_matin_avant: 750,
       personnes_nuit: 1,
       ecole_veille_fin: 1260,
       ecole_lendemain_debut: 480,

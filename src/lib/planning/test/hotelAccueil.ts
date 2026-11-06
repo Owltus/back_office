@@ -147,10 +147,7 @@ const STAFF: Array<
 ]
 
 /** Chiffre de l'accueil d'un moment (tableau, minimum = maximum). */
-export function chiffreHotelAccueil(
-  jour: number,
-  periode: 'matin' | 'soir' | 'nuit',
-): number {
+export function chiffreHotelAccueil(jour: number, periode: string): number {
   if (periode === 'nuit') return 1
   if (periode === 'matin') return 3
   return jour >= 4 ? 3 : 2

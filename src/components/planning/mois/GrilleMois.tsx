@@ -82,6 +82,7 @@ import {
 } from '#/components/planning/mois/mois.ts'
 import { clicOuDoubleClic } from '#/components/planning/doubleClic.ts'
 import type { CaseMois, EtatSemaine } from '#/components/planning/mois/mois.ts'
+import { useMoments } from '#/components/planning/hooks/useMoments.ts'
 
 const fmt = (o: Intl.DateTimeFormatOptions) =>
   new Intl.DateTimeFormat('fr-FR', { ...o, timeZone: 'UTC' })
@@ -553,6 +554,7 @@ function LigneMois({
   ) => void
   onDouble?: (salarieId: number, date: string) => void
 }) {
+  const moments = useMoments()
   const nom = `${s.prenom} ${s.nom}`.trim()
   const shifts = jours
     .filter((d) => d.startsWith(mois))
@@ -718,7 +720,7 @@ function LigneMois({
     const h = shift ? horaireDe(shift.type_shift_id) : undefined
     const quand = dateLongue(date)
     const resume = shift
-      ? `${quand} · ${!h ? 'Horaire spécifique ' : h.periode ? `${libelleMoment(h.periode)} ` : ''}${heureAffichee(shift.debut)}–${heureAffichee(shift.fin)}${s.forfait_jours ? '' : ` · ${heures(shift.duree)}`} · ${shift.epinglee ? 'validé' : 'proposition'}`
+      ? `${quand} · ${!h ? 'Horaire spécifique ' : h.periode ? `${libelleMoment(h.periode, moments)} ` : ''}${heureAffichee(shift.debut)}–${heureAffichee(shift.fin)}${s.forfait_jours ? '' : ` · ${heures(shift.duree)}`} · ${shift.epinglee ? 'validé' : 'proposition'}`
       : `${quand} · Non attribué`
     // « 09:00–17:45 au lieu de 07:00–15:45 » : la place tenue imposait un
     // autre horaire du cycle.

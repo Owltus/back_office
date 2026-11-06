@@ -45,6 +45,7 @@ import type {
 import { PastilleHoraire } from '#/components/planning/PastilleHoraire.tsx'
 import { JOURS } from '#/lib/planning/types.ts'
 import type { Horaire, Motif } from '#/lib/planning/types.ts'
+import { useMoments } from '#/components/planning/hooks/useMoments.ts'
 
 export interface OuvertureMenu {
   salarie_id: number
@@ -94,6 +95,7 @@ export function MenuCase({
   ouverture: OuvertureMenu | null
   onHoraire: (h: Horaire, posteId: number) => void
 }) {
+  const moments = useMoments()
   if (!ouverture) return null
   const {
     codes,
@@ -251,7 +253,10 @@ export function MenuCase({
       )}
       {groupeMotifs('Repos', absences?.repos ?? [])}
       <ContextMenuSeparator />
-      {grouperHoraires(liste.map((c) => c.horaire)).map((g, i) => (
+      {grouperHoraires(
+        liste.map((c) => c.horaire),
+        moments,
+      ).map((g, i) => (
         <ContextMenuGroup key={g.libelle} aria-label={g.libelle}>
           {i > 0 && <ContextMenuSeparator />}
           <ContextMenuLabel className="pt-1 pb-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">

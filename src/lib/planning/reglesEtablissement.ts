@@ -15,6 +15,8 @@
  * (`JOURS_AFFILES_MAX`…) ne sont plus que les défauts, pour l'aide.
  */
 
+import { lireMoments, MOMENTS_HOTEL } from '#/lib/planning/moment.ts'
+import type { Moments } from '#/lib/planning/moment.ts'
 import type {
   CritereEquite,
   FerieAjoute,
@@ -129,26 +131,10 @@ export interface RegleEtablissement {
     /** Première heure d'un poste à ouverture : quelqu'un dessus. */
     dureeOuverture: number
   }
-  /** Limites des moments, en minutes depuis minuit (`momentPropose`). */
-  moments: {
-    /** Nuit : commence à cette heure ou plus tard… */
-    nuitDebut: number
-    /** … ou avant celle-ci. */
-    nuitFin: number
-    /** Soir : finit à cette heure ou plus tard… */
-    soirFin: number
-    /** … ou commence à celle-ci ou plus tard. */
-    soirDebut: number
-    /** Matin : commence avant cette heure… */
-    matinDebutAvant: number
-    /** … et finit au plus tard à celle-ci. */
-    matinFinMax: number
-    /** Horaire libre sans fin connue (`periodeLibre`) : la nuit suit
-     * `nuitDebut` / `nuitFin` (une seule source depuis le 2026-11-05 ; avant,
-     * 22 h ici contre 21 h pour un horaire), le matin s'arrête à cette
-     * heure. */
-    libreMatinAvant: number
-  }
+  /** Les moments de la journée (`planning_moments`, 2026-11-06) : leurs
+   * conditions rangent un horaire (`momentPropose`), le tableau et la nuit
+   * se lisent sur leurs cases (`moment.ts`). */
+  moments: Moments
   accueil: {
     /** Personnes la nuit au calcul (plafond dur, un deuxième se pose à la
      * main). */
@@ -243,15 +229,7 @@ export const REGLES_PAR_DEFAUT: RegleEtablissement = {
     equipeTolerance: 30,
     dureeOuverture: 60,
   },
-  moments: {
-    nuitDebut: 21 * H,
-    nuitFin: 5 * H,
-    soirFin: 21 * H,
-    soirDebut: 15 * H,
-    matinDebutAvant: 9 * H,
-    matinFinMax: 17 * H + 45,
-    libreMatinAvant: 12 * H + 30,
-  },
+  moments: MOMENTS_HOTEL,
   accueil: { personnesNuit: 1 },
   ecole: { veilleFin: 21 * H, lendemainDebut: 8 * H },
   conges: { congeLong: 5 },
@@ -316,7 +294,10 @@ export const REGLES_PAR_DEFAUT: RegleEtablissement = {
  * valeur par défaut. */
 export function lireRegles(
   referentiel?: Partial<
-    Pick<Referentiel, 'reglages' | 'modelesContrat' | 'feriesAjoutes'>
+    Pick<
+      Referentiel,
+      'reglages' | 'modelesContrat' | 'feriesAjoutes' | 'moments'
+    >
   > | null,
 ): RegleEtablissement {
   const r: Partial<Reglages> = referentiel?.reglages ?? {}
@@ -358,15 +339,7 @@ export function lireRegles(
       equipeTolerance: r.equipe_tolerance ?? d.passations.equipeTolerance,
       dureeOuverture: r.duree_ouverture ?? d.passations.dureeOuverture,
     },
-    moments: {
-      nuitDebut: r.nuit_debut ?? d.moments.nuitDebut,
-      nuitFin: r.nuit_fin ?? d.moments.nuitFin,
-      soirFin: r.soir_fin ?? d.moments.soirFin,
-      soirDebut: r.soir_debut ?? d.moments.soirDebut,
-      matinDebutAvant: r.matin_debut_avant ?? d.moments.matinDebutAvant,
-      matinFinMax: r.matin_fin_max ?? d.moments.matinFinMax,
-      libreMatinAvant: r.libre_matin_avant ?? d.moments.libreMatinAvant,
-    },
+    moments: lireMoments(referentiel?.moments),
     accueil: {
       personnesNuit: r.personnes_nuit ?? d.accueil.personnesNuit,
     },

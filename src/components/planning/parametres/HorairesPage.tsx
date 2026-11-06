@@ -96,6 +96,8 @@ import {
 } from '#/lib/planning/service.ts'
 import { horairesNormaux, versionsEtoile } from '#/lib/planning/etoile.ts'
 import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
+import { leMoment, momentDe } from '#/lib/planning/moment.ts'
+import type { Moments } from '#/lib/planning/moment.ts'
 
 import {
   heureAffichee,
@@ -152,33 +154,15 @@ const saisieHoraire = (h: Horaire): SaisieHoraire => ({
   periode: h.periode,
 })
 
-/** Moment d'un horaire (consignes de présence, rangement) ; « aucune » : à part. */
-const PERIODES: ReadonlyArray<{
-  valeur: Periode | 'aucune'
-  libelle: string
-  aide: string
-}> = [
-  {
-    valeur: 'matin',
-    libelle: 'Matin',
-    aide: 'Compte le matin dans le tableau Accueil',
-  },
-  {
-    valeur: 'middle',
-    libelle: 'Middle',
-    aide: 'Un coup de main : ne compte ni le matin ni le soir dans le tableau Accueil',
-  },
-  {
-    valeur: 'soir',
-    libelle: 'Soir',
-    aide: 'Compte le soir dans le tableau Accueil',
-  },
-  {
-    valeur: 'nuit',
-    libelle: 'Nuit',
-    aide: 'Compte la nuit dans le tableau Accueil, sur les postes de la nuit',
-  },
-]
+/** Ce que fait le moment d'un horaire, lu sur ses cases. */
+function aideMoment(l: Moments, p: Periode | null): string {
+  const m = momentDe(l, p)
+  if (!m || !m.compte_dans_tableau)
+    return 'Un coup de main : ne compte pas dans le tableau Accueil'
+  return m.est_nuit
+    ? `Compte ${leMoment(l, m.id)} dans le tableau Accueil, sur les postes de la nuit`
+    : `Compte ${leMoment(l, m.id)} dans le tableau Accueil`
+}
 
 const saisieMotif = (m: Motif): SaisieMotif => ({
   code: m.code,
@@ -334,25 +318,29 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
               />
             </div>
             <div className={COLONNES_LISTES}>
-              {grouperHoraires(data.horaires).map((g) => (
-                <ListeCompacte
-                  key={g.libelle}
-                  titre={g.libelle}
-                  nombre={g.horaires.length}
-                >
-                  {g.horaires.map((h) => (
-                    <LigneHoraire
-                      key={h.id}
-                      h={h}
-                      etoile={
-                        horairesNormaux(h, data.horaires, lireRegles(data))
-                          .length > 0
-                      }
-                      onOuvrir={() => setOuvert({ type: 'horaire', id: h.id })}
-                    />
-                  ))}
-                </ListeCompacte>
-              ))}
+              {grouperHoraires(data.horaires, lireRegles(data).moments).map(
+                (g) => (
+                  <ListeCompacte
+                    key={g.libelle}
+                    titre={g.libelle}
+                    nombre={g.horaires.length}
+                  >
+                    {g.horaires.map((h) => (
+                      <LigneHoraire
+                        key={h.id}
+                        h={h}
+                        etoile={
+                          horairesNormaux(h, data.horaires, lireRegles(data))
+                            .length > 0
+                        }
+                        onOuvrir={() =>
+                          setOuvert({ type: 'horaire', id: h.id })
+                        }
+                      />
+                    ))}
+                  </ListeCompacte>
+                ),
+              )}
             </div>
           </section>
 
@@ -456,7 +444,10 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
                   {ouvert?.type === 'motif'
                     ? (motifOuvert?.nom ?? 'Absence ou école')
                     : horaireOuvert
-                      ? libelleMoment(horaireOuvert.periode)
+                      ? libelleMoment(
+                          horaireOuvert.periode,
+                          lireRegles(data).moments,
+                        )
                       : 'Heures, pause, moment et couleur'}
                 </SheetDescription>
               </SheetHeader>
@@ -899,15 +890,12 @@ function CarteHoraire({
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <span className="text-sm text-muted-foreground">Moment</span>
           <span className="text-sm font-medium">
-            {libelleMoment(momentDeLaSaisie(h, regles.moments))}
+            {libelleMoment(momentDeLaSaisie(h, regles.moments), regles.moments)}
           </span>
         </div>
         <span className="text-xs text-muted-foreground">
-          {PERIODES.find(
-            (p) =>
-              p.valeur === (momentDeLaSaisie(h, regles.moments) ?? 'aucune'),
-          )?.aide ?? 'Ne compte pas dans le tableau Accueil'}
-          . Calculé d'après les heures.
+          {aideMoment(regles.moments, momentDeLaSaisie(h, regles.moments))}.
+          Calculé d'après les heures.
         </span>
       </div>
 

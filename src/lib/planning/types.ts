@@ -21,9 +21,45 @@ export type JourIsole = 'interdit' | 'a_eviter' | 'aucune'
 /** Niveau demandé par un besoin (étape 7) : titulaire exigé, ou dépannage
  * accepté (aujourd'hui). */
 export type NiveauDemande = 'titulaire' | 'depannage'
-/** Moment d'un horaire (matin, middle, soir, nuit). Plus de « court »
- * depuis le 2026-10-31 : un horaire court se range d'après son début. */
-export type Periode = 'matin' | 'middle' | 'soir' | 'nuit'
+/** Moment d'un horaire : l'identifiant d'un moment de l'établissement
+ * (`planning_moments.id`, 2026-11-06). À l'hôtel : matin, middle, soir,
+ * nuit ; aucun n'est lu par son nom (`moment.ts`). */
+export type Periode = string
+
+/** Un moment de la journée de l'établissement (`planning_moments`,
+ * 2026-11-06). Un horaire s'y range par ses heures (`momentPropose`) :
+ * les moments sont essayés par `priorite` croissante, le premier dont les
+ * conditions tiennent l'emporte ; un moment sans condition prend le reste.
+ * Heures en minutes depuis minuit. */
+export interface Moment {
+  id: string
+  nom: string
+  /** Rang dans la journée (écran, tableau, semaine stable). */
+  ordre: number
+  /** Rang du classement d'un horaire. */
+  priorite: number
+  /** Commence à cette heure ou plus tard (null : dès minuit)… */
+  debut_de: number | null
+  /** … et avant celle-ci (null : jusqu'à minuit). Plus tôt que `debut_de` :
+   * la plage passe minuit (21 h à 5 h). */
+  debut_a: number | null
+  /** Finit à cette heure ou plus tard (une fin après minuit est plus tard
+   * que tout)… */
+  fin_de: number | null
+  /** … et au plus tard à celle-ci. */
+  fin_a: number | null
+  /** Vrai : toutes les conditions posées ; faux : une seule suffit. */
+  toutes: boolean
+  /** Horaire libre sans fin connue : rangé ici s'il commence avant cette
+   * heure (premier moment de jour du tableau qui convient). */
+  libre_avant: number | null
+  /** Compte dans le tableau de l'accueil (un chiffre par jour). */
+  compte_dans_tableau: boolean
+  /** C'est la nuit : la seule notion lue par la loi (mineurs, nuits
+   * d'affilée, reprise après des nuits) et par la passation. */
+  est_nuit: boolean
+  couleur: string | null
+}
 
 /** Un horaire se lit par ses heures et son moment : plus de code depuis le
  * 2026-10-31 (décision utilisateur). Deux horaires n'ont jamais les mêmes
@@ -140,13 +176,6 @@ export interface Reglages {
   passation_veilleur?: boolean
   equipe_tolerance?: number
   duree_ouverture?: number
-  nuit_debut?: number
-  nuit_fin?: number
-  soir_fin?: number
-  soir_debut?: number
-  matin_debut_avant?: number
-  matin_fin_max?: number
-  libre_matin_avant?: number
   personnes_nuit?: number
   ecole_veille_fin?: number
   ecole_lendemain_debut?: number
@@ -246,8 +275,9 @@ export interface Salarie {
   suite_de: number | null
 }
 
-/** Période d'une consigne de présence (la nuit depuis le 2026-10-30). */
-export type PeriodePresence = 'matin' | 'soir' | 'nuit'
+/** Moment d'une consigne : un moment du tableau
+ * (`Moment.compte_dans_tableau`). */
+export type PeriodePresence = string
 
 /** Combien de personnes le matin, le soir ou la nuit d'un jour de la semaine type,
  * sur les postes qui comptent dans la présence. `maximum` null : pas de
@@ -322,6 +352,9 @@ export interface Referentiel {
   modelesContrat?: ModeleContrat[]
   /** Jours fériés en plus des 11 calculés ; absents : aucun. */
   feriesAjoutes?: FerieAjoute[]
+  /** Moments de la journée (`planning_moments`, 2026-11-06) ; absents
+   * (données de test) : ceux de l'hôtel (`MOMENTS_PAR_DEFAUT`). */
+  moments?: Moment[]
 }
 
 export const JOURS = [

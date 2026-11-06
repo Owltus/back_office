@@ -32,10 +32,16 @@
  * réglages (`coherence.ts`, étape 4) ne les a pas remplacées.
  */
 
-import { momentPropose } from '#/lib/planning/moment.ts'
-import { REGLES_PAR_DEFAUT } from '#/lib/planning/reglesEtablissement.ts'
-import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
-import { minutes } from '#/lib/planning/temps.ts'
+import {
+  coupDeMain,
+  deJourAuTableau,
+  estNuit,
+  MOMENTS_HOTEL,
+  momentDuDebut,
+  momentPropose,
+  rangAuTableau,
+} from '#/lib/planning/moment.ts'
+import type { Moments } from '#/lib/planning/moment.ts'
 import type {
   Besoin,
   Consigne,
@@ -45,12 +51,14 @@ import type {
   Poste,
 } from '#/lib/planning/types.ts'
 
-/** Ordre d'affichage et de tri des périodes : matin, soir, nuit. */
-export const ORDRE_PERIODES: Readonly<Record<PeriodePresence, number>> = {
-  matin: 0,
-  soir: 1,
-  nuit: 2,
-}
+/** Tri des consignes : jour, puis rang du moment au tableau. */
+export const triConsignes =
+  (l: Moments = MOMENTS_HOTEL) =>
+  (
+    a: Pick<Consigne, 'jour' | 'periode'>,
+    b: Pick<Consigne, 'jour' | 'periode'>,
+  ) =>
+    a.jour - b.jour || rangAuTableau(l, a.periode) - rangAuTableau(l, b.periode)
 
 /** Moment d'un horaire LIBRE (sans horaire) d'après ses heures, comme un
  * horaire (`momentPropose`, 2026-11-05 : le moment se déduit des heures).
@@ -58,22 +66,16 @@ export const ORDRE_PERIODES: Readonly<Record<PeriodePresence, number>> = {
 export function momentLibre(
   debut: string,
   fin?: string,
-  l: RegleEtablissement['moments'] = REGLES_PAR_DEFAUT.moments,
+  l: Moments = MOMENTS_HOTEL,
 ): Periode {
   return fin === undefined
     ? periodeLibre(debut, l)
     : momentPropose({ debut, fin, pause: 0 }, l)
 }
 
-/** Période d'un horaire libre sans fin connue : nuit aux mêmes limites que
- * `momentPropose` (21 h à 5 h), matin avant 12 h 30. */
-export function periodeLibre(
-  debut: string,
-  l: RegleEtablissement['moments'] = REGLES_PAR_DEFAUT.moments,
-): 'matin' | 'soir' | 'nuit' {
-  const m = minutes(debut)
-  if (m >= l.nuitDebut || m < l.nuitFin) return 'nuit'
-  return m < l.libreMatinAvant ? 'matin' : 'soir'
+/** Moment d'un horaire libre sans fin connue (`momentDuDebut`). */
+export function periodeLibre(debut: string, l: Moments = MOMENTS_HOTEL) {
+  return momentDuDebut(debut, l)
 }
 
 /** Le poste a-t-il des horaires de NUIT (D15) ? Seulement s'il les liste
@@ -85,11 +87,12 @@ export function periodeLibre(
 export function posteADesCodesDeNuit(
   poste: Pick<Poste, 'horaires_autorises'> | undefined,
   horaires: Iterable<Pick<Horaire, 'id' | 'periode'>>,
+  l: Moments = MOMENTS_HOTEL,
 ): boolean {
   if (!poste?.horaires_autorises.length) return false
   const autorises = new Set(poste.horaires_autorises)
   for (const h of horaires)
-    if (h.periode === 'nuit' && autorises.has(h.id)) return true
+    if (estNuit(l, h.periode) && autorises.has(h.id)) return true
   return false
 }
 
@@ -101,14 +104,14 @@ export function periodePresence(
   horaire: Pick<Horaire, 'periode'> | undefined,
   debut: string,
   nuitComptee = false,
-  l: RegleEtablissement['moments'] = REGLES_PAR_DEFAUT.moments,
+  l: Moments = MOMENTS_HOTEL,
 ): PeriodePresence | null {
   const famille = horaire ? horaire.periode : null
   // Middle (D11) et horaire sans moment : jamais.
-  if (horaire && (famille === 'middle' || famille === null)) return null
+  if (horaire && (famille === null || coupDeMain(l, famille))) return null
   const p = !horaire ? periodeLibre(debut, l) : famille
-  if (p === 'nuit') return nuitComptee ? 'nuit' : null
-  if (p !== 'matin' && p !== 'soir') return null
+  if (estNuit(l, p)) return nuitComptee ? p : null
+  if (!deJourAuTableau(l, p)) return null
   return poste?.presence ? p : null
 }
 
@@ -118,11 +121,12 @@ export function periodePresence(
 export function periodeShift(
   horaire: Pick<Horaire, 'periode'> | undefined,
   debut: string,
-  l: RegleEtablissement['moments'] = REGLES_PAR_DEFAUT.moments,
-): 'matin' | 'soir' | null {
+  l: Moments = MOMENTS_HOTEL,
+): PeriodePresence | null {
   const famille = horaire ? horaire.periode : null
-  const p = !horaire || famille === 'middle' ? periodeLibre(debut, l) : famille
-  return p === 'matin' || p === 'soir' ? p : null
+  const p =
+    !horaire || coupDeMain(l, famille) ? periodeLibre(debut, l) : famille
+  return deJourAuTableau(l, p) ? p : null
 }
 
 /** Une consigne et ce que le planning en fait. */
@@ -152,26 +156,21 @@ export function ecartConsigne(
 export function bilanPresence(
   consignes: Consigne[],
   presents: ReadonlyArray<{ jour: number; periode: PeriodePresence }>,
+  l: Moments = MOMENTS_HOTEL,
 ): PresenceOut[] {
-  return [...consignes]
-    .sort(
-      (a, b) =>
-        a.jour - b.jour ||
-        ORDRE_PERIODES[a.periode] - ORDRE_PERIODES[b.periode],
-    )
-    .map((c) => {
-      const compte = presents.filter(
-        (p) => p.jour === c.jour && p.periode === c.periode,
-      ).length
-      return {
-        jour: c.jour,
-        periode: c.periode,
-        compte,
-        minimum: c.minimum,
-        maximum: c.maximum,
-        ecart: ecartConsigne(compte, c.minimum, c.maximum),
-      }
-    })
+  return [...consignes].sort(triConsignes(l)).map((c) => {
+    const compte = presents.filter(
+      (p) => p.jour === c.jour && p.periode === c.periode,
+    ).length
+    return {
+      jour: c.jour,
+      periode: c.periode,
+      compte,
+      minimum: c.minimum,
+      maximum: c.maximum,
+      ecart: ecartConsigne(compte, c.minimum, c.maximum),
+    }
+  })
 }
 
 /** « 3 », « 3 ou 4 », « 3 à 5 », « au moins 3 ». */
@@ -202,9 +201,9 @@ export function sommeBesoinsPresence(
   postes: ReadonlyMap<number, Pick<Poste, 'presence'>>,
   horaires: ReadonlyMap<number, Pick<Horaire, 'periode'>>,
   postesAvecNuit?: ReadonlySet<number>,
-  /** Limites des moments (`lireRegles(r).moments`) : un besoin sans horaire
-   * se range d'après son heure de début. */
-  l: RegleEtablissement['moments'] = REGLES_PAR_DEFAUT.moments,
+  /** Moments (`lireRegles(r).moments`) : un besoin sans horaire se range
+   * d'après son heure de début. */
+  l: Moments = MOMENTS_HOTEL,
 ): Map<string, number> {
   const somme = new Map<string, number>()
   for (const b of besoins) {
@@ -284,18 +283,15 @@ export function momentsAccueil(
   debut: string,
   actif = true,
   fin?: string,
-  l: RegleEtablissement['moments'] = REGLES_PAR_DEFAUT.moments,
+  l: Moments = MOMENTS_HOTEL,
 ): PeriodePresence[] {
   if (!estPosteAccueil(poste, actif) || !poste) return []
   const p = horaire ? horaire.periode : momentLibre(debut, fin, l)
 
   if (p === null) return []
   const r: PeriodePresence[] = []
-  if (poste.presence) {
-    if (p === 'matin') r.push('matin')
-    if (p === 'soir') r.push('soir')
-  }
-  if (tientLaNuit(poste) && p === 'nuit') r.push('nuit')
+  if (poste.presence && deJourAuTableau(l, p)) r.push(p)
+  if (tientLaNuit(poste) && estNuit(l, p) && rangAuTableau(l, p) >= 0) r.push(p)
   return r
 }
 

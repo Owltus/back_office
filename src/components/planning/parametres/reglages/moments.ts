@@ -1,63 +1,27 @@
 /*
- * Limites des moments (étape 5 du plan `planning-moteur-configurable-
- * 2026-11-05`, D7 : réglées dans la page Horaires). Le moment d'un horaire
- * se CALCULE d'après ses heures (`momentPropose`) ; ces limites sont les
- * seules choses qu'on règle. Avant d'enregistrer, la page montre les
- * horaires qui changeraient de moment (`changementsDeMoment`).
+ * Les moments de l'établissement à l'écran (2026-11-06, lot 2, A6 : la liste
+ * `planning_moments`, réglée dans la section Moments de la page Besoins).
+ * Le moment d'un horaire se CALCULE d'après ses heures (`momentPropose`) ;
+ * avant d'enregistrer, la page montre les horaires qui changeraient de
+ * moment (`changementsDeMoment`).
  */
 
-import { momentPropose } from '#/lib/planning/moment.ts'
+import { lireMoments, momentPropose } from '#/lib/planning/moment.ts'
 import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
-import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import type {
+  Consigne,
   Horaire,
+  Moment,
   Periode,
   Referentiel,
-  Reglages,
 } from '#/lib/planning/types.ts'
 
-/** Les colonnes de `planning_reglages` des moments (minutes depuis minuit). */
-export interface SaisieMoments {
-  nuit_debut: number
-  nuit_fin: number
-  soir_fin: number
-  soir_debut: number
-  matin_debut_avant: number
-  matin_fin_max: number
-  libre_matin_avant: number
-}
-
+/** Les moments enregistrés, rangés. */
 export function momentsDepuis(
-  referentiel: Pick<Referentiel, 'reglages' | 'modelesContrat'>,
-): SaisieMoments {
-  const m = lireRegles(referentiel).moments
-  return {
-    nuit_debut: m.nuitDebut,
-    nuit_fin: m.nuitFin,
-    soir_fin: m.soirFin,
-    soir_debut: m.soirDebut,
-    matin_debut_avant: m.matinDebutAvant,
-    matin_fin_max: m.matinFinMax,
-    libre_matin_avant: m.libreMatinAvant,
-  }
+  referentiel: Partial<Pick<Referentiel, 'reglages' | 'moments'>>,
+): Moment[] {
+  return [...lireRegles(referentiel).moments.liste]
 }
-
-/** La saisie lue comme le moteur la lit. */
-export function limites(s: SaisieMoments): RegleEtablissement['moments'] {
-  return {
-    nuitDebut: s.nuit_debut,
-    nuitFin: s.nuit_fin,
-    soirFin: s.soir_fin,
-    soirDebut: s.soir_debut,
-    matinDebutAvant: s.matin_debut_avant,
-    matinFinMax: s.matin_fin_max,
-    libreMatinAvant: s.libre_matin_avant,
-  }
-}
-
-export const reglagesMoments = (s: SaisieMoments): Partial<Reglages> => ({
-  ...s,
-})
 
 export interface ChangementMoment {
   horaire: Horaire
@@ -65,14 +29,15 @@ export interface ChangementMoment {
   apres: Periode
 }
 
-/** Les horaires dont le moment changerait avec les nouvelles limites. */
+/** Les horaires dont le moment changerait avec la nouvelle liste. */
 export function changementsDeMoment(
   horaires: readonly Horaire[],
-  avant: SaisieMoments,
-  apres: SaisieMoments,
+  avant: readonly Moment[],
+  apres: readonly Moment[],
 ): ChangementMoment[] {
-  const la = limites(avant)
-  const lb = limites(apres)
+  const la = lireMoments(avant)
+  const lb = lireMoments(apres)
+  if (!apres.length) return []
   return horaires.flatMap((h) => {
     const a = momentPropose(h, la)
     const b = momentPropose(h, lb)
@@ -80,30 +45,120 @@ export function changementsDeMoment(
   })
 }
 
-/** Bornes des CHECK de la base : de 00:00 à 23:59, 24:00 permis pour une
- * fin. */
-const FINS: ReadonlySet<keyof SaisieMoments> = new Set([
-  'soir_fin',
-  'matin_fin_max',
-])
+/** Identifiant d'un moment neuf, tiré de son nom (« Midi » → « midi ») et
+ * jamais déjà pris. */
+export function idPourNom(nom: string, pris: Iterable<string>): string {
+  const deja = new Set(pris)
+  const base =
+    nom
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 30) || 'moment'
+  let id = base
+  for (let i = 2; deja.has(id); i++) id = `${base}-${i}`
+  return id
+}
+
+/** Un moment neuf : dernier de la journée et du classement, sans condition
+ * (il prend le reste tant qu'on ne lui en donne pas). */
+export function nouveauMoment(nom: string, liste: readonly Moment[]): Moment {
+  return {
+    id: idPourNom(
+      nom,
+      liste.map((m) => m.id),
+    ),
+    nom: nom.trim(),
+    ordre: Math.max(0, ...liste.map((m) => m.ordre)) + 1,
+    priorite: Math.max(0, ...liste.map((m) => m.priorite)) + 1,
+    debut_de: null,
+    debut_a: null,
+    fin_de: null,
+    fin_a: null,
+    toutes: true,
+    libre_avant: null,
+    compte_dans_tableau: false,
+    est_nuit: false,
+    couleur: null,
+  }
+}
+
+/** La liste après avoir monté (-1) ou descendu (+1) un moment dans la
+ * journée : `ordre` réécrit 1..n. */
+export function deplacerMoment(
+  liste: readonly Moment[],
+  id: string,
+  sens: -1 | 1,
+  cle: 'ordre' | 'priorite' = 'ordre',
+): Moment[] {
+  const tries = [...liste].sort((a, b) => a[cle] - b[cle])
+  const i = tries.findIndex((m) => m.id === id)
+  const j = i + sens
+  if (i < 0 || j < 0 || j >= tries.length) return [...liste]
+  ;[tries[i], tries[j]] = [tries[j], tries[i]]
+  const rang = new Map(tries.map((m, k) => [m.id, k + 1]))
+  return liste.map((m) => ({ ...m, [cle]: rang.get(m.id) as number }))
+}
+
+/** Pourquoi un moment ne peut pas être retiré (null : il peut). Un moment
+ * qui a encore un horaire (dans la liste proposée) ou un chiffre au tableau
+ * reste. */
+export function raisonGarde(
+  id: string,
+  horaires: readonly Horaire[],
+  liste: readonly Moment[],
+  consignes: readonly Pick<Consigne, 'periode'>[],
+): string | null {
+  if (consignes.some((c) => c.periode === id))
+    return 'Il a des chiffres au tableau.'
+  const sans = liste.filter((m) => m.id !== id)
+  if (!sans.length) return 'Il faut au moins un moment.'
+  const l = lireMoments(liste)
+  if (horaires.some((h) => momentPropose(h, l) === id))
+    return 'Des horaires sont rangés dans ce moment.'
+  return null
+}
+
+const heureOk = (v: number | null, max: number) =>
+  v === null || (Number.isInteger(v) && v >= 0 && v <= max)
 
 /** Ce qui empêche d'enregistrer (vide : rien). */
-export function erreursMoments(s: SaisieMoments): string[] {
+export function erreursMoments(liste: readonly Moment[]): string[] {
   const erreurs: string[] = []
-  for (const [cle, v] of Object.entries(s) as Array<
-    [keyof SaisieMoments, number]
-  >) {
-    const max = FINS.has(cle) ? 1440 : 1439
-    if (!Number.isInteger(v) || v < 0 || v > max) {
-      erreurs.push('Une heure va de 00:00 à 23:59.')
-      break
-    }
-  }
-  if (s.nuit_fin >= s.nuit_debut)
-    erreurs.push('La nuit finit le matin, avant de recommencer le soir.')
-  if (s.matin_debut_avant <= s.nuit_fin)
-    erreurs.push(
-      'Le matin commence après la fin de la nuit : sinon aucun horaire ne serait du matin.',
+  if (!liste.length) erreurs.push('Il faut au moins un moment.')
+  const noms = liste.map((m) => m.nom.trim().toLocaleLowerCase('fr-FR'))
+  if (noms.some((n) => !n)) erreurs.push('Chaque moment a un nom.')
+  if (new Set(noms).size !== noms.length)
+    erreurs.push('Deux moments ne portent pas le même nom.')
+  if (
+    liste.some(
+      (m) =>
+        !heureOk(m.debut_de, 1440) ||
+        !heureOk(m.debut_a, 1440) ||
+        !heureOk(m.fin_de, 1440) ||
+        !heureOk(m.fin_a, 1440) ||
+        !heureOk(m.libre_avant, 1440),
     )
+  )
+    erreurs.push('Une heure va de 00:00 à 24:00.')
   return erreurs
+}
+
+/** Les lignes à écrire : moments neufs ou changés, et ceux à retirer. */
+export function differenceMoments(
+  avant: readonly Moment[],
+  apres: readonly Moment[],
+): { ecrire: Moment[]; retirer: string[] } {
+  const parId = new Map(avant.map((m) => [m.id, m]))
+  const ecrire = apres.filter((m) => {
+    const a = parId.get(m.id)
+    return !a || JSON.stringify(a) !== JSON.stringify(m)
+  })
+  const restent = new Set(apres.map((m) => m.id))
+  return {
+    ecrire,
+    retirer: avant.filter((m) => !restent.has(m.id)).map((m) => m.id),
+  }
 }

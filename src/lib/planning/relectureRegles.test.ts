@@ -11,6 +11,7 @@ import {
   REGLES_PAR_DEFAUT,
 } from '#/lib/planning/reglesEtablissement.ts'
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
+import { lusAvec } from '#/lib/planning/test/momentsTest.ts'
 import { SEMAINE_TYPE_VIDE } from '#/lib/planning/types.ts'
 import type {
   Besoin,
@@ -275,7 +276,7 @@ describe('6. contrôle des heures : les heures indicatives viennent du modèle',
     const postes = new Map([[1, { presence: true }]])
     const aux = sommeBesoinsPresence(besoins, postes, new Map())
     expect([...aux.keys()]).toEqual(['0:soir'])
-    const moments = { ...REGLES_PAR_DEFAUT.moments, libreMatinAvant: 15 * H }
+    const moments = lusAvec({ matin: { libre_avant: 15 * H } })
     const regle = sommeBesoinsPresence(
       besoins,
       postes,

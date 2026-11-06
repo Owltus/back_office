@@ -31,6 +31,9 @@ import { Button } from '#/components/ui/button.tsx'
 import type { LienReglage } from '#/lib/planning/coherence.ts'
 import type { RaisonClaire } from '#/lib/planning/raisonsPlaces.ts'
 import { libelleHoraire } from '#/lib/planning/affichage.ts'
+import { estNuit, leMoment, motMoment } from '#/lib/planning/moment.ts'
+import { NOM_ZONE_ACCUEIL } from '#/lib/planning/presence.ts'
+import { useMoments } from '#/components/planning/hooks/useMoments.ts'
 import { cn } from '#/lib/utils.ts'
 
 /** La case à ouvrir : la personne choisie, le jour de la place. `x`, `y` :
@@ -44,7 +47,7 @@ export interface DemandePlacement {
   horaireId: number | null
   /** Place de l'accueil : son moment, pour proposer un horaire de ce
    * moment (audit RH du 2026-11-01). */
-  moment?: 'matin' | 'soir' | 'nuit' | null
+  moment?: string | null
   x: number
   y: number
 }
@@ -180,8 +183,9 @@ function Groupe({
   const heures = libelleHoraire(g)
   const nom = g.poste?.nom ?? 'Poste'
   // Une place de l'accueil n'a ni poste ni horaire : son moment (2026-11-01).
+  const moments = useMoments()
   const titre = g.moment
-    ? `Accueil, ${g.moment === 'nuit' ? 'la nuit' : g.moment}`
+    ? `${NOM_ZONE_ACCUEIL}, ${estNuit(moments, g.moment) ? leMoment(moments, g.moment) : motMoment(moments, g.moment)}`
     : `${nom}, ${g.code ?? heures}`
   const jours = joursDesPlaces(g.places.map((p) => p.date))
   return (
@@ -214,7 +218,7 @@ function Groupe({
             <p className="flex flex-col text-xs text-muted-foreground">
               <strong className="text-sm text-foreground">
                 {g.moment
-                  ? `Impossible de compléter l'accueil ${g.moment === 'nuit' ? 'la nuit' : `le ${g.moment}`}.`
+                  ? `Impossible de compléter l'accueil ${leMoment(moments, g.moment)}.`
                   : jeNePeuxPas(g.code)}
               </strong>
               <span>{g.raisonCommune}</span>

@@ -75,6 +75,7 @@ import type {
   RubriquesCase,
   SourceCase,
 } from '#/components/planning/codesCase.ts'
+import { useMoments } from '#/components/planning/hooks/useMoments.ts'
 
 export type Edition =
   | {
@@ -85,7 +86,7 @@ export type Edition =
       poste_id?: number
       horaire_id?: number | null
       /** Place de l'accueil sans horaire : le moment à proposer. */
-      moment?: 'matin' | 'soir' | 'nuit' | null
+      moment?: string | null
     }
   | { mode: 'modification'; shift: ShiftOut }
 
@@ -149,6 +150,7 @@ export function EditeurShift({
   onPoserAbsence: (salarieId: number, jour: number, motifId: number) => void
   onRetirerAbsence: (salarieId: number, jour: number) => void
 }) {
+  const moments = useMoments()
   const { horaires, postes, salaries, motifs } = referentiel
   const existant = edition.mode === 'modification' ? edition.shift : null
   const salarieInitial =
@@ -625,6 +627,7 @@ export function EditeurShift({
                 uniques.codes
                   .filter((c) => !dansEtoile.has(c.horaire.id))
                   .map((c) => c.horaire),
+                moments,
               ).map((g) => [
                 <span
                   key={`titre-${g.libelle}`}

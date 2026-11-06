@@ -19,6 +19,16 @@ import {
 } from '#/lib/planning/cycles.ts'
 import type { PresencePoste } from '#/lib/planning/cycles.ts'
 import {
+  coupDeMain,
+  dernierMoment,
+  estNuit as momentDeNuit,
+  MOMENTS_HOTEL,
+  premierMoment,
+  rangAuTableau,
+  tailleTableau,
+} from '#/lib/planning/moment.ts'
+import type { Moments } from '#/lib/planning/moment.ts'
+import {
   aJourneeCourteImposee,
   estJourWeekend,
   jourVeilleWeekend,
@@ -222,13 +232,11 @@ export const POSTE_ID_ACCUEIL = 0
 
 /** `APourvoirOut.besoin_id` d'un moment de l'accueil incomplet : négatif
  * (aucun besoin), unique par jour et moment dans la semaine. */
-export const idPlaceAccueil = (jour: number, periode: PeriodePresence) =>
-  -(1 + jour * 3 + ORDRE_MOMENTS[periode])
-const ORDRE_MOMENTS: Readonly<Record<PeriodePresence, number>> = {
-  matin: 0,
-  soir: 1,
-  nuit: 2,
-}
+export const idPlaceAccueil = (
+  jour: number,
+  periode: PeriodePresence,
+  l: Moments = MOMENTS_HOTEL,
+) => -(1 + jour * tailleTableau(l) + rangAuTableau(l, periode))
 
 /** Un trou entre deux équipes, pour l'écran. */
 export interface TrouOut {
@@ -292,7 +300,8 @@ export interface ReposOblige {
 
 export interface EquipeOut {
   jour: number
-  moment: 'matin' | 'soir'
+  /** Un moment de jour du tableau (le premier, ou un suivant). */
+  moment: PeriodePresence
   /** Arrivées étalées : la première et la dernière (heures d'horloge). */
   arrivees: { debut: string; fin: string } | null
   /** Soir : départs étalés. */
@@ -851,14 +860,15 @@ function debutsMatinTot(ctx: Contexte): Map<number, number> {
       if (posteDeLAccueil(ctx, b.poste_id)) continue
       const h =
         b.horaire_id !== null ? ctx.horaires.get(b.horaire_id) : undefined
-      if (periodeShift(h, b.debut, ctx.regles.moments) !== 'matin') continue
+      const premier = premierMoment(ctx.regles.moments)
+      if (periodeShift(h, b.debut, ctx.regles.moments) !== premier) continue
       const m = minutes(b.debut)
       r.set(b.poste_id, Math.min(r.get(b.poste_id) ?? m, m))
     }
     for (const poste of ctx.postes.values()) {
       if (!posteDeLAccueil(ctx, poste.id)) continue
       for (const h of codesDuPoste(poste, [...ctx.horaires.values()])) {
-        if (h.periode !== 'matin') continue
+        if (h.periode !== premierMoment(ctx.regles.moments)) continue
         const m = minutes(h.debut)
         r.set(poste.id, Math.min(r.get(poste.id) ?? m, m))
       }
@@ -891,10 +901,15 @@ export function equiteDe(
   // libre était une nuit pour les nuits et un soir pour l'équité).
   const periode = periodeShift(h ?? { periode: moment }, x.debut, l)
   const tot = debutsMatinTot(ctx).get(x.poste_id)
+  // Les soirs partagés : le DERNIER moment de jour du tableau ; les matins
+  // tôt : le PREMIER (à l'hôtel, le soir et le matin).
   return {
-    soir: periode === 'soir',
+    soir: periode !== null && periode === dernierMoment(l),
     matinTot:
-      periode === 'matin' && tot !== undefined && minutes(x.debut) <= tot,
+      periode !== null &&
+      periode === premierMoment(l) &&
+      tot !== undefined &&
+      minutes(x.debut) <= tot,
     moment,
   }
 }
@@ -1146,12 +1161,21 @@ export function candidatsAccueil(ctx: Contexte, depuis = 0): Creneau[] {
     for (const poste of postes) {
       for (const h of codesDuPoste(poste, horaires)) {
         const c = creneauCandidat(ctx, jour, poste, h)
-        const coupDeMain =
+        // Un coup de main (hors tableau, pas la nuit : le middle) est
+        // candidat dès qu'un moment de jour du tableau est demandé.
+        const enCoupDeMain =
           poste.presence &&
-          c.moment === 'middle' &&
-          (demandes.has(`${jour}|matin`) || demandes.has(`${jour}|soir`))
+          coupDeMain(ctx.regles.moments, c.moment) &&
+          [...demandes].some((d) => {
+            const [j, m] = d.split('|')
+            return (
+              Number(j) === jour &&
+              !momentDeNuit(ctx.regles.moments, m) &&
+              rangAuTableau(ctx.regles.moments, m) >= 0
+            )
+          })
         if (
-          !coupDeMain &&
+          !enCoupDeMain &&
           !c.presence.some((m) => demandes.has(`${jour}|${m}`))
         )
           continue
@@ -1170,7 +1194,7 @@ export function candidatsAccueil(ctx: Contexte, depuis = 0): Creneau[] {
 function joursOuverts(
   ctx: Contexte,
   poste: Poste,
-  periode: 'matin' | 'soir',
+  periode: PeriodePresence | null,
 ): number[] {
   const jours: number[] = []
   const accueil = poste.presence && accueilEnService(ctx)
@@ -1207,7 +1231,11 @@ export function ouverturesPostes(ctx: Contexte): Probleme['ouvertures'] {
     if (!poste.ouverture || !aDesHeures(ctx, poste)) continue
     const m = minutes(poste.ouverture) + ctx.regles.passations.dureeOuverture
     const fin = `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
-    for (const jour of joursOuverts(ctx, poste, 'matin')) {
+    for (const jour of joursOuverts(
+      ctx,
+      poste,
+      premierMoment(ctx.regles.moments),
+    )) {
       const [debut, f] = bornes(ctx.lundi, jour, poste.ouverture, fin)
       r.push({ poste: String(poste.id), jour, debut, fin: f })
     }
@@ -1227,7 +1255,11 @@ export function fermeturesPostes(ctx: Contexte): Probleme['fermetures'] {
     if (!poste.fermeture || !aDesHeures(ctx, poste)) continue
     const m = (minutes(poste.fermeture) - duree + 1440) % 1440
     const debut = `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
-    for (const jour of joursOuverts(ctx, poste, 'soir')) {
+    for (const jour of joursOuverts(
+      ctx,
+      poste,
+      dernierMoment(ctx.regles.moments),
+    )) {
       const [d, f] = bornes(ctx.lundi, jour, debut, poste.fermeture)
       r.push({ poste: String(poste.id), jour, debut: d, fin: f })
     }
@@ -1764,7 +1796,8 @@ export function weekendsLiberes(d: DonneesSemaine): Set<number> {
       continue
     const hors = joursHorsContrat(x, lundi)
     if (ctx.regles.equite.weekendJours.some((j) => hors.has(j))) continue
-    const estNuit = (a: Affectation) => equiteDe(ctx, a).moment === 'nuit'
+    const estNuit = (a: Affectation) =>
+      momentDeNuit(ctx.regles.moments, equiteDe(ctx, a).moment)
     if (weekendLibreAvantDe(x, lundi, ctx, semaine, motifs, estNuit) === false)
       r.add(x.id)
   }
@@ -1826,13 +1859,8 @@ export function avecHistoire(
     const weekendLibreAvant =
       sol.placementManuel || aDesReposFixes(x)
         ? null
-        : weekendLibreAvantDe(
-            x,
-            lundi,
-            ctx,
-            semaine,
-            motifs,
-            (a) => equiteDe(ctx, a).moment === 'nuit',
+        : weekendLibreAvantDe(x, lundi, ctx, semaine, motifs, (a) =>
+            momentDeNuit(ctx.regles.moments, equiteDe(ctx, a).moment),
           )
     const WE = ctx.regles.equite.weekendJours
     const veille = jourVeilleWeekend(ctx.regles)
@@ -1851,7 +1879,8 @@ export function avecHistoire(
     const weekendTravailleAvant = avant.some(
       (a) =>
         WE.includes(a.jour) ||
-        (a.jour === veille && equiteDe(ctx, a).moment === 'nuit'),
+        (a.jour === veille &&
+          momentDeNuit(ctx.regles.moments, equiteDe(ctx, a).moment)),
     )
     if (avant.length) {
       const absents = joursAbsents(x, lAvant, ctx.absences)
@@ -1862,7 +1891,9 @@ export function avecHistoire(
     }
     const nuitsAvant = new Set(
       avant
-        .filter((a) => equiteDe(ctx, a).moment === 'nuit')
+        .filter((a) =>
+          momentDeNuit(ctx.regles.moments, equiteDe(ctx, a).moment),
+        )
         .map((a) => a.jour - 7),
     )
     // Règle 13 : jours de -14 à 6, absents (hors école) ou repos fixes.
@@ -2090,7 +2121,7 @@ export function equitesAvant(
         const q = equiteDe(ctx, a)
         if (q.soir) e.soirs++
         if (q.matinTot) e.matinsTot++
-        if (q.moment === 'nuit') e.nuits++
+        if (momentDeNuit(ctx.regles.moments, q.moment)) e.nuits++
       }
       return e
     })
@@ -2737,7 +2768,7 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
     minimum: chiffreAccueil(c),
     maximum: plafondAccueil(c),
   }))
-  const presence = bilanPresence(chiffres, presents)
+  const presence = bilanPresence(chiffres, presents, ctx.regles.moments)
   // Places de l'accueil (D1) : le chiffre de chaque moment, pourvu jusqu'à
   // lui ; s'ajoutent aux places des besoins des postes à part.
   const accueil = accueilEnService(ctx)
@@ -2772,7 +2803,7 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
         ids.map((c) => c.id),
       )
       aPourvoir.push({
-        besoin_id: idPlaceAccueil(x.jour, x.periode),
+        besoin_id: idPlaceAccueil(x.jour, x.periode, ctx.regles.moments),
         moment: x.periode,
         poste_id: POSTE_ID_ACCUEIL,
         jour: x.jour,
@@ -2813,7 +2844,10 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
     }
     const nuitDemandee = (j: number) =>
       ctx.consignes.some(
-        (k) => k.jour === j && k.periode === 'nuit' && chiffreAccueil(k) > 0,
+        (k) =>
+          k.jour === j &&
+          momentDeNuit(ctx.regles.moments, k.periode) &&
+          chiffreAccueil(k) > 0,
       )
     for (let jour = 0; jour < 7; jour++) {
       const demandes = new Set(
@@ -2825,7 +2859,14 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
         candidats.filter((c) => jourDe(c) === jour),
         demandes,
         presences,
-        nuitDeLaVeille(candidats, jourDe, jour, nuitDemandee),
+        nuitDeLaVeille(
+          candidats,
+          jourDe,
+          jour,
+          nuitDemandee,
+          ctx.regles.moments,
+        ),
+        ctx.regles.moments,
       ))
         trousAccueil.push({
           poste_id: POSTE_ID_ACCUEIL,
@@ -3500,7 +3541,8 @@ export function esquisseSuivante(
     return connus.filter((a) => a.lundi === l)
   }
   const motifs = new Map(d.referentiel.motifs.map((m) => [m.id, m]))
-  const estNuit = (a: Affectation) => equiteDe(ctx, a).moment === 'nuit'
+  const estNuit = (a: Affectation) =>
+    momentDeNuit(ctx.regles.moments, equiteDe(ctx, a).moment)
   const personnes = new Map<string, SuivantePersonne>()
   for (const x of ctx.staff) {
     const sol = salaries.get(x.id)

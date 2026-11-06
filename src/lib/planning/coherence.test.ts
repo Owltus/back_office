@@ -10,6 +10,7 @@ import {
   verifierReglages as verifierTout,
 } from '#/lib/planning/coherence.ts'
 import type { PointReglage } from '#/lib/planning/coherence.ts'
+import { momentsAvec } from '#/lib/planning/test/momentsTest.ts'
 import { avecCode } from '#/lib/planning/test/codesTest.ts'
 import { hotelAccueil } from '#/lib/planning/test/hotelAccueil.ts'
 import { hotelReel } from '#/lib/planning/test/hotelReel.ts'
@@ -1741,35 +1742,27 @@ describe("règles de l'établissement impossibles (étape 8, 2026-11-05)", () =>
     verifierReglages(r)
       .filter((x) => x.id.startsWith('moments:'))
       .map((x) => x.id)
-  const avecMoments = (m: Partial<NonNullable<Referentiel['reglages']>>) => {
-    const r = propre()
-    r.reglages = { releve_minutes: 30, ...m }
-    return r
-  }
+  const avecMoments = (
+    changes: Parameters<typeof momentsAvec>[0],
+  ): Referentiel => ({ ...propre(), moments: momentsAvec(changes) })
 
-  it('limites des moments qui se chevauchent : un point vers Moments', () => {
+  it('un moment qu’aucun horaire ne peut atteindre : un point vers Moments', () => {
     expect(moments(propre())).toEqual([])
-    const r = avecMoments({ soir_debut: 8 * 60 })
-    expect(moments(r)).toEqual(['moments:soir-debut'])
+    // Le soir dès 05:00 avale le matin et le middle.
+    const r = avecMoments({ soir: { debut_de: 5 * 60 } })
+    expect(moments(r)).toEqual(['moments:matin', 'moments:middle'])
     expect(
-      verifierReglages(r).find((x) => x.id === 'moments:soir-debut'),
+      verifierReglages(r).find((x) => x.id === 'moments:matin'),
     ).toMatchObject({
       ecran: 'besoins',
       lien: { page: '/planning/besoins', cible: 'moments' },
+      texte: expect.stringContaining('aucun horaire ne peut être du matin'),
     })
-    expect(moments(avecMoments({ soir_fin: 17 * 60 }))).toEqual([
-      'moments:soir-fin',
-    ])
-    expect(moments(avecMoments({ nuit_debut: 14 * 60 }))).toEqual([
-      'moments:nuit-soir',
-    ])
-    expect(moments(avecMoments({ nuit_fin: 22 * 60 }))).toEqual([
-      'moments:nuit',
-    ])
-    expect(moments(avecMoments({ matin_debut_avant: 4 * 60 }))).toEqual([
-      'moments:matin',
-    ])
-    // Corrigé : les limites par défaut.
+    // La nuit qui commence à 00:00 et finit à 24:00 prend tout.
+    expect(
+      moments(avecMoments({ nuit: { debut_de: 0, debut_a: 1440 } })),
+    ).toEqual(['moments:matin', 'moments:middle', 'moments:soir'])
+    // Corrigé : les moments par défaut.
     expect(moments(avecMoments({}))).toEqual([])
   })
 })

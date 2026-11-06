@@ -5,6 +5,7 @@ import { zonesPassation } from '#/lib/planning/generateur.ts'
 import type { Highs } from '#/lib/planning/generateur.ts'
 import { avecMomentCalcule, momentPropose } from '#/lib/planning/moment.ts'
 import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
+import { momentsAvec } from '#/lib/planning/test/momentsTest.ts'
 import { preparerGeneration } from '#/lib/planning/semaine.ts'
 import type { SemaineOut } from '#/lib/planning/semaine.ts'
 import { avecCode } from '#/lib/planning/test/codesTest.ts'
@@ -50,12 +51,6 @@ const REGLAGES: Reglages = {
   jours_affiles_conseilles: 6,
   jour_isole: 'a_eviter',
   passation_veilleur: false,
-  nuit_debut: 22 * H,
-  nuit_fin: 5 * H,
-  soir_fin: 22 * H,
-  soir_debut: 14 * H,
-  matin_debut_avant: 10 * H,
-  matin_fin_max: 16 * H + 30,
   journees_contrats: [
     { minutes_hebdo: 35 * H, durees: [7 * H], courtes_max: 0 },
   ],
@@ -87,8 +82,18 @@ const STAFF: Array<[string, Record<number, Niveau>]> = [
 const BESOIN_TITULAIRE = 100
 const BESOIN_SOUHAITE = 200
 
+/** Ses moments (2026-11-06 : la liste de l'établissement) : la nuit dès
+ * 22 h, le soir dès 14 h ou jusqu'à 22 h, le matin avant 10 h et jusqu'à
+ * 16 h 30. */
+const MOMENTS_ETAB = momentsAvec({
+  nuit: { debut_de: 22 * H, debut_a: 5 * H },
+  soir: { debut_de: 14 * H, fin_de: 22 * H },
+  matin: { debut_a: 10 * H, fin_a: 16 * H + 30 },
+})
+
 function etablissement(reglages: Reglages | undefined): Referentiel {
-  const moments = lireRegles({ reglages }).moments
+  const lignes = reglages ? MOMENTS_ETAB : undefined
+  const moments = lireRegles({ reglages, moments: lignes }).moments
   // Comme `fetchReferentiel` : le moment se calcule d'après les heures et
   // les limites de l'établissement.
   // Le code d'essai se range APRÈS : une copie le perd (codesTest.ts).
@@ -207,7 +212,7 @@ function etablissement(reglages: Reglages | undefined): Referentiel {
     besoins,
     consignes,
     verrous: [],
-    ...(reglages ? { reglages } : {}),
+    ...(reglages ? { reglages, moments: MOMENTS_ETAB } : {}),
   }
 }
 
@@ -297,7 +302,10 @@ describe('un second établissement, fictif', () => {
   })
 
   it('moments selon les limites de l’établissement', () => {
-    const moments = lireRegles({ reglages: REGLAGES }).moments
+    const moments = lireRegles({
+      reglages: REGLAGES,
+      moments: MOMENTS_ETAB,
+    }).moments
     const h3 = { debut: '09:00', fin: '16:30', pause: 30 }
     expect(momentPropose(h3, moments)).toBe('matin')
     expect(momentPropose(h3)).toBe('middle')

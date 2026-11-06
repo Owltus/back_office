@@ -14,7 +14,16 @@
 
 import { Moon, Sun, Sunset } from 'lucide-react'
 
+import { useMoments } from '#/components/planning/hooks/useMoments.ts'
 import { Tip } from '#/components/shared/Tip.tsx'
+import {
+  estNuit,
+  momentDe,
+  momentsDeJour,
+  momentsDuTableau,
+  nuitsDuTableau,
+} from '#/lib/planning/moment.ts'
+import type { Moments } from '#/lib/planning/moment.ts'
 import { libelleConsigne } from '#/lib/planning/presence.ts'
 import type { PresenceOut } from '#/lib/planning/presence.ts'
 import type {
@@ -23,9 +32,16 @@ import type {
 } from '#/lib/planning/verificateur.ts'
 import { cn } from '#/lib/utils.ts'
 
-const NOM = { matin: 'Matin', soir: 'Soir', nuit: 'Nuit' } as const
-const PERIODES = ['matin', 'soir', 'nuit'] as const
-const ICONE = { matin: Sun, soir: Sunset, nuit: Moon } as const
+/** Nom d'un moment à l'écran. */
+const nomDe = (l: Moments, p: string) => momentDe(l, p)?.nom ?? p
+
+/** Icône d'un moment : la lune la nuit, le couchant pour le dernier moment
+ * de jour, le soleil sinon. */
+export function iconeDe(l: Moments, p: string) {
+  if (estNuit(l, p)) return Moon
+  const jour = momentsDeJour(l)
+  return jour.length > 1 && jour[jour.length - 1] === p ? Sunset : Sun
+}
 
 /** « 1 de moins », « 2 de plus ». */
 export function ecartTexte(ecart: number): string {
@@ -36,14 +52,24 @@ export function ecartTexte(ecart: number): string {
  * peut rester vide, comme le dit le rond orange du mois. */
 const RIEN = "personne de demandé, l'hôtel peut rester vide"
 
-export function PastillesPresence({ presence }: { presence: PresenceOut[] }) {
+export function PastillesPresence({
+  presence,
+  moments: donnes,
+}: {
+  presence: PresenceOut[]
+  moments?: Moments
+}) {
+  const lus = useMoments()
+  const moments = donnes ?? lus
   if (!presence.length) return null
-  const absents = PERIODES.filter((m) => !presence.some((p) => p.periode === m))
+  const absents = momentsDuTableau(moments).filter(
+    (m) => !presence.some((p) => p.periode === m),
+  )
   return (
     <div className="mt-1 flex flex-wrap gap-1">
       {absents.map((m) => {
-        const Icone = ICONE[m]
-        const texte = `${NOM[m]} : ${RIEN}`
+        const Icone = iconeDe(moments, m)
+        const texte = `${nomDe(moments, m)} : ${RIEN}`
         return (
           <Tip key={m} label={texte}>
             <span
@@ -57,9 +83,9 @@ export function PastillesPresence({ presence }: { presence: PresenceOut[] }) {
         )
       })}
       {presence.map((p) => {
-        const Icone = ICONE[p.periode]
+        const Icone = iconeDe(moments, p.periode)
         const attendu = libelleConsigne(p.minimum, p.maximum)
-        const texte = `${NOM[p.periode]} : ${p.compte} présent${p.compte > 1 ? 's' : ''} pour ${attendu} demandé${p.minimum > 1 ? 's' : ''}${p.ecart ? ` (${ecartTexte(p.ecart)})` : ''}`
+        const texte = `${nomDe(moments, p.periode)} : ${p.compte} présent${p.compte > 1 ? 's' : ''} pour ${attendu} demandé${p.minimum > 1 ? 's' : ''}${p.ecart ? ` (${ecartTexte(p.ecart)})` : ''}`
         return (
           <Tip key={p.periode} label={texte}>
             <span
@@ -90,18 +116,23 @@ export function PastillesPresence({ presence }: { presence: PresenceOut[] }) {
  * et mal alignés »). Il court d'un centre de forme à l'autre, sous elles. */
 function Lien({
   etat,
-  place,
+  de,
+  a,
 }: {
   etat: EtatTransmission | undefined
-  place: string
+  /** Bords du trait, en proportion de la case (0 à 1). */
+  de: number
+  a: number
 }) {
+  const p = placeTrait(de, a)
   return (
     <span
       aria-hidden
       data-transmission={etat ?? 'aucune'}
+      style={p.style}
       className={cn(
         'absolute top-1/2 h-0 -translate-y-1/2 border-t',
-        place,
+        p.className,
         etat === 'ok' && 'border-emerald-500/70',
         etat === 'manque' && 'border-dashed border-red-500/90',
         !etat && 'border-foreground/10',
@@ -110,13 +141,57 @@ function Lien({
   )
 }
 
-const PASSAGE = {
-  nuitMatin: 'Transmission nuit → matin',
-  matinSoir: 'Transmission matin → soir',
-  soirNuit: 'Transmission soir → nuit',
-} as const
+// Les tiers de la case, en classes (les positions de l'hôtel) ; une autre
+// position, en style.
+const GAUCHE: Record<string, string> = {
+  '0': 'left-0',
+  '0.333': 'left-1/3',
+  '0.667': 'left-2/3',
+  '1': 'left-full',
+}
+const DROITE: Record<string, string> = {
+  '0': 'right-0',
+  '0.333': 'right-1/3',
+  '0.667': 'right-2/3',
+}
+const cle = (f: number) => String(Math.round(f * 1000) / 1000)
 
-type PeriodeMois = (typeof PERIODES)[number]
+/** Place d'une forme (son centre) en proportion de la case. */
+function placeForme(f: number) {
+  const g = GAUCHE[cle(f)] as string | undefined
+  return g
+    ? { className: g, style: undefined }
+    : { className: '', style: { left: `${f * 100}%` } }
+}
+
+/** Place d'un trait de `de` à `a`. */
+function placeTrait(de: number, a: number) {
+  const g = GAUCHE[cle(de)] as string | undefined
+  const d = DROITE[cle(1 - a)] as string | undefined
+  return g && d
+    ? { className: `${g} ${d}`, style: undefined }
+    : {
+        className: '',
+        style: { left: `${de * 100}%`, right: `${(1 - a) * 100}%` },
+      }
+}
+
+/** Les trois passages, nommés par les moments : nuit → premier, premier →
+ * dernier, dernier → nuit (à l'hôtel : nuit → matin, matin → soir, soir →
+ * nuit). */
+function passages(l: Moments) {
+  const jour = momentsDeJour(l)
+  const nuit = nuitsDuTableau(l)[0]
+  const n = (p: string | undefined) =>
+    p === undefined ? '' : nomDe(l, p).toLocaleLowerCase('fr-FR')
+  const premier = n(jour[0])
+  const dernier = n(jour[jour.length - 1])
+  return {
+    nuitMatin: `Transmission ${n(nuit)} → ${premier}`,
+    matinSoir: `Transmission ${premier} → ${dernier}`,
+    soirNuit: `Transmission ${dernier} → ${n(nuit)}`,
+  } as const
+}
 
 /** Couleur d'un moment : vert conforme, rouge il manque du monde, bleu plus
  * que demandé, orange vide quand rien n'est demandé. */
@@ -134,12 +209,17 @@ function teinte(p: PresenceOut | undefined): string {
 function Forme({
   periode,
   p,
+  nuit,
   className,
+  style,
   data = periode,
 }: {
-  periode: PeriodeMois
+  periode: string
   p: PresenceOut | undefined
+  /** C'est un moment de nuit (triangle). */
+  nuit: boolean
   className?: string
+  style?: React.CSSProperties
   data?: string
 }) {
   const trait = {
@@ -152,19 +232,18 @@ function Forme({
       aria-hidden
       data-periode={data}
       viewBox="0 0 10 10"
+      style={style}
       className={cn(
         'block shrink-0',
         // Taille bornée par la largeur de la case (`@container`) : une
         // fenêtre étroite rétrécit les formes au lieu de les faire se
         // chevaucher (retour utilisateur du 2026-11-03).
-        periode === 'nuit'
-          ? 'size-[min(0.75rem,26cqw)]'
-          : 'size-[min(0.625rem,20cqw)]',
+        nuit ? 'size-[min(0.75rem,26cqw)]' : 'size-[min(0.625rem,20cqw)]',
         teinte(p),
         className,
       )}
     >
-      {periode === 'nuit' ? (
+      {nuit ? (
         <path d="M5 1.2 9.2 8.8H0.8Z" strokeLinejoin="round" {...trait} />
       ) : (
         <circle cx="5" cy="5" r="3.8" {...trait} />
@@ -173,10 +252,10 @@ function Forme({
   )
 }
 
-const ligne = (periode: PeriodeMois, p: PresenceOut | undefined) =>
+const ligne = (l: Moments, periode: string, p: PresenceOut | undefined) =>
   p
-    ? `${NOM[periode]} : ${p.compte} pour ${libelleConsigne(p.minimum, p.maximum)}${p.ecart ? ` (${ecartTexte(p.ecart)})` : ''}`
-    : `${NOM[periode]} : ${RIEN}`
+    ? `${nomDe(l, periode)} : ${p.compte} pour ${libelleConsigne(p.minimum, p.maximum)}${p.ecart ? ` (${ecartTexte(p.ecart)})` : ''}`
+    : `${nomDe(l, periode)} : ${RIEN}`
 
 /** Vue mois (demandes utilisateur du 2026-11-03) : sous le numéro du jour,
  * le matin et le soir en deux ronds ; la NUIT en triangle posé sur la
@@ -194,7 +273,10 @@ export function PointsPresence({
   transmissions,
   veille,
   derniere = false,
+  moments: donnes,
 }: {
+  /** Les moments de l'établissement (le tableau). */
+  moments?: Moments
   presence: PresenceOut[] | undefined
   transmissions?: Omit<Transmissions, 'jour'>
   /** La présence de la veille (colonne d'avant) : sa nuit se pose ici, au
@@ -203,21 +285,30 @@ export function PointsPresence({
   /** Dernière colonne : sa nuit se pose au bord droit, dans sa case. */
   derniere?: boolean
 }) {
+  const lus = useMoments()
   if (!presence) return null
-  const de = (periode: PeriodeMois) =>
-    presence.find((x) => x.periode === periode)
-  const lignes = PERIODES.map((periode) => ligne(periode, de(periode)))
+  const l = donnes ?? lus
+  const de = (periode: string) => presence.find((x) => x.periode === periode)
+  const tableau = momentsDuTableau(l)
+  const jour = momentsDeJour(l)
+  const nuit = nuitsDuTableau(l)[0] as string | undefined
+  // Les moments de jour à intervalles égaux entre les deux nuits (à
+  // l'hôtel : matin 1/3, soir 2/3).
+  const x = (i: number) => (i + 1) / (jour.length + 1)
+  const PASSAGE = passages(l)
+  const lignes = tableau.map((periode) => ligne(l, periode, de(periode)))
   if (transmissions)
-    for (const cle of ['nuitMatin', 'matinSoir', 'soirNuit'] as const) {
-      const e = transmissions[cle]
+    for (const c of ['nuitMatin', 'matinSoir', 'soirNuit'] as const) {
+      const e = transmissions[c]
       if (e)
         lignes.push(
-          `${PASSAGE[cle]} : ${e === 'ok' ? 'assurée' : 'personne pour la faire'}`,
+          `${PASSAGE[c]} : ${e === 'ok' ? 'assurée' : 'personne pour la faire'}`,
         )
     }
-  const nuitAvant = veille?.find((x) => x.periode === 'nuit')
-  if (transmissions && veille)
-    lignes.unshift(`${ligne('nuit', nuitAvant)} (la veille)`)
+  const nuitAvant =
+    nuit === undefined ? undefined : veille?.find((v) => v.periode === nuit)
+  if (transmissions && veille && nuit !== undefined)
+    lignes.unshift(`${ligne(l, nuit, nuitAvant)} (la veille)`)
   const pose = 'absolute top-1/2 z-10 -translate-x-1/2 -translate-y-1/2'
   return (
     <Tip
@@ -233,38 +324,60 @@ export function PointsPresence({
       >
         {transmissions ? (
           <>
-            <Lien etat={transmissions.nuitMatin} place="left-0 right-2/3" />
-            <Lien etat={transmissions.matinSoir} place="left-1/3 right-1/3" />
-            <Lien etat={transmissions.soirNuit} place="left-2/3 right-0" />
-            <Forme
-              periode="matin"
-              p={de('matin')}
-              className={cn(pose, 'left-1/3')}
-            />
-            <Forme
-              periode="soir"
-              p={de('soir')}
-              className={cn(pose, 'left-2/3')}
-            />
-            {veille && (
+            {jour.length > 0 && (
+              <>
+                <Lien etat={transmissions.nuitMatin} de={0} a={x(0)} />
+                <Lien
+                  etat={transmissions.matinSoir}
+                  de={x(0)}
+                  a={x(jour.length - 1)}
+                />
+                <Lien
+                  etat={transmissions.soirNuit}
+                  de={x(jour.length - 1)}
+                  a={1}
+                />
+              </>
+            )}
+            {jour.map((periode, i) => {
+              const p = placeForme(x(i))
+              return (
+                <Forme
+                  key={periode}
+                  periode={periode}
+                  nuit={false}
+                  p={de(periode)}
+                  style={p.style}
+                  className={cn(pose, p.className)}
+                />
+              )
+            })}
+            {veille && nuit !== undefined && (
               <Forme
-                periode="nuit"
+                periode={nuit}
+                nuit
                 p={nuitAvant}
-                data="nuit-veille"
+                data={`${nuit}-veille`}
                 className={cn(pose, 'left-0')}
               />
             )}
-            {derniere && (
+            {derniere && nuit !== undefined && (
               <Forme
-                periode="nuit"
-                p={de('nuit')}
+                periode={nuit}
+                nuit
+                p={de(nuit)}
                 className={cn(pose, 'left-full')}
               />
             )}
           </>
         ) : (
-          PERIODES.map((periode) => (
-            <Forme key={periode} periode={periode} p={de(periode)} />
+          tableau.map((periode) => (
+            <Forme
+              key={periode}
+              periode={periode}
+              nuit={estNuit(l, periode)}
+              p={de(periode)}
+            />
           ))
         )}
       </span>

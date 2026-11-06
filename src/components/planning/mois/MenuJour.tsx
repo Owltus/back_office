@@ -50,6 +50,7 @@ import type {
   Referentiel,
   Salarie,
 } from '#/lib/planning/types.ts'
+import { useMoments } from '#/components/planning/hooks/useMoments.ts'
 
 /** Repos et absences posables sur la case : le motif actuel (posé ici),
  * et la pose d'un clic. Absent quand le jour ne se change pas (absence de
@@ -121,6 +122,7 @@ export function MenuJour({
    * le modifier. Absent : pas de ligne. */
   onSpecifique?: (o: OuvertureSpecifique) => void
 }) {
+  const moments = useMoments()
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState({ left: ouverture.x, top: ouverture.y })
 
@@ -436,7 +438,10 @@ export function MenuJour({
           <span className="flex-1 font-medium">Ouvrir la semaine</span>
         </button>
         {motifs && groupeMotifs('Repos', motifs.repos)}
-        {grouperHoraires(liste.map((c) => c.horaire)).map((g) => (
+        {grouperHoraires(
+          liste.map((c) => c.horaire),
+          moments,
+        ).map((g) => (
           <div key={g.libelle} role="group" aria-label={g.libelle}>
             <div className="-mx-1 my-1 h-px bg-border" />
             <div className="px-2 pt-1 pb-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">

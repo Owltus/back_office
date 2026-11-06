@@ -110,7 +110,7 @@ describe('passation du soir au veilleur', () => {
     })
     const r = gen(p)
     expect(qui(r)).toContain('v@n0')
-    expect(r.passationsManquantes).toEqual([{ jour: 0, cote: 'soir' }])
+    expect(r.passationsManquantes).toEqual([{ jour: 0, cote: 'arrivee' }])
     expect(transmissions(p, r.affectations, [])[0].soirNuit).toBe('manque')
   })
 })
@@ -143,7 +143,7 @@ describe('passation du veilleur au matin', () => {
       nbJours: 2,
     })
     const r = gen(p)
-    expect(r.passationsManquantes).toEqual([{ jour: 0, cote: 'matin' }])
+    expect(r.passationsManquantes).toEqual([{ jour: 0, cote: 'depart' }])
     expect(transmissions(p, r.affectations, [])[1].nuitMatin).toBe('manque')
   })
 
@@ -154,7 +154,7 @@ describe('passation du veilleur au matin', () => {
       consignes: [chiffre(0, 'soir', 1), chiffre(0, 'nuit', 1)],
       nbJours: 1,
     })
-    expect(zonesPassation(p).map((z) => z.cote)).toEqual(['soir'])
+    expect(zonesPassation(p).map((z) => z.cote)).toEqual(['arrivee'])
   })
 
   it('le lundi matin : la passation se fait avec le veilleur du dimanche d’avant', () => {
@@ -207,7 +207,7 @@ describe('une présence, pas un compte de personnes (comme l’oracle)', () => {
     })
     const r = gen(p)
     expect(qui(r).filter((x) => x.endsWith('@n0')).length).toBe(2)
-    expect(r.passationsManquantes).toEqual([{ jour: 0, cote: 'soir' }])
+    expect(r.passationsManquantes).toEqual([{ jour: 0, cote: 'arrivee' }])
   })
 
   it('deux nuits à des heures différentes : la plus tôt fait foi', () => {

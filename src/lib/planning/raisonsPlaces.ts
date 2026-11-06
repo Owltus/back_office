@@ -18,6 +18,8 @@ import { cibleFiche } from '#/lib/planning/coherence.ts'
 import type { LienReglage, PartieFiche } from '#/lib/planning/coherence.ts'
 import type { APourvoirOut } from '#/lib/planning/semaine.ts'
 import { JOURS } from '#/lib/planning/types.ts'
+import { estNuit, MOMENTS_HOTEL, motMoment } from '#/lib/planning/moment.ts'
+import type { Moments } from '#/lib/planning/moment.ts'
 import type { PeriodePresence } from '#/lib/planning/types.ts'
 
 export type Mention =
@@ -430,17 +432,23 @@ export function phraseCommune(regle: string | null | undefined): string | null {
 export const CONSEIL_PERSONNE = 'Prenez un extra ou changez un shift.'
 
 /** « mardi matin », « mardi soir », « la nuit de mardi ». */
-export function momentDuJour(jour: number, periode: PeriodePresence): string {
+export function momentDuJour(
+  jour: number,
+  periode: PeriodePresence,
+  l: Moments = MOMENTS_HOTEL,
+): string {
   const j = JOURS[jour].toLowerCase()
-  return periode === 'nuit' ? `la nuit de ${j}` : `${j} ${periode}`
+  const mot = motMoment(l, periode)
+  return estNuit(l, periode) ? `la ${mot} de ${j}` : `${j} ${mot}`
 }
 
 /** « Il manque 1 personne mardi matin à l'accueil. » */
 export function phrasePlaceAccueil(
   p: Pick<APourvoirOut, 'jour' | 'manquant'> & { moment: PeriodePresence },
+  l: Moments = MOMENTS_HOTEL,
 ): string {
   const n = p.manquant
-  return `Il manque ${n} personne${n > 1 ? 's' : ''} ${momentDuJour(p.jour, p.moment)} à l'accueil.`
+  return `Il manque ${n} personne${n > 1 ? 's' : ''} ${momentDuJour(p.jour, p.moment, l)} à l'accueil.`
 }
 
 export interface PlaceAccueilClaire {
@@ -461,6 +469,7 @@ export function placeAccueilClaire(
     APourvoirOut,
     'jour' | 'manquant' | 'raisons' | 'raison_commune' | 'debut'
   > & { moment: PeriodePresence },
+  l: Moments = MOMENTS_HOTEL,
 ): PlaceAccueilClaire {
   const quelquun = p.raisons.some((r) =>
     estPossible(raisonsClaires(r.salarie_id, r.regles, r.messages)),
@@ -468,12 +477,12 @@ export function placeAccueilClaire(
   const raison = quelquun
     ? null
     : p.debut === ''
-      ? `Aucun horaire ${p.moment === 'nuit' ? 'de nuit' : `du ${p.moment}`} n'est possible à l'accueil.`
+      ? `Aucun horaire ${estNuit(l, p.moment) ? 'de' : 'du'} ${motMoment(l, p.moment)} n'est possible à l'accueil.`
       : !p.raisons.length
         ? "Personne ne peut venir à l'accueil."
         : phraseCommune(p.raison_commune)
   return {
-    phrase: phrasePlaceAccueil(p),
+    phrase: phrasePlaceAccueil(p, l),
     raison,
     conseil: quelquun ? null : CONSEIL_PERSONNE,
   }

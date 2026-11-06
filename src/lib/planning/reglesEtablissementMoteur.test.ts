@@ -16,6 +16,7 @@ import type {
   SalarieSolveur,
 } from '#/lib/planning/modele.ts'
 import { momentPropose } from '#/lib/planning/moment.ts'
+import { lusAvec } from '#/lib/planning/test/momentsTest.ts'
 import {
   droitAuRattrapage,
   journeesDuCalcul,
@@ -439,9 +440,9 @@ describe('limites des moments (moments)', () => {
   it('21:30 est une nuit à 21 h, un soir si la nuit commence à 22 h', () => {
     const h = { debut: '21:30', fin: '23:59', pause: 0 }
     expect(momentPropose(h)).toBe('nuit')
-    expect(
-      momentPropose(h, { ...REGLES_PAR_DEFAUT.moments, nuitDebut: 22 * H }),
-    ).toBe('soir')
+    expect(momentPropose(h, lusAvec({ nuit: { debut_de: 22 * H } }))).toBe(
+      'soir',
+    )
   })
 })
 

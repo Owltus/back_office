@@ -436,6 +436,20 @@ describe('aucun code de contrat ni catégorie lu par le code (lot 1a)', () => {
     expect(lignes(/\.importance\b|importance:/)).toEqual([])
   })
 
+  it('aucun moment écrit dans le code (matin, soir, nuit, middle, lot 2)', () => {
+    expect(
+      lignes(/(?<!Anchor=)['"`](?:matin|soir|nuit|middle)['"`]/, [
+        // Les moments de l'hôtel par défaut (mêmes lignes que la migration).
+        'lib/planning/moment.ts',
+        // Jour ou nuit de l'accueil : la notion de zone (lot 2, A5).
+        'lib/planning/presence.ts',
+        'parametres/PostesPage.tsx',
+        'parametres/BesoinsPage.tsx',
+        'planning/AidePlanningContenu.tsx',
+      ]),
+    ).toEqual([])
+  })
+
   it('les jours du week-end viennent des règles', () => {
     expect(
       lignes(/\[5, ?6\]|jour >= 5|jourDe\(c\) >= 5|has\(5\) \|\||j !== 5/, [

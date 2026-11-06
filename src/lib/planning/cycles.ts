@@ -18,9 +18,15 @@
  */
 
 import type { Creneau } from '#/lib/planning/modele.ts'
+import {
+  deJourAuTableau,
+  estNuit,
+  MOMENTS_HOTEL,
+  momentsDeJour,
+} from '#/lib/planning/moment.ts'
+import type { Moments } from '#/lib/planning/moment.ts'
 import { periodeLibre } from '#/lib/planning/presence.ts'
 import { REGLES_PAR_DEFAUT } from '#/lib/planning/reglesEtablissement.ts'
-import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import { minutes } from '#/lib/planning/temps.ts'
 import type { Horaire, Periode } from '#/lib/planning/types.ts'
 
@@ -48,7 +54,7 @@ export type Cycle = Periode | null
 export function cycleDe(
   horaire: Pick<Horaire, 'periode'> | undefined,
   debut: string,
-  l: RegleEtablissement['moments'] = REGLES_PAR_DEFAUT.moments,
+  l: Moments = MOMENTS_HOTEL,
 ): Cycle {
   return horaire?.periode ?? periodeLibre(debut, l)
 }
@@ -141,14 +147,14 @@ export function trousDuJour(
  * postes passe alors la liste lui-même. */
 export function postesAPresence(
   creneaux: ReadonlyArray<Pick<Creneau, 'poste' | 'presence' | 'accueil'>>,
+  l: Moments = MOMENTS_HOTEL,
 ): Set<string> {
   const r = new Set<string>()
   for (const c of creneaux) {
     // Un candidat de l'accueil n'est pas un besoin : ses trous se comptent
     // sur l'accueil entier (`trousAccueilDuJour`), pas par poste.
     if (c.accueil) continue
-    if (c.presence.includes('matin') || c.presence.includes('soir'))
-      r.add(c.poste)
+    if (c.presence.some((m) => deJourAuTableau(l, m))) r.add(c.poste)
   }
   return r
 }
@@ -190,21 +196,17 @@ export function postesAPresence(
  * rien à tenir (ni matin ni soir demandé). */
 export function plageAccueil(
   candidats: ReadonlyArray<Pick<Creneau, 'debut' | 'fin' | 'presence'>>,
-  demandes: ReadonlySet<'matin' | 'soir' | 'nuit'>,
+  demandes: ReadonlySet<string>,
   nuitVeille: ReadonlyArray<Pick<Creneau, 'debut' | 'fin'>> = [],
+  l: Moments = MOMENTS_HOTEL,
 ): PlageMinutes | null {
-  const premier = demandes.has('matin')
-    ? 'matin'
-    : demandes.has('soir')
-      ? 'soir'
-      : null
-  const dernier = demandes.has('soir')
-    ? 'soir'
-    : demandes.has('matin')
-      ? 'matin'
-      : null
+  // Premier et dernier moments de JOUR demandés, dans l'ordre de la journée
+  // (à l'hôtel : le matin, puis le soir).
+  const jour = momentsDeJour(l).filter((m) => demandes.has(m))
+  const premier = jour[0] ?? null
+  const dernier = jour[jour.length - 1] ?? null
   if (!premier || !dernier) return null
-  const du = (moment: 'matin' | 'soir') => {
+  const du = (moment: string) => {
     const purs = candidats.filter(
       (c) => c.presence.length === 1 && c.presence[0] === moment,
     )
@@ -212,9 +214,9 @@ export function plageAccueil(
       ? purs
       : candidats.filter((c) => c.presence.includes(moment))
   }
-  const nuits = demandes.has('nuit')
-    ? candidats.filter((c) => c.presence.includes('nuit'))
-    : []
+  const nuits = candidats.filter((c) =>
+    c.presence.some((m) => estNuit(l, m) && demandes.has(m)),
+  )
   const ouvrent = du(premier)
   const ferment = du(dernier)
   if (!ouvrent.length && !nuitVeille.length) return null
@@ -244,11 +246,13 @@ export function nuitDeLaVeille<
   jourDuCandidat: (c: C) => number,
   jour: number,
   nuitDemandee: (jour: number) => boolean,
+  l: Moments = MOMENTS_HOTEL,
 ): Array<Pick<Creneau, 'debut' | 'fin'>> {
   const veille = (jour + 6) % 7
   if (!nuitDemandee(veille)) return []
   const nuits = candidats.filter(
-    (c) => jourDuCandidat(c) === veille && c.presence.includes('nuit'),
+    (c) =>
+      jourDuCandidat(c) === veille && c.presence.some((m) => estNuit(l, m)),
   )
   const recul = jour === 0 ? 7 * 24 * 60 : 0
   // Le matin est tenu dès le départ le plus TÔT possible du veilleur (la
@@ -263,11 +267,12 @@ export function nuitDeLaVeille<
  * avec les présences de TOUS les postes de l'accueil du matin et du soir. */
 export function trousAccueilDuJour(
   candidats: ReadonlyArray<Pick<Creneau, 'debut' | 'fin' | 'presence'>>,
-  demandes: ReadonlySet<'matin' | 'soir' | 'nuit'>,
+  demandes: ReadonlySet<string>,
   presences: ReadonlyArray<PresencePoste>,
   nuitVeille: ReadonlyArray<Pick<Creneau, 'debut' | 'fin'>> = [],
+  l: Moments = MOMENTS_HOTEL,
 ): PlageMinutes[] {
-  const plage = plageAccueil(candidats, demandes, nuitVeille)
+  const plage = plageAccueil(candidats, demandes, nuitVeille, l)
   return plage ? trousDuJour([plage], presences) : []
 }
 

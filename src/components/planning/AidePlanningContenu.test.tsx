@@ -46,6 +46,7 @@ vi.mock(
 const { AidePlanningContenu, SECTIONS_FONCTIONNEMENT } =
   await import('#/components/planning/AidePlanningContenu.tsx')
 const { lireRegles } = await import('#/lib/planning/reglesEtablissement.ts')
+const { momentsAvec } = await import('#/lib/planning/test/momentsTest.ts')
 
 afterEach(cleanup)
 
@@ -200,8 +201,6 @@ describe('AidePlanningContenu (aide du bouton ?)', () => {
           jour_isole: 'a_eviter',
           repos_confort: 13 * 60,
           passation_veilleur: false,
-          nuit_debut: 22 * 60,
-          matin_fin_max: 16 * 60,
           journees_contrats: [
             { minutes_hebdo: 35 * 60, durees: [7 * 60], courtes_max: 0 },
             {
@@ -213,6 +212,10 @@ describe('AidePlanningContenu (aide du bouton ?)', () => {
           conge_long: 7,
         },
         modelesContrat: [],
+        moments: momentsAvec({
+          nuit: { debut_de: 22 * 60 },
+          matin: { fin_a: 16 * 60 },
+        }),
       }),
     )
     const contrats = texteDe('contrats')

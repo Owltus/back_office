@@ -61,6 +61,7 @@ import type {
   Referentiel,
 } from '#/lib/planning/types.ts'
 import { cn } from '#/lib/utils.ts'
+import { useMoments } from '#/components/planning/hooks/useMoments.ts'
 
 export type Affiche = (
   posteId: number,
@@ -283,6 +284,7 @@ function LigneGrille({
   affiche: Affiche
   actions: ActionsGrille
 }) {
+  const moments = useMoments()
   const nom = libelleHoraire(ligne)
   const reglages = JOURS.map((_, j) => affiche(poste.id, ligne, j))
   const trop = alerteBesoin(poste, presence(ligne.debut, ligne.fin))
@@ -314,7 +316,9 @@ function LigneGrille({
           <div className="min-w-0 flex-1">
             <div className="truncate font-medium tabular-nums">{nom}</div>
             <div className="text-xs text-muted-foreground">
-              {horaire ? libelleMoment(horaire.periode) : 'Horaire spécifique'}
+              {horaire
+                ? libelleMoment(horaire.periode, moments)
+                : 'Horaire spécifique'}
             </div>
           </div>
           {alertes.length > 0 && (
@@ -667,6 +671,7 @@ function AjoutHoraire({
   aide: string
   onChoisir: (h: Horaire) => void
 }) {
+  const moments = useMoments()
   const [ouvert, setOuvert] = useState(false)
   return (
     <Popover open={ouvert} onOpenChange={setOuvert}>
@@ -706,7 +711,7 @@ function AjoutHoraire({
                     {libelleHoraire(h)}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {libelleMoment(h.periode)}
+                    {libelleMoment(h.periode, moments)}
                   </span>
                 </span>
               </button>

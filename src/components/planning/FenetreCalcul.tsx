@@ -5,6 +5,8 @@ import { Dialog as DialogPrimitive } from 'radix-ui'
 
 import { Button } from '#/components/ui/button.tsx'
 import { cn } from '#/lib/utils.ts'
+import { useMoments } from '#/components/planning/hooks/useMoments.ts'
+import { momentsDuTableau } from '#/lib/planning/moment.ts'
 
 /**
  * Fenêtre du calcul du planning (demande utilisateur du 2026-11-03 : « une
@@ -29,7 +31,6 @@ import { cn } from '#/lib/utils.ts'
 export const LIMITE_SECONDES = 60
 
 const JOURS = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
-const MOMENTS = ['matin', 'soir', 'nuit']
 
 export interface CalculEnCours {
   /** Ce qui est demandé : « Compléter le mois », « Compléter la semaine »
@@ -180,8 +181,11 @@ export function FenetreCalcul({
  * Immobile quand le système demande moins d'animation.
  */
 function SemaineQuiSeTisse({ arret }: { arret: boolean }) {
+  // Les moments du tableau de l'établissement (à l'hôtel : 3).
+  const MOMENTS = momentsDuTableau(useMoments())
+  const n = Math.max(1, MOMENTS.length)
   const x = (j: number) => 20 + j * 40
-  const y = (m: number) => 14 + m * 22
+  const y = (m: number) => 14 + (m * 44) / Math.max(1, n - 1)
   return (
     <svg
       viewBox="0 0 280 86"
@@ -201,7 +205,7 @@ function SemaineQuiSeTisse({ arret }: { arret: boolean }) {
               x2={x(j)}
               y1={y(m) + 4}
               y2={y(m + 1) - 4}
-              style={{ '--k': j * 3 + m } as CSSProperties}
+              style={{ '--k': j * n + m } as CSSProperties}
             />
           ))}
           {MOMENTS.map((moment, m) => (
@@ -211,7 +215,7 @@ function SemaineQuiSeTisse({ arret }: { arret: boolean }) {
               cx={x(j)}
               cy={y(m)}
               r={4}
-              style={{ '--k': j * 3 + m } as CSSProperties}
+              style={{ '--k': j * n + m } as CSSProperties}
             />
           ))}
           <text

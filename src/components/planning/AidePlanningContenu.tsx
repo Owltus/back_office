@@ -58,6 +58,7 @@ import type {
 import { heuresLisibles as h } from '#/lib/planning/temps.ts'
 import type { Horaire, Poste } from '#/lib/planning/types.ts'
 import { listeEt } from '#/lib/planning/affichage.ts'
+import { conditionsEnClair } from '#/lib/planning/moment.ts'
 
 /** Les parties de la page, dans l'ordre du sommaire. */
 export const SECTIONS_FONCTIONNEMENT = [
@@ -686,25 +687,17 @@ export function AidePlanningContenu({
           </p>
           <Tableau
             entetes={['Moment', 'Quand']}
-            lignes={[
-              [
-                'Nuit',
-                `il commence à ${h(M.nuitDebut)} ou plus tard, ou avant ${h(M.nuitFin)}`,
-              ],
-              [
-                'Soir',
-                `il finit à ${h(M.soirFin)} ou plus tard, ou après minuit, ou il commence à ${h(M.soirDebut)} ou plus tard`,
-              ],
-              [
-                'Matin',
-                `il commence avant ${h(M.matinDebutAvant)} et finit à ${h(M.matinFinMax)} au plus tard`,
-              ],
-              [
-                'Middle',
-                'le reste : à cheval sur le matin et le soir. Un middle est un coup de main : il ne compte ni au matin ni au soir de l’accueil, et il est posé s’il reste des heures.',
-              ],
-            ]}
+            lignes={[...M.liste]
+              .sort((a, b) => a.priorite - b.priorite)
+              .map((m) => [
+                m.nom,
+                `${conditionsEnClair(m)}${m.compte_dans_tableau ? '' : '. Hors du tableau : un coup de main, posé s’il reste des heures'}${m.est_nuit ? '. C’est la nuit' : ''}`,
+              ])}
           />
+          <p className="text-muted-foreground">
+            Les moments sont essayés dans cet ordre : le premier qui convient
+            décide.
+          </p>
         </Sous>
         <Sous titre="Horaires courts">
           <p className="text-muted-foreground">

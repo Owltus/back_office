@@ -37,6 +37,8 @@ const service = vi.hoisted(() => ({
   reglerHeuresPoste: vi.fn(),
   enregistrerReglages: vi.fn(),
   enregistrerMomentsHoraires: vi.fn(),
+  enregistrerMoments: vi.fn(),
+  supprimerMoment: vi.fn(),
 }))
 
 vi.mock('#/lib/supabase.ts', () => ({ supabase: {} }))
@@ -92,6 +94,8 @@ beforeEach(() => {
   service.reglerHeuresPoste.mockReset().mockResolvedValue(undefined)
   service.enregistrerReglages.mockReset().mockResolvedValue(undefined)
   service.enregistrerMomentsHoraires.mockReset().mockResolvedValue(undefined)
+  service.enregistrerMoments.mockReset().mockResolvedValue(undefined)
+  service.supprimerMoment.mockReset().mockResolvedValue(undefined)
   baseSimulee()
 })
 afterEach(cleanup)
@@ -645,7 +649,7 @@ describe('Besoins', () => {
       const region = within(screen.getByRole('region', { name: 'Moments' }))
       // Rien à enregistrer tant qu'aucune limite ne change.
       expect(region.queryByRole('button', { name: 'Enregistrer' })).toBeNull()
-      const champ = region.getByRole('textbox', { name: 'La nuit commence à' })
+      const champ = region.getByRole('textbox', { name: 'Nuit commence de' })
       fireEvent.change(champ, { target: { value: '23:30' } })
       fireEvent.blur(champ)
       expect(
@@ -653,12 +657,12 @@ describe('Besoins', () => {
           name: 'Horaires qui changeraient de moment',
         }),
       ).toBeTruthy()
-      expect(service.enregistrerReglages).not.toHaveBeenCalled()
+      expect(service.enregistrerMoments).not.toHaveBeenCalled()
       fireEvent.click(region.getByRole('button', { name: 'Enregistrer' }))
       await waitFor(() =>
-        expect(service.enregistrerReglages).toHaveBeenCalledWith(
-          expect.objectContaining({ nuit_debut: 23 * 60 + 30 }),
-        ),
+        expect(service.enregistrerMoments).toHaveBeenCalledWith([
+          expect.objectContaining({ id: 'nuit', debut_de: 23 * 60 + 30 }),
+        ]),
       )
     })
 

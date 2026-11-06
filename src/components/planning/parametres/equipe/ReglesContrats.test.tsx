@@ -20,6 +20,8 @@ const service = vi.hoisted(() => ({
   ajouterModeleContrat: vi.fn(),
   supprimerModeleContrat: vi.fn(),
   enregistrerMomentsHoraires: vi.fn(),
+  enregistrerMoments: vi.fn(),
+  supprimerMoment: vi.fn(),
 }))
 
 vi.mock('#/lib/supabase.ts', () => ({ supabase: {} }))
@@ -54,6 +56,8 @@ beforeEach(() => {
   service.enregistrerReglages.mockReset().mockResolvedValue(undefined)
   service.enregistrerModeleContrat.mockReset().mockResolvedValue(undefined)
   service.enregistrerMomentsHoraires.mockReset().mockResolvedValue(undefined)
+  service.enregistrerMoments.mockReset().mockResolvedValue(undefined)
+  service.supprimerMoment.mockReset().mockResolvedValue(undefined)
   service.ajouterModeleContrat.mockReset().mockResolvedValue(undefined)
   service.supprimerModeleContrat.mockReset().mockResolvedValue(undefined)
 })
@@ -243,26 +247,44 @@ describe('Règles des contrats : relecture adverse du 2026-11-05', () => {
 })
 
 describe('Moments', () => {
-  it('aperçu avant l’envoi, puis limites et moments des horaires', async () => {
+  it('aperçu avant l’envoi, puis moments et moments des horaires', async () => {
     monter(<SectionMoments referentiel={ref} modifiable />)
-    const champ = screen.getByRole('textbox', { name: 'La nuit commence à' })
+    const champ = screen.getByRole('textbox', { name: 'Nuit commence de' })
     fireEvent.change(champ, { target: { value: '23:30' } })
     fireEvent.blur(champ)
     const liste = await screen.findByRole('list', {
       name: 'Horaires qui changeraient de moment',
     })
     expect(liste.textContent).toMatch(/Nuit/)
-    expect(service.enregistrerReglages).not.toHaveBeenCalled()
+    expect(service.enregistrerMoments).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
     await waitFor(() =>
       expect(service.enregistrerMomentsHoraires).toHaveBeenCalledTimes(1),
     )
-    expect(service.enregistrerReglages.mock.calls[0][0].nuit_debut).toBe(
-      23 * 60 + 30,
-    )
+    expect(service.enregistrerMoments.mock.calls[0][0]).toEqual([
+      expect.objectContaining({ id: 'nuit', debut_de: 23 * 60 + 30 }),
+    ])
+    expect(service.enregistrerReglages).not.toHaveBeenCalled()
     expect(
       service.enregistrerMomentsHoraires.mock.calls[0][0].length,
     ).toBeGreaterThan(0)
+  })
+
+  it('créer un moment, puis l’enregistrer', async () => {
+    monter(<SectionMoments referentiel={ref} modifiable />)
+    fireEvent.change(
+      screen.getByRole('textbox', { name: 'Nom du nouveau moment' }),
+      { target: { value: 'Midi' } },
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }))
+    expect(screen.getByRole('listitem', { name: 'Midi' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+    await waitFor(() =>
+      expect(service.enregistrerMoments).toHaveBeenCalledTimes(1),
+    )
+    expect(service.enregistrerMoments.mock.calls[0][0]).toEqual([
+      expect.objectContaining({ id: 'midi', nom: 'Midi' }),
+    ])
   })
 
   it('lecture seule : pas de bouton, champs grisés', () => {
@@ -270,7 +292,7 @@ describe('Moments', () => {
     expect(screen.queryByRole('button', { name: 'Enregistrer' })).toBeNull()
     expect(
       screen
-        .getByRole('textbox', { name: 'La nuit commence à' })
+        .getByRole('textbox', { name: 'Nuit commence de' })
         .hasAttribute('disabled'),
     ).toBe(true)
   })

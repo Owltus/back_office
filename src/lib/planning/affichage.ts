@@ -3,6 +3,8 @@
  */
 
 import { estJourneeEtoile } from '#/lib/planning/etoile.ts'
+import { MOMENTS_HOTEL, momentDe, rangMoment } from '#/lib/planning/moment.ts'
+import type { Moments } from '#/lib/planning/moment.ts'
 import {
   estJourWeekend,
   REGLES_PAR_DEFAUT,
@@ -148,19 +150,24 @@ export function texteSur(couleur: string): string {
  * 2026-10-28 : « bien carré, par couleur, par période »). Depuis le
  * 2026-10-31, un horaire n'a plus de code : il se lit par ses heures et
  * son moment. */
-export const FAMILLES: ReadonlyArray<{
+export function familles(l: Moments = MOMENTS_HOTEL): ReadonlyArray<{
   periode: Periode | null
   libelle: string
-}> = [
-  { periode: 'matin', libelle: 'Matin' },
-  { periode: 'middle', libelle: 'Middle' },
-  { periode: 'soir', libelle: 'Soir' },
-  { periode: 'nuit', libelle: 'Nuit' },
-  { periode: null, libelle: 'À part' },
-]
+}> {
+  return [
+    ...l.liste.map((m) => ({ periode: m.id, libelle: m.nom })),
+    { periode: null, libelle: 'À part' },
+  ]
+}
 
-const rangFamille = (p: Periode | null | undefined) =>
-  FAMILLES.findIndex((f) => f.periode === (p ?? null))
+/** Les moments de l'hôtel (données de test, aide). */
+export const FAMILLES = familles()
+
+const rangFamille = (p: Periode | null | undefined, l: Moments) => {
+  if (p == null) return l.liste.length
+  const r = rangMoment(l, p)
+  return r < 0 ? l.liste.length : r
+}
 
 /** Heure de début sur une journée de travail : minuit à 5 h vient APRÈS
  * 23 h (une nuit qui commence à minuit suit celle de 23 h). */
@@ -173,10 +180,10 @@ const debutDansLaJournee = (debut: string) => {
  * plus court au plus long. */
 export function trierHoraires<
   T extends Pick<Horaire, 'id' | 'periode' | 'debut' | 'fin'>,
->(horaires: readonly T[]): T[] {
+>(horaires: readonly T[], l: Moments = MOMENTS_HOTEL): T[] {
   return [...horaires].sort(
     (a, b) =>
-      rangFamille(a.periode) - rangFamille(b.periode) ||
+      rangFamille(a.periode, l) - rangFamille(b.periode, l) ||
       debutDansLaJournee(a.debut) - debutDansLaJournee(b.debut) ||
       dureeHoraire(a.debut, a.fin) - dureeHoraire(b.debut, b.fin) ||
       a.id - b.id,
@@ -205,13 +212,17 @@ function heureEnLettres(h: string): string {
  * inventer depuis le 2026-10-31). */
 export function nomHoraire(
   h: Pick<Horaire, 'debut' | 'fin' | 'periode'>,
+  l: Moments = MOMENTS_HOTEL,
 ): string {
-  return `${libelleMoment(h.periode)} de ${heureEnLettres(h.debut)} à ${heureEnLettres(h.fin)}`
+  return `${libelleMoment(h.periode, l)} de ${heureEnLettres(h.debut)} à ${heureEnLettres(h.fin)}`
 }
 
 /** Libellé d'un moment (« Matin »…), « À part » sans moment. */
-export function libelleMoment(p: Periode | null | undefined): string {
-  return FAMILLES[rangFamille(p)]?.libelle ?? 'À part'
+export function libelleMoment(
+  p: Periode | null | undefined,
+  l: Moments = MOMENTS_HOTEL,
+): string {
+  return momentDe(l, p)?.nom ?? 'À part'
 }
 
 export { momentPropose } from '#/lib/planning/moment.ts'
@@ -221,12 +232,20 @@ export function grouperHoraires<
   T extends Pick<Horaire, 'id' | 'periode' | 'debut' | 'fin'>,
 >(
   horaires: readonly T[],
+  l: Moments = MOMENTS_HOTEL,
 ): Array<{ periode: Periode | null; libelle: string; horaires: T[] }> {
-  const tries = trierHoraires(horaires)
-  return FAMILLES.map((f) => ({
-    ...f,
-    horaires: tries.filter((h) => (h.periode ?? null) === f.periode),
-  })).filter((g) => g.horaires.length > 0)
+  const tries = trierHoraires(horaires, l)
+  const connus = new Set(l.liste.map((m) => m.id))
+  return familles(l)
+    .map((f) => ({
+      ...f,
+      horaires: tries.filter((h) =>
+        f.periode === null
+          ? h.periode == null || !connus.has(h.periode)
+          : h.periode === f.periode,
+      ),
+    }))
+    .filter((g) => g.horaires.length > 0)
 }
 
 /** Postes proposés dans la fiche d'un membre de cette catégorie. */

@@ -11,7 +11,7 @@
 
 import { tientLaNuit } from '#/lib/planning/presence.ts'
 import { useState } from 'react'
-import { Moon, Sun, Sunset } from 'lucide-react'
+import type { Sun } from 'lucide-react'
 
 import { Compteur } from '#/components/planning/parametres/reglages/controles.tsx'
 import {
@@ -20,6 +20,10 @@ import {
   PopoverTrigger,
 } from '#/components/ui/popover.tsx'
 import { Button } from '#/components/ui/button.tsx'
+import { useMoments } from '#/components/planning/hooks/useMoments.ts'
+import { iconeDe } from '#/components/planning/semaine/Presence.tsx'
+import { momentDe, momentsDuTableau } from '#/lib/planning/moment.ts'
+import type { Moments } from '#/lib/planning/moment.ts'
 import { listeEt } from '#/lib/planning/affichage.ts'
 import {
   clePresence,
@@ -39,15 +43,19 @@ export interface BornesAccueil {
   maximum: number | null
 }
 
-export const PERIODES: ReadonlyArray<{
+/** Les lignes du tableau : les moments du tableau de l'établissement, dans
+ * l'ordre de la journée (à l'hôtel : matin, soir, nuit). */
+export function periodesDuTableau(l: Moments): ReadonlyArray<{
   periode: Periode
   libelle: string
   Icone: typeof Sun
-}> = [
-  { periode: 'matin', libelle: 'Matin', Icone: Sun },
-  { periode: 'soir', libelle: 'Soir', Icone: Sunset },
-  { periode: 'nuit', libelle: 'Nuit', Icone: Moon },
-]
+}> {
+  return momentsDuTableau(l).map((p) => ({
+    periode: p,
+    libelle: momentDe(l, p)?.nom ?? p,
+    Icone: iconeDe(l, p),
+  }))
+}
 
 export function TableauAccueil({
   postes,
@@ -60,6 +68,7 @@ export function TableauAccueil({
   affiche: (jour: number, periode: Periode) => BornesAccueil
   regler: (jour: number, periode: Periode, b: BornesAccueil) => void
 }) {
+  const moments = useMoments()
   const jour = postes.filter((p) => p.presence && !p.ferme).map((p) => p.nom)
   const nuit = postes.filter((p) => tientLaNuit(p)).map((p) => p.nom)
 
@@ -106,7 +115,7 @@ export function TableauAccueil({
             </tr>
           </thead>
           <tbody>
-            {PERIODES.map(({ periode, libelle, Icone }) => (
+            {periodesDuTableau(moments).map(({ periode, libelle, Icone }) => (
               <tr key={periode} className="border-t">
                 <th
                   scope="row"

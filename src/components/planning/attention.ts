@@ -19,11 +19,15 @@ import {
 import type { RaisonClaire } from '#/lib/planning/raisonsPlaces.ts'
 import { POSTE_ID_ACCUEIL } from '#/lib/planning/semaine.ts'
 import type { EquipeOut, SemaineOut } from '#/lib/planning/semaine.ts'
+import { NOM_ZONE_ACCUEIL, tientLaNuit } from '#/lib/planning/presence.ts'
 import {
-  NOM_ZONE_ACCUEIL,
-  ORDRE_PERIODES,
-  tientLaNuit,
-} from '#/lib/planning/presence.ts'
+  estNuit,
+  leMoment,
+  MOMENTS_HOTEL,
+  momentDe,
+  rangAuTableau,
+} from '#/lib/planning/moment.ts'
+import type { Moments } from '#/lib/planning/moment.ts'
 import {
   modeleDe,
   REGLES_PAR_DEFAUT,
@@ -262,7 +266,9 @@ export function pointsAttention(
         t.poste_id === POSTE_ID_ACCUEIL
           ? postes
               .filter((p) =>
-                moment === 'nuit' ? tientLaNuit(p) : p.presence && !p.ferme,
+                estNuit(regles.moments, moment)
+                  ? tientLaNuit(p)
+                  : p.presence && !p.ferme,
               )
               .map((p) => p.id)
           : [t.poste_id]
@@ -397,7 +403,8 @@ export function pointsAttention(
   presence.sort(
     (a, b) =>
       a.date.localeCompare(b.date) ||
-      ORDRE_PERIODES[a.periode] - ORDRE_PERIODES[b.periode],
+      rangAuTableau(regles.moments, a.periode) -
+        rangAuTableau(regles.moments, b.periode),
   )
   // Tri stable : dans un jour, l'ordre réel de l'analyse (une nuit qui passe
   // minuit reste après le soir).
@@ -557,28 +564,27 @@ export function joursDesPlaces(dates: readonly string[]): string {
   return enListe(l.map(nom))
 }
 
-const MOMENT: Record<PeriodePresence, string> = {
-  matin: 'le matin',
-  soir: 'le soir',
-  nuit: 'la nuit',
-}
-
 /** Un écart à la consigne d'un cycle, en une phrase : « Il manque 1
  * personne le matin mardi », « 1 personne de trop le soir mardi ».
  * `jour` : le nom du jour (`nommerJours`). */
 export function phraseCycle(
   e: Pick<EcartPresence, 'periode' | 'ecart'>,
   jour: string,
+  l: Moments = MOMENTS_HOTEL,
 ): string {
   const n = pluriel(Math.abs(e.ecart), 'personne')
   return e.ecart < 0
-    ? `Il manque ${n} ${MOMENT[e.periode]} ${jour}`
-    : `${n} de trop ${MOMENT[e.periode]} ${jour}`
+    ? `Il manque ${n} ${leMoment(l, e.periode)} ${jour}`
+    : `${n} de trop ${leMoment(l, e.periode)} ${jour}`
 }
 
 /** « Soir mardi 3 : arrivées étalées de 14 h 30 à 16 h 15, une personne
  * arrive sans relève ». Règle 17 du PRD (2026-11-03). */
-export function phraseEquipe(e: EquipeOut, jour: string): string {
+export function phraseEquipe(
+  e: EquipeOut,
+  jour: string,
+  l: Moments = MOMENTS_HOTEL,
+): string {
   const parties: string[] = []
   if (e.arrivees)
     parties.push(
@@ -594,7 +600,7 @@ export function phraseEquipe(e: EquipeOut, jour: string): string {
         ? 'une personne arrive sans relève'
         : `${e.sans_releve} personnes arrivent sans relève`,
     )
-  const moment = e.moment === 'matin' ? 'Matin' : 'Soir'
+  const moment = momentDe(l, e.moment)?.nom ?? e.moment
   return `${moment} ${jour} : ${parties.join(', ')}`
 }
 
@@ -606,8 +612,12 @@ export function heureParlee(h: string): string {
 }
 
 /** « Réception mardi : personne de 15 h à 16 h ». */
-export function phraseTrou(t: TrouAttention, jour: string): string {
-  if (t.equipe) return phraseEquipe(t.equipe, jour)
+export function phraseTrou(
+  t: TrouAttention,
+  jour: string,
+  l: Moments = MOMENTS_HOTEL,
+): string {
+  if (t.equipe) return phraseEquipe(t.equipe, jour, l)
   if (t.releve)
     return `Relève ${jour} : l'équipe du matin et celle de l'après-midi ne se croisent pas`
   // `poste_id` 0 : trou de l'accueil entier, Réception et Club ensemble

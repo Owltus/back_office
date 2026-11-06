@@ -56,6 +56,17 @@ import {
   repartit,
 } from '#/lib/planning/reglesEtablissement.ts'
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
+import {
+  deJourAuTableau,
+  estNuit,
+  MOMENTS_HOTEL,
+  momentsDe,
+  momentsDeJour,
+  pairesDeJour,
+  premierMoment,
+  rangMoment,
+} from '#/lib/planning/moment.ts'
+import type { Moments } from '#/lib/planning/moment.ts'
 import type {
   AffectationSolveur,
   Creneau,
@@ -633,7 +644,7 @@ export function pireMoral(
     POIDS_WEEKEND_LIBRE +
     2 * POIDS_MOMENT_EN_TROP +
     2 * R.repos.momentArriereJours * POIDS_MOMENT_ARRIERE +
-    (c.moment === 'nuit'
+    (estNuit(R.moments, c.moment)
       ? 6 * POIDS_NUIT_AFFILEE + 2 * POIDS_REPRISE_APRES_NUIT
       : POIDS_REPRISE_APRES_NUIT) +
     POIDS_RETOUR_SIXIEME +
@@ -646,7 +657,8 @@ export function pireMoral(
     POIDS_EQUIPE_DEPART +
     POIDS_RELEVE_CHACUN +
     // Un veilleur ajouté peut manquer sa passation des deux côtés.
-    (c.presence.includes('nuit') && R.passations.passationVeilleur
+    (c.presence.some((q) => estNuit(R.moments, q)) &&
+    R.passations.passationVeilleur
       ? 2 * POIDS_PASSATION
       : 0)
   )
@@ -789,8 +801,9 @@ export function pireCoutRemplir(
     POIDS_MINEUR_FERIE +
     presenceLaPlusChere +
     EQUITE_MAX_PAR_SHIFT +
-    // Arriver après l'ouverture (2026-11-05), au plus.
-    (c.moment === 'matin' && c.accueil
+    // Arriver après l'ouverture (2026-11-05), au plus : le premier moment
+    // de jour du tableau (à l'hôtel, le matin).
+    (c.moment === premierMoment(R.moments) && c.accueil
       ? POIDS_ARRIVEE_MATIN_MINUTE * ARRIVEE_MATIN_MAX
       : 0) +
     POIDS_DEJA_PROPOSE +
@@ -804,8 +817,9 @@ export function pireCoutRemplir(
 export function coutArriveeMatin(
   c: Creneau,
   ouvertureDe: ReadonlyMap<string, number>,
+  l: Moments = MOMENTS_HOTEL,
 ): number {
-  if (c.moment !== 'matin' || !c.accueil) return 0
+  if (c.moment !== premierMoment(l) || !c.accueil) return 0
   const o = ouvertureDe.get(`${c.poste}|${jourDe(c)}`)
   if (o === undefined) return 0
   const retard = Math.min(ARRIVEE_MATIN_MAX, Math.max(0, c.debut - o))
@@ -980,11 +994,15 @@ export interface Trou {
 }
 
 /** Une passation avec le veilleur : le jour où la nuit est écrite, et le
- * côté (le soir qui lui passe la main, ou le matin qui la reprend). */
+ * côté (`arrivee` : le dernier moment de jour lui passe la main ;
+ * `depart` : le premier moment de jour la reprend). */
 export interface Passation {
   jour: number
-  cote: 'soir' | 'matin'
+  cote: CotePassation
 }
+
+/** Côté d'une passation avec la nuit. */
+export type CotePassation = 'arrivee' | 'depart'
 
 /** Le résultat du générateur, avec les trous entre équipes restés. */
 export type ResultatGeneration = Resultat & {
@@ -1336,7 +1354,7 @@ export function construire(
   )
   /** Le surplus de nuit d'un manque ou d'un trou de ce palier (D8). */
   const nuitDe = (cs: Creneau[], rang: number) =>
-    cs.some((c) => !c.ferme && c.presence.includes('nuit'))
+    cs.some((c) => !c.ferme && c.presence.some((q) => estNuit(R.moments, q)))
       ? 2 * pl.extraNuit(rang)
       : 0
   const coutsMinimum = comptent.map((cs) => {
@@ -1530,7 +1548,7 @@ export function construire(
     // calcul. Le jour reste souple (D8). `accueil.personnesNuit` n'est pas
     // lu ici : le chiffre de la nuit DIT déjà combien de personnes la nuit
     // (un plafond à part le contredirait, deux veilleurs demandés).
-    if (k.periode === 'nuit') {
+    if (estNuit(R.moments, k.periode)) {
       const poses = comptent[i].reduce(
         (t, c) =>
           t + p.salaries.filter((s) => imposees.has(cle(s.id, c.id))).length,
@@ -2307,7 +2325,9 @@ export function construire(
         // `weekend()` de la règle 4 ; la veille du week-end réglé).
         siens
           .filter(
-            (c) => jourDe(c) === jourVeilleWeekend(R) && c.moment === 'nuit',
+            (c) =>
+              jourDe(c) === jourVeilleWeekend(R) &&
+              estNuit(R.moments, c.moment),
           )
           .map(xv),
       )
@@ -2424,7 +2444,7 @@ export function construire(
     for (const [k, v] of x) {
       const c = creneaux.get(scinder(k)[1])
       if (!c) continue
-      const cout = coutArriveeMatin(c, ouvertureDe)
+      const cout = coutArriveeMatin(c, ouvertureDe, R.moments)
       if (cout > 0) m.cout(cout, v)
     }
   }
@@ -2522,7 +2542,7 @@ function equite(
     lineaires.push([(c) => c.matinTot, (s) => s.equiteAvant.matinsTot])
   if (repartit(R, 'nuits'))
     lineaires.push([
-      (c) => c.moment === 'nuit',
+      (c) => estNuit(R.moments, c.moment),
       (s) => s.equiteAvant.nuits ?? 0,
     ])
   for (const membres of groupes.values()) {
@@ -2750,10 +2770,6 @@ function sommeDe(m: Modele, termes: Terme[]): Terme[] {
 
 const negatifs = (t: Terme[]): Terme[] => t.map(([c, v]) => [-c, v] as Terme)
 
-/** Rang d'un moment dans la journée : une semaine stable va vers plus tard
- * (règle 6 du PRD : du matin vers le soir se supporte mieux que l'inverse). */
-const RANG_MOMENT = { matin: 0, middle: 1, soir: 2, nuit: 3 } as const
-
 /**
  * Règles morales d'une semaine `k` d'une personne (PRD, partie 4) :
  *   - 8 (confort) : un jour de semaine de repos la semaine d'avant devient
@@ -2794,7 +2810,7 @@ function reglesMoralesSemaine(
     nuitVendredi ??= sommeDe(
       m,
       siens
-        .filter((c) => jourDe(c) === veille && c.moment === 'nuit')
+        .filter((c) => jourDe(c) === veille && estNuit(R.moments, c.moment))
         .map((c) => [1, xv(c)] as Terme),
     )
     return [
@@ -2872,7 +2888,10 @@ function reglesMoralesSemaine(
   for (const c of siens) {
     const j = jourDe(c)
     if (c.moment === null || !dans.has(j)) continue
-    const r = RANG_MOMENT[c.moment]
+    // Rang d'un moment dans la journée (`ordre`) : une semaine stable va
+    // vers plus tard (règle 6 du PRD : du matin vers le soir se supporte
+    // mieux que l'inverse).
+    const r = rangMoment(R.moments, c.moment)
     const duJour = parRang.get(j) ?? new Map<number, Terme[]>()
     parRang.set(j, duJour)
     duJour.set(r, [...(duJour.get(r) ?? []), [1, xv(c)]])
@@ -3018,7 +3037,7 @@ function reglesMoralesSuite(
   // Règle 7 : les nuits.
   const nuits = new Map<number, Terme[]>()
   for (const c of siens) {
-    if (c.moment !== 'nuit') continue
+    if (!estNuit(R.moments, c.moment)) continue
     const j = jourDe(c)
     nuits.set(j, [...(nuits.get(j) ?? []), [1, xv(c)]])
   }
@@ -3263,12 +3282,11 @@ function trousEntreEquipes(
 ): Array<Trou & { v: string }> {
   // Postes à part comptés (un besoin `b…` au matin ou au soir) ; un
   // candidat de l'accueil n'en fait pas un (ses trous sont plus bas).
+  const L = momentsDe(p)
   const postes = new Set(
     p.creneaux
       .filter(
-        (c) =>
-          !c.accueil &&
-          (c.presence.includes('matin') || c.presence.includes('soir')),
+        (c) => !c.accueil && c.presence.some((q) => deJourAuTableau(L, q)),
       )
       .map((c) => c.poste),
   )
@@ -3314,7 +3332,7 @@ function trousEntreEquipes(
     const tenus = p.creneaux.filter((c) => postesAccueil.has(c.poste))
     const nuitDemandee = (j: number) =>
       p.consignes.some(
-        (k) => k.jour === j && k.periode === 'nuit' && k.minimum > 0,
+        (k) => k.jour === j && estNuit(L, k.periode) && k.minimum > 0,
       )
     const jours = [...new Set(candidats.map(jourDe))].sort((a, b) => a - b)
     for (const jour of jours) {
@@ -3326,17 +3344,18 @@ function trousEntreEquipes(
       const plage = plageAccueil(
         candidats.filter((c) => jourDe(c) === jour),
         demandes,
-        nuitDeLaVeille(candidats, jourDe, jour, nuitDemandee),
+        nuitDeLaVeille(candidats, jourDe, jour, nuitDemandee, L),
+        L,
       )
       if (!plage) continue
       // Personne seule : jusqu'à l'arrivée possible la plus TÔT du veilleur
       // (relecture du 2026-11-05) ; ensuite, un veilleur seul est la règle
       // (un seul veilleur la nuit), il ne se paie pas.
-      const nuitsDuJour = demandes.has('nuit')
-        ? candidats.filter(
-            (c) => jourDe(c) === jour && c.presence.includes('nuit'),
-          )
-        : []
+      const nuitsDuJour = candidats.filter(
+        (c) =>
+          jourDe(c) === jour &&
+          c.presence.some((q) => estNuit(L, q) && demandes.has(q)),
+      )
       const finSeul = nuitsDuJour.length
         ? Math.min(...nuitsDuJour.map((c) => c.debut))
         : plage.fin
@@ -3497,9 +3516,9 @@ function passationsVeilleur(
 
 /** Une zone de passation avec le veilleur (`zonesPassation`). */
 export interface ZonePassation {
-  /** Jour où la nuit est écrite (-1 : le dimanche d'avant, côté matin). */
+  /** Jour où la nuit est écrite (-1 : le dimanche d'avant, côté départ). */
   jour: number
-  cote: 'soir' | 'matin'
+  cote: CotePassation
   /** Créneaux de nuit de l'accueil de ce jour (vide pour le dimanche
    * d'avant, qui est `veille`). */
   nuits: Creneau[]
@@ -3525,21 +3544,32 @@ export function zonesPassation(
 ): ZonePassation[] {
   // Règle de l'établissement : sans passation avec le veilleur, rien.
   if (!(p.regles ?? REGLES_PAR_DEFAUT).passations.passationVeilleur) return []
+  const L = momentsDe(p)
+  // Le premier moment de jour reprend la nuit, le dernier la lui passe (à
+  // l'hôtel : le matin et le soir).
+  const jourDuTableau = momentsDeJour(L)
+  const premier = jourDuTableau[0] ?? null
+  const dernier = jourDuTableau[jourDuTableau.length - 1] ?? null
+  const deNuit = (c: Creneau) => c.presence.some((q) => estNuit(L, q))
   const postesAccueil = new Set(
     p.creneaux.filter((c) => c.accueil).map((c) => c.poste),
   )
   const deJour = p.creneaux.filter(
-    (c) => postesAccueil.has(c.poste) && !c.presence.includes('nuit'),
+    (c) => postesAccueil.has(c.poste) && !deNuit(c),
   )
-  const demande = (j: number, periode: 'matin' | 'soir') =>
+  const demande = (j: number, periode: string | null) =>
+    periode !== null &&
     p.consignes.some(
       (k) => k.jour === j && k.periode === periode && k.minimum > 0,
     )
   const matinsDe = (j: number) =>
-    deJour.filter((c) => jourDe(c) === j && c.presence.includes('matin'))
+    deJour.filter(
+      (c) =>
+        jourDe(c) === j && premier !== null && c.presence.includes(premier),
+    )
   const r: ZonePassation[] = []
   const veilles = p.veilleDuLundi ?? []
-  if (veilles.length && demande(0, 'matin')) {
+  if (veilles.length && demande(0, premier)) {
     const matins = matinsDe(0)
     const veille = {
       debut: Math.min(...veilles.map((c) => c.debut)),
@@ -3548,7 +3578,7 @@ export function zonesPassation(
     if (matins.length)
       r.push({
         jour: -1,
-        cote: 'matin',
+        cote: 'depart',
         nuits: [],
         veille,
         relais: (n) => matins.filter((c) => c.debut <= n.fin),
@@ -3557,29 +3587,27 @@ export function zonesPassation(
   }
   for (let jour = 0; jour < p.nbJours; jour++) {
     const nuits = p.creneaux.filter(
-      (c) =>
-        postesAccueil.has(c.poste) &&
-        c.presence.includes('nuit') &&
-        jourDe(c) === jour,
+      (c) => postesAccueil.has(c.poste) && deNuit(c) && jourDe(c) === jour,
     )
     if (!nuits.length) continue
     const soirs = deJour.filter(
-      (c) => jourDe(c) === jour && c.presence.includes('soir'),
+      (c) =>
+        jourDe(c) === jour && dernier !== null && c.presence.includes(dernier),
     )
-    if (soirs.length && demande(jour, 'soir'))
+    if (soirs.length && demande(jour, dernier))
       r.push({
         jour,
-        cote: 'soir',
+        cote: 'arrivee',
         nuits,
         veille: null,
         relais: (n) => soirs.filter((c) => c.fin >= n.debut),
         avant: (n) => nuits.filter((x) => x.debut < n.debut),
       })
     const matins = matinsDe(jour + 1)
-    if (matins.length && demande(jour + 1, 'matin'))
+    if (matins.length && demande(jour + 1, premier))
       r.push({
         jour,
-        cote: 'matin',
+        cote: 'depart',
         nuits,
         veille: null,
         relais: (n) => matins.filter((c) => c.debut <= n.fin),
@@ -3668,7 +3696,7 @@ function equipesSynchro(
         )
       }
   }
-  for (const { matins, soirs, releve } of equipesAccueil(p)) {
+  for (const { avant: matins, apres: soirs, releve } of equipesAccueil(p)) {
     etalement(soirs, (c) => c.debut, POIDS_EQUIPE_ARRIVEE)
     etalement(soirs, (c) => c.fin, POIDS_EQUIPE_DEPART)
     if (!releve || R <= 0) continue
@@ -3697,48 +3725,57 @@ function equipesSynchro(
   }
 }
 
-/** Les équipes de l'accueil, jour par jour (règle 17) : les créneaux du
- * matin pur et du soir pur des postes de l'accueil du jour (pas la nuit,
- * pas le middle), et si la relève se cherche ce jour-là (matin et soir
- * demandés). */
+/** Les équipes de l'accueil, jour par jour et par paire de moments de jour
+ * qui se suivent (règle 17) : les créneaux du moment d'avant pur
+ * (`avant`, à l'hôtel le matin) et de celui d'après pur (`apres`, le soir)
+ * des postes de l'accueil du jour (pas la nuit, pas le middle), et si la
+ * relève se cherche ce jour-là (les deux moments demandés). */
 export function equipesAccueil(
-  p: Pick<Probleme, 'creneaux' | 'consignes' | 'nbJours'>,
+  p: Pick<Probleme, 'creneaux' | 'consignes' | 'nbJours'> &
+    Partial<Pick<Probleme, 'regles'>>,
 ): Array<{
   jour: number
-  matins: Creneau[]
-  soirs: Creneau[]
+  moments: [string, string]
+  avant: Creneau[]
+  apres: Creneau[]
   releve: boolean
 }> {
+  const L = momentsDe(p)
   const postesJour = new Set(
     p.creneaux
-      .filter((c) => c.accueil && !c.presence.includes('nuit'))
+      .filter((c) => c.accueil && !c.presence.some((q) => estNuit(L, q)))
       .map((c) => c.poste),
   )
-  const pur = (c: Creneau, moment: 'matin' | 'soir') =>
+  const pur = (c: Creneau, moment: string) =>
     c.presence.length === 1 && c.presence[0] === moment
-  const demande = (j: number, periode: 'matin' | 'soir') =>
+  const demande = (j: number, periode: string) =>
     p.consignes.some(
       (c) => c.jour === j && c.periode === periode && c.minimum > 0,
     )
   const r: Array<{
     jour: number
-    matins: Creneau[]
-    soirs: Creneau[]
+    moments: [string, string]
+    avant: Creneau[]
+    apres: Creneau[]
     releve: boolean
   }> = []
+  const paires = pairesDeJour(L)
   for (let jour = 0; jour < p.nbJours; jour++) {
     const duJour = p.creneaux.filter(
       (c) => postesJour.has(c.poste) && jourDe(c) === jour,
     )
-    const matins = duJour.filter((c) => pur(c, 'matin'))
-    const soirs = duJour.filter((c) => pur(c, 'soir'))
-    if (!matins.length && !soirs.length) continue
-    r.push({
-      jour,
-      matins,
-      soirs,
-      releve: demande(jour, 'matin') && demande(jour, 'soir'),
-    })
+    for (const [a, b] of paires) {
+      const avant = duJour.filter((c) => pur(c, a))
+      const apres = duJour.filter((c) => pur(c, b))
+      if (!avant.length && !apres.length) continue
+      r.push({
+        jour,
+        moments: [a, b],
+        avant,
+        apres,
+        releve: demande(jour, a) && demande(jour, b),
+      })
+    }
   }
   return r
 }
@@ -3748,7 +3785,8 @@ export function equipesAccueil(
  * chevauchent ; les quarts d'heure (grille absolue) du chevauchement
  * possible. Partagé avec l'oracle. */
 export function zonesReleve(
-  p: Pick<Probleme, 'creneaux' | 'consignes' | 'nbJours' | 'releveMinutes'>,
+  p: Pick<Probleme, 'creneaux' | 'consignes' | 'nbJours' | 'releveMinutes'> &
+    Partial<Pick<Probleme, 'regles'>>,
 ): Array<{
   jour: number
   quarts: number[]
@@ -3757,16 +3795,17 @@ export function zonesReleve(
 }> {
   const duree = p.releveMinutes ?? 0
   if (duree <= 0) return []
-  const demande = (j: number, periode: 'matin' | 'soir') =>
+  const L = momentsDe(p)
+  const demande = (j: number, periode: string) =>
     p.consignes.some(
       (c) => c.jour === j && c.periode === periode && c.minimum > 0,
     )
   const postesJour = new Set(
     p.creneaux
-      .filter((c) => c.accueil && !c.presence.includes('nuit'))
+      .filter((c) => c.accueil && !c.presence.some((q) => estNuit(L, q)))
       .map((c) => c.poste),
   )
-  const pur = (c: Creneau, moment: 'matin' | 'soir') =>
+  const pur = (c: Creneau, moment: string) =>
     c.presence.length === 1 && c.presence[0] === moment
   const r: Array<{
     jour: number
@@ -3774,21 +3813,25 @@ export function zonesReleve(
     matins: Creneau[]
     soirs: Creneau[]
   }> = []
+  const paires = pairesDeJour(L)
   for (let jour = 0; jour < p.nbJours; jour++) {
-    if (!demande(jour, 'matin') || !demande(jour, 'soir')) continue
-    const duJour = p.creneaux.filter(
-      (c) => postesJour.has(c.poste) && jourDe(c) === jour,
-    )
-    const matins = duJour.filter((c) => pur(c, 'matin'))
-    const soirs = duJour.filter((c) => pur(c, 'soir'))
-    if (!matins.length || !soirs.length) continue
-    const debut =
-      Math.ceil(Math.min(...soirs.map((c) => c.debut)) / QUART) * QUART
-    const fin = Math.max(...matins.map((c) => c.fin))
-    const quarts: number[] = []
-    for (let a = debut; a + QUART <= fin; a += QUART) quarts.push(a)
-    if (quarts.length * QUART < duree) continue
-    r.push({ jour, quarts, matins, soirs })
+    for (const [a, b] of paires) {
+      if (!demande(jour, a) || !demande(jour, b)) continue
+      const duJour = p.creneaux.filter(
+        (c) => postesJour.has(c.poste) && jourDe(c) === jour,
+      )
+      // `matins` : le moment d'avant de la paire, `soirs` celui d'après.
+      const matins = duJour.filter((c) => pur(c, a))
+      const soirs = duJour.filter((c) => pur(c, b))
+      if (!matins.length || !soirs.length) continue
+      const debut =
+        Math.ceil(Math.min(...soirs.map((c) => c.debut)) / QUART) * QUART
+      const fin = Math.max(...matins.map((c) => c.fin))
+      const quarts: number[] = []
+      for (let q = debut; q + QUART <= fin; q += QUART) quarts.push(q)
+      if (quarts.length * QUART < duree) continue
+      r.push({ jour, quarts, matins, soirs })
+    }
   }
   return r
 }

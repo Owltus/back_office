@@ -18,6 +18,7 @@ import {
 } from '#/lib/planning/affichage.ts'
 import type { Horaire } from '#/lib/planning/types.ts'
 import { cn } from '#/lib/utils.ts'
+import { useMoments } from '#/components/planning/hooks/useMoments.ts'
 
 export function ChoixCodes({
   horaires,
@@ -33,11 +34,12 @@ export function ChoixCodes({
   disabled?: boolean
   etiquette: string
 }) {
+  const moments = useMoments()
   const basculer = (ids: number[], cocher: boolean) =>
     onChange(basculerIds(choisis, ids, cocher))
   return (
     <div role="group" aria-label={etiquette} className="flex flex-col gap-2.5">
-      {grouperHoraires(horaires).map((g) => {
+      {grouperHoraires(horaires, moments).map((g) => {
         const ids = g.horaires.map((h) => h.id)
         const toute = ids.every((id) => choisis.includes(id))
         return (

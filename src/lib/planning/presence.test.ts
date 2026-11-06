@@ -437,7 +437,7 @@ describe('une semaine de l’hôtel d’essai', () => {
     )
     const veille = referentiel.postes.find((x) => x.accueil_nuit)
     const code = new Map(referentiel.horaires.map((h) => [h.id, codeTest(h)]))
-    const recompte = (jour: number, periode: 'matin' | 'soir' | 'nuit') =>
+    const recompte = (jour: number, periode: string) =>
       sem.affectations.filter((a) => {
         if (a.jour !== jour) return false
         // Une version étoile (M7, AM7, N7…) compte comme son horaire de 8 h.

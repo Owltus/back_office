@@ -12,7 +12,7 @@
 import { refusDroits } from '#/lib/planning/erreurs.ts'
 import { SEMAINES_EQUITE } from '#/lib/planning/modele.ts'
 import { avecMomentCalcule } from '#/lib/planning/moment.ts'
-import { ORDRE_PERIODES } from '#/lib/planning/presence.ts'
+import { triConsignes } from '#/lib/planning/presence.ts'
 import {
   lireRegles,
   REGLES_PAR_DEFAUT,
@@ -31,6 +31,7 @@ import type {
   Horaire,
   ModeleContrat,
   Motif,
+  Moment,
   Periode,
   Poste,
   Referentiel,
@@ -45,6 +46,8 @@ const COL_MOTIF =
 const COL_POSTE =
   'id, nom, couleur, horaires_autorises, presence, accueil_nuit, ferme, ouverture, ordre, feries_chomes, indispensable, fermeture, jour_max_minutes'
 const COL_CONSIGNE = 'id, jour, periode, minimum, maximum'
+const COL_MOMENT =
+  'id, nom, ordre, priorite, debut_de, debut_a, fin_de, fin_a, toutes, libre_avant, compte_dans_tableau, est_nuit, couleur'
 const COL_GROUPE = 'id, nom, ordre, postes_autorises, forfait_possible'
 const COL_SALARIE =
   'id, prenom, nom, groupe_id, type_contrat, heures_hebdo, forfait_jours, mineur, competences, semaine_type, shifts_autorises, date_entree, date_sortie, actif, suite_de'
@@ -71,13 +74,6 @@ const CHAMPS_REGLAGES = [
   'passation_veilleur',
   'equipe_tolerance',
   'duree_ouverture',
-  'nuit_debut',
-  'nuit_fin',
-  'soir_fin',
-  'soir_debut',
-  'matin_debut_avant',
-  'matin_fin_max',
-  'libre_matin_avant',
   'personnes_nuit',
   'ecole_veille_fin',
   'ecole_lendemain_debut',
@@ -170,6 +166,7 @@ export async function fetchReferentiel(): Promise<Referentiel> {
     reglages,
     modeles,
     feries,
+    lignesMoments,
   ] = await Promise.all([
     supabase
       .from('planning_horaires')
@@ -217,13 +214,22 @@ export async function fetchReferentiel(): Promise<Referentiel> {
       .from('planning_feries')
       .select('id, jour, nom, recurrent')
       .order('jour'),
+    supabase
+      .from('planning_moments')
+      .select(COL_MOMENT)
+      .order('ordre')
+      .order('id'),
   ])
   // La ligne manque (base pas encore migrée) : la relève par défaut ;
   // les autres règles absentes reprennent leurs défauts (`lireRegles`).
   const lesReglages = normaliserReglages(
     verifier(reglages) as unknown as Reglages | null,
   )
-  const moments = lireRegles({ reglages: lesReglages }).moments
+  const lesMoments = verifier(lignesMoments) as unknown as Moment[]
+  const moments = lireRegles({
+    reglages: lesReglages,
+    moments: lesMoments,
+  }).moments
   return {
     // Le moment se déduit des heures (2026-11-05), quoi que dise la base,
     // aux limites de l'établissement.
@@ -243,17 +249,14 @@ export async function fetchReferentiel(): Promise<Referentiel> {
     besoins: verifier(besoins),
     // Matin, soir, nuit : l'ordre alphabétique de la base (matin, nuit,
     // soir) n'est pas celui de l'écran ; trié ici, une fois.
-    consignes: (verifier(consignes) as Consigne[]).sort(
-      (a, b) =>
-        a.jour - b.jour ||
-        ORDRE_PERIODES[a.periode] - ORDRE_PERIODES[b.periode],
-    ),
+    consignes: (verifier(consignes) as Consigne[]).sort(triConsignes(moments)),
     verrous: (verifier(verrous) as Array<{ lundi: string }>).map(
       (v) => v.lundi,
     ),
     reglages: lesReglages,
     modelesContrat: verifier(modeles) as unknown as ModeleContrat[],
     feriesAjoutes: verifier(feries) as FerieAjoute[],
+    moments: lesMoments,
   }
 }
 
@@ -666,6 +669,42 @@ export async function enregistrerMomentsHoraires(
         .select('id'),
     )
   }
+}
+
+/** Les moments neufs ou changés (gestion), en une écriture. */
+export async function enregistrerMoments(
+  moments: readonly Moment[],
+): Promise<void> {
+  if (!moments.length) return
+  auMoinsUne(
+    await supabase
+      .from('planning_moments')
+      .upsert(
+        moments.map((m) => ({
+          id: m.id,
+          nom: m.nom.trim(),
+          ordre: m.ordre,
+          priorite: m.priorite,
+          debut_de: m.debut_de,
+          debut_a: m.debut_a,
+          fin_de: m.fin_de,
+          fin_a: m.fin_a,
+          toutes: m.toutes,
+          libre_avant: m.libre_avant,
+          compte_dans_tableau: m.compte_dans_tableau,
+          est_nuit: m.est_nuit,
+          couleur: m.couleur,
+        })),
+      )
+      .select('id'),
+  )
+}
+
+/** Retire un moment (gestion) : refusé par la base s'il sert encore. */
+export async function supprimerMoment(id: string): Promise<void> {
+  auMoinsUne(
+    await supabase.from('planning_moments').delete().eq('id', id).select('id'),
+  )
 }
 
 /** Un motif ; s'il prend un rôle, l'ancien porteur le perd d'abord (un

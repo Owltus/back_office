@@ -398,10 +398,12 @@ export function SectionSemaineType({
                     }
                     options={[{ valeur: 'tous', libelle: 'Ses horaires' }]}
                     groupes={[
-                      ...grouperHoraires(possibles(j)).map((g) => ({
-                        titre: g.libelle,
-                        options: g.horaires.map(optionHoraire),
-                      })),
+                      ...grouperHoraires(possibles(j), regles.moments).map(
+                        (g) => ({
+                          titre: g.libelle,
+                          options: g.horaires.map(optionHoraire),
+                        }),
+                      ),
                       ...(fixeImpossible
                         ? [
                             {
