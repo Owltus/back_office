@@ -40,6 +40,8 @@ A5 FAIT 677537ad (base, RETIRE la clé unique (jour, moment) des consignes : `--
 
 A7 FAIT d74d8fd5 (base, RETIRE le CHECK, le NOT NULL et le défaut de `planning_besoins.niveau_min` : `--supprimer` et `--avec-donnees`) et 093ed711 (code). Niveaux en table (`planning_niveaux`, clés `titulaire`, `occasionnel`, `soutien` gardées), un besoin demande un nombre par niveau (`planning_besoins.niveaux`). D13 NON levé : le moteur le permettrait sans changer l'empreinte (aucun besoin sur un poste de zone à l'hôtel), mais les hôtels d'essai des tests (`hotelAccueil`, 7 tests) en portent, et Besoins n'a pas de grille pour un poste de zone.
 
+A7 RÉVISÉ le 2026-11-06 (décision de l'utilisateur, voir D-decisions partie C) : les niveaux redeviennent FIXES dans le moteur (titulaire, dépannage, soutien, `niveaux.ts`), non réglables. Table `planning_niveaux` gardée et figée (migration d'ajout `20261106160000`), section Niveaux de Postes retirée. Gardés : le nombre par niveau d'un besoin et `niveau_min`.
+
 A6 FAIT 89df271e (base, RETIRE les CHECK des périodes : `--supprimer` et `--avec-donnees`) et 19ce5568 (code). Limites des moments de `planning_reglages` gardées, plus lues. Reste en dur : la notion de nuit de la loi (`est_nuit`).
 
 | #   | Figé                                                                                                                                                                         | Où                                                                                                                                                                      | Cible                                                                                                                       |

@@ -78,3 +78,17 @@ réceptionnistes, au Club et aux veilleurs »). Indispensables : Réception, Clu
 - Page Besoins refaite en sections (même demande : « plus claire », « migrer la partie Moments
   dans Besoins ») : Postes indispensables, Autres postes tenus au mieux, Moments, puis l'ordre de
   décision en repli. Un poste neuf se range tout seul selon son réglage.
+
+**2026-11-06, A7 révisé : trois niveaux fixes (décision utilisateur).** « titulaire à placer en
+priorité, est autonome, il peut avoir une autre personne avec lui si possible mais pas obligé,
+donc avec lui un dépannage et/ou un soutien. Le dépannage est placé à défaut si pas de titulaire
+disponible, il peut avoir un soutien avec lui. Les soutiens ne peuvent pas être seuls, obligés
+avec dépannage et/ou titulaire. Je pense que tu peux le mettre en dur dans le moteur et non
+paramétrable, car c'est un truc qui couvre tous les cas. » Et : « il y a des règles où tout le
+monde doit faire ses heures en fonction de son contrat 35 h ou 39 h ».
+
+- Niveaux FIXES dans le code (`niveaux.ts`), jamais réglables : renverse les niveaux de
+  l'établissement d'A7 (création, ordre, cases « peut être seul » et « jamais seul »).
+- Ordre de décision gardé : heures du contrat avant « titulaire avant dépannage ».
+- Table `planning_niveaux` gardée et figée (PL409), plus lue ; nombre par niveau d'un besoin et
+  `niveau_min` gardés.

@@ -2825,29 +2825,29 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   encore levé). Écrans : choix Zone dans Postes, un tableau et une passation par
   zone et la section Zones dans Besoins. Identique prouvé (empreinte 8874c146,
   banc 0 écart) ; `zonesReglables.test.ts` (Room service).
-- **NIVEAUX RÉGLABLES (lot 2, A7, 2026-11-06, d74d8fd5 et 093ed711)** : table
-  `planning_niveaux` (id texte, nom, ordre, `autonome`, `jamais_seul`) ;
-  Titulaire, Dépannage, Soutien gardent leurs clés (`titulaire`,
-  `occasionnel`, `soutien`) : aucune fiche réécrite. Niveau inconnu dans une
-  fiche refusé (PL400), niveau utilisé ou dernier autonome jamais retiré
-  (PL409). `planning_besoins.niveau_min` en clé étrangère, nul = tout niveau
-  autonome (RETIRE son CHECK : `--supprimer`, `--avec-donnees`) ;
-  `planning_besoins.niveaux` (jsonb `[{niveau, nombre}]`) : nombre par
-  niveau, vide = effectif / soutien / niveau_min. `niveaux.ts` seul :
-  `lireNiveaux` (dans `regles.niveaux`), `demandeDe` (paliers cumulés),
-  `niveauSur` / `autonomeSur` / `jamaisSeulSur` / `referentSur` / `partSur`
-  (modele.ts) ; un niveau autonome suivant coûte `part` du dépannage (le
-  dernier le prix entier, D13 inchangé) ; « jamais seul » = avec un
-  référent (autonome, pas jamais seul). Créneau : `niveauMax`, `paliers`
-  (contraintes par palier, place précise vide, `correspondances` et
-  `manquants` aussi). Écrans : section Niveaux de Postes
-  (`postes/SectionNiveaux.tsx`), niveau par poste depuis la liste dans la
-  fiche, « Un nombre par niveau » dans le panneau d'une case de Besoins
-  (chiffre de la case = la somme). Indice de glisser `possible` (plus
-  `depannage`). Identique prouvé (empreinte 8874c146, banc 0 écart) ;
-  `niveauxReglables.test.ts` refuse toute clé de niveau écrite. D13 non levé
-  (hôtels d'essai des tests).
-- **Relecture adverse des lots 1a-2b (2026-11-06)** : `relectureLots.test.ts`, migration `20261106150000` (ajouts seuls : moment à chiffres hors tableau PL409, week-end consécutif, `planning_moments.article`) ; 48 h au seul contrat sans heures posé à la main ; échange de noms par nom d'attente (UNIQUE non différable : un retrait).
+- **TROIS NIVEAUX FIXES (décision utilisateur du 2026-11-06, qui RENVERSE les
+  niveaux réglables du lot 2, A7 : « tu peux le mettre en dur dans le moteur et
+  non paramétrable, car c'est un truc qui couvre tous les cas »). NE PAS les
+  rendre configurables.** Titulaire (clé `titulaire`) : placé en priorité,
+  autonome, peut avoir un dépannage et / ou un soutien avec lui sans
+  obligation. Dépannage (`occasionnel`) : placé à défaut de titulaire,
+  autonome, coûte la part fixe du dépannage (`part` 1, comme avant A7).
+  Soutien (`soutien`) : jamais seul, avec un titulaire et / ou un dépannage.
+  Ordre GARDÉ : les heures du contrat (35 h, 39 h) passent avant « titulaire
+  avant dépannage » (un dépannage qui manque d'heures passe devant un
+  titulaire qui a les siennes). UNE source, `lib/planning/niveaux.ts`
+  (`NIVEAUX`, `LISTE_NIVEAUX` avec nom et phrase de la fiche, `demandeDe`) ;
+  seul fichier où une clé de niveau s'écrit (`contratsPostesReglables.test.ts`).
+  La table `planning_niveaux` reste (d74d8fd5) mais n'est plus lue : FIGÉE par
+  `20261106160000_planning_niveaux_fixes` (ajout seul, trigger PL409 « Les
+  niveaux sont fixes » sur tout insert, delete, changement de clé, nom, ordre,
+  autonome, jamais_seul) ; triggers « niveau inconnu » (PL400) gardés. Gardés
+  aussi : `planning_besoins.niveaux` (nombre par niveau, « 1 titulaire et 2 en
+  plus », facultatif, paliers cumulés) et `niveau_min` (titulaire seulement /
+  null = titulaire ou dépannage). Écrans : plus de section Niveaux dans
+  Postes ; fiche : choix du niveau par poste avec sa phrase dessous. Identique
+  prouvé : empreinte 8874c146, banc décembre (5 semaines : modèle, analyse,
+  solution à graine égale) 0 écart. Tests `niveauxFixes.test.ts`.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 
