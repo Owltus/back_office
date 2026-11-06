@@ -133,8 +133,6 @@ describe('options de la case (2026-11-05)', () => {
   it('souhaité ou titulaire seulement est un changement ; les défauts n’en sont pas', () => {
     expect(sansEffet(c({}, { obligatoire: false }))).toBe(false)
     expect(sansEffet(c({}, { niveau_min: 'titulaire' }))).toBe(false)
-    expect(
-      sansEffet(c({}, { obligatoire: true, niveau_min: 'depannage' })),
-    ).toBe(true)
+    expect(sansEffet(c({}, { obligatoire: true, niveau_min: null }))).toBe(true)
   })
 })

@@ -63,11 +63,7 @@ const JOUR = new Intl.DateTimeFormat('fr-FR', {
 })
 const jourCourt = (date: string) => JOUR.format(new Date(`${date}T12:00:00Z`))
 
-const ROLE: Record<RolePlace, string | null> = {
-  titulaire: null,
-  occasionnel: 'dépannage',
-  extra: 'extra',
-}
+const ROLE = (r: RolePlace) => r.libelle
 
 /** Ce qu'il reste à faire quand le moteur ne peut pas (D3). */
 export const SOLUTION_HUMAINE = 'Prenez un extra ou changez un shift.'
@@ -157,8 +153,8 @@ function Placer({
                 onClick={(e) => choisir(p.id, e)}
               >
                 {p.nom}
-                {ROLE[p.role] && (
-                  <span className="text-muted-foreground">{ROLE[p.role]}</span>
+                {ROLE(p.role) && (
+                  <span className="text-muted-foreground">{ROLE(p.role)}</span>
                 )}
               </Button>
             ))
@@ -234,9 +230,9 @@ function Groupe({
                 <li key={p.id} className="flex flex-col">
                   <span>
                     <strong>{p.nom}</strong>
-                    {ROLE[p.role] && (
+                    {ROLE(p.role) && (
                       <span className="ml-1.5 text-xs text-muted-foreground">
-                        {ROLE[p.role]}
+                        {ROLE(p.role)}
                       </span>
                     )}
                   </span>

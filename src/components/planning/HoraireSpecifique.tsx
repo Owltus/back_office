@@ -29,7 +29,9 @@ import {
   SelectValue,
 } from '#/components/ui/select.tsx'
 import { Switch } from '#/components/ui/switch.tsx'
-import { heures, NIVEAUX } from '#/lib/planning/affichage.ts'
+import { heures } from '#/lib/planning/affichage.ts'
+import { nomNiveau } from '#/lib/planning/niveaux.ts'
+import { useRegles } from '#/components/planning/hooks/useMoments.ts'
 import { minutes, presence } from '#/lib/planning/temps.ts'
 import type { Niveau, Poste } from '#/lib/planning/types.ts'
 import { cn } from '#/lib/utils.ts'
@@ -161,6 +163,7 @@ export function ChoixPosteSpecifique({
   niveau: (posteId: number) => Niveau | undefined
   onChange: (posteId: number) => void
 }) {
+  const niveaux = useRegles().niveaux
   return (
     <div className="space-y-1.5">
       <span className="text-xs font-medium text-muted-foreground">Poste</span>
@@ -189,7 +192,7 @@ export function ChoixPosteSpecifique({
                   n ? 'text-muted-foreground' : 'text-muted-foreground/50',
                 )}
               >
-                {n ? NIVEAUX[n].libelle : 'non tenu'}
+                {n ? nomNiveau(niveaux, n) : 'non tenu'}
               </small>
             </button>
           )

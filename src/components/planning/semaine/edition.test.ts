@@ -337,7 +337,7 @@ describe('indiceDe', () => {
         bilan(),
         null,
       ),
-    ).toBe('depannage')
+    ).toBe('possible')
     expect(indiceDe(vol, salarie({ competences: [] }), 1, bilan(), null)).toBe(
       'deconseille',
     )

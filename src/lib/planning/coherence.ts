@@ -43,8 +43,15 @@
  */
 
 import {
+  demandeDe,
+  estAutonome,
+  estPrefere,
+  estSoutien,
+} from '#/lib/planning/niveaux.ts'
+import {
   libelleHoraire,
   listeEt,
+  listeOu,
   nomComplet,
 } from '#/lib/planning/affichage.ts'
 import {
@@ -296,8 +303,6 @@ export function momentsAccueilDemandes(r: Referentiel): number {
   return r.consignes.filter((c) => chiffreAccueil(c) > 0).length
 }
 
-const autonome = (n: string) => n === 'titulaire' || n === 'occasionnel'
-
 /** Son contrat ne mesure pas ses heures : forfait jours (décompte en
  * jours), heures indicatives d'après le modèle de son type de contrat
  * (l'extra, aux défauts), ou 0 h. Même règle que le moteur. */
@@ -367,6 +372,16 @@ export function verifierReglages(
     avant: [],
     apres: [],
   })
+  // Les niveaux de l'établissement (2026-11-06) : aucun n'est lu par sa clé.
+  const niv = regles.niveaux
+  const autonome = (n: string) => estAutonome(niv, n)
+  const prefere = (n: string) => estPrefere(niv, n)
+  const soutienNiv = (n: string) => estSoutien(niv, n)
+  const nomPrefere = niv.autonomes[0]?.nom ?? ''
+  const nomsAutonomes = listeOu(niv.autonomes.map((n) => n.nom))
+  const nomsSoutien = listeOu(
+    niv.liste.filter((n) => !n.autonome).map((n) => n.nom),
+  )
   // Les besoins que le moteur lit : ceux de l'accueil sont ignorés (D13).
   const { valides, alertes } = besoinsDuMoteur(ctx)
   const parId = new Map(ctx.besoins.map((b) => [b.id, b]))
@@ -529,19 +544,16 @@ export function verifierReglages(
         `sans-autonome:${p.id}`,
         'a-voir',
         'equipe',
-        `Le poste ${p.nom} a des besoins, mais personne n'y est titulaire ni en dépannage.`,
+        `Le poste ${p.nom} a des besoins, mais personne n'y a le niveau ${nomsAutonomes}.`,
         `poste-${p.id}`,
         PAGE_ECRAN.postes,
       )
-    } else if (
-      zoneDuPoste(p) !== null &&
-      !tenants(p.id, (n) => n === 'titulaire').length
-    ) {
+    } else if (zoneDuPoste(p) !== null && !tenants(p.id, prefere).length) {
       ajouter(
         `presence-sans-titulaire:${p.id}`,
         'a-voir',
         'equipe',
-        `Le poste ${p.nom} fait partie de l'accueil, mais personne n'y est titulaire.`,
+        `Le poste ${p.nom} fait partie de l'accueil, mais personne n'y a le niveau ${nomPrefere}.`,
         `poste-${p.id}`,
         PAGE_ECRAN.postes,
       )
@@ -767,15 +779,13 @@ export function verifierReglages(
   const nonJuges = new Set(
     r.postes
       .filter((p) =>
-        tenants(p.id, (n) => n === 'titulaire').some((s) =>
-          contratIndicatif(s, regles),
-        ),
+        tenants(p.id, prefere).some((s) => contratIndicatif(s, regles)),
       )
       .map((p) => p.id),
   )
   for (const p of r.postes) {
     const demandees = demandeesPoste.get(p.id) ?? 0
-    const titulaires = tenants(p.id, (n) => n === 'titulaire')
+    const titulaires = tenants(p.id, prefere)
     if (!demandees || !titulaires.length || nonJuges.has(p.id)) continue
     const contrat = titulaires.reduce((t, s) => t + minutesContrat(s), 0)
     if (demandees - contrat > demandees * SEUIL_HEURES) {
@@ -784,7 +794,7 @@ export function verifierReglages(
         `heures:${p.id}`,
         'a-voir',
         'besoins',
-        `Le poste ${p.nom} demande ${heuresTexte(demandees)} par semaine ; ses titulaires ont ${heuresTexte(contrat)} de contrat. Il manque ${heuresTexte(demandees - contrat)}.`,
+        `Le poste ${p.nom} demande ${heuresTexte(demandees)} par semaine ; les personnes au niveau ${nomPrefere} ont ${heuresTexte(contrat)} de contrat. Il manque ${heuresTexte(demandees - contrat)}.`,
         `poste-${p.id}`,
       )
     }
@@ -796,7 +806,7 @@ export function verifierReglages(
     .filter(
       (s) =>
         !contratIndicatif(s, regles) &&
-        s.competences.some((c) => c.niveau === 'titulaire'),
+        s.competences.some((c) => prefere(c.niveau)),
     )
     .reduce((t, s) => t + minutesContrat(s), 0)
   if (
@@ -808,7 +818,7 @@ export function verifierReglages(
       'heures:total',
       'a-voir',
       'besoins',
-      `Les besoins demandent ${heuresTexte(totalDemande)} par semaine ; les titulaires ont ${heuresTexte(totalContrat)} de contrat. Il manque ${heuresTexte(totalDemande - totalContrat)}.`,
+      `Les besoins demandent ${heuresTexte(totalDemande)} par semaine ; les personnes au niveau ${nomPrefere} ont ${heuresTexte(totalContrat)} de contrat. Il manque ${heuresTexte(totalDemande - totalContrat)}.`,
     )
   }
 
@@ -821,12 +831,12 @@ export function verifierReglages(
     const jours = valides
       .filter((b) => b.poste_id === p.id && b.soutien > 0 && avecBase(b))
       .map((b) => b.jour)
-    if (!jours.length || tenants(p.id, (n) => n === 'soutien').length) continue
+    if (!jours.length || tenants(p.id, soutienNiv).length) continue
     ajouter(
       `soutien:${p.id}`,
       'a-voir',
       'besoins',
-      `Le poste ${p.nom} demande des personnes en soutien (${listeJours(jours)}), mais personne de l'équipe n'a le niveau Soutien sur ce poste.`,
+      `Le poste ${p.nom} demande des personnes en soutien (${listeJours(jours)}), mais personne de l'équipe n'a le niveau ${nomsSoutien} sur ce poste.`,
       `soutien-${p.id}`,
     )
   }
@@ -898,13 +908,9 @@ export function verifierReglages(
         (s) =>
           !contratIndicatif(s, regles) &&
           s.competences.some(
-            (k) =>
-              deLAccueil(k) &&
-              (k.niveau === 'titulaire' || k.niveau === 'soutien'),
+            (k) => deLAccueil(k) && (prefere(k.niveau) || soutienNiv(k.niveau)),
           ) &&
-          !s.competences.some(
-            (k) => !deLAccueil(k) && k.niveau === 'titulaire',
-          ),
+          !s.competences.some((k) => !deLAccueil(k) && prefere(k.niveau)),
       )
       .reduce((t, s) => t + minutesContrat(s), 0)
     if (demandees - contrats > demandees * SEUIL_HEURES) {
@@ -1045,19 +1051,30 @@ export function verifierReglages(
         )
     }
   }
-  const titulaireDemande = new Set(
-    valides
-      .filter((b) => b.effectif > 0 && b.niveau_min === 'titulaire')
-      .map((b) => b.poste_id),
-  )
-  for (const id of [...titulaireDemande].sort((a, b) => a - b)) {
+  // Niveau demandé (un seul, ou un nombre par niveau) que personne de
+  // l'équipe n'a sur ce poste, ni mieux.
+  const niveauDemande = new Map<number, { rang: number; nom: string }>()
+  for (const b of valides) {
+    if (b.effectif <= 0) continue
+    const d = demandeDe(niv, b)
+    for (const q of d.paliers ?? (d.niveauMax ? [d.niveauMax] : [])) {
+      const deja = niveauDemande.get(b.poste_id)
+      if (!deja || q.rang < deja.rang) niveauDemande.set(b.poste_id, q)
+    }
+  }
+  for (const id of [...niveauDemande.keys()].sort((a, b) => a - b)) {
     const p = postes.get(id)
-    if (!p || tenants(id, (n) => n === 'titulaire').length) continue
+    const q = niveauDemande.get(id) as { rang: number; nom: string }
+    const assez = (n: string) => {
+      const l = niv.parId.get(n)
+      return !!l && l.autonome && l.rang <= q.rang
+    }
+    if (!p || tenants(id, assez).length) continue
     ajouter(
       `titulaire-demande:${id}`,
       'a-voir',
       'besoins',
-      `${p.nom} : des besoins demandent un titulaire, mais personne n'est titulaire de ce poste.`,
+      `${p.nom} : des besoins demandent le niveau ${q.nom}, mais personne n'a ce niveau sur ce poste.`,
       `poste-${id}`,
     )
   }

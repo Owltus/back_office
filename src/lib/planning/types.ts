@@ -8,7 +8,10 @@
  * `type_absence_id`) : c'est un JSON, recopié tel quel à l'import.
  */
 
-export type Niveau = 'titulaire' | 'occasionnel' | 'soutien'
+/** Niveau d'une personne sur un poste : l'identifiant d'un niveau de
+ * l'établissement (`planning_niveaux.id`, 2026-11-06, `niveaux.ts`). Aucun
+ * n'est lu par sa clé. */
+export type Niveau = string
 export type ModeJour = 'auto' | 'travail' | 'repos' | 'absence'
 export type NatureMotif = 'absence' | 'ecole' | 'repos'
 /** Identifiant d'un type de contrat (`planning_modeles_contrat.type_contrat`).
@@ -18,9 +21,27 @@ export type TypeContrat = string
 /** Force d'une règle de l'établissement (colonne texte en base). */
 export type ForceRegle = 'obligatoire' | 'souhaite' | 'aucune'
 export type JourIsole = 'interdit' | 'a_eviter' | 'aucune'
-/** Niveau demandé par un besoin (étape 7) : titulaire exigé, ou dépannage
- * accepté (aujourd'hui). */
-export type NiveauDemande = 'titulaire' | 'depannage'
+/** Niveau demandé par un besoin : le moins préféré des niveaux autonomes
+ * qui tiennent la place (`planning_niveaux.id`). Null ou inconnu : tout
+ * niveau autonome. */
+export type NiveauDemande = string | null
+
+/** Un niveau de l'établissement (`planning_niveaux`, 2026-11-06). */
+export interface NiveauEtab {
+  id: string
+  nom: string
+  ordre: number
+  /** Tient une place seul. */
+  autonome: boolean
+  /** Toujours avec une personne autonome qui ne l'est pas. */
+  jamais_seul: boolean
+}
+
+/** Nombre de personnes demandé à un niveau par un besoin. */
+export interface BesoinNiveau {
+  niveau: string
+  nombre: number
+}
 /** Moment d'un horaire : l'identifiant d'un moment de l'établissement
  * (`planning_moments.id`, 2026-11-06). À l'hôtel : matin, middle, soir,
  * nuit ; aucun n'est lu par son nom (`moment.ts`). */
@@ -331,9 +352,12 @@ export interface Besoin {
    * tenu si possible, vide en premier, jamais une place à pourvoir.
    * Absent : obligatoire. */
   obligatoire?: boolean
-  /** Niveau demandé (2026-11-05) : « titulaire » = jamais tenu en
-   * dépannage. Absent : dépannage accepté. */
+  /** Niveau demandé (2026-11-05) : le moins préféré des niveaux qui
+   * tiennent la place. Absent ou null : tout niveau autonome. */
   niveau_min?: NiveauDemande
+  /** Nombre par niveau (2026-11-06) ; vide ou absent : effectif, soutien et
+   * niveau_min font foi. */
+  niveaux?: BesoinNiveau[]
 }
 
 export interface Affectation {
@@ -374,6 +398,9 @@ export interface Referentiel {
   /** Zones (`planning_zones`, 2026-11-06) ; absentes (données de test) :
    * l'accueil seul, aux réglages de passation (`zoneParDefaut`). */
   zones?: Zone[]
+  /** Niveaux (`planning_niveaux`, 2026-11-06) ; absents (données de test) :
+   * ceux de l'hôtel (`NIVEAUX_PAR_DEFAUT`). */
+  niveaux?: NiveauEtab[]
 }
 
 export const JOURS = [

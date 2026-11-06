@@ -256,7 +256,7 @@ describe('niveau demandé : titulaire seulement', () => {
     postesOccasionnels: new Set(['a']),
   })
   it('un dépannage ne tient pas la place ; il la tient sinon', () => {
-    const c = cr('t', 'a', 9, 17, { titulaireSeul: true })
+    const c = cr('t', 'a', 9, 17, { niveauMax: { rang: 0, nom: 'Titulaire' } })
     const p = probleme({ creneaux: [c], salaries: [depannage], graine: 1 })
     const r = generer(p, highs)
     expect(tenus(r)).toEqual([])
@@ -268,10 +268,10 @@ describe('niveau demandé : titulaire seulement', () => {
         ?.map((v) => v.regle),
     ).toEqual(['TITULAIRE-DEMANDE'])
     expect(raisonClaire('TITULAIRE-DEMANDE', '', 1).phrase).toBe(
-      'En dépannage : la place demande un titulaire',
+      'Son niveau sur ce poste ne suffit pas pour cette place',
     )
     const p2 = probleme({
-      creneaux: [{ ...c, titulaireSeul: false }],
+      creneaux: [{ ...c, niveauMax: null }],
       salaries: [depannage],
       graine: 1,
     })
@@ -279,7 +279,7 @@ describe('niveau demandé : titulaire seulement', () => {
     expect(raisonsBlocage(p2, [], 't').get('d')).toEqual([])
   })
   it('un titulaire la tient', () => {
-    const c = cr('t', 'a', 9, 17, { titulaireSeul: true })
+    const c = cr('t', 'a', 9, 17, { niveauMax: { rang: 0, nom: 'Titulaire' } })
     const r = generer(
       probleme({ creneaux: [c], salaries: [personne('x', 0)], graine: 1 }),
       highs,

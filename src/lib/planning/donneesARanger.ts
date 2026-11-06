@@ -32,6 +32,8 @@
  * incohérents sont dans des semaines verrouillées, les cacher les aurait tus.
  */
 
+import { estAutonome, estPrefere, lireNiveaux } from '#/lib/planning/niveaux.ts'
+import type { Niveaux } from '#/lib/planning/niveaux.ts'
 import { libelleHoraire } from '#/lib/planning/affichage.ts'
 import type { LienReglage } from '#/lib/planning/coherence.ts'
 import {
@@ -133,21 +135,18 @@ function posteAlternatif(
   sauf: number,
   horaireId: number,
   postes: ReadonlyMap<number, Poste>,
+  niveaux: Niveaux,
 ): Poste | null {
   if (!s) return null
   const possibles = s.competences
-    .filter(
-      (c) =>
-        c.poste_id !== sauf &&
-        (c.niveau === 'titulaire' || c.niveau === 'occasionnel'),
-    )
+    .filter((c) => c.poste_id !== sauf && estAutonome(niveaux, c.niveau))
     .map((c) => ({ c, poste: postes.get(c.poste_id) }))
     .filter(
       (x): x is { c: (typeof s.competences)[number]; poste: Poste } =>
         x.poste !== undefined && codePrevuAuPoste(x.poste, horaireId),
     )
   if (possibles.length === 1) return possibles[0].poste
-  const titulaires = possibles.filter((x) => x.c.niveau === 'titulaire')
+  const titulaires = possibles.filter((x) => estPrefere(niveaux, x.c.niveau))
   return titulaires.length === 1 ? titulaires[0].poste : null
 }
 
@@ -185,6 +184,7 @@ export function donneesARanger(
   const horaires = new Map(r.horaires.map((h) => [h.id, h]))
   const salaries = new Map(r.salaries.map((s) => [s.id, s]))
   const verrous = new Set(r.verrous)
+  const niveaux = lireNiveaux(r.niveaux)
 
   interface Brouillon {
     sorte: SorteRangement
@@ -225,7 +225,13 @@ export function donneesARanger(
     if (codePrevuAuPoste(poste, s.horaire_id)) continue
     const horaire = horaires.get(s.horaire_id)
     if (!horaire) continue
-    const cible = posteAlternatif(personne, poste.id, horaire.id, postes)
+    const cible = posteAlternatif(
+      personne,
+      poste.id,
+      horaire.id,
+      postes,
+      niveaux,
+    )
     ajouter(
       `hors-poste:${poste.id}:${horaire.id}:${cible?.id ?? 'aucun'}`,
       { sorte: 'hors-poste', poste, horaire, posteCible: cible ?? undefined },

@@ -15,6 +15,7 @@
  * semaines verrouillées ne sont jamais réécrits (la base refuserait tout).
  */
 
+import { estPrefere } from '#/lib/planning/niveaux.ts'
 import { useId, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -942,7 +943,8 @@ function ParcoursContrats({
   const periode = periodeContrat
   const poste = (s: Salarie) => {
     const c =
-      s.competences.find((x) => x.niveau === 'titulaire') ?? s.competences.at(0)
+      s.competences.find((x) => estPrefere(regles.niveaux, x.niveau)) ??
+      s.competences.at(0)
     return referentiel.postes.find((x) => x.id === c?.poste_id)?.nom
   }
   return (

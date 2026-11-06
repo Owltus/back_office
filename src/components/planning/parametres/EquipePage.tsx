@@ -7,6 +7,8 @@
  * Lisible par tous ; ajouter et modifier : gestion seule.
  */
 
+import { estPrefere, NIVEAUX_HOTEL, nomNiveau } from '#/lib/planning/niveaux.ts'
+import type { Niveaux } from '#/lib/planning/niveaux.ts'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { ChevronRight, Layers, Scale, UserPlus } from 'lucide-react'
@@ -43,7 +45,7 @@ import { Skeleton } from '#/components/ui/skeleton.tsx'
 import {
   initiales,
   nomComplet,
-  NIVEAUX,
+  aideNiveau,
   parGroupe,
   texteSur,
   deNom,
@@ -66,9 +68,11 @@ const GRIS = '#98a2b3'
 function postePrincipal(
   s: Pick<Salarie, 'competences'>,
   postes: Poste[],
+  niveaux: Niveaux = NIVEAUX_HOTEL,
 ): Poste | undefined {
   const c =
-    s.competences.find((x) => x.niveau === 'titulaire') ?? s.competences.at(0)
+    s.competences.find((x) => estPrefere(niveaux, x.niveau)) ??
+    s.competences.at(0)
   return c && postes.find((p) => p.id === c.poste_id)
 }
 
@@ -374,7 +378,8 @@ export function texteSuivant(
 ): string {
   const quand = dateFr(suivant.date_entree as string)
   if (
-    postePrincipal(courant, postes)?.id !== postePrincipal(suivant, postes)?.id
+    postePrincipal(courant, postes, regles.niveaux)?.id !==
+    postePrincipal(suivant, postes, regles.niveaux)?.id
   )
     return `Nouveau poste le ${quand}`
   if (courant.type_contrat !== suivant.type_contrat)
@@ -397,7 +402,7 @@ function LigneMembre({
   aujourdhui: string
   onOuvrir: () => void
 }) {
-  const couleur = postePrincipal(s, postes)?.couleur ?? GRIS
+  const couleur = postePrincipal(s, postes, regles.niveaux)?.couleur ?? GRIS
   const sorti = !!s.date_sortie && s.date_sortie < aujourdhui
   const parti = sorti || !s.actif
   const contrat = nomContrat(regles, s.type_contrat)
@@ -455,16 +460,22 @@ function LigneMembre({
               const p = postes.find((x) => x.id === c.poste_id)
               if (!p) return null
               return (
-                <Tip key={c.poste_id} label={NIVEAUX[c.niveau].aide}>
+                <Tip
+                  key={c.poste_id}
+                  label={(() => {
+                    const n = regles.niveaux.parId.get(c.niveau)
+                    return n ? aideNiveau(n) : c.niveau
+                  })()}
+                >
                   <span className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5 text-xs">
                     <span
                       className="inline-block size-2 rounded-full"
                       style={{ background: p.couleur }}
                     />
                     {p.nom}
-                    {c.niveau !== 'titulaire' && (
+                    {!estPrefere(regles.niveaux, c.niveau) && (
                       <span className="text-muted-foreground">
-                        · {NIVEAUX[c.niveau].libelle}
+                        · {nomNiveau(regles.niveaux, c.niveau)}
                       </span>
                     )}
                   </span>

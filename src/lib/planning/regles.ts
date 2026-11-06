@@ -16,6 +16,7 @@ import {
 } from '#/lib/planning/reglesEtablissement.ts'
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import type { SalarieSolveur } from '#/lib/planning/modele.ts'
+import type { NiveauSolveur } from '#/lib/planning/niveaux.ts'
 import { heuresLisibles } from '#/lib/planning/temps.ts'
 import type { Poste, TypeContrat } from '#/lib/planning/types.ts'
 
@@ -201,6 +202,8 @@ export interface Fiche {
   shiftsAutorises?: ReadonlySet<string>
   postesOccasionnels?: ReadonlySet<string>
   postesSoutien?: ReadonlySet<string>
+  /** Niveau de chaque poste tenu (`niveaux.ts`). */
+  niveauxPostes?: ReadonlyMap<string, NiveauSolveur>
   /** Jours d'absence de la semaine comptés dans les heures, HORS jours
    * d'école (`heuresDues` les ajoute : une journée de contrat chacun). */
   joursAbsenceDecomptes?: number
@@ -490,6 +493,7 @@ export function versSolveur(f: Fiche): SalarieSolveur {
     shiftsAutorises: f.shiftsAutorises ?? new Set(),
     postesOccasionnels: f.postesOccasionnels ?? new Set(),
     postesSoutien: f.postesSoutien ?? new Set(),
+    ...(f.niveauxPostes ? { niveauxPostes: f.niveauxPostes } : {}),
   })
 }
 

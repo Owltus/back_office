@@ -7,6 +7,8 @@
  * les autres (`etoileDeLaCase`, `codesCase.ts`).
  */
 
+import { estPrefere, NIVEAUX_HOTEL } from '#/lib/planning/niveaux.ts'
+import type { Niveaux } from '#/lib/planning/niveaux.ts'
 import { dureeHoraire, heures, jourDeRepos } from '#/lib/planning/affichage.ts'
 import { estJfr } from '#/lib/planning/feries.ts'
 import { estEcole } from '#/lib/planning/semaine.ts'
@@ -52,7 +54,8 @@ export function raisonOblige(
   return (bilan.repos_obliges ?? []).find((o) => o.jour === jour)?.raison
 }
 
-export type Indice = 'ok' | 'depannage' | 'deconseille' | null
+/** « possible » : un niveau qui n'est pas le préféré (2026-11-06). */
+export type Indice = 'ok' | 'possible' | 'deconseille' | null
 
 export type EnVol =
   | { type: 'shift'; shift: ShiftOut }
@@ -253,6 +256,7 @@ export function indiceDe(
   jour: number,
   bilan: BilanOut | undefined,
   statut: ContenuStatut | null,
+  niveaux: Niveaux = NIVEAUX_HOTEL,
 ): Indice {
   if (!vol) return null
   if (statut?.genre === 'hors') return 'deconseille'
@@ -266,7 +270,7 @@ export function indiceDe(
     (c) => c.poste_id === vol.shift.poste_id,
   )?.niveau
   if (!niveau) return 'deconseille'
-  return niveau === 'titulaire' ? 'ok' : 'depannage'
+  return estPrefere(niveaux, niveau) ? 'ok' : 'possible'
 }
 
 /** Temps de travail d'un code (pause déduite). */

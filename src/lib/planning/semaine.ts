@@ -68,13 +68,24 @@ import {
   travail,
   cle,
   cleAEviter,
+  niveauAccepte,
+  niveauSur,
+  soutienSur,
 } from '#/lib/planning/modele.ts'
+import {
+  demandeDe,
+  estAutonome,
+  estPrefere,
+  estSecours,
+  NIVEAUX_HOTEL,
+  niveauLu,
+} from '#/lib/planning/niveaux.ts'
+import type { Niveaux, NiveauSolveur } from '#/lib/planning/niveaux.ts'
 import type {
   AffectationSolveur,
   Creneau,
   Probleme,
   Resultat,
-  Role,
   GroupeSuivante,
   SalarieSolveur,
   Suivante,
@@ -183,7 +194,8 @@ export interface ShiftOut {
    * cycle (« 08:00–16:45 au lieu de 07:00–15:45 », plan planning-cycles-2026-10-30) ; null
    * sinon. Ajouté le 2026-10-30 ; absent de l'API du prototype. */
   code_demande: number | null
-  role: Role | null
+  /** Niveau de la personne sur ce poste (`planning_niveaux.id`). */
+  role: string | null
   alertes: AlerteOut[]
 }
 
@@ -457,11 +469,14 @@ export function contexte(d: DonneesSemaine): Contexte {
     d.referentiel.motifs.filter(estJfr).map((m) => m.id),
   )
   const horaires = new Map(d.referentiel.horaires.map((h) => [h.id, h]))
+  const regles = lireRegles(d.referentiel)
   const besoins = [...d.referentiel.besoins]
     .map((b) => {
       const h = b.horaire_id !== null ? horaires.get(b.horaire_id) : undefined
+      // Nombre par niveau (2026-11-06) : effectif et soutien en sont la somme.
+      const nb = { ...b, ...placesDe({ regles }, b) }
       // Les heures de l'horaire, minuit en début écrit 24:00 (`horaireDe`).
-      return h ? { ...b, ...horaireDe(h) } : { ...b }
+      return h ? { ...nb, ...horaireDe(h) } : nb
     })
     .sort(
       (a, b) =>
@@ -496,7 +511,7 @@ export function contexte(d: DonneesSemaine): Contexte {
         .filter((a) => a.epinglee === false && motifsJfr.has(a.motif_id))
         .map((a) => `${a.salarie_id}|${a.jour}`),
     ),
-    regles: lireRegles(d.referentiel),
+    regles,
   }
 }
 
@@ -556,7 +571,11 @@ export function feriesEnAttente(
     const siens = travailles.get(x.id)
     if (!siens) continue
     // Encadrement : le jour férié se prend le jour même, jamais rattrapé.
-    if (ctx.postes && feriesChomes(x, ctx.postes)) continue
+    if (
+      ctx.postes &&
+      feriesChomes(x, ctx.postes, (ctx.regles ?? REGLES_PAR_DEFAUT).niveaux)
+    )
+      continue
     const poses = [...(ctx.absences.get(x.id) ?? [])]
       .filter(([, m]) => ctx.motifsJfr.has(m))
       .map(([date]) => date)
@@ -580,8 +599,9 @@ export function feriesEnAttente(
 export function feriesChomes(
   x: Pick<Salarie, 'competences'>,
   postes: ReadonlyMap<number, Pick<Poste, 'feries_chomes'>>,
+  niveaux: Niveaux = NIVEAUX_HOTEL,
 ): boolean {
-  const principal = x.competences.find((c) => c.niveau === 'titulaire')
+  const principal = x.competences.find((c) => estPrefere(niveaux, c.niveau))
   return !!principal && !!postes.get(principal.poste_id)?.feries_chomes
 }
 
@@ -627,7 +647,7 @@ export function avecFeriesDuJour(
   const postes = new Map(d.referentiel.postes.map((p) => [p.id, p]))
   for (const x of d.referentiel.salaries) {
     const stagiaire = modeleDe(regles, x.type_contrat).feriesJourMeme
-    const encadrement = !stagiaire && feriesChomes(x, postes)
+    const encadrement = !stagiaire && feriesChomes(x, postes, regles.niveaux)
     if (!stagiaire && !encadrement) continue
     for (const f of feries) {
       if (x.date_entree && f.date < x.date_entree) continue
@@ -728,11 +748,13 @@ export function fiche(
   const semaine = x.semaine_type
   const absents = joursAbsents(x, lundi, ctx.absences)
   const hors = joursHorsContrat(x, lundi)
-  const niveaux = new Map<string, string>()
-  for (const c of x.competences) niveaux.set(String(c.poste_id), c.niveau)
-  const postes = [...niveaux]
-    .filter(([, n]) => n === 'titulaire' || n === 'occasionnel')
-    .map(([p]) => p)
+  const lus = (ctx.regles ?? REGLES_PAR_DEFAUT).niveaux
+  const niveaux = new Map<string, NiveauSolveur>()
+  for (const c of x.competences) {
+    const n = niveauLu(lus, c.niveau)
+    if (n) niveaux.set(String(c.poste_id), n)
+  }
+  const postes = [...niveaux].filter(([, n]) => n.autonome).map(([p]) => p)
   // R-ECOLE-JOURS : les jours d'école sont des jours travaillés hors de l'hôtel.
   const ecole: Set<number> = exclu
     ? new Set()
@@ -771,11 +793,12 @@ export function fiche(
     id: String(x.id),
     postes: new Set(postes),
     postesOccasionnels: new Set(
-      [...niveaux].filter(([, n]) => n === 'occasionnel').map(([p]) => p),
+      [...niveaux].filter(([, n]) => n.autonome && n.rang > 0).map(([p]) => p),
     ),
     postesSoutien: new Set(
-      [...niveaux].filter(([, n]) => n === 'soutien').map(([p]) => p),
+      [...niveaux].filter(([, n]) => !n.autonome).map(([p]) => p),
     ),
+    niveauxPostes: niveaux,
     typeContrat: x.type_contrat,
     regles: ctx.regles,
     minutesHebdo: Math.round(Number(x.heures_hebdo) * 60),
@@ -944,15 +967,28 @@ function muralDe(jour: number, debut: string, fin: string, pause: number) {
  * ce que le créneau porte pour le calcul et le vérificateur. Poste inconnu
  * ou champ absent : non indispensable, obligatoire, dépannage accepté. */
 function niveauxDe(
-  ctx: Pick<Contexte, 'postes'>,
+  ctx: Pick<Contexte, 'postes'> & Partial<Pick<Contexte, 'regles'>>,
   posteId: number,
-  b?: Pick<Besoin, 'obligatoire' | 'niveau_min'>,
-): Pick<Creneau, 'indispensable' | 'souhaite' | 'titulaireSeul'> {
+  b?: Pick<Besoin, 'obligatoire' | 'niveau_min' | 'niveaux'> &
+    Pick<Besoin, 'effectif' | 'renfort'> & { soutien: number },
+): Pick<Creneau, 'indispensable' | 'souhaite' | 'niveauMax' | 'paliers'> {
+  const d = b ? demandeDe((ctx.regles ?? REGLES_PAR_DEFAUT).niveaux, b) : null
   return {
     indispensable: estIndispensable(ctx.postes.get(posteId)),
     souhaite: b?.obligatoire === false,
-    titulaireSeul: b?.niveau_min === 'titulaire',
+    niveauMax: d?.niveauMax ?? null,
+    paliers: d?.paliers ?? null,
   }
+}
+
+/** Effectif et soutien d'un besoin : son nombre par niveau s'il en a un. */
+export function placesDe(
+  ctx: Partial<Pick<Contexte, 'regles'>>,
+  b: Pick<Besoin, 'effectif' | 'niveau_min' | 'niveaux'> & { soutien: number },
+): { effectif: number; soutien: number } {
+  if (!b.niveaux?.length) return { effectif: b.effectif, soutien: b.soutien }
+  const d = demandeDe((ctx.regles ?? REGLES_PAR_DEFAUT).niveaux, b)
+  return { effectif: d.effectif, soutien: d.soutien }
 }
 
 function presenceMaxDe(ctx: Contexte, posteId: number): number | null {
@@ -1343,14 +1379,15 @@ export function besoinsDuMoteur(ctx: Contexte): {
 /** Les titulaires actifs d'un poste, s'ils sont TOUS des cadres au forfait
  * jours (la Direction) ; vide sinon. */
 function cadresSeulsDe(
-  ctx: Pick<Contexte, 'staff'>,
+  ctx: Pick<Contexte, 'staff'> & Partial<Pick<Contexte, 'regles'>>,
   posteId: number,
 ): Salarie[] {
+  const lus = (ctx.regles ?? REGLES_PAR_DEFAUT).niveaux
   const titulaires = ctx.staff.filter(
     (x) =>
       x.actif !== false &&
       x.competences.some(
-        (c) => c.poste_id === posteId && c.niveau !== 'soutien',
+        (c) => c.poste_id === posteId && estAutonome(lus, c.niveau),
       ),
   )
   return titulaires.length && titulaires.every((x) => x.forfait_jours)
@@ -1378,7 +1415,7 @@ export function jfrDesCadresSeuls(
   const cadres = ctx.staff.filter((x) => {
     if (!x.forfait_jours || exclus.has(x.id)) return false
     const postes = x.competences
-      .filter((c) => c.niveau === 'titulaire')
+      .filter((c) => estPrefere(ctx.regles.niveaux, c.niveau))
       .map((c) => c.poste_id)
     return (
       postes.length > 0 &&
@@ -1425,14 +1462,16 @@ export function jfrDesCadresSeuls(
  * si elle n'est pas là, elle n'est pas là ». Un jour où aucun d'eux n'est là
  * (absence, hors contrat), la place n'existe pas : rien à pourvoir. */
 export function sansSonCadre(
-  ctx: Pick<Contexte, 'staff' | 'lundi' | 'absences'>,
+  ctx: Pick<Contexte, 'staff' | 'lundi' | 'absences'> &
+    Partial<Pick<Contexte, 'regles'>>,
   b: Pick<Besoin, 'poste_id' | 'jour'>,
 ): boolean {
+  const lus = (ctx.regles ?? REGLES_PAR_DEFAUT).niveaux
   const titulaires = ctx.staff.filter(
     (x) =>
       x.actif !== false &&
       x.competences.some(
-        (c) => c.poste_id === b.poste_id && c.niveau !== 'soutien',
+        (c) => c.poste_id === b.poste_id && estAutonome(lus, c.niveau),
       ),
   )
   if (!titulaires.length || !titulaires.every((x) => x.forfait_jours))
@@ -1481,6 +1520,10 @@ export interface Correspondances {
    * demandé, sans « au lieu de ». Sous-ensemble des clés de `lien` et
    * `soutien`, jamais dans `demande`. */
   etoile: Set<number>
+  /** Shifts sur une place de renfort d'un besoin à plusieurs niveaux : ils
+   * ne pourvoient aucune place obligatoire (2026-11-06). Sous-ensemble des
+   * clés de `lien`. */
+  enRenfort: Set<number>
 }
 
 /** Rattache chaque shift au besoin qu'il couvre, en deux passes (plan
@@ -1518,7 +1561,28 @@ export function correspondances(
       : `${x.poste_id}|${x.jour}|${x.debut}-${x.fin}`
   const places = new Map<string, number[]>()
   const renforts = new Map<string, number[]>()
+  // Nombre par niveau (2026-11-06) : les places d'un besoin à plusieurs
+  // niveaux, chacune avec le rang le moins préféré qu'elle accepte ; un
+  // renfort prend celui du dernier niveau demandé. Une personne prend la
+  // place la plus exigeante qu'elle tient (l'affectation la meilleure
+  // quand les niveaux se suivent).
+  const rangs = new Map<number, Array<{ rang: number; obligatoire: boolean }>>()
+  const lus = ctx.regles.niveaux
   for (const b of besoins) {
+    const d = b.niveaux?.length ? demandeDe(lus, b) : null
+    if (d?.paliers) {
+      const r: Array<{ rang: number; obligatoire: boolean }> = []
+      let avant = 0
+      for (const p of d.paliers) {
+        for (let i = avant; i < p.cumul; i++)
+          r.push({ rang: p.rang, obligatoire: true })
+        avant = p.cumul
+      }
+      const dernier = d.paliers[d.paliers.length - 1].rang
+      for (let i = 0; i < b.renfort; i++)
+        r.push({ rang: dernier, obligatoire: false })
+      rangs.set(b.id, r)
+    }
     const k = cleDe(b)
     places.set(k, [
       ...(places.get(k) ?? []),
@@ -1538,16 +1602,55 @@ export function correspondances(
   )
   const enSoutien = (a: Affectation) => {
     const sol = salaries.get(a.salarie_id)
-    return sol !== undefined && role(sol, String(a.poste_id)) === 'soutien'
+    return sol !== undefined && soutienSur(sol, String(a.poste_id))
   }
   const parId = new Map(besoins.map((b) => [b.id, b]))
-  const enDepannage = (a: Affectation) => {
+  const niveauDe = (a: Affectation) => {
     const sol = salaries.get(a.salarie_id)
-    return sol !== undefined && role(sol, String(a.poste_id)) === 'occasionnel'
+    return sol === undefined ? null : niveauSur(sol, String(a.poste_id))
+  }
+  const creneauxBesoin = new Map<number, Creneau>()
+  const demandeCreneau = (id: number) => {
+    let c = creneauxBesoin.get(id)
+    if (!c) {
+      const b = parId.get(id) as Besoin
+      c = creneau({ id: `b${id}`, poste: '', debut: 0, fin: 0 })
+      c = { ...c, ...niveauxDe(ctx, b.poste_id, b) }
+      creneauxBesoin.set(id, c)
+    }
+    return c
   }
   /** Le besoin `id` accepte-t-il ce shift (niveau demandé) ? */
-  const accepte = (a: Affectation, id: number) =>
-    !(parId.get(id)?.niveau_min === 'titulaire' && enDepannage(a))
+  const accepte = (a: Affectation, id: number) => {
+    const n = niveauDe(a)
+    if (n === null || !n.autonome) return true
+    const r = rangs.get(id)
+    if (r) return r.some((p) => n.rang <= p.rang)
+    return niveauAccepte(n, demandeCreneau(id))
+  }
+  /** Shifts tenus sur une place de renfort d'un besoin à plusieurs
+   * niveaux : ils ne pourvoient aucune place obligatoire. */
+  const enRenfort = new Set<number>()
+  /** Le shift prend sa place dans le besoin `id` (à plusieurs niveaux : la
+   * plus exigeante qu'il tient, une obligatoire avant un renfort). */
+  const occuper = (a: Affectation, id: number) => {
+    const r = rangs.get(id)
+    const n = niveauDe(a)
+    if (!r || n === null) return
+    let i = -1
+    for (let j = 0; j < r.length; j++) {
+      if (n.rang > r[j].rang) continue
+      if (
+        i < 0 ||
+        (r[j].obligatoire && !r[i].obligatoire) ||
+        (r[j].obligatoire === r[i].obligatoire && r[j].rang < r[i].rang)
+      )
+        i = j
+    }
+    if (i < 0) return
+    if (!r[i].obligatoire) enRenfort.add(a.id)
+    r.splice(i, 1)
+  }
   /** Prend dans `pool` la dernière place qui accepte le shift, une
    * obligatoire avant une souhaitée ; undefined s'il n'y en a pas. */
   const prendre = (pool: number[] | undefined, a: Affectation) => {
@@ -1572,7 +1675,10 @@ export function correspondances(
       if (r?.length) soutien.set(a.id, r.pop() as number)
     } else {
       const id = prendre(places.get(k), a)
-      if (id !== undefined) lien.set(a.id, id)
+      if (id !== undefined) {
+        lien.set(a.id, id)
+        occuper(a, id)
+      }
     }
   }
 
@@ -1615,10 +1721,11 @@ export function correspondances(
     const pool = reserve.get(cleDe(choisi)) as number[]
     pool.splice(pool.lastIndexOf(choisi.id), 1)
     ;(soutienIci ? soutien : lien).set(a.id, choisi.id)
+    if (!soutienIci) occuper(a, choisi.id)
     if (etoiles.get(choisi.id)?.has(h.id)) etoile.add(a.id)
     else demande.set(a.id, choisi.horaire_id)
   }
-  return { lien, soutien, demande, etoile }
+  return { lien, soutien, demande, etoile, enRenfort }
 }
 
 /** Fiches d'une même personne (contrats liés par `suite_de`) : id → clé. */
@@ -2094,13 +2201,16 @@ export function posteEquite(
   const hs = [...horaires]
   if (postes)
     for (const c of x.competences) {
-      if (c.niveau !== 'titulaire' && c.niveau !== 'soutien') continue
+      if (estSecours(regles.niveaux, c.niveau)) continue
       const p = postes.get(c.poste_id)
       const z = zoneDuPoste(p)
       if (z === null || seulementLaNuit(p, hs, regles.moments)) continue
       return posteIdZone(regles.zones, z)
     }
-  return x.competences.find((c) => c.niveau === 'titulaire')?.poste_id ?? null
+  return (
+    x.competences.find((c) => estPrefere(regles.niveaux, c.niveau))?.poste_id ??
+    null
+  )
 }
 
 /** Jours de la semaine `lundi` où la personne est là : sous contrat et sans
@@ -2561,6 +2671,7 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
     lien,
     soutien: enSoutien,
     demande,
+    enRenfort,
   } = correspondances(ctx, besoins, salaries)
 
   const creneaux = new Map<string, Creneau>()
@@ -2635,7 +2746,8 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
   }
 
   const pourvus = new Map<number, number>()
-  for (const id of lien.values()) pourvus.set(id, (pourvus.get(id) ?? 0) + 1)
+  for (const [aId, id] of lien)
+    if (!enRenfort.has(aId)) pourvus.set(id, (pourvus.get(id) ?? 0) + 1)
   // Places vides : raisons sur l'horaire imposé ET sur chaque version étoile
   // et chaque remplaçant. Ces créneaux ne servent qu'ici : ils restent hors
   // de `p`, donc hors des alertes de la semaine.
@@ -2906,7 +3018,7 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
       presences.push({
         debut: c.debut,
         fin: c.fin,
-        autonome: role(sol, String(a.poste_id)) !== 'soutien',
+        autonome: !soutienSur(sol, String(a.poste_id)),
       })
     }
     const nuitDemandee = (j: number) =>
@@ -3227,6 +3339,15 @@ export function preparerGeneration(
             [...x.postes].filter((p) => !x.postesOccasionnels.has(p)),
           ),
           postesOccasionnels: new Set<string>(),
+          ...(x.niveauxPostes
+            ? {
+                niveauxPostes: new Map(
+                  [...x.niveauxPostes].filter(
+                    ([p]) => !x.postesOccasionnels.has(p),
+                  ),
+                ),
+              }
+            : {}),
         },
       ]),
     )
@@ -3687,7 +3808,8 @@ export function esquisseSuivante(
           (x) =>
             personnes.has(String(x.id)) &&
             x.competences.some(
-              (c) => c.niveau !== 'soutien' && poste(c.poste_id),
+              (c) =>
+                estAutonome(ctx.regles.niveaux, c.niveau) && poste(c.poste_id),
             ),
         )
         .map((x) => String(x.id)),

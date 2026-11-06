@@ -10,6 +10,7 @@
  * tiennent sur une ligne.
  */
 
+import { niveauLu, positionNiveau } from '#/lib/planning/niveaux.ts'
 import { libelleHoraire, nomsCourts } from '#/lib/planning/affichage.ts'
 import {
   estPossible,
@@ -48,11 +49,6 @@ import type {
 } from '#/lib/planning/types.ts'
 
 const RAISON_EXTRA = 'extra disponible'
-const RANG_NIVEAU: Record<string, number> = {
-  titulaire: 0,
-  occasionnel: 1,
-  soutien: 2,
-}
 const SANS_RAISON = 'disponible ce jour-là'
 
 export interface Raison {
@@ -60,14 +56,14 @@ export interface Raison {
   noms: string[]
 }
 
-/** Titulaire, puis dépannage, puis extra (D13 : le moteur préfère un
- * titulaire ; l'extra s'appelle). */
-export type RolePlace = 'titulaire' | 'occasionnel' | 'extra'
-const ORDRE_ROLE: Record<RolePlace, number> = {
-  titulaire: 0,
-  occasionnel: 1,
-  extra: 2,
+/** Le niveau de la personne sur la place, du préféré au dernier, puis
+ * l'extra (D13 : le moteur préfère le premier niveau ; l'extra s'appelle).
+ * `libelle` : ce qui s'affiche à côté du nom (rien pour le niveau préféré). */
+export interface RolePlace {
+  ordre: number
+  libelle: string | null
 }
+export const ROLE_EXTRA: RolePlace = { ordre: 1e6, libelle: 'extra' }
 
 /** Une personne qui tient le poste, face à UNE place. */
 export interface PersonnePlace {
@@ -295,19 +291,23 @@ export function pointsAttention(
         const x = parId.get(r.salarie_id)
         const competence = x?.competences
           .filter((c) => postesPlace.includes(c.poste_id))
-          .sort((a, b) => RANG_NIVEAU[a.niveau] - RANG_NIVEAU[b.niveau])
+          .sort(
+            (a, b) =>
+              positionNiveau(regles.niveaux, a.niveau) -
+              positionNiveau(regles.niveaux, b.niveau),
+          )
           .at(0)
-        const niveau = competence?.niveau
+        const niveau = niveauLu(regles.niveaux, competence?.niveau)
         const claires = raisonsClaires(r.salarie_id, r.regles, r.messages)
         personnes.push({
           id: r.salarie_id,
           nom: nom(r.salarie_id),
           posteId: competence?.poste_id ?? t.poste_id,
           role: aAppeler(r.salarie_id)
-            ? 'extra'
-            : niveau === 'occasionnel'
-              ? 'occasionnel'
-              : 'titulaire',
+            ? ROLE_EXTRA
+            : niveau?.autonome && niveau.rang > 0
+              ? { ordre: niveau.rang, libelle: niveau.nom.toLowerCase() }
+              : { ordre: 0, libelle: null },
           raisons: claires,
           possible: estPossible(claires),
         })
@@ -355,9 +355,7 @@ export function pointsAttention(
           .map(([message, noms]) => ({ message, noms }))
           .sort((a, b) => b.noms.length - a.noms.length),
         // Tri stable : l'ordre du référentiel tient à rôle égal.
-        personnes: personnes.sort(
-          (a, b) => ORDRE_ROLE[a.role] - ORDRE_ROLE[b.role],
-        ),
+        personnes: personnes.sort((a, b) => a.role.ordre - b.role.ordre),
         raisonCommune:
           commune && t.raison_commune
             ? { regle: t.raison_commune, phrase: commune }
@@ -725,7 +723,7 @@ export function regrouperPlaces(
           dates: r.dates && new Set(r.dates).size === nbDates ? null : r.dates,
         })),
       }))
-      .sort((a, b) => ORDRE_ROLE[a.role] - ORDRE_ROLE[b.role])
+      .sort((a, b) => a.role.ordre - b.role.ordre)
   }
   return [...groupes.values()]
 }

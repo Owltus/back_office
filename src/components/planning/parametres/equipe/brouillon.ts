@@ -7,6 +7,7 @@
  * pas n'est jamais réécrit.
  */
 
+import { estSoutien, niveauPropose } from '#/lib/planning/niveaux.ts'
 import {
   datesEntre,
   enPeriodes,
@@ -314,11 +315,12 @@ export function filtrerJours(
 
 // ------------------------------------------------------- règles d'édition
 
-/** Niveau proposé à l'ajout d'un poste. */
+/** Niveau proposé à l'ajout d'un poste : le premier niveau qui ne tient
+ * pas une place seul pour un contrat en alternance (D9), sinon le préféré. */
 export const niveauParDefaut = (
   contrat: TypeContrat,
   regles: RegleEtablissement = REGLES_PAR_DEFAUT,
-): Niveau => (enAlternance(contrat, regles) ? 'soutien' : 'titulaire')
+): Niveau => niveauPropose(regles.niveaux, enAlternance(contrat, regles))
 
 /** Journée étoile possible : au-delà de 35 h payé à l'heure, pour un
  * contrat dont le modèle a une journée étoile (`contratEtoile`, la même
@@ -687,8 +689,8 @@ export function planEvolution(
     competences: (e.competences ?? b.competences)
       .filter((c) => possibles.some((p) => p.id === c.poste_id))
       .map((c) =>
-        !alternance && c.niveau === 'soutien'
-          ? { ...c, niveau: 'titulaire' as const }
+        !alternance && estSoutien(regles.niveaux, c.niveau)
+          ? { ...c, niveau: niveauPropose(regles.niveaux, false) }
           : c,
       ),
     semaine_type: semaineComplete(b.semaine_type).map((x) =>

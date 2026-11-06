@@ -657,6 +657,10 @@ export function VueSemaine({
     ).finally(() => setDeplacement(null))
   }
 
+  const niveauxEtab = useMemo(
+    () => lireRegles(referentiel).niveaux,
+    [referentiel],
+  )
   const indice = useCallback(
     (s: Salarie, jour: number, statut: ContenuStatut | null) =>
       indiceDe(
@@ -665,8 +669,9 @@ export function VueSemaine({
         jour,
         affichee?.bilan.find((b) => b.salarie_id === s.id),
         statut,
+        niveauxEtab,
       ),
-    [enVol, affichee],
+    [enVol, affichee, niveauxEtab],
   )
 
   // Points d'attention : jours à venir ; le bouton compte ce que le panneau

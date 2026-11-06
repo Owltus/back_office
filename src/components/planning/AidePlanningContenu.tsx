@@ -215,12 +215,18 @@ function statuts(R: RegleEtablissement): ReadonlyArray<{
       ),
       texte: `Étoile au coin. Pour un contrat de plus de ${h(TEMPS_PLEIN)}, un jour par semaine se fait sur un horaire plus court (de ${h(R.contrats.journeeEtoileMin)} à moins de ${h(R.contrats.journeePleine)}).`,
     },
-    {
-      nom: 'Shift en dépannage',
-      pastille: <CarteShift c={carte({ role: 'occasionnel' })} />,
-      texte:
-        'Bouée. La personne tient ce poste en dépannage : elle sait le faire, mais ce n’est pas son poste habituel.',
-    },
+    // Le second niveau autonome (Dépannage à l'hôtel, 2026-11-06).
+    ...(R.niveaux.autonomes[1]
+      ? [
+          {
+            nom: `Shift en ${R.niveaux.autonomes[1].nom.toLowerCase()}`,
+            pastille: (
+              <CarteShift c={carte({ role: R.niveaux.autonomes[1].id })} />
+            ),
+            texte: `Bouée. La personne tient ce poste au niveau ${R.niveaux.autonomes[1].nom} : elle sait le faire, mais le planning préfère le niveau ${R.niveaux.autonomes[0].nom}.`,
+          },
+        ]
+      : []),
     {
       nom: 'Shift avec alerte',
       pastille: (

@@ -27,9 +27,13 @@ import {
   estSouhaite,
   horairesAAjouter,
   lignesDuPoste,
+  lignesNiveaux,
+  niveauRestreint,
   optionsDe,
+  parNiveau,
+  reglerNiveauCase,
+  sansDetailNiveaux,
   soutienSansBase,
-  titulaireSeulement,
 } from '#/components/planning/parametres/reglages/besoins.ts'
 import type {
   LigneBesoin,
@@ -49,19 +53,23 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '#/components/ui/popover.tsx'
-import { libelleHoraire, libelleMoment } from '#/lib/planning/affichage.ts'
+import {
+  libelleHoraire,
+  libelleMoment,
+  listeOu,
+} from '#/lib/planning/affichage.ts'
+import { NIVEAUX_HOTEL } from '#/lib/planning/niveaux.ts'
+import type { Niveaux } from '#/lib/planning/niveaux.ts'
 import { codesDuPoste } from '#/lib/planning/eligibilite.ts'
 import { alerteBesoin } from '#/lib/planning/regles.ts'
 import { presence } from '#/lib/planning/temps.ts'
 import { JOURS } from '#/lib/planning/types.ts'
-import type {
-  Horaire,
-  NiveauDemande,
-  Poste,
-  Referentiel,
-} from '#/lib/planning/types.ts'
+import type { Horaire, Poste, Referentiel } from '#/lib/planning/types.ts'
 import { cn } from '#/lib/utils.ts'
-import { useMoments } from '#/components/planning/hooks/useMoments.ts'
+import {
+  useMoments,
+  useRegles,
+} from '#/components/planning/hooks/useMoments.ts'
 
 export type Affiche = (
   posteId: number,
@@ -108,12 +116,21 @@ export function nomCase(
   ligne: LigneBesoin,
   jour: number,
   r: Reglage,
+  niveaux: Niveaux = NIVEAUX_HOTEL,
 ): string {
   const n =
     r.effectif === 0
       ? 'aucune personne nécessaire'
       : pluriel(r.effectif, 'personne nécessaire', 'personnes nécessaires')
   const options: string[] = []
+  if (parNiveau(r))
+    options.push(
+      lignesNiveaux(r, niveaux)
+        .map(
+          (l) => `${l.nombre} ${niveaux.parId.get(l.niveau)?.nom ?? l.niveau}`,
+        )
+        .join(' et '),
+    )
   if (r.soutien > 0)
     options.push(
       pluriel(
@@ -124,8 +141,9 @@ export function nomCase(
     )
   if (r.renfort > 0) options.push(`${r.renfort} en plus si besoin`)
   if (r.effectif > 0 && estSouhaite(r)) options.push('souhaité')
-  if (r.effectif + r.renfort > 0 && titulaireSeulement(r))
-    options.push('titulaire seulement')
+  const restreint = niveauRestreint(r, niveaux)
+  if (r.effectif + r.renfort > 0 && restreint)
+    options.push(`${restreint.toLowerCase()} seulement`)
   return `${poste.nom}, ${JOURS[jour].toLowerCase()}, ${libelleHoraire(ligne)} : ${[n, ...options].join(', ')}`
 }
 
@@ -138,11 +156,7 @@ export interface ActionsGrille {
     v: number,
   ) => void
   /** Obligatoire ou souhaité, niveau demandé (2026-11-05). */
-  option: (
-    ligne: LigneBesoin,
-    jour: number,
-    patch: { obligatoire?: boolean; niveau_min?: NiveauDemande },
-  ) => void
+  option: (ligne: LigneBesoin, jour: number, patch: Partial<Reglage>) => void
   /** « Appliquer ces réglages à » : toutes les valeurs de la case. */
   copier: (ligne: LigneBesoin, jour: number, cible: CibleCopie) => void
   vider: (ligne: LigneBesoin) => void
@@ -405,13 +419,15 @@ function CaseBesoin({
   actions: ActionsGrille
 }) {
   const [ouvert, setOuvert] = useState(false)
+  const niveaux = useRegles().niveaux
   const orphelin = soutienSansBase(r)
+  const restreint = niveauRestreint(r, niveaux)
   return (
     <Popover open={ouvert} onOpenChange={setOuvert}>
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label={nomCase(poste, ligne, jour, r)}
+          aria-label={nomCase(poste, ligne, jour, r, niveaux)}
           data-case={`${ligne.cle}|${jour}`}
           className={cn(
             'flex min-h-14 w-full flex-col items-center justify-center rounded-md border border-transparent transition-colors outline-none hover:border-border hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring',
@@ -430,7 +446,7 @@ function CaseBesoin({
           <span className="flex min-h-4 flex-wrap justify-center gap-x-1 text-[10px] leading-4 text-muted-foreground">
             {r.soutien > 0 && (
               <span
-                data-repere="soutien"
+                data-repere="accompagne"
                 className={cn(orphelin && 'text-amber-500 line-through')}
               >
                 +{r.soutien} app.
@@ -442,8 +458,11 @@ function CaseBesoin({
             {r.effectif > 0 && estSouhaite(r) && (
               <span data-repere="souhaite">souhaité</span>
             )}
-            {r.effectif + r.renfort > 0 && titulaireSeulement(r) && (
-              <span data-repere="titulaire">titulaire</span>
+            {r.effectif + r.renfort > 0 && restreint && (
+              <span data-repere="niveau">{restreint.toLowerCase()}</span>
+            )}
+            {r.effectif > 0 && parNiveau(r) && (
+              <span data-repere="niveau">par niveau</span>
             )}
           </span>
         </button>
@@ -478,14 +497,29 @@ function OptionsNiveau({
 }: {
   r: Reglage
   modifiable: boolean
-  onChange: (patch: {
-    obligatoire?: boolean
-    niveau_min?: NiveauDemande
-  }) => void
+  onChange: (patch: Partial<Reglage>) => void
 }) {
   const o = optionsDe(r)
+  const niveaux = useRegles().niveaux
   const sansPersonne = r.effectif === 0
   const sansPlace = r.effectif + r.renfort === 0
+  const autonomes = niveaux.autonomes
+  // Le niveau demandé, en choix : le premier seulement, puis le premier ou
+  // le suivant, et ainsi de suite ; le dernier = tout niveau (null en base).
+  const choix = autonomes.map((n, i) => ({
+    valeur: i === autonomes.length - 1 ? '' : n.id,
+    libelle:
+      i === 0
+        ? `${n.nom} seulement`
+        : listeOu(autonomes.slice(0, i + 1).map((x) => x.nom)),
+  }))
+  const courant =
+    niveaux.parId.get(o.niveau_min ?? '')?.autonome &&
+    choix.some((c) => c.valeur === o.niveau_min)
+      ? (o.niveau_min ?? '')
+      : ''
+  const restreint = niveauRestreint(r, niveaux)
+  const detail = parNiveau(r)
   return (
     <div className="flex flex-col gap-2.5">
       <div className="flex flex-col gap-1">
@@ -507,24 +541,94 @@ function OptionsNiveau({
               : "Tenue si quelqu'un est libre. Quand il manque du monde, elle reste vide en premier, sans compter comme place à pourvoir."}
         </p>
       </div>
-      <div className="flex flex-col gap-1">
-        <p className="text-xs font-medium">Niveau demandé</p>
-        <Segmente<NiveauDemande>
-          label="Niveau demandé"
-          valeur={o.niveau_min}
-          options={[
-            { valeur: 'titulaire', libelle: 'Titulaire seulement' },
-            { valeur: 'depannage', libelle: 'Titulaire ou dépannage' },
-          ]}
-          disabled={!modifiable || sansPlace}
-          onChange={(v) => onChange({ niveau_min: v })}
+      {!detail && autonomes.length > 1 && (
+        <div className="flex flex-col gap-1">
+          <p className="text-xs font-medium">Niveau demandé</p>
+          <Segmente<string>
+            label="Niveau demandé"
+            valeur={courant}
+            options={choix}
+            disabled={!modifiable || sansPlace}
+            onChange={(v) => onChange({ niveau_min: v || null })}
+          />
+          <p className="text-xs text-muted-foreground">
+            {restreint
+              ? `Seule une personne au niveau ${listeOu(
+                  autonomes
+                    .filter(
+                      (n) => n.rang <= (niveaux.parId.get(courant)?.rang ?? 0),
+                    )
+                    .map((n) => n.nom),
+                )} tient la place.`
+              : `Toute personne qui tient le poste seule peut tenir la place. Le planning préfère le niveau ${autonomes[0].nom}.`}
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Le nombre de personnes par niveau (2026-11-06) : « 1 Responsable + 2
+ * Équipiers ». Le chiffre de la case en est la somme ; une place d'un niveau
+ * reste vide si personne de ce niveau, ou mieux, n'est libre. */
+function NombreParNiveau({
+  r,
+  modifiable,
+  onChange,
+}: {
+  r: Reglage
+  modifiable: boolean
+  onChange: (r: Reglage) => void
+}) {
+  const niveaux = useRegles().niveaux
+  const detail = parNiveau(r)
+  const lignes = lignesNiveaux(r, niveaux)
+  if (niveaux.autonomes.length < 2) return null
+  return (
+    <div className="flex flex-col gap-2 border-t pt-2">
+      <label className="flex items-center gap-2 text-xs font-medium">
+        <input
+          type="checkbox"
+          className="size-4 accent-primary"
+          checked={detail}
+          disabled={!modifiable || (!detail && r.effectif === 0)}
+          onChange={(e) =>
+            onChange(
+              e.target.checked
+                ? { ...r, niveaux: lignes, niveau_min: null }
+                : sansDetailNiveaux(r, niveaux),
+            )
+          }
         />
+        Un nombre par niveau
+      </label>
+      {!detail && r.effectif === 0 && (
         <p className="text-xs text-muted-foreground">
-          {o.niveau_min === 'titulaire'
-            ? 'Seule une personne titulaire du poste tient la place. Un apprenti ou un stagiaire peut venir en plus, jamais seul.'
-            : "Une personne en dépannage peut tenir la place si aucun titulaire n'est libre."}
+          Mettez d'abord une personne nécessaire.
         </p>
-      </div>
+      )}
+      {detail && (
+        <>
+          {niveaux.autonomes.map((n) => (
+            <div key={n.id} className="flex items-center justify-between gap-3">
+              <p className="text-sm">{n.nom}</p>
+              <Compteur
+                valeur={lignes.find((l) => l.niveau === n.id)?.nombre ?? 0}
+                etiquette={`Personnes au niveau ${n.nom}`}
+                disabled={!modifiable}
+                onChange={(v) =>
+                  onChange(reglerNiveauCase(r, n.id, v, niveaux))
+                }
+              />
+            </div>
+          ))}
+          <p className="text-xs text-muted-foreground">
+            Une personne d'un niveau plus haut peut tenir la place d'un niveau
+            plus bas, jamais l'inverse. Sans personne du bon niveau, la place
+            reste vide.
+          </p>
+        </>
+      )}
     </div>
   )
 }
@@ -570,7 +674,8 @@ function PanneauCase({
         <Compteur
           valeur={r.effectif}
           etiquette="Personnes nécessaires"
-          disabled={!modifiable}
+          // Avec un nombre par niveau, le chiffre en est la somme.
+          disabled={!modifiable || parNiveau(r)}
           onChange={(v) => actions.regler(ligne, jour, 'effectif', v)}
         />
       </div>
@@ -579,6 +684,12 @@ function PanneauCase({
         r={r}
         modifiable={modifiable}
         onChange={(patch) => actions.option(ligne, jour, patch)}
+      />
+
+      <NombreParNiveau
+        r={r}
+        modifiable={modifiable}
+        onChange={(suite) => actions.option(ligne, jour, suite)}
       />
 
       <div className="flex flex-col gap-2 border-t pt-2">

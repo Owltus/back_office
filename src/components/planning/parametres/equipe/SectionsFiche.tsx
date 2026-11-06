@@ -4,6 +4,8 @@
  * Identité et contrat : `SectionIdentite.tsx`.
  */
 
+import { lireNiveaux } from '#/lib/planning/niveaux.ts'
+import type { Niveaux } from '#/lib/planning/niveaux.ts'
 import { zoneDuPoste } from '#/lib/planning/zones.ts'
 import { useMemo, useState } from 'react'
 import { Plus, Star, Trash2, X } from 'lucide-react'
@@ -44,7 +46,7 @@ import { Input } from '#/components/ui/input.tsx'
 import {
   grouperHoraires,
   libelleHoraire,
-  NIVEAUX,
+  aideNiveau,
   postesDuGroupe,
 } from '#/lib/planning/affichage.ts'
 import { resume } from '#/lib/planning/regles.ts'
@@ -69,11 +71,17 @@ export interface PropsSection {
   disabled: boolean
 }
 
-const OPTIONS_NIVEAU = (Object.keys(NIVEAUX) as Niveau[]).map((n) => ({
-  valeur: n,
-  libelle: NIVEAUX[n].libelle,
-  aide: NIVEAUX[n].aide,
-}))
+/** Les niveaux de l'établissement, dans leur ordre (2026-11-06). */
+function optionsNiveau(niveaux: Niveaux) {
+  return niveaux.liste.map((n) => {
+    const lu = niveaux.parId.get(n.id)
+    return {
+      valeur: n.id,
+      libelle: n.nom,
+      aide: lu ? aideNiveau(lu) : '',
+    }
+  })
+}
 
 const MODES: ReadonlyArray<{ valeur: ModeJour; libelle: string }> = [
   { valeur: 'auto', libelle: 'Libre' },
@@ -102,6 +110,8 @@ export function SectionCompetences({
   disabled,
 }: PropsSection) {
   const { postes, groupes } = referentiel
+  const etab = lireNiveaux(referentiel.niveaux)
+  const options = optionsNiveau(etab)
   const groupe = groupes.find((g) => g.id === b.groupe_id)
   const niveaux = new Map(b.competences.map((c) => [c.poste_id, c.niveau]))
   const tenus = postes.filter((p) => niveaux.has(p.id))
@@ -122,7 +132,7 @@ export function SectionCompetences({
   return (
     <Section
       titre="Compétences"
-      aide="Les postes qu'elle tient, et comment. Titulaire : seule sur le poste. Dépannage : seule aussi, mais le planning automatique préfère un titulaire, sauf si celui-ci ferait des heures en plus ou un 6e jour. Soutien (apprenti, stagiaire) : ne compte pas seule, toujours avec une personne autonome."
+      aide={`Les postes qu'elle tient, et à quel niveau. Le planning préfère le premier niveau. ${options.map((o) => `${o.libelle} : ${o.aide.toLowerCase()}.`).join(' ')} Les niveaux se règlent dans Postes.`}
     >
       {tenus.length === 0 && (
         <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
@@ -146,8 +156,8 @@ export function SectionCompetences({
             <span className="flex items-center gap-1">
               <Segmente<Niveau>
                 label={`Niveau sur ${p.nom}`}
-                valeur={niveaux.get(p.id) ?? 'titulaire'}
-                options={OPTIONS_NIVEAU}
+                valeur={niveaux.get(p.id) ?? options[0]?.valeur ?? ''}
+                options={options}
                 onChange={(n) => regler(p.id, n)}
                 disabled={disabled}
               />

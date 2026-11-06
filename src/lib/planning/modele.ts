@@ -7,6 +7,8 @@
 import { MINUTES_PAR_JOUR, NUIT_DEBUT, NUIT_FIN } from '#/lib/planning/temps.ts'
 import type { Periode, PeriodePresence } from '#/lib/planning/types.ts'
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
+import { NIVEAUX_HOTEL } from '#/lib/planning/niveaux.ts'
+import type { NiveauSolveur } from '#/lib/planning/niveaux.ts'
 
 /** Un poste à tenir sur une plage horaire, avec le nombre de personnes. */
 export interface Creneau {
@@ -78,9 +80,15 @@ export interface Creneau {
    * possible, vide avant toute place obligatoire, jamais une place à
    * pourvoir ni une plage de continuité. Faux partout ailleurs. */
   souhaite: boolean
-  /** Niveau demandé « titulaire seulement » (2026-11-05) : jamais tenu en
-   * dépannage ; un soutien reste possible sur ses places de soutien. */
-  titulaireSeul: boolean
+  /** Niveau demandé (2026-11-05 ; niveaux de l'établissement depuis le
+   * 2026-11-06) : rang du moins préféré des niveaux autonomes qui tiennent la
+   * place, et son nom. Null : tout niveau autonome. Un soutien reste possible
+   * sur ses places de soutien. */
+  niveauMax: { rang: number; nom: string } | null
+  /** Nombre par niveau (2026-11-06, `demandeDe`) : nombre cumulé demandé
+   * jusqu'à chaque rang autonome (le dernier = `effectif`). Null : un seul
+   * niveau demandé (le modèle d'avant). */
+  paliers: ReadonlyArray<{ rang: number; cumul: number; nom: string }> | null
 }
 
 /** Le poste est-il indispensable au fonctionnement ? Un choix oui / non
@@ -122,7 +130,8 @@ export function creneau(
     travailMural: null,
     indispensable: false,
     souhaite: false,
-    titulaireSeul: false,
+    niveauMax: null,
+    paliers: null,
     ...c,
   }
 }
@@ -188,8 +197,13 @@ export interface SalarieSolveur {
   /** (jour, code) : horaire imposé ce jour-là. Clé `${jour}|${code}`. */
   shiftImpose: ReadonlyArray<readonly [number, string]>
   shiftsAutorises: ReadonlySet<string>
+  /** Postes tenus à un niveau autonome qui n'est pas le préféré. */
   postesOccasionnels: ReadonlySet<string>
+  /** Postes tenus à un niveau non autonome. */
   postesSoutien: ReadonlySet<string>
+  /** Niveau de chaque poste tenu (`niveaux.ts`, 2026-11-06). Absent (données
+   * de test) : lu sur les trois ensembles, aux niveaux de l'hôtel. */
+  niveauxPostes?: ReadonlyMap<string, NiveauSolveur>
   journeesCourtesMax: number | null
   journeePleine: number
   /** Durées de travail que le calcul peut poser (`journeesDuCalcul`,
@@ -372,13 +386,65 @@ export function dansLeContrat(s: SalarieSolveur, c: Creneau): boolean {
   )
 }
 
-export type Role = 'titulaire' | 'occasionnel' | 'soutien'
+const PREFERE = NIVEAUX_HOTEL.autonomes[0]
+const SECOURS = NIVEAUX_HOTEL.autonomes[NIVEAUX_HOTEL.autonomes.length - 1]
+const SOUTIEN = [...NIVEAUX_HOTEL.parId.values()].find(
+  (n) => !n.autonome,
+) as NiveauSolveur
 
-export function role(s: SalarieSolveur, poste: string): Role | null {
-  if (s.postes.has(poste)) {
-    return s.postesOccasionnels.has(poste) ? 'occasionnel' : 'titulaire'
-  }
-  return s.postesSoutien.has(poste) ? 'soutien' : null
+/** Le niveau de cette personne sur ce poste ; null : elle ne le tient pas. */
+export function niveauSur(
+  s: SalarieSolveur,
+  poste: string,
+): NiveauSolveur | null {
+  const n = s.niveauxPostes?.get(poste)
+  if (n !== undefined) return n
+  if (s.postes.has(poste))
+    return s.postesOccasionnels.has(poste) ? SECOURS : PREFERE
+  return s.postesSoutien.has(poste) ? SOUTIEN : null
+}
+
+/** La clé du niveau de cette personne sur ce poste (affichage). */
+export function role(s: SalarieSolveur, poste: string): string | null {
+  return niveauSur(s, poste)?.id ?? null
+}
+
+/** Tient une place seul sur ce poste. */
+export function autonomeSur(s: SalarieSolveur, poste: string): boolean {
+  return niveauSur(s, poste)?.autonome === true
+}
+
+/** Tient ce poste à un niveau non autonome (une place de soutien). */
+export function soutienSur(s: SalarieSolveur, poste: string): boolean {
+  return niveauSur(s, poste)?.autonome === false
+}
+
+/** Jamais seul sur ce poste (D9). */
+export function jamaisSeulSur(s: SalarieSolveur, poste: string): boolean {
+  return niveauSur(s, poste)?.jamaisSeul === true
+}
+
+/** Accompagne une personne jamais seule : autonome, et pas elle-même
+ * jamais seule. */
+export function referentSur(s: SalarieSolveur, poste: string): boolean {
+  const n = niveauSur(s, poste)
+  return n !== null && n.autonome && !n.jamaisSeul
+}
+
+/** Part du prix du dépannage (0 : le niveau préféré ou non autonome). */
+export function partSur(s: SalarieSolveur, poste: string): number {
+  return niveauSur(s, poste)?.part ?? 0
+}
+
+/** Autonome sur ce poste, mais pas au niveau préféré (en dépannage). */
+export function enDepannageSur(s: SalarieSolveur, poste: string): boolean {
+  const n = niveauSur(s, poste)
+  return n !== null && n.autonome && n.rang > 0
+}
+
+/** Le niveau tient-il la place (niveau demandé) ? */
+export function niveauAccepte(n: NiveauSolveur, c: Creneau): boolean {
+  return !n.autonome || c.niveauMax === null || n.rang <= c.niveauMax.rang
 }
 
 /** Un moment du tableau de l'accueil (`presence.ts`). Depuis le 2026-11-01

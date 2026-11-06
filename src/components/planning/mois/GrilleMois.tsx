@@ -12,6 +12,7 @@
  * visuels : la base tranche.
  */
 
+import { estPrefere } from '#/lib/planning/niveaux.ts'
 import { useMemo, useState } from 'react'
 import type { CSSProperties, MouseEvent, ReactNode } from 'react'
 import {
@@ -113,7 +114,8 @@ export type EnVol =
       nom: string
     }
 
-type Indice = 'ok' | 'depannage' | 'deconseille' | null
+/** « possible » : un niveau qui n'est pas le préféré (2026-11-06). */
+type Indice = 'ok' | 'possible' | 'deconseille' | null
 
 export interface Depot {
   vol: EnVol
@@ -224,7 +226,7 @@ export function GrilleMois({
       (x) => x.poste_id === enVol.shift.poste_id,
     )?.niveau
     if (!niveau) return 'deconseille'
-    return niveau === 'titulaire' ? 'ok' : 'depannage'
+    return estPrefere(regles.niveaux, niveau) ? 'ok' : 'possible'
   }
 
   const debutVol = (e: DragStartEvent) => {
@@ -511,7 +513,7 @@ export function GrilleMois({
 
 const classesIndice: Record<Exclude<Indice, null>, string> = {
   ok: 'shadow-[inset_0_0_0_2px_rgb(16_185_129/0.6)]',
-  depannage: 'shadow-[inset_0_0_0_2px_rgb(245_158_11/0.7)]',
+  possible: 'shadow-[inset_0_0_0_2px_rgb(245_158_11/0.7)]',
   deconseille: 'bg-destructive/15',
 }
 

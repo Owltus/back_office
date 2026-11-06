@@ -5,6 +5,9 @@
  * carte dans un `useDraggable`.
  */
 
+import { useRegles } from '#/components/planning/hooks/useMoments.ts'
+import { NIVEAUX_HOTEL, niveauLu } from '#/lib/planning/niveaux.ts'
+import type { Niveaux } from '#/lib/planning/niveaux.ts'
 import { memo } from 'react'
 import type { CSSProperties } from 'react'
 import { useDraggable } from '@dnd-kit/core'
@@ -67,14 +70,18 @@ export function ligneAuLieuDe(
   return `${libelleHoraire(horaire)} au lieu de ${libelleHoraire(demande)}`
 }
 
-export function texteCarte(c: ContenuCarte): string[] {
+export function texteCarte(
+  c: ContenuCarte,
+  niveaux: Niveaux = NIVEAUX_HOTEL,
+): string[] {
+  const n = niveauLu(niveaux, c.role)
   return [
     `${!c.horaire ? 'Horaire spécifique · ' : c.horaire.periode ? `${libelleMoment(c.horaire.periode)} · ` : ''}${heureAffichee(c.debut)}–${heureAffichee(c.fin)}`,
     ligneAuLieuDe(c.horaire, c.demande),
     c.poste?.nom,
     c.etoile && 'Journée étoile : un horaire de 7 h',
-    c.role === 'soutien' && 'En soutien (ne compte pas seul)',
-    c.role === 'occasionnel' && 'En dépannage sur ce poste',
+    n && !n.autonome && `En ${n.nom.toLowerCase()} (ne compte pas seul)`,
+    n?.autonome && n.rang > 0 && `En ${n.nom.toLowerCase()} sur ce poste`,
     c.epinglee
       ? 'Validé : gardé lors des générations'
       : 'Proposition : recalculée à la prochaine génération (clic droit pour valider)',
@@ -97,6 +104,8 @@ function Infobulle({ lignes }: { lignes: string[] }) {
 /** La carte d'un shift. `enVol` : le fantôme qui suit la souris. */
 export function CarteShift({ c, enVol }: { c: ContenuCarte; enVol?: boolean }) {
   const loi = c.alertes.some((a) => a.nature === 'loi')
+  const nv = niveauLu(useRegles().niveaux, c.role)
+  const secours = nv?.autonome && nv.rang > 0 ? nv : null
   return (
     <div
       className={cn('planning-carte', enVol && 'planning-carte-vol')}
@@ -134,9 +143,7 @@ export function CarteShift({ c, enVol }: { c: ContenuCarte; enVol?: boolean }) {
             aria-label="Validé"
           />
         )}
-        {c.role === 'occasionnel' && (
-          <LifeBuoy className="size-3" aria-label="Dépannage" />
-        )}
+        {secours && <LifeBuoy className="size-3" aria-label={secours.nom} />}
         {c.alertes.length > 0 && (
           <TriangleAlert
             className={cn(
@@ -173,7 +180,7 @@ export const CarteShiftDeplacable = memo(function CarteShiftDeplacable({
     id,
     disabled: !actif,
   })
-  const libelle = texteCarte(c)
+  const libelle = texteCarte(c, useRegles().niveaux)
   return (
     <Tip label={<Infobulle lignes={libelle} />} side="top">
       <div

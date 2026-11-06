@@ -741,7 +741,7 @@ describe('verifierReglages, points complets (test de mutation)', () => {
       point(
         'sans-autonome:2',
         'equipe',
-        "Le poste Bar a des besoins, mais personne n'y est titulaire ni en dépannage.",
+        "Le poste Bar a des besoins, mais personne n'y a le niveau Titulaire ou Dépannage.",
         { page: '/planning/postes', cible: 'poste-2' },
       ),
     )
@@ -755,7 +755,7 @@ describe('verifierReglages, points complets (test de mutation)', () => {
       point(
         'presence-sans-titulaire:2',
         'equipe',
-        "Le poste Club fait partie de l'accueil, mais personne n'y est titulaire.",
+        "Le poste Club fait partie de l'accueil, mais personne n'y a le niveau Titulaire.",
         { page: '/planning/postes', cible: 'poste-2' },
       ),
     )
@@ -937,7 +937,7 @@ describe('verifierReglages, points complets (test de mutation)', () => {
       point(
         'heures:1',
         'besoins',
-        'Le poste Réception demande 112 h par semaine ; ses titulaires ont 90 h de contrat. Il manque 22 h.',
+        'Le poste Réception demande 112 h par semaine ; les personnes au niveau Titulaire ont 90 h de contrat. Il manque 22 h.',
         { page: '/planning/besoins', cible: 'poste-1' },
       ),
     )
@@ -982,7 +982,7 @@ describe('verifierReglages, points complets (test de mutation)', () => {
       point(
         'heures:total',
         'besoins',
-        'Les besoins demandent 168 h par semaine ; les titulaires ont 117 h de contrat. Il manque 51 h.',
+        'Les besoins demandent 168 h par semaine ; les personnes au niveau Titulaire ont 117 h de contrat. Il manque 51 h.',
         { page: '/planning/besoins' },
       ),
     )

@@ -195,7 +195,8 @@ describe('Besoins', () => {
       soutien: 1,
       renfort: 0,
       obligatoire: true,
-      niveau_min: 'depannage',
+      niveau_min: null,
+      niveaux: [],
     })
     // Le besoin existant, relu en base (même objet).
     expect(service.reglerBesoin.mock.calls[0][1]).toBe(existant)
@@ -541,7 +542,7 @@ describe('Besoins', () => {
       expect(service.reglerBesoin.mock.calls[0][0]).toMatchObject({
         effectif: 1,
         obligatoire: false,
-        niveau_min: 'depannage',
+        niveau_min: null,
       })
       await waitFor(() =>
         expect(
@@ -574,7 +575,7 @@ describe('Besoins', () => {
       await waitFor(() =>
         expect(
           caseDe('Réception', 'lundi', '07:00–15:45').querySelector(
-            '[data-repere="titulaire"]',
+            '[data-repere="niveau"]',
           ),
         ).toBeTruthy(),
       )
@@ -595,6 +596,42 @@ describe('Besoins', () => {
           }) as HTMLButtonElement
         ).disabled,
       ).toBe(false)
+    })
+
+    it('un nombre par niveau : 1 Titulaire et 1 Dépannage, le chiffre en est la somme (2026-11-06)', async () => {
+      monter(<BesoinsPage />)
+      onglet('Réception')
+      const panneau = ouvrirCase('Réception', 'lundi', '07:00–15:45')
+      fireEvent.click(
+        panneau.getByRole('checkbox', { name: 'Un nombre par niveau' }),
+      )
+      await waitFor(() => expect(service.reglerBesoin).toHaveBeenCalledTimes(1))
+      // La personne nécessaire passe au dernier niveau (tout niveau).
+      expect(service.reglerBesoin.mock.calls[0][0]).toMatchObject({
+        effectif: 1,
+        niveau_min: null,
+        niveaux: [{ niveau: 'occasionnel', nombre: 1 }],
+      })
+      fireEvent.click(
+        panneau.getByRole('button', {
+          name: 'Personnes au niveau Titulaire : un de plus',
+        }),
+      )
+      await waitFor(() => expect(service.reglerBesoin).toHaveBeenCalledTimes(2))
+      expect(service.reglerBesoin.mock.calls[1][0]).toMatchObject({
+        effectif: 2,
+        niveaux: [
+          { niveau: 'titulaire', nombre: 1 },
+          { niveau: 'occasionnel', nombre: 1 },
+        ],
+      })
+      await waitFor(() =>
+        expect(
+          caseDe('Réception', 'lundi', '07:00–15:45').getAttribute(
+            'aria-label',
+          ),
+        ).toContain('1 Titulaire et 1 Dépannage'),
+      )
     })
 
     it('l’ordre de décision est écrit d’après le réglage indispensable', () => {

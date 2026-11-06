@@ -253,12 +253,12 @@
   background: var(--couleur);
 }
 
-.planning-point-poste[data-niveau='occasionnel'] {
+.planning-point-poste[data-niveau='autre'] {
   background: transparent;
   box-shadow: inset 0 0 0 2px var(--couleur);
 }
 
-.planning-point-poste[data-niveau='soutien'] {
+.planning-point-poste[data-niveau='accompagne'] {
   background: transparent;
   border: 2px dotted var(--couleur);
 }
@@ -269,7 +269,7 @@
   box-shadow: inset 0 0 0 1px rgb(16 185 129 / 0.45);
 }
 
-.planning-grille[data-glisser] .planning-cellule[data-indice='depannage'] {
+.planning-grille[data-glisser] .planning-cellule[data-indice='possible'] {
   box-shadow: inset 0 0 0 1px rgb(245 158 11 / 0.45);
 }
 
@@ -286,7 +286,7 @@
   box-shadow: inset 0 0 0 2px rgb(16 185 129);
 }
 
-.planning-grille .planning-cellule[data-survol][data-indice='depannage'] {
+.planning-grille .planning-cellule[data-survol][data-indice='possible'] {
   background-color: rgb(245 158 11 / 0.12);
   box-shadow: inset 0 0 0 2px rgb(245 158 11);
 }

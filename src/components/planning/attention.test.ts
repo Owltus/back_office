@@ -140,14 +140,15 @@ describe('points d’attention', () => {
     expect(
       dimanche.personnes.map((x) => [
         x.nom,
-        x.role,
+        x.role.libelle,
         x.raisons.map((r) => r.phrase),
         x.possible,
       ]),
     ).toEqual([
-      ['Léa', 'titulaire', ['En repos fixe ce jour-là'], false],
-      ['Zoé', 'titulaire', ['Libre ce jour-là'], true],
-      ['Paul', 'occasionnel', ['En repos fixe ce jour-là'], false],
+      // Le niveau préféré n'a pas de libellé ; les autres, leur nom.
+      ['Léa', null, ['En repos fixe ce jour-là'], false],
+      ['Zoé', null, ['Libre ce jour-là'], true],
+      ['Paul', 'dépannage', ['En repos fixe ce jour-là'], false],
       ['Max', 'extra', ['Extra libre'], true],
       ['Ana', 'extra', ['Extra libre'], true],
     ])
@@ -662,7 +663,7 @@ describe('places de l’accueil (2026-11-01)', () => {
     expect(s.moment).toBe('matin')
     const lea = s.personnes.find((x) => x.id === 1)
     expect(lea?.posteId).toBe(8)
-    expect(lea?.role).toBe('titulaire')
+    expect(lea?.role).toEqual({ ordre: 0, libelle: null })
     // Paul ne tient aucun poste du matin de l'accueil : il reste sur la place.
     expect(s.personnes.find((x) => x.id === 2)?.posteId).toBe(0)
     const [g] = regrouperPlaces([s])

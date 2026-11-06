@@ -229,7 +229,8 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
           soutien: b.soutien,
           renfort: b.renfort,
           obligatoire: b.obligatoire ?? true,
-          niveau_min: b.niveau_min ?? 'depannage',
+          niveau_min: b.niveau_min ?? null,
+          niveaux: b.niveaux ?? [],
         }
       : RIEN
   }

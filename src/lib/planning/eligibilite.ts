@@ -21,6 +21,8 @@
  * générateur ne la passe jamais, le vérificateur signale le shift posé.
  */
 
+import { estPrefere, NIVEAUX_HOTEL } from '#/lib/planning/niveaux.ts'
+import type { Niveaux } from '#/lib/planning/niveaux.ts'
 import {
   contratEtoile,
   horairesNormaux,
@@ -142,10 +144,11 @@ export function posteDeReference(
   personne: Pick<Salarie, 'competences'>,
   postes: ReadonlyArray<{ id: number }>,
   shift?: { poste_id: number },
+  niveaux: Niveaux = NIVEAUX_HOTEL,
 ): number | undefined {
   return (
     shift?.poste_id ??
-    personne.competences.find((c) => c.niveau === 'titulaire')?.poste_id ??
+    personne.competences.find((c) => estPrefere(niveaux, c.niveau))?.poste_id ??
     personne.competences.at(0)?.poste_id ??
     postes.at(0)?.id
   )

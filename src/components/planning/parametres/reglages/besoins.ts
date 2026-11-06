@@ -3,7 +3,14 @@
  * `lignesDuPoste`, `trouver`, `correspond`). Pur.
  */
 
-import type { Besoin, Horaire, NiveauDemande } from '#/lib/planning/types.ts'
+import { NIVEAUX_HOTEL, niveauLu } from '#/lib/planning/niveaux.ts'
+import type { Niveaux } from '#/lib/planning/niveaux.ts'
+import type {
+  Besoin,
+  BesoinNiveau,
+  Horaire,
+  NiveauDemande,
+} from '#/lib/planning/types.ts'
 
 /** Une ligne : un horaire du référentiel, ou un horaire spécifique. */
 export interface LigneBesoin {
@@ -22,22 +29,89 @@ export interface Reglage {
   renfort: number
   obligatoire?: boolean
   niveau_min?: NiveauDemande
+  /** Nombre par niveau (2026-11-06) ; vide : les personnes nécessaires, au
+   * niveau demandé. Rempli : `effectif` en est la somme. */
+  niveaux?: BesoinNiveau[]
 }
 
 /** Les personnes nécessaires sont souhaitées, pas obligatoires. */
 export const estSouhaite = (r: Reglage) => r.obligatoire === false
 
-/** La case demande un titulaire (jamais un dépannage). */
-export const titulaireSeulement = (r: Reglage) => r.niveau_min === 'titulaire'
+/** La case demande un nombre par niveau. */
+export const parNiveau = (r: Reglage) => (r.niveaux?.length ?? 0) > 0
+
+/** Le niveau demandé par la case, s'il restreint la place (un niveau
+ * autonome qui n'est pas le dernier) ; null sinon. */
+export function niveauRestreint(
+  r: Reglage,
+  niveaux: Niveaux = NIVEAUX_HOTEL,
+): string | null {
+  if (parNiveau(r)) return null
+  const n = niveauLu(niveaux, r.niveau_min)
+  return n && n.autonome && n.rang < niveaux.autonomes.length - 1 ? n.nom : null
+}
+
+/** Le nombre par niveau d'une case : celui qu'elle porte, sinon ses
+ * personnes nécessaires au niveau demandé (le dernier autonome sans
+ * niveau demandé). */
+export function lignesNiveaux(
+  r: Reglage,
+  niveaux: Niveaux = NIVEAUX_HOTEL,
+): BesoinNiveau[] {
+  if (parNiveau(r)) return r.niveaux ?? []
+  if (r.effectif <= 0) return []
+  const n = niveauLu(niveaux, r.niveau_min)
+  const id = n && n.autonome ? n.id : (niveaux.autonomes.at(-1)?.id ?? null)
+  return id ? [{ niveau: id, nombre: r.effectif }] : []
+}
+
+/** Règle le nombre d'un niveau : la case passe au nombre par niveau ;
+ * `effectif` suit. Plus aucun nombre : la case revient aux personnes
+ * nécessaires (0). */
+export function reglerNiveauCase(
+  r: Reglage,
+  niveau: string,
+  nombre: number,
+  niveaux: Niveaux = NIVEAUX_HOTEL,
+): Reglage {
+  const lignes = lignesNiveaux(r, niveaux).filter((l) => l.niveau !== niveau)
+  if (nombre > 0) lignes.push({ niveau, nombre })
+  const ordre = (id: string) => niveaux.parId.get(id)?.position ?? 99
+  lignes.sort((a, b) => ordre(a.niveau) - ordre(b.niveau))
+  const effectif = lignes.reduce((t, l) => t + l.nombre, 0)
+  if (!effectif) return reglerChamp({ ...r, niveaux: [] }, 'effectif', 0)
+  return { ...r, effectif, niveaux: lignes, niveau_min: null }
+}
+
+/** Revient à un seul chiffre : la somme, au moins préféré des niveaux
+ * demandés. */
+export function sansDetailNiveaux(
+  r: Reglage,
+  niveaux: Niveaux = NIVEAUX_HOTEL,
+): Reglage {
+  const lignes = lignesNiveaux(r, niveaux)
+  const pire = lignes
+    .map((l) => niveaux.parId.get(l.niveau))
+    .filter((n) => n?.autonome)
+    .sort((a, b) => (b?.rang ?? 0) - (a?.rang ?? 0))[0]
+  return {
+    ...r,
+    niveaux: [],
+    niveau_min:
+      pire && pire.rang < niveaux.autonomes.length - 1 ? pire.id : null,
+  }
+}
 
 /** Les deux options d'une case, avec leurs défauts. */
 export function optionsDe(r: Reglage): {
   obligatoire: boolean
   niveau_min: NiveauDemande
+  niveaux: BesoinNiveau[]
 } {
   return {
     obligatoire: r.obligatoire !== false,
-    niveau_min: r.niveau_min ?? 'depannage',
+    niveau_min: r.niveau_min ?? null,
+    niveaux: r.niveaux ?? [],
   }
 }
 
@@ -75,7 +149,9 @@ export function reglerChamp(
   const v = Math.max(0, valeur)
   if (champ === 'effectif') {
     const soutien = v + r.renfort === 0 ? 0 : r.soutien
-    return { ...r, effectif: v, soutien, renfort: r.renfort }
+    // Un chiffre réglé à la main remplace le nombre par niveau.
+    const sans = parNiveau(r) ? { niveaux: [] } : {}
+    return { ...r, ...sans, effectif: v, soutien, renfort: r.renfort }
   }
   if (champ === 'renfort') {
     return v + r.effectif === 0

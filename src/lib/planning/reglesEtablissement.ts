@@ -18,6 +18,8 @@
 import { lireMoments, MOMENTS_HOTEL } from '#/lib/planning/moment.ts'
 import type { Moments } from '#/lib/planning/moment.ts'
 import { lireZones, zoneParDefaut } from '#/lib/planning/zones.ts'
+import { lireNiveaux, NIVEAUX_HOTEL } from '#/lib/planning/niveaux.ts'
+import type { Niveaux } from '#/lib/planning/niveaux.ts'
 import type { ZoneRegle } from '#/lib/planning/zones.ts'
 import type {
   CritereEquite,
@@ -141,6 +143,9 @@ export interface RegleEtablissement {
    * relève, sa passation, sa tolérance. Sans ligne : l'accueil seul, aux
    * réglages de `passations`. */
   zones: readonly ZoneRegle[]
+  /** Les niveaux d'une personne sur un poste (`planning_niveaux`,
+   * 2026-11-06, `niveaux.ts`). Sans ligne : ceux de l'hôtel. */
+  niveaux: Niveaux
   accueil: {
     /** Personnes la nuit au calcul (plafond dur, un deuxième se pose à la
      * main). */
@@ -243,6 +248,7 @@ export const REGLES_PAR_DEFAUT: RegleEtablissement = {
       equipeTolerance: 30,
     }),
   ],
+  niveaux: NIVEAUX_HOTEL,
   accueil: { personnesNuit: 1 },
   ecole: { veilleFin: 21 * H, lendemainDebut: 8 * H },
   conges: { congeLong: 5 },
@@ -309,7 +315,12 @@ export function lireRegles(
   referentiel?: Partial<
     Pick<
       Referentiel,
-      'reglages' | 'modelesContrat' | 'feriesAjoutes' | 'moments' | 'zones'
+      | 'reglages'
+      | 'modelesContrat'
+      | 'feriesAjoutes'
+      | 'moments'
+      | 'zones'
+      | 'niveaux'
     >
   > | null,
 ): RegleEtablissement {
@@ -355,6 +366,7 @@ export function lireRegles(
     passations,
     moments: lireMoments(referentiel?.moments),
     zones: lireZones(referentiel?.zones, zoneParDefaut(passations)),
+    niveaux: lireNiveaux(referentiel?.niveaux),
     accueil: {
       personnesNuit: r.personnes_nuit ?? d.accueil.personnesNuit,
     },

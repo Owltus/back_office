@@ -63,7 +63,8 @@ const memeReglage = (a: Reglage, b: Reglage) =>
   a.soutien === b.soutien &&
   a.renfort === b.renfort &&
   optionsDe(a).obligatoire === optionsDe(b).obligatoire &&
-  optionsDe(a).niveau_min === optionsDe(b).niveau_min
+  optionsDe(a).niveau_min === optionsDe(b).niveau_min &&
+  JSON.stringify(optionsDe(a).niveaux) === JSON.stringify(optionsDe(b).niveaux)
 const memesBornes = (a: Bornes, b: Bornes) =>
   a.minimum === b.minimum && a.maximum === b.maximum
 

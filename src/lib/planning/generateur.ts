@@ -41,7 +41,13 @@ import {
   jourDe,
   presenceMax,
   rangImportance,
-  role,
+  enDepannageSur,
+  jamaisSeulSur,
+  niveauAccepte,
+  niveauSur,
+  partSur,
+  referentSur,
+  soutienSur,
   toucheLaNuit,
   journeeDe,
   travail,
@@ -1045,18 +1051,19 @@ export function reposAvecVoisins(s: SalarieSolveur, c: Creneau): boolean {
 
 export function compatible(s: SalarieSolveur, c: Creneau): boolean {
   const j = jourDe(c)
-  const r = role(s, c.poste)
+  const n = niveauSur(s, c.poste)
   return (
     // Un extra n'est JAMAIS placé par le calcul (décision utilisateur du
     // 2026-11-03 : « on contacte un extra avant de le shifter, laisse les
     // cases vides ») : seulement posé à la main. Un soutien trouve toujours
     // sa place sur l'accueil (D5), accompagné (`construire`).
     !s.placementManuel &&
-    r !== null &&
-    (r !== 'soutien' || c.soutien > 0 || c.accueil) &&
-    // Niveau demandé « titulaire seulement » (2026-11-05) : jamais un
-    // dépannage ; un soutien garde ses places de soutien (D9).
-    !(r === 'occasionnel' && c.titulaireSeul) &&
+    n !== null &&
+    (n.autonome || c.soutien > 0 || c.accueil) &&
+    // Niveau demandé (2026-11-05, niveaux de l'établissement le 2026-11-06) :
+    // jamais un niveau moins préféré que celui demandé ; un soutien garde
+    // ses places de soutien (D9).
+    niveauAccepte(n, c) &&
     !s.indisponibilites.has(j) &&
     !s.horsContrat.has(j) &&
     dansLeContrat(s, c) &&
@@ -1391,16 +1398,28 @@ export function construire(
     // Le besoin fixe la place ; sans lui (remplaçant orphelin), le premier.
     const tete = membres.find((c) => c.id === g) ?? membres[0]
     const autonomes: string[] = []
+    /** Rang de niveau de chaque autonome (nombre par niveau, 2026-11-06). */
+    const rangs: number[] = []
+    const referents: string[] = []
     const soutiens: Array<[SalarieSolveur, string, Creneau]> = []
+    /** Autonomes « jamais seuls » (un niveau autonome qui l'est). */
+    const seuls: Array<[SalarieSolveur, string, Creneau]> = []
     for (const c of membres) {
       for (const s of p.salaries) {
         const v = x.get(cle(s.id, c.id))
         if (!v) continue
-        const r = role(s, c.poste)
-        if (r === 'soutien') soutiens.push([s, v, c])
-        else autonomes.push(v)
-        // P4 : un dépannage coûte, un titulaire libre passe devant (D13).
-        if (r === 'occasionnel') m.cout(coutDepannage(c), v)
+        const n = niveauSur(s, c.poste)
+        if (soutienSur(s, c.poste)) soutiens.push([s, v, c])
+        else {
+          autonomes.push(v)
+          rangs.push(n?.rang ?? 0)
+          if (referentSur(s, c.poste)) referents.push(v)
+          else if (jamaisSeulSur(s, c.poste)) seuls.push([s, v, c])
+        }
+        // P4 : un dépannage coûte, un titulaire libre passe devant (D13) ;
+        // un niveau entre les deux, une part du prix (`partSur`).
+        const part = partSur(s, c.poste)
+        if (part > 0) m.cout(coutDepannage(c) * part, v)
         // P4 : un autre horaire du cycle coûte, l'horaire imposé passe devant
         // (D5, D13, D16), en plus du dépannage s'il y a lieu ; l'écart
         // d'heures avec le besoin est rendu (`coutRemplacant`).
@@ -1424,6 +1443,46 @@ export function construire(
         pl.decalage(rangPlace(tete)),
       vm,
     )
+    // Nombre par niveau (2026-11-06) : « 1 Responsable + 2 Équipiers ».
+    // Jusqu'à chaque rang demandé, les personnes de ce rang ou mieux, plus
+    // les places vides, couvrent le nombre cumulé (les places vides sont
+    // celles qu'aucun niveau assez haut ne tient : `vm`) ; au-delà, un niveau
+    // moins préféré ne prend que les places qui l'acceptent, plus les
+    // renforts (et ce qui est posé à la main).
+    if (tete.paliers) {
+      for (const palier of tete.paliers.slice(0, -1)) {
+        const haut = autonomes.filter((_, i) => rangs[i] <= palier.rang)
+        m.ajoute(
+          [...haut.map((v) => [1, v] as Terme), [1, vm]],
+          '>=',
+          palier.cumul,
+        )
+        const bas = autonomes.filter((_, i) => rangs[i] > palier.rang)
+        const basImposes = bas.filter((v) =>
+          membres.some((c) =>
+            p.salaries.some(
+              (s) =>
+                x.get(cle(s.id, c.id)) === v && imposees.has(cle(s.id, c.id)),
+            ),
+          ),
+        ).length
+        if (bas.length)
+          m.ajoute(
+            bas.map((v) => [1, v] as Terme),
+            '<=',
+            Math.max(
+              tete.effectif - palier.cumul + tete.facultatif,
+              basImposes,
+            ),
+          )
+      }
+    }
+    // Un niveau autonome « jamais seul » : avec une personne qui ne l'est
+    // pas, sur la même place.
+    for (const [s, v, c] of seuls) {
+      if (!imposees.has(cle(s.id, c.id)))
+        m.ajoute([[1, v], ...referents.map((a) => [-1, a] as Terme)], '<=', 0)
+    }
     if (soutiens.length) {
       const nbImposes = soutiens.filter(([s, , c]) =>
         imposees.has(cle(s.id, c.id)),
@@ -1433,10 +1492,11 @@ export function construire(
         '<=',
         Math.max(tete.soutien, nbImposes),
       )
-      // Soutien jamais seul : compté sur la place entière.
+      // Soutien jamais seul : compté sur la place entière, avec une
+      // personne autonome qui n'est pas elle-même « jamais seule ».
       for (const [s, v, c] of soutiens) {
-        if (!imposees.has(cle(s.id, c.id))) {
-          m.ajoute([[1, v], ...autonomes.map((a) => [-1, a] as Terme)], '<=', 0)
+        if (!imposees.has(cle(s.id, c.id)) && jamaisSeulSur(s, c.poste)) {
+          m.ajoute([[1, v], ...referents.map((a) => [-1, a] as Terme)], '<=', 0)
         }
       }
     }
@@ -1454,7 +1514,7 @@ export function construire(
   // réduction). Un shift posé (`a…`) garde ses variables propres.
   const sommesAccueil = new Map<
     string,
-    { tous: Terme[]; autonomes: Terme[]; n: number }
+    { tous: Terme[]; autonomes: Terme[]; referents: Terme[]; n: number }
   >()
   const sommer = (termes: Terme[]): Terme[] => {
     if (termes.length <= 1) return termes
@@ -1466,12 +1526,14 @@ export function construire(
     if (!c.accueil) continue
     const tous: Terme[] = []
     const autonomes: Terme[] = []
+    const referents: Terme[] = []
     for (const s of p.salaries) {
       const v = x.get(cle(s.id, c.id))
       if (!v) continue
       tous.push([1, v])
-      if (role(s, c.poste) === 'soutien') continue
+      if (soutienSur(s, c.poste)) continue
       autonomes.push([1, v])
+      if (referentSur(s, c.poste)) referents.push([1, v])
     }
     if (!tous.length) continue
     const memes = autonomes.length === tous.length
@@ -1479,18 +1541,29 @@ export function construire(
     sommesAccueil.set(c.id, {
       tous: memes ? sa : sommer(tous),
       autonomes: sa,
+      // À l'hôtel, les autonomes sont tous des référents : la même somme.
+      referents: referents.length === autonomes.length ? sa : sommer(referents),
       n: tous.length,
     })
   }
   /** Les termes d'un créneau qui comptent : sa somme pour un candidat, ses
    * variables une à une sinon. */
-  const termesDe = (c: Creneau, quoi: 'tous' | 'autonomes'): Terme[] => {
+  const termesDe = (
+    c: Creneau,
+    quoi: 'tous' | 'autonomes' | 'referents',
+  ): Terme[] => {
     if (c.accueil) return sommesAccueil.get(c.id)?.[quoi] ?? []
     const r: Terme[] = []
     for (const s of p.salaries) {
       const v = x.get(cle(s.id, c.id))
       if (!v) continue
-      if (quoi === 'tous' || role(s, c.poste) !== 'soutien') r.push([1, v])
+      if (
+        quoi === 'tous' ||
+        (quoi === 'autonomes'
+          ? !soutienSur(s, c.poste)
+          : referentSur(s, c.poste))
+      )
+        r.push([1, v])
     }
     return r
   }
@@ -1510,15 +1583,15 @@ export function construire(
       const k = cle(s.id, c.id)
       const v = x.get(k)
       if (!v) continue
-      const r = role(s, c.poste)
+      const part = partSur(s, c.poste)
       if (s.placementManuel) m.cout(coutExtra(c, R), v)
-      else if (r === 'occasionnel') m.cout(coutDepannage(c), v)
-      if (r !== 'soutien' || imposees.has(k)) continue
+      else if (part > 0) m.cout(coutDepannage(c) * part, v)
+      if (!jamaisSeulSur(s, c.poste) || imposees.has(k)) continue
       if (!avec) {
         avec = []
         for (const d of parPoste.get(c.poste) ?? [])
           if (d.debut < c.fin && c.debut < d.fin)
-            avec.push(...termesDe(d, 'autonomes'))
+            avec.push(...termesDe(d, 'referents'))
         avec = sommer(avec)
       }
       m.ajoute([[1, v], ...avec.map(([k2, w]) => [-k2, w] as Terme)], '<=', 0)
@@ -2227,7 +2300,7 @@ export function construire(
         if (t) {
           m.cout(-POIDS_PREMIER_JOUR, t)
           for (const c of siens)
-            if (jourDe(c) === arrivee && role(s, c.poste) === 'occasionnel')
+            if (jourDe(c) === arrivee && enDepannageSur(s, c.poste))
               m.cout(POIDS_PREMIER_JOUR, xv(c))
         }
       }
@@ -2235,11 +2308,7 @@ export function construire(
       // prime du jour est annulée sur ce shift (un shift par jour).
       for (const c of siens) {
         const j = jourDe(c)
-        if (
-          dans(j) &&
-          s.travailFixe.has(j) &&
-          role(s, c.poste) === 'occasionnel'
-        )
+        if (dans(j) && s.travailFixe.has(j) && enDepannageSur(s, c.poste))
           m.cout(POIDS_JOUR_FIXE, xv(c))
       }
 
@@ -3976,7 +4045,7 @@ function variablesTrous(
       }
       for (const s of p.salaries) {
         const v = x.get(cle(s.id, c.id))
-        if (!v || role(s, c.poste) === 'soutien') continue
+        if (!v || soutienSur(s, c.poste)) continue
         termes.push([1, v])
       }
     }
@@ -4474,7 +4543,7 @@ function placesEnDepannage(p: Probleme, r: Resolution): Set<string> {
     const s = salaries.get(a.salarieId)
     if (!c || !s || p.imposees.has(cle(a.salarieId, a.creneauId))) continue
     const place = c.place ?? c.id
-    if (avecRemplacants.has(place) && role(s, c.poste) === 'occasionnel')
+    if (avecRemplacants.has(place) && enDepannageSur(s, c.poste))
       places.add(place)
   }
   return places

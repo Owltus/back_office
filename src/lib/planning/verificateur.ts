@@ -36,7 +36,13 @@ import {
   duree,
   jourDe,
   presenceMax,
+  autonomeSur,
+  jamaisSeulSur,
+  niveauAccepte,
+  niveauSur,
+  referentSur,
   role,
+  soutienSur,
   toucheLaNuit,
   journeeDe,
   travail,
@@ -961,21 +967,25 @@ export function soutiensSeuls(
   }
   const erreurs: Violation[] = []
   for (const [s, c] of presents) {
-    if (role(s, c.poste) !== 'soutien') continue
+    // Un niveau « jamais seul » (D9 : le soutien), accompagné d'une personne
+    // autonome qui ne l'est pas.
+    if (!jamaisSeulSur(s, c.poste)) continue
     const accompagne = presents.some(
       ([autre, d]) =>
         autre.id !== s.id &&
-        (role(autre, d.poste) === 'titulaire' ||
-          role(autre, d.poste) === 'occasionnel') &&
+        referentSur(autre, d.poste) &&
         d.poste === c.poste &&
         d.debut < c.fin &&
         c.debut < d.fin,
     )
     if (!accompagne) {
+      const n = niveauSur(s, c.poste)
       erreurs.push({
         salarieId: s.id,
         regle: 'SOUTIEN-SEUL',
-        message: 'en soutien sur ce poste : ne peut pas être seul',
+        message: n?.autonome
+          ? `${n.nom} sur ce poste : ne peut pas être seul`
+          : 'en soutien sur ce poste : ne peut pas être seul',
         creneaux: [c.id],
         nature: 'organisation',
       })
@@ -997,7 +1007,7 @@ export function autonomesParPlace(
   for (const a of affectations) {
     const s = salaries.get(a.salarieId)
     const c = creneaux.get(a.creneauId)
-    if (s && c && role(s, c.poste) !== 'soutien') {
+    if (s && c && !soutienSur(s, c.poste)) {
       const place = c.place ?? c.id
       compte.set(place, (compte.get(place) ?? 0) + 1)
     }
@@ -1014,10 +1024,31 @@ export function manquants(
 ): Map<string, number> {
   const compte = autonomesParPlace(p, affectations)
   const r = new Map<string, number>()
+  // Nombre par niveau (2026-11-06) : jusqu'à chaque rang demandé, le
+  // nombre cumulé contre les personnes de ce rang ou mieux ; le plus grand
+  // écart est le nombre de places vides.
+  const rangs = new Map<string, number[]>()
+  if (p.creneaux.some((c) => c.paliers)) {
+    const salaries = new Map(p.salaries.map((s) => [s.id, s]))
+    const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
+    for (const a of affectations) {
+      const s = salaries.get(a.salarieId)
+      const c = creneaux.get(a.creneauId)
+      const n = s && c ? niveauSur(s, c.poste) : null
+      if (!c || !n?.autonome) continue
+      const place = c.place ?? c.id
+      rangs.set(place, [...(rangs.get(place) ?? []), n.rang])
+    }
+  }
   for (const c of p.creneaux) {
     if (c.place !== null) continue
     const n = compte.get(c.id) ?? 0
-    if (n < c.effectif) r.set(c.id, c.effectif - n)
+    let vide = c.effectif - n
+    for (const palier of c.paliers ?? []) {
+      const tenus = (rangs.get(c.id) ?? []).filter((x) => x <= palier.rang)
+      vide = Math.max(vide, palier.cumul - tenus.length)
+    }
+    if (vide > 0) r.set(c.id, vide)
   }
   return r
 }
@@ -1084,7 +1115,7 @@ export function trous(
       {
         debut: c.debut,
         fin: c.fin,
-        autonome: role(s, c.poste) !== 'soutien',
+        autonome: !soutienSur(s, c.poste),
       },
     ])
   }
@@ -1162,7 +1193,7 @@ function trousUneZone(
     presences.push({
       debut: c.debut,
       fin: c.fin,
-      autonome: role(s, c.poste) !== 'soutien',
+      autonome: !soutienSur(s, c.poste),
     })
   }
   const r: Trou[] = []
@@ -1308,8 +1339,7 @@ export function raisonsBlocageAccueil(
     if (cibles.some((c) => siens.includes(c))) continue
     let meilleure: Violation[] | null = null
     for (const cible of cibles) {
-      const r = role(s, cible.poste)
-      if (r !== 'titulaire' && r !== 'occasionnel') continue
+      if (!autonomeSur(s, cible.poste)) continue
       const liste = violationsSalarie(
         s,
         [...siens, cible],
@@ -1351,21 +1381,21 @@ export function raisonsBlocage(
   const raisons = new Map<string, Violation[]>()
   if (!cible) return raisons
   for (const s of p.salaries) {
-    const r = role(s, cible.poste)
-    if (r !== 'titulaire' && r !== 'occasionnel') continue
+    const n = niveauSur(s, cible.poste)
+    if (!n?.autonome) continue
     const siens = affectations
       .filter((a) => a.salarieId === s.id)
       .map((a) => creneaux.get(a.creneauId))
       .filter((c): c is Creneau => c !== undefined)
     if (siens.includes(cible)) continue
-    // Niveau demandé « titulaire seulement » (2026-11-05) : un dépannage ne
-    // tient jamais la place, comme dans le calcul (`compatible`).
-    if (r === 'occasionnel' && cible.titulaireSeul) {
+    // Niveau demandé (2026-11-05) : un niveau moins préféré ne tient
+    // jamais la place, comme dans le calcul (`compatible`).
+    if (!niveauAccepte(n, cible) && cible.niveauMax) {
       raisons.set(s.id, [
         {
           salarieId: s.id,
           regle: 'TITULAIRE-DEMANDE',
-          message: 'en dépannage sur ce poste : la place demande un titulaire',
+          message: `en ${n.nom.toLowerCase()} sur ce poste : la place demande un ${cible.niveauMax.nom.toLowerCase()}`,
           creneaux: [cible.id],
           nature: 'organisation',
         },
@@ -1425,7 +1455,7 @@ export function ouverturesManquees(
       {
         debut: c.debut,
         fin: c.fin,
-        autonome: role(s, c.poste) !== 'soutien',
+        autonome: !soutienSur(s, c.poste),
       },
     ])
   }
@@ -1505,7 +1535,7 @@ function transmissionsUneZone(
     const c = creneaux.get(a.creneauId)
     const s = salaries.get(a.salarieId)
     if (!c || !s || !postesAccueil.has(c.poste)) return []
-    if (role(s, c.poste) === 'soutien') return []
+    if (soutienSur(s, c.poste)) return []
     return [c]
   })
   // Le premier moment de jour reprend la nuit, le dernier la lui passe (à
@@ -1594,7 +1624,7 @@ function relevesUneZone(
     const c = creneaux.get(a.creneauId)
     const s = salaries.get(a.salarieId)
     if (!c || !s || !postesJour.has(c.poste)) return []
-    if (role(s, c.poste) === 'soutien') return []
+    if (soutienSur(s, c.poste)) return []
     return [{ c, fait: c }]
   })
   const r: number[] = []
@@ -1693,7 +1723,7 @@ function equipesUneZone(
     const c = creneaux.get(a.creneauId)
     const s = salaries.get(a.salarieId)
     if (!c || !s || !postesJour.has(c.poste)) return []
-    if (role(s, c.poste) === 'soutien') return []
+    if (soutienSur(s, c.poste)) return []
     return [c]
   })
   const jourDuTableau = momentsDeJour(L)

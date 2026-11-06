@@ -14,6 +14,11 @@
  */
 
 import {
+  estPrefere,
+  lireNiveaux,
+  positionNiveau,
+} from '#/lib/planning/niveaux.ts'
+import {
   dureeHoraire,
   heures,
   libelleHoraire,
@@ -106,7 +111,7 @@ export function actuelNonPermis(
 
 interface EntreeCase {
   referentiel: Pick<Referentiel, 'horaires' | 'postes' | 'motifs'> &
-    Partial<Pick<Referentiel, 'reglages' | 'modelesContrat'>>
+    Partial<Pick<Referentiel, 'reglages' | 'modelesContrat' | 'niveaux'>>
   personne: Salarie
   posteId: number | undefined
   jour: number
@@ -205,7 +210,7 @@ export function ouvertureSpecifique(
     shift?.poste_id,
     e.placePosteId,
     ...personne.competences
-      .filter((c) => c.niveau === 'titulaire')
+      .filter((c) => estPrefere(lireNiveaux(referentiel.niveaux), c.niveau))
       .map((c) => c.poste_id),
     ...postes.map((p) => p.id),
   ].filter(
@@ -314,12 +319,6 @@ export interface RubriquesCase {
   actuel: { horaire: Horaire; texte: string } | null
 }
 
-const RANG_NIVEAU: Record<Niveau, number> = {
-  titulaire: 0,
-  occasionnel: 1,
-  soutien: 2,
-}
-
 /**
  * Tous les codes que cette personne peut tenir ce jour-là, rangés par
  * casquette : une rubrique par poste de sa fiche, chacune calculée par la
@@ -350,6 +349,7 @@ export function rubriquesDeLaCase({
   garderActuel?: boolean
 }): RubriquesCase {
   const { postes, horaires } = referentiel
+  const niveaux = lireNiveaux(referentiel.niveaux)
   const rang = (id: number) => postes.findIndex((p) => p.id === id)
   const candidats: Array<{ poste: Poste; niveau: Niveau | null }> = [
     ...personne.competences,
@@ -357,7 +357,7 @@ export function rubriquesDeLaCase({
     .filter((c) => rang(c.poste_id) >= 0)
     .sort(
       (a, b) =>
-        RANG_NIVEAU[a.niveau] - RANG_NIVEAU[b.niveau] ||
+        positionNiveau(niveaux, a.niveau) - positionNiveau(niveaux, b.niveau) ||
         rang(a.poste_id) - rang(b.poste_id),
     )
     .filter((c, i, l) => l.findIndex((x) => x.poste_id === c.poste_id) === i)

@@ -7,6 +7,8 @@
  * Seule la gestion modifie ; lecture et écriture voient les réglages.
  */
 
+import { SectionNiveaux } from '#/components/planning/parametres/postes/SectionNiveaux.tsx'
+import { lireNiveaux } from '#/lib/planning/niveaux.ts'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react'
@@ -263,6 +265,8 @@ export function PostesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
               </p>
             )}
           </div>
+
+          <SectionNiveaux referentiel={ref.data} modifiable={modifiable} />
 
           <Sheet
             open={ouvert !== undefined && (ouvert === null || !!posteOuvert)}
@@ -585,12 +589,13 @@ function CartePoste({
       </div>
 
       {!neuf && (
-        <dl className="grid grid-cols-4 gap-2 rounded-lg bg-muted/50 p-2 text-center">
+        <dl className="grid grid-cols-[repeat(auto-fit,minmax(5rem,1fr))] gap-2 rounded-lg bg-muted/50 p-2 text-center">
           {[
-            [compte('titulaire'), 'titulaires'],
-            [compte('occasionnel'), 'dépannage'],
-            [compte('soutien'), 'soutien'],
-            [heures(besoinsSemaine), 'besoins / sem.'],
+            // Les niveaux de l'établissement (2026-11-06), dans leur ordre.
+            ...lireNiveaux(referentiel.niveaux).liste.map(
+              (n) => [compte(n.id), n.nom.toLowerCase()] as const,
+            ),
+            [heures(besoinsSemaine), 'besoins / sem.'] as const,
           ].map(([v, l]) => (
             <div key={l} className="flex flex-col">
               <dd className="font-semibold tabular-nums">{v}</dd>

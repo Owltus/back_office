@@ -28,25 +28,41 @@ import type {
   Groupe,
   Horaire,
   Motif,
-  Niveau,
   Periode,
   Poste,
   Salarie,
 } from '#/lib/planning/types.ts'
+import { NIVEAUX_HOTEL, positionNiveau } from '#/lib/planning/niveaux.ts'
+import type { Niveaux, NiveauSolveur } from '#/lib/planning/niveaux.ts'
 
-export const NIVEAUX: Record<Niveau, { libelle: string; aide: string }> = {
-  titulaire: {
-    libelle: 'Titulaire',
-    aide: 'Tient le poste seul, au quotidien',
-  },
-  occasionnel: {
-    libelle: 'Dépannage',
-    aide: 'Peut le tenir seul, à éviter si possible',
-  },
-  soutien: {
-    libelle: 'Soutien',
-    aide: 'Apprenti ou stagiaire : ne compte pas seul',
-  },
+/** Repère visuel d'un niveau : le préféré (plein), un autre niveau
+ * autonome (cerclé), un niveau qui ne tient pas une place seul (pointillé). */
+export type GenreNiveau = 'prefere' | 'autre' | 'accompagne'
+
+export function genreNiveau(
+  niveaux: Niveaux,
+  id: string | null | undefined,
+): GenreNiveau | null {
+  const n = id ? niveaux.parId.get(id) : undefined
+  if (!n) return null
+  if (!n.autonome) return 'accompagne'
+  return n.rang === 0 ? 'prefere' : 'autre'
+}
+
+/** Ce qu'un niveau veut dire, tiré de ses cases (2026-11-06 : plus de
+ * libellé écrit par niveau). */
+export function aideNiveau(
+  n: Pick<NiveauSolveur, 'autonome' | 'jamaisSeul' | 'rang'>,
+): string {
+  if (!n.autonome)
+    return n.jamaisSeul
+      ? 'Ne compte pas seul, toujours accompagné'
+      : 'Ne compte pas seul'
+  const base =
+    n.rang === 0
+      ? 'Tient le poste seul, au quotidien'
+      : 'Peut le tenir seul, à éviter si possible'
+  return n.jamaisSeul ? `${base}, jamais seul` : base
 }
 
 /** « Réception », « Réception et Club », « Bar, Réception et Club ». */
@@ -54,6 +70,13 @@ export function listeEt(l: readonly string[]): string {
   return l.length < 2
     ? (l[0] ?? '')
     : `${l.slice(0, -1).join(', ')} et ${l[l.length - 1]}`
+}
+
+/** « Titulaire », « Titulaire ou Dépannage », « A, B ou C ». */
+export function listeOu(l: readonly string[]): string {
+  return l.length < 2
+    ? (l[0] ?? '')
+    : `${l.slice(0, -1).join(', ')} ou ${l[l.length - 1]}`
 }
 
 /** « 7h45 », « 8h » (format court des cartes et du bilan). */
@@ -269,10 +292,13 @@ export function postesDuGroupe(postes: Poste[], groupe?: Groupe): Poste[] {
 export function postesTenus(
   s: Pick<Salarie, 'competences'>,
   postes: Poste[],
+  niveaux: Niveaux = NIVEAUX_HOTEL,
 ): string {
-  const ordre = { titulaire: 0, occasionnel: 1, soutien: 2 }
   return [...s.competences]
-    .sort((a, b) => ordre[a.niveau] - ordre[b.niveau])
+    .sort(
+      (a, b) =>
+        positionNiveau(niveaux, a.niveau) - positionNiveau(niveaux, b.niveau),
+    )
     .map((c) => postes.find((p) => p.id === c.poste_id)?.nom)
     .filter(Boolean)
     .join(' · ')
@@ -284,10 +310,13 @@ export function postesTenus(
 export function metier(
   s: Pick<Salarie, 'competences'>,
   postes: Poste[],
+  niveaux: Niveaux = NIVEAUX_HOTEL,
 ): string {
-  const ordre = { titulaire: 0, occasionnel: 1, soutien: 2 }
   const noms = [...s.competences]
-    .sort((a, b) => ordre[a.niveau] - ordre[b.niveau])
+    .sort(
+      (a, b) =>
+        positionNiveau(niveaux, a.niveau) - positionNiveau(niveaux, b.niveau),
+    )
     .map((c) => postes.find((p) => p.id === c.poste_id)?.nom)
     .filter((n): n is string => !!n)
   return [...new Set(noms)].join(' · ')
@@ -300,6 +329,7 @@ export function metier(
 export function rangOrganigramme(
   s: Partial<Pick<Salarie, 'competences'>>,
   postes: ReadonlyArray<Pick<Poste, 'id'>>,
+  niveaux: Niveaux = NIVEAUX_HOTEL,
 ): number {
   const place = new Map(postes.map((p, i) => [p.id, i]))
   const n = postes.length
@@ -307,7 +337,7 @@ export function rangOrganigramme(
   for (const c of s.competences ?? []) {
     const i = place.get(c.poste_id)
     if (i === undefined) continue
-    rang = Math.min(rang, c.niveau === 'titulaire' ? i : n + i)
+    rang = Math.min(rang, niveaux.parId.get(c.niveau)?.rang === 0 ? i : n + i)
   }
   return rang
 }

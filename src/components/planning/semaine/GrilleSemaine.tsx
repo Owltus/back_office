@@ -5,6 +5,8 @@
  * mémoïsée : seules les lignes dont les données changent se redessinent.
  */
 
+import { useRegles } from '#/components/planning/hooks/useMoments.ts'
+import { nomNiveau } from '#/lib/planning/niveaux.ts'
 import { memo } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { useDroppable } from '@dnd-kit/core'
@@ -15,7 +17,7 @@ import {
   dateCourte,
   heures,
   metier,
-  NIVEAUX,
+  genreNiveau,
   deNom,
 } from '#/lib/planning/affichage.ts'
 import type { PresenceOut } from '#/lib/planning/presence.ts'
@@ -222,6 +224,7 @@ const LigneStaff = memo(function LigneStaff({
   rappels: RappelsGrille
 }) {
   const { salarie: s, bilan } = ligne
+  const niveauxEtab = useRegles().niveaux
   const alertes = bilan?.alertes ?? []
   const loi = alertes.some((a) => a.nature === 'loi')
   return (
@@ -266,13 +269,15 @@ const LigneStaff = memo(function LigneStaff({
                   <Tip
                     key={c.poste_id}
                     side="top"
-                    label={`${p.nom} · ${NIVEAUX[c.niveau].libelle}`}
+                    label={`${p.nom} · ${nomNiveau(niveauxEtab, c.niveau)}`}
                   >
                     <span
                       className="planning-point-poste"
-                      data-niveau={c.niveau}
+                      data-niveau={
+                        genreNiveau(niveauxEtab, c.niveau) ?? undefined
+                      }
                       style={{ '--couleur': p.couleur } as CSSProperties}
-                      aria-label={`${p.nom} · ${NIVEAUX[c.niveau].libelle}`}
+                      aria-label={`${p.nom} · ${nomNiveau(niveauxEtab, c.niveau)}`}
                       role="img"
                     />
                   </Tip>
