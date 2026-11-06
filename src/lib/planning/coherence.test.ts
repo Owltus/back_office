@@ -1193,6 +1193,12 @@ describe('verifierReglages, cycles', () => {
  * horaire possible. La nuit : la Veille seule (D10). Oracle écrit à la main.
  */
 describe("verifierReglages, tableau de l'accueil", () => {
+  // Le matin finit à 15:00 quand le soir commence : la relève (fixe depuis
+  // le 2026-11-06) ne peut pas se faire, ce qui a son propre test (étape 8).
+  const verifierReglages = (r: Referentiel) =>
+    verifierTout(r).filter(
+      (p) => !p.id.startsWith('accueil-vide:') && p.id !== 'releve-impossible',
+    )
   const X = 6
   const VERS_PRESENCE: PointReglage['lien'] = {
     page: '/planning/besoins',
@@ -1246,9 +1252,6 @@ describe("verifierReglages, tableau de l'accueil", () => {
         { id: 3, jour: 0, periode: 'nuit', minimum: 1, maximum: 1 },
       ],
       verrous: [],
-      // Le matin finit à 15:00 quand le soir commence : aucune relève
-      // possible, qui a son propre test (étape 8).
-      reglages: { releve_minutes: 0 },
     }
   }
   const chiffre = (r: Referentiel, i: number, n: number) => {
@@ -1638,7 +1641,6 @@ describe("règles de l'établissement impossibles (étape 8, 2026-11-05)", () =>
     // … ou par les journées du contrat.
     const regle = trenteCinq(propre())
     regle.reglages = {
-      releve_minutes: 30,
       journees_contrats: [
         { minutes_hebdo: 35 * 60, durees: [8 * 60], courtes_max: 0 },
       ],
@@ -1685,7 +1687,7 @@ describe("règles de l'établissement impossibles (étape 8, 2026-11-05)", () =>
   it('deux repos de suite : la règle suit son réglage, la loi reste pour un mineur', () => {
     const r = propre()
     const s = travaillePairs(r, 10)
-    r.reglages = { releve_minutes: 30, deux_repos_de_suite: 'souhaite' }
+    r.reglages = { deux_repos_de_suite: 'souhaite' }
     expect(verifierReglages(r)).toEqual([])
     s.mineur = true
     expect(ids(verifierReglages(r))).toContain('deux-repos-impossibles:10')
@@ -1712,24 +1714,28 @@ describe("règles de l'établissement impossibles (étape 8, 2026-11-05)", () =>
   const releve = (r: Referentiel) =>
     verifierReglages(r).filter((x) => x.id === 'releve-impossible')
 
-  it('relève demandée sans horaires du matin et du soir qui se croisent', () => {
+  it('relève fixe (2026-11-06) sans horaires du matin et du soir qui se croisent', () => {
     const r = accueilReleve()
     // Tous les horaires du poste : le matin finit à 17:00 (J), le soir
     // commence à 15:00 (S). Ils se croisent.
     expect(releve(r)).toEqual([])
     r.postes[0].horaires_autorises = [M, S]
     const [p] = releve(r)
+    // Plus de réglage de la relève : on corrige les horaires.
     expect(p).toMatchObject({
-      ecran: 'besoins',
-      lien: { page: '/planning/besoins', cible: 'releve' },
+      ecran: 'horaires',
+      lien: { page: '/planning/horaires' },
     })
+    expect(p.lien.cible).toBeUndefined()
     expect(p.texte).toContain('30 minutes')
     expect(p.texte).toContain('15:00')
-    // Relève réglée à 0 : rien à dire.
-    r.reglages = { releve_minutes: 0 }
+    expect(p.texte).toContain('préfère')
+    expect(p.texte).not.toContain('réduisez')
+    // Une zone qui n'est pas tenue en continu n'a pas de relève.
+    r.zones = [{ id: 1, nom: 'Accueil', ordre: 0, continue: false }]
     expect(releve(r)).toEqual([])
+    r.zones = undefined
     // Un horaire du soir qui commence 30 minutes avant la fin du matin.
-    r.reglages = undefined
     r.horaires.push(horaire(8, 'S2', '14:30', '23:00', 'soir'))
     r.postes[0].horaires_autorises = [M, S, 8]
     expect(releve(r)).toEqual([])

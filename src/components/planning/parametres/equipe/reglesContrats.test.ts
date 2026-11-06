@@ -19,7 +19,7 @@ import type { Reglages } from '#/lib/planning/types.ts'
  */
 
 const H = 60
-const vide = { reglages: { releve_minutes: 30 } as Reglages }
+const vide = { reglages: {} as Reglages }
 
 describe('aller-retour', () => {
   it('sans geste, les règles écrites sont celles lues', () => {
@@ -29,7 +29,7 @@ describe('aller-retour', () => {
       { minutes_hebdo: 35 * H, durees: [7 * H], courtes_max: 0 },
       { minutes_hebdo: 39 * H, durees: [8 * H, 7 * H], courtes_max: 1 },
     ])
-    const relu = lireRegles({ reglages: { releve_minutes: 30, ...r } })
+    const relu = lireRegles({ reglages: { ...r } })
     expect(relu).toEqual(lireRegles(vide))
     expect(erreursSaisie(s)).toEqual([])
     expect(avertissementsSaisie(s)).toEqual([])

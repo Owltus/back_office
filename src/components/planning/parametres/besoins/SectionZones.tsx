@@ -1,7 +1,8 @@
 /*
  * Les zones de l'établissement (2026-11-06, lot 2, A5) : créer, nommer,
  * tenir en continu ou non, retirer une zone. Un poste choisit sa zone dans
- * Postes ; chaque zone a son tableau, sa relève et sa passation, au-dessus.
+ * Postes ; chaque zone a son tableau, au-dessus. Une zone tenue en continu a
+ * la passation fixe entre les équipes (2026-11-06), sans réglage.
  * Gestion seule (la base le garde aussi).
  */
 
@@ -50,16 +51,12 @@ export function SectionZones({
   const ajouter = async () => {
     const n = nom.trim()
     if (!n || zones.some((z) => z.nom.toLowerCase() === n.toLowerCase())) return
-    const premiere = zones[0]
     const ok = await agir(
       () =>
         ajouterZone({
           nom: n,
           ordre: Math.max(...zones.map((z) => z.ordre)) + 1,
           continue: true,
-          releve_minutes: premiere.releve_minutes,
-          passation_nuit: premiere.passation_nuit,
-          equipe_tolerance: premiere.equipe_tolerance,
         }),
       "La zone n'a pas pu être créée",
     )

@@ -47,7 +47,7 @@ beforeAll(async () => {
 const LUNDI = '2026-11-16'
 const AUJOURDHUI = '2026-11-01'
 const TOUS = [0, 1, 2, 3, 4, 5, 6]
-const REGLAGES: Reglages = { releve_minutes: 0, passation_veilleur: false }
+const REGLAGES: Reglages = {}
 
 /** Les cinq contrats de l'hôtel, tels que la base les range. */
 const LIGNES_HOTEL: ModeleContrat[] = listeContrats(REGLES_PAR_DEFAUT).map(
@@ -429,6 +429,16 @@ describe('aucun code de contrat ni catégorie lu par le code (lot 1a)', () => {
           'reglesEtablissement.ts',
         ],
       ).filter((l) => !/passations?Veilleur|passation_veilleur/.test(l)),
+    ).toEqual([])
+  })
+
+  it('la passation entre les équipes est fixe : ses colonnes ne sont plus lues (2026-11-06)', () => {
+    // Décision utilisateur : « cette notion n'a pas besoin d'être
+    // paramétrable ». Seules les constantes de regles.ts la portent.
+    expect(
+      lignes(
+        /releve_minutes|continuite_obligatoire|passation_veilleur|equipe_tolerance|passation_nuit|continuiteObligatoire|passationVeilleur|passationNuit|equipeTolerance/,
+      ),
     ).toEqual([])
   })
 

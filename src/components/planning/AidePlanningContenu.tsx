@@ -30,6 +30,7 @@ import { NEUTRE } from '#/components/planning/semaine/edition.ts'
 import type { ContenuStatut } from '#/components/planning/semaine/edition.ts'
 import { nomsPostesAccueil } from '#/lib/planning/presence.ts'
 import {
+  EQUIPE_TOLERANCE,
   FORFAIT_JOUR_MAX,
   JOUR_MAX_LOI,
   JOURS_TRAVAILLES_MAX,
@@ -39,6 +40,7 @@ import {
   MINEUR_SEMAINE_MAX,
   REPOS_DEUX_SEMAINES,
   REPOS_HEBDO_MIN,
+  RELEVE_MINUTES,
   REPOS_QUOTIDIEN,
   SEMAINE_MAX,
   TEMPS_PLEIN,
@@ -754,13 +756,9 @@ export function AidePlanningContenu({
             items={[
               'D’une nuit à l’autre : quand la nuit est demandée, l’accueil est tenu sans trou du départ de la nuit au matin jusqu’à l’arrivée de la suivante le soir.',
               `Ouverture et fermeture : tout poste peut avoir une heure d’ouverture et de fermeture (page Besoins). Quelqu’un y est dès l’ouverture et jusqu’à la fermeture, pendant au moins ${duree(P.dureeOuverture)}, les jours où il est ouvert.`,
-              P.releveMinutes > 0
-                ? `Relève : l’équipe du matin et celle du soir sont ensemble ${duree(P.releveMinutes)} chaque jour (réglé sur la page Besoins).`
-                : 'Relève : aucune n’est demandée. Son temps se règle sur la page Besoins.',
-              P.passationVeilleur
-                ? 'Passation avec la nuit : le dernier du soir part à son arrivée, le premier du matin arrive avant son départ.'
-                : 'Passation avec la nuit : pas demandée (réglage de la page Besoins).',
-              `Une équipe ensemble : le soir, les personnes arrivent à ${duree(P.equipeTolerance)} près et partent à ${duree(P.equipeTolerance)} près, pour que personne ne reste seul. Chacune croise le matin le temps de la relève. Le matin, l’équipe arrive à l’heure d’ouverture du poste, comme dans les plannings faits à la main. Quand il manque du monde, le manque est partagé entre le matin et le soir plutôt que de laisser une personne seule. Une alerte dit quand ce n’est pas possible.`,
+              `Entre deux équipes, la suivante arrive au plus tard quand la précédente part, nuit comprise. Le planning préfère qu’elles se croisent : l’équipe du matin et celle du soir ensemble ${duree(RELEVE_MINUTES)} chaque jour, pour la relève. Ces règles sont les mêmes pour toute zone tenue en continu, sans réglage.`,
+              'Passation avec la nuit : le dernier du soir part à son arrivée, le premier du matin arrive avant son départ.',
+              `Une équipe ensemble : le soir, les personnes arrivent à ${duree(EQUIPE_TOLERANCE)} près et partent à ${duree(EQUIPE_TOLERANCE)} près, pour que personne ne reste seul. Chacune croise le matin le temps de la relève. Le matin, l’équipe arrive à l’heure d’ouverture du poste, comme dans les plannings faits à la main. Quand il manque du monde, le manque est partagé entre le matin et le soir plutôt que de laisser une personne seule. Une alerte dit quand ce n’est pas possible.`,
               'Un apprenti ou un stagiaire compte dans le chiffre de l’accueil, mais n’est jamais seul sur son poste.',
             ]}
           />
@@ -1008,13 +1006,10 @@ export function AidePlanningContenu({
             <span className="font-medium text-foreground">
               L’accueil sans trou
             </span>{' '}
-            : personne ne manque entre deux équipes, l’ouverture est tenue
-            {P.continuiteObligatoire
-              ? ', au prix d’une place nécessaire'
-              : ', quand c’est possible'}
-            .
-            {P.passationVeilleur &&
-              ' La passation avec la nuit aussi : le soir reste jusqu’à son arrivée, à la minute près (fin à 23:00 pour une nuit à 23:00), et le matin arrive avant son départ.'}
+            : personne ne manque entre deux équipes, l’ouverture est tenue, au
+            prix d’une place nécessaire. La passation avec la nuit aussi : le
+            soir reste jusqu’à son arrivée, à la minute près (fin à 23:00 pour
+            une nuit à 23:00), et le matin arrive avant son départ.
           </li>
           <li>
             <span className="font-medium text-foreground">Les contrats</span> :
@@ -1033,9 +1028,7 @@ export function AidePlanningContenu({
           </li>
           <li>
             <span className="font-medium text-foreground">La relève</span> :{' '}
-            {P.releveMinutes > 0
-              ? `une personne du matin et une du soir ensemble ${duree(P.releveMinutes)} chaque jour. Elle passe avant un 6e jour, après les heures dues.`
-              : 'aucune n’est demandée.'}
+            {`une personne du matin et une du soir ensemble ${duree(RELEVE_MINUTES)} chaque jour. Elle passe avant un 6e jour, après les heures dues.`}
           </li>
           <li>
             <span className="font-medium text-foreground">

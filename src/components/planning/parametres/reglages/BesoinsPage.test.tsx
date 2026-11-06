@@ -726,16 +726,36 @@ describe('Besoins', () => {
           fermeture: '23:00',
         }),
       )
-      // La passation entre équipes au même endroit que la relève.
-      const passation = screen.getByRole('switch', {
-        name: 'Aucun trou entre deux équipes',
-      })
-      fireEvent.click(passation)
-      await waitFor(() =>
-        expect(service.enregistrerReglages).toHaveBeenCalledWith(
-          expect.objectContaining({ continuite_obligatoire: false }),
+    })
+
+    it('passation entre les équipes : fixe, une phrase, aucun réglage (2026-11-06)', () => {
+      const ref = etat.referentiel as Referentiel
+      for (const p of ref.postes)
+        p.zone_id = ['Réception', 'Club', 'Veille de nuit'].includes(p.nom)
+          ? 1
+          : null
+      monter(<BesoinsPage />)
+      // Oracle : « retire le paramétrage de cela ».
+      expect(screen.queryByText('Passation entre les équipes')).toBeNull()
+      for (const nom of [
+        'Aucun trou entre deux équipes',
+        'Passation avec la nuit',
+      ])
+        expect(screen.queryByRole('switch', { name: nom })).toBeNull()
+      expect(
+        screen.queryByRole('radiogroup', { name: 'Durée de la relève' }),
+      ).toBeNull()
+      expect(
+        screen.queryByRole('radiogroup', {
+          name: 'Équipe du soir ensemble, à combien de minutes près',
+        }),
+      ).toBeNull()
+      expect(
+        screen.getByText(
+          "Entre deux équipes, la suivante arrive au plus tard quand la précédente part, nuit comprise. Le planning préfère qu'elles se croisent un moment.",
         ),
-      )
+      ).toBeTruthy()
+      expect(service.enregistrerReglages).not.toHaveBeenCalled()
     })
 
     it('lecture seule : obligatoire et niveau ne se règlent pas', () => {

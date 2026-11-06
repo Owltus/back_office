@@ -53,6 +53,7 @@ import {
   travail,
 } from '#/lib/planning/modele.ts'
 import {
+  EQUIPE_TOLERANCE,
   jourIsoleDe,
   rythmeHumain,
   apresContrat,
@@ -664,11 +665,9 @@ export function pireMoral(
     POIDS_EQUIPE_ARRIVEE +
     POIDS_EQUIPE_DEPART +
     POIDS_RELEVE_CHACUN +
-    // Un veilleur ajouté peut manquer sa passation des deux côtés.
-    (c.presence.some((q) => estNuit(R.moments, q)) &&
-    R.passations.passationVeilleur
-      ? 2 * POIDS_PASSATION
-      : 0)
+    // Un veilleur ajouté peut manquer sa passation des deux côtés
+    // (passation avec la nuit fixe, 2026-11-06).
+    (c.presence.some((q) => estNuit(R.moments, q)) ? 2 * POIDS_PASSATION : 0)
   )
 }
 
@@ -1334,28 +1333,27 @@ export function construire(
   // faudrait payer pour ajouter quelqu'un sur un créneau qui la tiendrait
   // (un relais). Un veilleur ajouté peut en manquer deux : ce surplus
   // (`extraNuit`, au-delà de `POIDS_PASSATION` déjà dans `pireMoral`) entre
-  // dans le prix des places de nuit (P1). Sans la règle : 0, rien ne change.
+  // dans le prix des places de nuit (P1). Règle fixe du 2026-11-06.
   const zones: ZonePrix[] = []
-  if (R.passations.continuiteObligatoire)
-    for (const z of zonesPassation(p)) {
-      const relais = new Set<Creneau>()
-      if (z.veille) for (const c of z.relais(z.veille)) relais.add(c)
-      for (const n of z.nuits) for (const c of z.relais(n)) relais.add(c)
-      const ouverts = [...relais].filter((c) => !c.ferme)
-      const plus = ouverts.length
-        ? coutPlaceVideGroupe(ouverts, presenceLaPlusChere, besoinDe, R)
-        : 0
-      // Le palier de la passation : celui de ses nuits (un veilleur ajouté
-      // est ce qui peut la casser), le plus bas.
-      const nuits = z.nuits.length ? z.nuits : [...relais]
-      zones.push({
-        cle: `${z.zone === premiereZone ? '' : `${z.zone}|`}${z.jour}|${z.cote}`,
-        plus,
-        rang: nuits.length
-          ? Math.min(...nuits.map((c) => rangImportance(c.indispensable)))
-          : RANG_AUTRE,
-      })
-    }
+  for (const z of zonesPassation(p)) {
+    const relais = new Set<Creneau>()
+    if (z.veille) for (const c of z.relais(z.veille)) relais.add(c)
+    for (const n of z.nuits) for (const c of z.relais(n)) relais.add(c)
+    const ouverts = [...relais].filter((c) => !c.ferme)
+    const plus = ouverts.length
+      ? coutPlaceVideGroupe(ouverts, presenceLaPlusChere, besoinDe, R)
+      : 0
+    // Le palier de la passation : celui de ses nuits (un veilleur ajouté
+    // est ce qui peut la casser), le plus bas.
+    const nuits = z.nuits.length ? z.nuits : [...relais]
+    zones.push({
+      cle: `${z.zone === premiereZone ? '' : `${z.zone}|`}${z.jour}|${z.cote}`,
+      plus,
+      rang: nuits.length
+        ? Math.min(...nuits.map((c) => rangImportance(c.indispensable)))
+        : RANG_AUTRE,
+    })
+  }
   // IMPORTANCE DES POSTES (D11) et besoins souhaités : `paliersPlaces`.
   const pl = paliersPlaces(p.creneaux, zones, (c) =>
     coutPlaceVide(
@@ -1645,24 +1643,22 @@ export function construire(
     }
   })
 
-  // CONTINUITÉ ENTRE ÉQUIPES (D8 du 2026-11-05, `continuiteObligatoire`) :
+  // CONTINUITÉ ENTRE ÉQUIPES (D8 du 2026-11-05, FIXE depuis le 2026-11-06) :
   // un trou entre la fin d'une équipe et l'arrivée de la suivante (passation
   // avec le veilleur comprise : la plage de l'accueil va d'un veilleur à
   // l'autre) coûte une PLACE NÉCESSAIRE (P1) : plus que tout ce qu'il
   // faudrait payer pour ajouter une personne sur l'un des créneaux qui le
   // couvriraient. Jamais dur : si personne ne peut le tenir, il reste (D3).
   // Le chevauchement (relève) reste une préférence.
-  const continuite = R.passations.continuiteObligatoire
-    ? (couvrants: Creneau[]) => {
-        const ouverts = couvrants.filter((c) => !c.ferme)
-        const rang = rangDe(couvrants)
-        return ouverts.length
-          ? coutPlaceVideGroupe(ouverts, presenceLaPlusChere, besoinDe, R) +
-              nuitDe(ouverts, rang) +
-              pl.decalage(rang)
-          : 0
-      }
-    : undefined
+  const continuite = (couvrants: Creneau[]) => {
+    const ouverts = couvrants.filter((c) => !c.ferme)
+    const rang = rangDe(couvrants)
+    return ouverts.length
+      ? coutPlaceVideGroupe(ouverts, presenceLaPlusChere, besoinDe, R) +
+          nuitDe(ouverts, rang) +
+          pl.decalage(rang)
+      : 0
+  }
   const trous = trousEntreEquipes(m, p, x, termesDe, continuite)
   // Ouverture (2026-11-01) : la première heure de chaque poste de l'accueil
   // qui a une heure d'ouverture, tenue sur CE poste.
@@ -3653,10 +3649,13 @@ export function zonesPassation(
   p: Pick<Probleme, 'creneaux' | 'nbJours' | 'consignes' | 'veilleDuLundi'> &
     Partial<Pick<Probleme, 'regles'>>,
 ): ZonePassation[] {
-  // Zone par zone, chacune sa passation avec la nuit (2026-11-06).
-  return vuesZones(p).flatMap((v) =>
-    passationsDeZone(v.p, v.zone.id).map((z) => ({ ...z, zone: v.zone.id })),
-  )
+  // Zone par zone ; seulement une zone tenue en continu (passation avec la
+  // nuit fixe, 2026-11-06).
+  return vuesZones(p)
+    .filter((v) => v.zone.continue)
+    .flatMap((v) =>
+      passationsDeZone(v.p, v.zone.id).map((z) => ({ ...z, zone: v.zone.id })),
+    )
 }
 
 function passationsDeZone(
@@ -3664,8 +3663,6 @@ function passationsDeZone(
     Partial<Pick<Probleme, 'regles'>>,
   zone: string,
 ): ZonePassation[] {
-  // Règle de la zone : sans passation avec le veilleur, rien.
-  if (!(p.regles ?? REGLES_PAR_DEFAUT).passations.passationVeilleur) return []
   const L = momentsDe(p)
   // Le premier moment de jour reprend la nuit, le dernier la lui passe (à
   // l'hôtel : le matin et le soir).
@@ -3775,8 +3772,10 @@ function equipesSynchro(
   termesDe: (c: Creneau, quoi: 'autonomes') => Terme[],
   borne: (c: Creneau) => number,
 ): void {
-  // Zone par zone, chacune sa tolérance et sa relève (2026-11-06).
-  for (const v of vuesZones(p)) equipesDeZone(m, v.p, termesDe, borne)
+  // Zone par zone ; seulement une zone tenue en continu (règle fixe du
+  // 2026-11-06).
+  for (const v of vuesZones(p))
+    if (v.zone.continue) equipesDeZone(m, v.p, termesDe, borne)
 }
 
 function equipesDeZone(
@@ -3786,8 +3785,6 @@ function equipesDeZone(
   borne: (c: Creneau) => number,
 ): void {
   const R = p.releveMinutes ?? 0
-  const EQUIPE_TOLERANCE = (p.regles ?? REGLES_PAR_DEFAUT).passations
-    .equipeTolerance
   /** Une heure (début ou fin) prise par quelqu'un : y_t >= n_c / K. Deux
 
    * heures prises à plus de la tolérance l'une de l'autre : le jour est

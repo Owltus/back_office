@@ -490,7 +490,8 @@ export interface Probleme {
     debut: number
     fin: number
   }>
-  /** Relève entre le matin et le soir, en minutes (0 ou absent : aucune). */
+  /** Relève entre le matin et le soir, en minutes (0 ou absent : aucune) :
+   * `RELEVE_MINUTES` quand l'accueil est en service (fixe, 2026-11-06). */
   releveMinutes?: number
   /** Règles de l'établissement (`lireRegles`), lues par le générateur ET le
    * vérificateur. Absent : les défauts (l'hôtel). */

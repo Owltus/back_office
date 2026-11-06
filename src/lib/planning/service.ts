@@ -13,10 +13,7 @@ import { partielle, refusDroits } from '#/lib/planning/erreurs.ts'
 import { SEMAINES_EQUITE } from '#/lib/planning/modele.ts'
 import { avecMomentCalcule } from '#/lib/planning/moment.ts'
 import { triConsignes } from '#/lib/planning/presence.ts'
-import {
-  lireRegles,
-  REGLES_PAR_DEFAUT,
-} from '#/lib/planning/reglesEtablissement.ts'
+import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import { premierLundiLu } from '#/lib/planning/feries.ts'
 import { premierLundiGeneration } from '#/lib/planning/semaine.ts'
@@ -48,8 +45,8 @@ const COL_MOTIF =
 const COL_POSTE =
   'id, nom, couleur, horaires_autorises, zone_id, ferme, ouverture, ordre, feries_chomes, indispensable, fermeture, jour_max_minutes'
 const COL_CONSIGNE = 'id, zone_id, jour, periode, minimum, maximum'
-const COL_ZONE =
-  'id, nom, ordre, continue, releve_minutes, passation_nuit, equipe_tolerance'
+// Relève, passation et tolérance d'une zone : fixes (2026-11-06), plus lues.
+const COL_ZONE = 'id, nom, ordre, continue'
 const COL_MOMENT =
   'id, nom, ordre, priorite, debut_de, debut_a, fin_de, fin_a, toutes, libre_avant, compte_dans_tableau, est_nuit, couleur, article'
 const COL_GROUPE = 'id, nom, ordre, postes_autorises, forfait_possible'
@@ -63,7 +60,6 @@ const COL_ABSENCE = 'id, salarie_id, jour, motif_id, epinglee'
 /** Les règles de l'établissement (2026-11-05) : une colonne oubliée ici
  * n'est jamais lue ni écrite. */
 const CHAMPS_REGLAGES = [
-  'releve_minutes',
   'deux_repos_de_suite',
   'jours_affiles_max',
   'jours_affiles_conseilles',
@@ -74,9 +70,6 @@ const CHAMPS_REGLAGES = [
   'moment_arriere_jours',
   'nuits_affilees_max',
   'repos_apres_nuits',
-  'continuite_obligatoire',
-  'passation_veilleur',
-  'equipe_tolerance',
   'duree_ouverture',
   'personnes_nuit',
   'ecole_veille_fin',
@@ -274,11 +267,7 @@ function normaliserReglages(r: Reglages | null): Reglages {
   const sansVides = Object.fromEntries(
     Object.entries(r ?? {}).filter(([, v]) => v !== null && v !== undefined),
   ) as Partial<Reglages>
-  return {
-    ...sansVides,
-    releve_minutes:
-      sansVides.releve_minutes ?? REGLES_PAR_DEFAUT.passations.releveMinutes,
-  }
+  return sansVides
 }
 
 /** Réglages généraux du planning (gestion). */
@@ -724,7 +713,7 @@ export async function enregistrerZone(
   )
 }
 
-/** Une zone neuve, tenue en continu, aux réglages de la première. */
+/** Une zone neuve (nom, ordre, tenue en continu). */
 export async function ajouterZone(z: Omit<Zone, 'id'>): Promise<void> {
   auMoinsUne(await supabase.from('planning_zones').insert(z).select('id'))
 }

@@ -55,6 +55,13 @@ type Patch = {
   [K in keyof RegleEtablissement]?: Partial<RegleEtablissement[K]>
 }
 /** Les défauts, une partie changée. */
+/** La zone de l'hôtel, NON tenue en continu : sans la passation fixe entre
+ * les équipes (continuité, nuit, relève, équipe du soir ; 2026-11-06). */
+const SANS_CONTINU: RegleEtablissement = {
+  ...REGLES_PAR_DEFAUT,
+  zones: [{ id: '1', nom: 'Accueil', continue: false }],
+}
+
 const regles = (patch: Patch): RegleEtablissement => {
   const r = { ...REGLES_PAR_DEFAUT } as Record<string, unknown>
   for (const [k, v] of Object.entries(patch))
@@ -316,7 +323,7 @@ describe('règles morales lues dans les règles (vérificateur)', () => {
   })
 })
 
-describe('passation avec le veilleur (passations.passationVeilleur)', () => {
+describe('passation avec le veilleur (fixe depuis le 2026-11-06)', () => {
   const cand = (
     id: string,
     poste: string,
@@ -367,21 +374,14 @@ describe('passation avec le veilleur (passations.passationVeilleur)', () => {
     generer(p(R), highs)
       .affectations.map((a) => a.creneauId)
       .find((id) => id.startsWith('s'))
-  it('active : le soir attend le veilleur ; désactivée : le plus court', () => {
+  it('zone tenue en continu : le soir attend le veilleur ; sinon le plus court', () => {
     expect(soir(REGLES_PAR_DEFAUT)).toBe('s2300')
-    // La continuité de l’accueil (D8) va elle aussi jusqu’au veilleur :
-    // désactivées toutes les deux, le soir le plus court.
-    const sans = regles({
-      passations: { passationVeilleur: false, continuiteObligatoire: false },
-    })
-    expect(soir(regles({ passations: { passationVeilleur: false } }))).toBe(
-      's2300',
-    )
-    expect(soir(sans)).toBe('s2245')
-    expect(zonesPassation(p(sans))).toEqual([])
     expect(zonesPassation(p(REGLES_PAR_DEFAUT)).length).toBeGreaterThan(0)
+    // Une zone qui n'est pas tenue en continu n'a ni passation ni continuité.
+    expect(soir(SANS_CONTINU)).toBe('s2245')
+    expect(zonesPassation(p(SANS_CONTINU))).toEqual([])
   })
-  it('vérificateur : la passation n’est plus jugée', () => {
+  it('vérificateur : jugée dans une zone tenue en continu seulement', () => {
     const aff = [
       { salarieId: 'a', creneauId: 's2245' },
       { salarieId: 'v', creneauId: 'n0' },
@@ -389,13 +389,12 @@ describe('passation avec le veilleur (passations.passationVeilleur)', () => {
     expect(transmissions(p(REGLES_PAR_DEFAUT), aff, [])[0].soirNuit).toBe(
       'manque',
     )
-    const sans = regles({ passations: { passationVeilleur: false } })
-    expect(transmissions(p(sans), aff, [])[0].soirNuit).toBeNull()
+    expect(transmissions(p(SANS_CONTINU), aff, [])).toEqual([])
   })
 })
 
-describe('équipe ensemble (passations.equipeTolerance)', () => {
-  it('arrivées du soir à 45 min : dites à 30 min de tolérance, pas à 60', () => {
+describe('équipe du soir ensemble (fixe : 30 min, 2026-11-06)', () => {
+  it('arrivées du soir à 45 min : dites ; à 30 min : non', () => {
     const c = (id: string, d: number, f: number) =>
       creneau({
         id,
@@ -421,18 +420,20 @@ describe('équipe ensemble (passations.equipeTolerance)', () => {
       { salarieId: 'a', creneauId: 'x' },
       { salarieId: 'b', creneauId: 'y' },
     ]
-    const dit = (R: RegleEtablissement) =>
+    const dit = (R: RegleEtablissement, ecartH = 0.75) =>
       equipesDesynchro(
         probleme({
           salaries: [s('a'), s('b')],
-          creneaux: [c('x', 14, 22), c('y', 14.75, 22)],
+          creneaux: [c('x', 14, 22), c('y', 14 + ecartH, 22)],
           nbJours: 1,
           regles: R,
         }),
         aff,
       ).filter((e) => e.arrivees)
     expect(dit(REGLES_PAR_DEFAUT)).toHaveLength(1)
-    expect(dit(regles({ passations: { equipeTolerance: 60 } }))).toEqual([])
+    expect(dit(REGLES_PAR_DEFAUT, 0.5)).toEqual([])
+    // Zone non tenue en continu : rien à dire.
+    expect(dit(SANS_CONTINU)).toEqual([])
   })
 })
 
@@ -519,7 +520,7 @@ describe('contrats et modèles de contrat', () => {
   })
 })
 
-describe('continuité entre équipes (passations.continuiteObligatoire, D8)', () => {
+describe('continuité entre équipes (D8, fixe depuis le 2026-11-06)', () => {
   // Matin 07-15 et soir 15:30-23 : une demi-heure sans personne. Seule
   // une personne sans heures dues (0 h) peut la tenir, sur un renfort
   // 11-19 : des heures en plus.
@@ -533,29 +534,29 @@ describe('continuité entre équipes (passations.continuiteObligatoire, D8)', ()
     personne(35, { id: 'b' }),
     personne(0, { id: 'c' }),
   ]
-  const resoudre = (continuite: boolean) => {
-    const R = regles({ passations: { continuiteObligatoire: continuite } })
+  const resoudre = (R: RegleEtablissement) => {
     const p = probleme({ salaries, creneaux, graine: 1, regles: R })
     return generer(p, highs)
   }
-  it('préférence : la demi-heure reste un trou', () => {
-    const r = resoudre(false)
-    expect(r.affectations.some((a) => a.creneauId === 'r')).toBe(false)
-    expect(r.trous).toHaveLength(1)
+  it('plus de préférence : un poste hors zone la tient aussi, quelle que soit la zone', () => {
+    // Ces créneaux sont d'un poste hors zone (ses besoins) : la continuité
+    // y est obligatoire, la zone de l'accueil n'y change rien.
+    const r = resoudre(SANS_CONTINU)
+    expect(r.affectations.some((a) => a.creneauId === 'r')).toBe(true)
+    expect(r.trous).toEqual([])
   })
   it('obligatoire : quelqu’un la tient, même en heures en plus, sans vider une place', () => {
-    const r = resoudre(true)
+    const r = resoudre(REGLES_PAR_DEFAUT)
     expect(r.affectations.some((a) => a.creneauId === 'r')).toBe(true)
     expect(r.manques).toEqual([])
     expect(r.trous).toEqual([])
   })
   it('jamais dur : sans personne pour la tenir, le trou reste (D3)', () => {
-    const R = regles({ passations: { continuiteObligatoire: true } })
     const p = probleme({
       salaries: salaries.slice(0, 2),
       creneaux,
       graine: 1,
-      regles: R,
+      regles: REGLES_PAR_DEFAUT,
     })
     const r = generer(p, highs)
     expect(r.statut).toBe('optimal')

@@ -79,6 +79,7 @@ import {
   rangAuTableau,
 } from '#/lib/planning/moment.ts'
 import type { Moments } from '#/lib/planning/moment.ts'
+import { RELEVE_MINUTES } from '#/lib/planning/regles.ts'
 import { seulementLaNuit, zoneDuPoste } from '#/lib/planning/zones.ts'
 import {
   dureesImposees,
@@ -141,8 +142,8 @@ export function cibleFiche(salarieId: number, partie?: PartieFiche): string {
 /** Où corriger : l'écran, et ce qu'il doit ouvrir (`?ouvrir=`). Cibles :
  * `horaire-<id>`, `poste-<id>`, `salarie-<id>` (`.partie` en plus pour
  * ouvrir la fiche sur une partie, `cibleFiche`), et sur Besoins
- * `poste-<id>`, `soutien-<id>` (le poste, réglage des apprentis),
- * `presence` (la vue par cycle) ou `releve` ; `regles` (Équipe : Règles des
+ * `poste-<id>`, `soutien-<id>` (le poste, réglage des apprentis) ou
+ * `presence` (la vue par cycle) ; `regles` (Équipe : Règles des
  * contrats) et `moments` (Besoins : limites des moments). */
 export interface LienReglage {
   page: PageReglage
@@ -1278,12 +1279,18 @@ function pointsDesRegles(
   }
 
   // ---------------------------------------------------------------- relève
-  const releve = regles.passations.releveMinutes
+  // Fixe (décision utilisateur du 2026-11-06) : le planning PRÉFÈRE que deux
+  // équipes se croisent `RELEVE_MINUTES` dans une zone tenue en continu.
+  // Des horaires qui ne le permettent jamais : dit ici, à corriger dans
+  // Horaires (plus rien à régler dans Besoins).
+  const releve = RELEVE_MINUTES
   const L = regles.moments
+  const continues = new Set(
+    regles.zones.filter((z) => z.continue).map((z) => z.id),
+  )
   for (const [avant, apres] of pairesDeJour(L)) {
     const releveDemandee =
       accueil &&
-      releve > 0 &&
       [0, 1, 2, 3, 4, 5, 6].some(
         (j) =>
           chiffres.some((c) => c.jour === j && c.periode === avant) &&
@@ -1291,9 +1298,12 @@ function pointsDesRegles(
       )
     if (!releveDemandee) continue
     const duJour = r.postes
-      .filter(
-        (p) => zoneDuPoste(p) !== null && !seulementLaNuit(p, r.horaires, L),
-      )
+      .filter((p) => {
+        const z = zoneDuPoste(p)
+        return (
+          z !== null && continues.has(z) && !seulementLaNuit(p, r.horaires, L)
+        )
+      })
       .flatMap((p) => codesDuPoste(p, r.horaires))
     const moment = (h: Horaire) => h.periode ?? momentPropose(h, L)
     const matins = duJour.filter((h) => moment(h) === avant)
@@ -1310,9 +1320,8 @@ function pointsDesRegles(
             ? `releve-impossible:${avant}`
             : 'releve-impossible',
           'a-voir',
-          'besoins',
-          `La relève demande ${dureeCourte(releve)} ensemble entre le ${a} et le ${b}, mais à l'accueil le ${a} finit au plus tard à ${hhmm(finMatin)} et le ${b} commence au plus tôt à ${hhmm(debutSoir)}. Ajoutez des horaires qui se croisent, ou réduisez la relève.`,
-          'releve',
+          'horaires',
+          `Le planning préfère que le ${a} et le ${b} se croisent ${dureeCourte(releve)} pour la relève, mais à l'accueil le ${a} finit au plus tard à ${hhmm(finMatin)} et le ${b} commence au plus tôt à ${hhmm(debutSoir)}. Ajoutez des horaires qui se croisent.`,
         )
     }
   }

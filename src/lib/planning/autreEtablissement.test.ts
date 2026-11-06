@@ -46,11 +46,9 @@ const TOUS = [0, 1, 2, 3, 4, 5, 6]
 
 /** Les règles de cet établissement (le reste : les défauts). */
 const REGLAGES: Reglages = {
-  releve_minutes: 0,
   deux_repos_de_suite: 'souhaite',
   jours_affiles_conseilles: 6,
   jour_isole: 'a_eviter',
-  passation_veilleur: false,
   journees_contrats: [
     { minutes_hebdo: 35 * H, durees: [7 * H], courtes_max: 0 },
   ],
@@ -293,9 +291,9 @@ describe('un second établissement, fictif', () => {
       expect(t.nuitMatin).toBeNull()
       expect(t.soirNuit).toBeNull()
     }
-    // Même sans la règle « passation » désactivée, aucun poste ne tient la
-    // nuit : aucune zone non plus.
-    const q = planning({ ...REGLAGES, passation_veilleur: true })
+    // La passation avec la nuit est fixe (2026-11-06) ; aucun poste ne tient
+    // la nuit : aucune zone de passation.
+    const q = planning(REGLAGES)
     const g2 = preparerGeneration(q.donnees(LUNDI), { aujourdhui: AUJOURDHUI })
     expect(zonesPassation(g2.probleme)).toEqual([])
   })

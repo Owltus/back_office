@@ -18,6 +18,7 @@ import {
   JOURS_AFFILES_MAX,
   MOMENT_ARRIERE_JOURS,
   NUITS_AFFILEES_MAX,
+  RELEVE_MINUTES,
   REPOS_APRES_NUITS,
   REPOS_CONFORT,
   RYTHME_CONTRAT_MIN,
@@ -28,7 +29,6 @@ import {
   joursDuContrat,
   lireRegles,
   modeleDe,
-  passationVeilleurActive,
   REGLES_PAR_DEFAUT,
 } from '#/lib/planning/reglesEtablissement.ts'
 import type { ModeleContrat, Reglages } from '#/lib/planning/types.ts'
@@ -44,6 +44,7 @@ describe('REGLES_PAR_DEFAUT : l’hôtel d’aujourd’hui, chiffre pour chiffre
     ['RYTHME_CONTRAT_MIN', RYTHME_CONTRAT_MIN, 35 * H],
     ['REPOS_CONFORT', REPOS_CONFORT, 12 * H],
     ['EQUIPE_TOLERANCE', EQUIPE_TOLERANCE, 30],
+    ['RELEVE_MINUTES', RELEVE_MINUTES, 30],
     ['CHANGEMENTS_MOMENT_MAX', CHANGEMENTS_MOMENT_MAX, 1],
     ['MOMENT_ARRIERE_JOURS', MOMENT_ARRIERE_JOURS, 2],
     ['NUITS_AFFILEES_MAX', NUITS_AFFILEES_MAX, 5],
@@ -66,11 +67,9 @@ describe('REGLES_PAR_DEFAUT : l’hôtel d’aujourd’hui, chiffre pour chiffre
     const r = REGLES_PAR_DEFAUT
     expect(r.repos.deuxReposDeSuite).toBe('obligatoire')
     expect(r.repos.jourIsole).toBe('interdit')
-    expect(r.passations.releveMinutes).toBe(30)
-    expect(r.passations.dureeOuverture).toBe(60)
-    expect(r.passations.passationVeilleur).toBe(true)
-    // D8 (2026-11-05) : la continuité entre équipes est obligatoire.
-    expect(r.passations.continuiteObligatoire).toBe(true)
+    // Passation entre les équipes fixe (2026-11-06) : plus dans les règles.
+    expect(r.passations).toEqual({ dureeOuverture: 60 })
+    expect(r.zones).toEqual([{ id: '1', nom: 'Accueil', continue: true }])
     expect(r.accueil.personnesNuit).toBe(1)
     expect(r.contrats.journees).toEqual([
       { minutesHebdo: 35 * H, durees: [7 * H], courtesMax: 0 },
@@ -119,20 +118,37 @@ describe('lireRegles', () => {
     expect(lireRegles({})).toEqual(REGLES_PAR_DEFAUT)
   })
 
-  it('relève lue dans les réglages, 0 compris', () => {
-    expect(
-      lireRegles({ reglages: { releve_minutes: 45 } }).passations.releveMinutes,
-    ).toBe(45)
-    expect(
-      lireRegles({ reglages: { releve_minutes: 0 } }).passations.releveMinutes,
-    ).toBe(0)
+  it('passation fixe (2026-11-06) : ses colonnes de la base ne sont plus lues', () => {
+    // Des valeurs que la base garde encore : sans effet.
+    const reglages = {
+      releve_minutes: 0,
+      continuite_obligatoire: false,
+      passation_veilleur: false,
+      equipe_tolerance: 60,
+    } as Reglages
+    expect(lireRegles({ reglages })).toEqual(REGLES_PAR_DEFAUT)
+    const zones = [
+      {
+        id: 1,
+        nom: 'Accueil',
+        ordre: 0,
+        continue: true,
+        releve_minutes: 0,
+        passation_nuit: false,
+        equipe_tolerance: 60,
+      },
+    ]
+    expect(lireRegles({ zones }).zones).toEqual([
+      { id: '1', nom: 'Accueil', continue: true },
+    ])
   })
 
   it('les défauts de la base (migration 20261105100000) = REGLES_PAR_DEFAUT', () => {
     // Recopiés À LA MAIN de la migration : un défaut changé d'un seul côté
     // fait échouer ce test.
+    // La passation entre les équipes (relève, continuité, nuit, tolérance)
+    // n'est plus lue depuis le 2026-11-06 : ses colonnes sont absentes.
     const reglages: Reglages = {
-      releve_minutes: 30,
       deux_repos_de_suite: 'obligatoire',
       jours_affiles_max: 6,
       jours_affiles_conseilles: 5,
@@ -143,10 +159,6 @@ describe('lireRegles', () => {
       moment_arriere_jours: 2,
       nuits_affilees_max: 5,
       repos_apres_nuits: 2,
-      // Défaut passé à vrai par la migration 20261105110000 (D8).
-      continuite_obligatoire: true,
-      passation_veilleur: true,
-      equipe_tolerance: 30,
       duree_ouverture: 60,
       personnes_nuit: 1,
       ecole_veille_fin: 1260,
@@ -187,7 +199,7 @@ describe('lireRegles', () => {
 
   it('une règle réglée en base est lue, les autres gardent leur défaut', () => {
     const r = lireRegles({
-      reglages: { releve_minutes: 30, personnes_nuit: 2, jour_isole: 'aucune' },
+      reglages: { personnes_nuit: 2, jour_isole: 'aucune' },
       modelesContrat: [
         {
           type_contrat: 'cdd',
@@ -224,8 +236,8 @@ describe('lireRegles', () => {
   })
 
   it('ne modifie jamais les défauts', () => {
-    lireRegles({ reglages: { releve_minutes: 45 } })
-    expect(REGLES_PAR_DEFAUT.passations.releveMinutes).toBe(30)
+    lireRegles({ reglages: { duree_ouverture: 45 } })
+    expect(REGLES_PAR_DEFAUT.passations.dureeOuverture).toBe(60)
   })
 })
 
@@ -235,15 +247,5 @@ describe('règles déduites', () => {
     expect(joursDuContrat(REGLES_PAR_DEFAUT, 39 * H)).toBe(5)
     expect(joursDuContrat(REGLES_PAR_DEFAUT, 24 * H)).toBeNull()
     expect(journeesDuContrat(REGLES_PAR_DEFAUT, 39 * H)?.courtesMax).toBe(1)
-  })
-
-  it('passation avec le veilleur seulement si un poste tient la nuit', () => {
-    expect(passationVeilleurActive(REGLES_PAR_DEFAUT, true)).toBe(true)
-    expect(passationVeilleurActive(REGLES_PAR_DEFAUT, false)).toBe(false)
-    const sans = {
-      ...REGLES_PAR_DEFAUT,
-      passations: { ...REGLES_PAR_DEFAUT.passations, passationVeilleur: false },
-    }
-    expect(passationVeilleurActive(sans, true)).toBe(false)
   })
 })

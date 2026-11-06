@@ -1,7 +1,8 @@
 /*
  * Les zones de l'établissement (2026-11-06, lot 2, A5) : une seconde zone
  * « Room service », tenue en continu, a son tableau, ses trous, sa relève
- * et sa passation, sans rien mélanger avec l'Accueil. Un poste qui tient le
+ * et sa passation (règles fixes du 2026-11-06), sans rien mélanger avec
+ * l'Accueil. Un poste qui tient le
  * jour ET la nuit compte aux deux. Données fictives.
  */
 
@@ -52,18 +53,12 @@ const ZONES: Zone[] = [
     nom: 'Accueil',
     ordre: 0,
     continue: true,
-    releve_minutes: 30,
-    passation_nuit: true,
-    equipe_tolerance: 30,
   },
   {
     id: 2,
     nom: 'Room service',
     ordre: 1,
     continue: true,
-    releve_minutes: 0,
-    passation_nuit: false,
-    equipe_tolerance: 60,
   },
 ]
 const R = lireRegles({ zones: ZONES })
@@ -141,15 +136,23 @@ describe('une seconde zone, Room service', () => {
     expect(v.map((x) => x.zone.nom)).toEqual(['Accueil', 'Room service'])
     expect(v[1].p.creneaux.map((c) => c.id)).toEqual(['rm', 'rs'])
     expect(v[1].p.consignes).toHaveLength(2)
+    // Relève fixe (2026-11-06) : la même dans toute zone tenue en continu,
+    // aucune dans une zone qui ne l'est pas.
     expect(v[0].p.releveMinutes).toBe(30)
-    expect(v[1].p.releveMinutes).toBe(0)
-    expect(v[1].p.regles?.passations.passationVeilleur).toBe(false)
-    expect(v[1].p.regles?.passations.equipeTolerance).toBe(60)
+    expect(v[1].p.releveMinutes).toBe(30)
+    const sansContinu = probleme({
+      ...pb(),
+      regles: lireRegles({
+        zones: ZONES.map((z) => (z.id === 2 ? { ...z, continue: false } : z)),
+      }),
+    })
+    expect(vuesZones(sansContinu)[1].p.releveMinutes).toBe(0)
   })
 
   it('relève et passation : celles de l’Accueil seulement', () => {
     const p = pb()
-    // Room service n'a ni relève (0 min) ni nuit : rien pour elle.
+    // Room service : son matin (7-14) et son soir (17-23) ne se croisent
+    // jamais, et elle n'a pas de nuit : rien pour elle.
     expect(zonesReleve(p)).toHaveLength(1)
     expect(zonesPassation(p).map((z) => [z.zone, z.cote])).toEqual([
       ['1', 'arrivee'],
@@ -200,10 +203,10 @@ describe('une seconde zone, Room service', () => {
 
   it('sans zone en base : l’accueil aux réglages généraux', () => {
     expect(REGLES_PAR_DEFAUT.zones).toHaveLength(1)
-    expect(REGLES_PAR_DEFAUT.zones[0]).toMatchObject({
+    expect(REGLES_PAR_DEFAUT.zones[0]).toEqual({
       id: '1',
-      releveMinutes: 30,
-      passationNuit: true,
+      nom: 'Accueil',
+      continue: true,
     })
   })
 })

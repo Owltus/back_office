@@ -59,7 +59,6 @@ import type {
   Historique,
 } from '#/components/planning/parametres/besoins/historique.ts'
 import { TableauAccueil } from '#/components/planning/parametres/besoins/TableauAccueil.tsx'
-import { ReglageReleve } from '#/components/planning/parametres/besoins/ReglageReleve.tsx'
 import {
   HeuresAccueil,
   HeuresPoste,
@@ -101,7 +100,6 @@ import { planningKeys } from '#/lib/planning/keys.ts'
 import { estIndispensable } from '#/lib/planning/modele.ts'
 import { estPosteAccueil } from '#/lib/planning/presence.ts'
 import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
-import { nomsPostesAccueil } from '#/lib/planning/presence.ts'
 import { zoneDuPoste } from '#/lib/planning/zones.ts'
 import { SectionZones } from '#/components/planning/parametres/besoins/SectionZones.tsx'
 import { reglerBesoin, reglerConsigne } from '#/lib/planning/service.ts'
@@ -172,8 +170,9 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
   const historiqueRef = useRef(historique)
   historiqueRef.current = historique
 
-  // Lien d'un point « À vérifier » : un poste (`poste-<id>`, `soutien-<id>`),
-  // la présence minimum (`presence`) ou la relève (`releve`).
+  // Lien d'un point « À vérifier » : un poste (`poste-<id>`, `soutien-<id>`)
+  // ou la présence minimum (`presence`). La relève n'a plus de réglage
+  // (fixe, décision utilisateur du 2026-11-06).
   useOuvrirCible(
     lien,
     !!data,
@@ -185,11 +184,6 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
       }
       if (cible === 'presence') {
         window.setTimeout(() => allerA('besoins-presence'), 0)
-        return true
-      }
-      // La relève, sous le tableau de l'accueil.
-      if (cible === 'releve') {
-        window.setTimeout(() => allerA('titre-releve'), 0)
         return true
       }
       const id = idCible(cible, 'soutien') ?? idCible(cible, 'poste')
@@ -466,10 +460,9 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
   }
 
   const regles = data ? lireRegles(data) : undefined
-  // Le tableau de l'accueil, ses heures et ses passations : un seul bloc,
-  // posé dans la section du réglage de ses postes.
-  // Un tableau par zone (2026-11-06), ses heures et ses passations ; puis
-  // créer, nommer, retirer une zone.
+  // Un tableau par zone (2026-11-06) et ses heures ; puis créer, nommer,
+  // retirer une zone. La passation entre les équipes n'a plus de réglage
+  // (décision utilisateur du 2026-11-06) : une phrase la dit.
   const accueil = data && regles && (
     <div className="flex flex-col gap-8">
       {regles.zones.map((z, i) => {
@@ -492,25 +485,17 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
                 modifiable={modifiable}
                 duree={regles.passations.dureeOuverture}
               />
-              <ReglageReleve
-                zoneId={data.zones?.length ? id : undefined}
-                premier={i === 0}
-                minutes={z.releveMinutes}
-                continuite={regles.passations.continuiteObligatoire}
-                veilleur={z.passationNuit}
-                nuit={nomsPostesAccueil(
-                  siens,
-                  data.horaires,
-                  true,
-                  regles.moments,
-                )}
-                tolerance={z.equipeTolerance}
-                modifiable={modifiable}
-              />
             </div>
           </div>
         )
       })}
+      <p
+        id="besoins-passation"
+        className="max-w-3xl text-sm text-muted-foreground"
+      >
+        Entre deux équipes, la suivante arrive au plus tard quand la précédente
+        part, nuit comprise. Le planning préfère qu'elles se croisent un moment.
+      </p>
       <SectionZones referentiel={data} modifiable={modifiable} />
     </div>
   )

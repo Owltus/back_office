@@ -119,19 +119,10 @@ export interface RegleEtablissement {
     /** Jours sans travail après une série de nuits. */
     reposApresNuits: number
   }
+  /** La passation entre les équipes (continuité, nuit, relève, équipe du
+   * soir) est FIXE depuis le 2026-11-06 (décision utilisateur) : constantes
+   * de `regles.ts` (`RELEVE_MINUTES`, `EQUIPE_TOLERANCE`), jamais ici. */
   passations: {
-    /** Temps passé ensemble par l'équipe du matin et celle du soir. */
-    releveMinutes: number
-    /** Aucun trou entre la fin d'une équipe et le début de la suivante,
-     * passation avec le veilleur comprise : au niveau d'une place
-     * nécessaire (D8, vrai depuis le 2026-11-05), sinon une préférence. */
-    continuiteObligatoire: boolean
-    /** Le dernier du soir attend le veilleur, le premier du matin le
-     * relaie. */
-    passationVeilleur: boolean
-    /** Les personnes d'un même moment arrivent (et le soir partent) à
-     * cette tolérance près. */
-    equipeTolerance: number
     /** Première heure d'un poste à ouverture : quelqu'un dessus. */
     dureeOuverture: number
   }
@@ -139,9 +130,8 @@ export interface RegleEtablissement {
    * conditions rangent un horaire (`momentPropose`), le tableau et la nuit
    * se lisent sur leurs cases (`moment.ts`). */
   moments: Moments
-  /** Les zones (`planning_zones`, 2026-11-06, `zones.ts`) : chacune sa
-   * relève, sa passation, sa tolérance. Sans ligne : l'accueil seul, aux
-   * réglages de `passations`. */
+  /** Les zones (`planning_zones`, 2026-11-06, `zones.ts`) : une zone tenue
+   * en continu a la passation fixe. Sans ligne : l'accueil seul. */
   zones: readonly ZoneRegle[]
   /** Les trois niveaux FIXES d'une personne sur un poste (`niveaux.ts`,
    * décision de l'utilisateur du 2026-11-06 : jamais réglables). */
@@ -232,22 +222,9 @@ export const REGLES_PAR_DEFAUT: RegleEtablissement = {
     nuitsAffileesMax: 5,
     reposApresNuits: 2,
   },
-  passations: {
-    releveMinutes: 30,
-    // D8 (décision utilisateur du 2026-11-05) : obligatoire.
-    continuiteObligatoire: true,
-    passationVeilleur: true,
-    equipeTolerance: 30,
-    dureeOuverture: 60,
-  },
+  passations: { dureeOuverture: 60 },
   moments: MOMENTS_HOTEL,
-  zones: [
-    zoneParDefaut({
-      releveMinutes: 30,
-      passationVeilleur: true,
-      equipeTolerance: 30,
-    }),
-  ],
+  zones: [zoneParDefaut()],
   niveaux: NIVEAUX,
   accueil: { personnesNuit: 1 },
   ecole: { veilleFin: 21 * H, lendemainDebut: 8 * H },
@@ -321,12 +298,10 @@ export function lireRegles(
 ): RegleEtablissement {
   const r: Partial<Reglages> = referentiel?.reglages ?? {}
   const d = REGLES_PAR_DEFAUT
+  // Passation entre les équipes : fixe (2026-11-06), les colonnes
+  // `continuite_obligatoire`, `releve_minutes`, `passation_veilleur`,
+  // `equipe_tolerance` ne sont plus lues.
   const passations = {
-    releveMinutes: r.releve_minutes ?? d.passations.releveMinutes,
-    continuiteObligatoire:
-      r.continuite_obligatoire ?? d.passations.continuiteObligatoire,
-    passationVeilleur: r.passation_veilleur ?? d.passations.passationVeilleur,
-    equipeTolerance: r.equipe_tolerance ?? d.passations.equipeTolerance,
     dureeOuverture: r.duree_ouverture ?? d.passations.dureeOuverture,
   }
   return {
@@ -360,7 +335,7 @@ export function lireRegles(
     },
     passations,
     moments: lireMoments(referentiel?.moments),
-    zones: lireZones(referentiel?.zones, zoneParDefaut(passations)),
+    zones: lireZones(referentiel?.zones, zoneParDefaut()),
     niveaux: NIVEAUX,
     accueil: {
       personnesNuit: r.personnes_nuit ?? d.accueil.personnesNuit,
@@ -455,15 +430,6 @@ export function joursDuContrat(
     jours++
   }
   return jours + Math.ceil(reste / pleine)
-}
-
-/** Règle déduite : la passation avec le veilleur n'existe que si un poste
- * tient la nuit (`tientLaNuit`, presence.ts). */
-export function passationVeilleurActive(
-  regles: RegleEtablissement,
-  unPosteTientLaNuit: boolean,
-): boolean {
-  return regles.passations.passationVeilleur && unPosteTientLaNuit
 }
 
 /** Le défaut d'un identifiant : le contrat de l'hôtel de même identifiant,

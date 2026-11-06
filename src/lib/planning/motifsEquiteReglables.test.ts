@@ -177,7 +177,6 @@ describe('week-end réglé au vendredi et samedi', () => {
     expect(estJourWeekend(VENDREDI_SAMEDI, 11)).toBe(true)
     const r = lireRegles({
       reglages: {
-        releve_minutes: 30,
         weekend_jours: [5, 4],
         weekend_nuit_veille: false,
         equite_criteres: ['nuits'],

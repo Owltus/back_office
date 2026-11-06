@@ -172,12 +172,12 @@ export interface JourneesContratLigne {
 
 /** Réglages généraux du planning (table `planning_reglages`, une ligne) : les
  * RÈGLES DE L'ÉTABLISSEMENT globales (2026-11-05), lues par `lireRegles`.
- * Durées et heures en minutes (heures : depuis minuit). Seule la relève est
- * obligatoire : un champ absent (données de test, base pas encore migrée)
- * reprend `REGLES_PAR_DEFAUT`. */
+ * Durées et heures en minutes (heures : depuis minuit). Un champ absent
+ * (données de test, base pas encore migrée) reprend `REGLES_PAR_DEFAUT`. Les
+ * colonnes de la passation entre les équipes (`continuite_obligatoire`,
+ * `releve_minutes`, `passation_veilleur`, `equipe_tolerance`) restent en
+ * base, plus lues : règles fixes depuis le 2026-11-06 (`regles.ts`). */
 export interface Reglages {
-  /** Temps passé ensemble par l'équipe du matin et celle de l'après-midi. */
-  releve_minutes: number
   deux_repos_de_suite?: ForceRegle
   jours_affiles_max?: number
   jours_affiles_conseilles?: number
@@ -188,9 +188,6 @@ export interface Reglages {
   moment_arriere_jours?: number
   nuits_affilees_max?: number
   repos_apres_nuits?: number
-  continuite_obligatoire?: boolean
-  passation_veilleur?: boolean
-  equipe_tolerance?: number
   duree_ouverture?: number
   personnes_nuit?: number
   ecole_veille_fin?: number
@@ -314,11 +311,10 @@ export interface Zone {
   id: number
   nom: string
   ordre: number
-  /** Tenue en continu (trous, personne seule, d'un veilleur à l'autre). */
+  /** Tenue en continu (trous, personne seule, d'un veilleur à l'autre, et
+   * la passation fixe du 2026-11-06). `releve_minutes`, `passation_nuit`,
+   * `equipe_tolerance` restent en base, plus lues. */
   continue: boolean
-  releve_minutes: number
-  passation_nuit: boolean
-  equipe_tolerance: number
 }
 
 /** Un jour d'absence (une ligne par jour). */
@@ -390,7 +386,7 @@ export interface Referentiel {
    * (données de test) : ceux de l'hôtel (`MOMENTS_PAR_DEFAUT`). */
   moments?: Moment[]
   /** Zones (`planning_zones`, 2026-11-06) ; absentes (données de test) :
-   * l'accueil seul, aux réglages de passation (`zoneParDefaut`). */
+   * l'accueil seul, tenu en continu (`zoneParDefaut`). */
   zones?: Zone[]
 }
 

@@ -419,18 +419,12 @@ describe('9c. un poste dans une zone sans chiffres', () => {
         nom: 'Accueil',
         ordre: 0,
         continue: true,
-        releve_minutes: 30,
-        passation_nuit: true,
-        equipe_tolerance: 30,
       },
       {
         id: 2,
         nom: 'Room service',
         ordre: 1,
         continue: true,
-        releve_minutes: 0,
-        passation_nuit: false,
-        equipe_tolerance: 30,
       },
     ]
     r.postes = r.postes.map((p) =>

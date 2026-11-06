@@ -105,7 +105,7 @@ describe('1. heures indicatives : la loi du temps partiel tient', () => {
   })
   const indicatif = (type: ModeleContrat['type_contrat']) =>
     lireRegles({
-      reglages: { releve_minutes: 30 },
+      reglages: {},
       modelesContrat: [modele(type, { contrat_indicatif: true })],
     })
 
@@ -120,7 +120,7 @@ describe('1. heures indicatives : la loi du temps partiel tient', () => {
         typeContrat: 'extra',
         minutesHebdo: 0,
         regles: lireRegles({
-          reglages: { releve_minutes: 30 },
+          reglages: {},
           modelesContrat: [
             modele('extra', {
               contrat_indicatif: true,
@@ -157,7 +157,7 @@ describe('2. menu de la journée étoile : il suit les règles', () => {
 
   it('journée étoile décochée pour le CDI : aucune rubrique', () => {
     const regles = lireRegles({
-      reglages: { releve_minutes: 30 },
+      reglages: {},
       modelesContrat: [modele('cdi', { journee_etoile: false })],
     })
     expect(rubriqueEtoile(entree(regles))).toBeNull()
@@ -184,7 +184,7 @@ describe('2. menu de la journée étoile : il suit les règles', () => {
       horaires,
       postes: [poste(1)],
       motifs: [],
-      reglages: { releve_minutes: 30 },
+      reglages: {},
       modelesContrat: [modele('cdi', { journee_etoile: false })],
     }
     expect(
@@ -241,7 +241,6 @@ describe('4. jour seul interdit avec un seul jour d’affilée conseillé', () =
     const r = propre()
     expect(ids(r)).toEqual([])
     r.reglages = {
-      releve_minutes: 30,
       jours_affiles_conseilles: 1,
       jour_isole: 'interdit',
     }

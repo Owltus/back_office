@@ -105,6 +105,7 @@ import {
 import type { Fiche } from '#/lib/planning/regles.ts'
 import {
   jourIsoleDe,
+  RELEVE_MINUTES,
   rythmeHumain,
   apresContrat,
 } from '#/lib/planning/regles.ts'
@@ -3086,7 +3087,7 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
     consignes: chiffresAccueil(ctx),
     ouvertures: ouverturesPostes(ctx),
     fermetures: fermeturesPostes(ctx),
-    releveMinutes: accueil ? ctx.regles.passations.releveMinutes : 0,
+    releveMinutes: accueil ? RELEVE_MINUTES : 0,
   }
   const ouverturesVides: TrouOut[] = ouverturesManquees(pReglages, affs).map(
     (t) => ({
@@ -3591,9 +3592,8 @@ export function preparerGeneration(
     ...(horizon
       ? { suivante: esquisseSuivante(d2, ctx, salaries, besoins) }
       : {}),
-    releveMinutes: accueilEnService(ctx)
-      ? ctx.regles.passations.releveMinutes
-      : 0,
+    // Relève fixe (décision utilisateur du 2026-11-06).
+    releveMinutes: accueilEnService(ctx) ? RELEVE_MINUTES : 0,
     // Passation du lundi matin avec le veilleur du dimanche d'avant.
     veilleDuLundi: veilleDuLundiDe(d, lundi),
     // 60 s au plus par semaine (décision utilisateur du 2026-11-03 ; 40 s

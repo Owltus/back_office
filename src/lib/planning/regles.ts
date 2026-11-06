@@ -120,7 +120,28 @@ export const REPOS_CONFORT = REGLES_PAR_DEFAUT.repos.reposConfort
  * le maximum possible, à trente minutes près, synchro comme le matin ») :
  * à l'accueil, les personnes d'un même moment (matin, soir) arrivent à
  * cette tolérance près, celles du soir partent à cette tolérance près. */
-export const EQUIPE_TOLERANCE = REGLES_PAR_DEFAUT.passations.equipeTolerance
+export const EQUIPE_TOLERANCE = 30
+/** Relève : temps que le planning cherche à faire passer ENSEMBLE l'équipe
+ * du matin et celle de l'après-midi, chacun sa personne de l'autre équipe
+ * (une préférence ; le minimum, c'est la continuité). */
+export const RELEVE_MINUTES = 30
+/*
+ * PASSATION ENTRE LES ÉQUIPES : FIXE (décision utilisateur du 2026-11-06 :
+ * « cette notion n'a pas besoin d'être paramétrable. Dis-toi simplement que
+ * c'est toujours, par défaut, la transition parfaite, genre terminer à 15h00
+ * et l'autre commence à 15h00, mais si possible de chevauchement, privilégie
+ * le chevauchement. Donc retire le paramétrage de cela. »). Dans toute zone
+ * tenue en continu, et seulement là :
+ *   - continuité OBLIGATOIRE au prix d'une place nécessaire (D8) : aucun trou
+ *     entre deux équipes, nuit comprise ;
+ *   - passation avec la nuit : le dernier du soir attend le veilleur, le
+ *     premier du matin le relaie ;
+ *   - relève préférée de `RELEVE_MINUTES` ;
+ *   - équipe du soir ensemble à `EQUIPE_TOLERANCE` près.
+ * Les colonnes de la base (`planning_reglages.continuite_obligatoire`,
+ * `releve_minutes`, `passation_veilleur`, `equipe_tolerance`, et celles de
+ * `planning_zones`) restent, plus lues. NE PAS les rendre réglables.
+ */
 /** Règle 6 : changements de moment (matin, middle, soir, nuit) au plus
  * dans une semaine, et de préférence vers plus tard (matin puis soir). */
 export const CHANGEMENTS_MOMENT_MAX =

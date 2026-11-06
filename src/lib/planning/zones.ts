@@ -1,9 +1,10 @@
 /*
  * Les ZONES de l'établissement (2026-11-06, lot 2, A5) : des postes tenus
  * ensemble, avec leur tableau (un chiffre par jour et par moment). À l'hôtel,
- * une zone : l'accueil (Réception, Club, Veille de nuit). Une zone porte sa
- * relève, sa passation avec la nuit, sa tolérance d'équipe, et se tient en
- * continu ou non. Le calcul ne lit jamais un nom de zone : la zone d'un poste
+ * une zone : l'accueil (Réception, Club, Veille de nuit). Une zone se tient
+ * en continu ou non ; tenue en continu, elle a la passation FIXE entre les
+ * équipes (décision utilisateur du 2026-11-06, `regles.ts` : continuité,
+ * passation avec la nuit, relève, équipe du soir ensemble). Le calcul ne lit jamais un nom de zone : la zone d'un poste
  * (`zone_id`), celle d'une consigne (`zone_id`), celle d'un créneau (`zone`).
  * Un poste de zone compte dans chaque moment du tableau que ses horaires
  * touchent, le jour comme la nuit.
@@ -19,36 +20,15 @@ export interface ZoneRegle {
   id: string
   nom: string
   /** Tenue en continu : aucun trou d'une équipe à l'autre, d'un veilleur à
-   * l'autre ; personne seule évitée. */
+   * l'autre, passation avec la nuit, relève, équipe du soir ensemble
+   * (règles fixes du 2026-11-06) ; personne seule évitée. */
   continue: boolean
-  /** Temps passé ensemble par deux équipes de jour qui se suivent. */
-  releveMinutes: number
-  /** Passation avec la nuit (le dernier du soir attend le veilleur). */
-  passationNuit: boolean
-  /** Les personnes d'un même moment arrivent (et partent) à cette
-   * tolérance près. */
-  equipeTolerance: number
-  /** Zone tirée des réglages généraux (aucune zone en base) : le problème
-   * garde ses passations et sa relève. */
-  parDefaut?: boolean
 }
 
 /** La zone de l'hôtel quand la base n'en porte aucune (données de test) :
- * l'accueil, aux réglages de passation donnés. */
-export function zoneParDefaut(p: {
-  releveMinutes: number
-  passationVeilleur: boolean
-  equipeTolerance: number
-}): ZoneRegle {
-  return {
-    id: '1',
-    nom: 'Accueil',
-    continue: true,
-    releveMinutes: p.releveMinutes,
-    passationNuit: p.passationVeilleur,
-    equipeTolerance: p.equipeTolerance,
-    parDefaut: true,
-  }
+ * l'accueil, tenu en continu. */
+export function zoneParDefaut(): ZoneRegle {
+  return { id: '1', nom: 'Accueil', continue: true }
 }
 
 /** Les zones d'une liste de la base, rangées (ordre, puis id). */
@@ -63,9 +43,6 @@ export function lireZones(
       id: String(z.id),
       nom: z.nom,
       continue: z.continue,
-      releveMinutes: z.releve_minutes,
-      passationNuit: z.passation_nuit,
-      equipeTolerance: z.equipe_tolerance,
     }))
 }
 
@@ -173,26 +150,13 @@ interface ProblemeZones {
   }>
   consignes: ReadonlyArray<{ zone?: string }>
   releveMinutes?: number
-  regles?: {
-    zones: readonly ZoneRegle[]
-    passations: {
-      releveMinutes: number
-      passationVeilleur: boolean
-      equipeTolerance: number
-    }
-  }
+  regles?: { zones: readonly ZoneRegle[] }
   veilleDuLundi?: ReadonlyArray<{ zone?: string }>
 }
 
 /** Les zones d'un problème (absentes : celle de l'hôtel). */
 const zonesDe = (p: ProblemeZones): readonly ZoneRegle[] =>
-  p.regles?.zones ?? [
-    zoneParDefaut({
-      releveMinutes: 30,
-      passationVeilleur: true,
-      equipeTolerance: 30,
-    }),
-  ]
+  p.regles?.zones ?? [zoneParDefaut()]
 
 /** La zone de chaque poste d'un problème : celle de ses créneaux, sinon la
  * première zone pour un poste qui a un candidat (`accueil`). */
@@ -209,11 +173,11 @@ export function zonesDesPostes(p: ProblemeZones): Map<string, string> {
 
 /**
  * Le problème vu d'une zone : ses créneaux (ceux de ses postes), ses
- * consignes, sa relève, sa passation, sa tolérance. Le calcul d'une zone
- * (trous, passations, relève, équipes) se fait zone par zone, sans rien
- * mélanger. Une zone sans créneau ni consigne n'est pas rendue. Sans zone
- * en base (données de test), la zone de l'hôtel garde la relève du
- * problème.
+ * consignes, sa relève. Le calcul d'une zone (trous, passations, relève,
+ * équipes) se fait zone par zone, sans rien mélanger. Une zone sans créneau
+ * ni consigne n'est pas rendue. La relève du problème (`RELEVE_MINUTES`
+ * quand la zone est en service, posée par semaine.ts) ne vaut que pour une
+ * zone tenue en continu ; ailleurs, aucune (règle fixe du 2026-11-06).
  */
 export function vuesZones<P extends ProblemeZones>(
   p: P,
@@ -229,12 +193,7 @@ export function vuesZones<P extends ProblemeZones>(
     const creneaux = p.creneaux.filter((c) => zoneDuCreneau(c) === z.id)
     const consignes = p.consignes.filter((k) => (k.zone ?? premiere) === z.id)
     if (!creneaux.length && !consignes.length) continue
-    const releve =
-      z.parDefaut || !p.regles
-        ? p.releveMinutes
-        : (p.releveMinutes ?? 0) > 0
-          ? z.releveMinutes
-          : 0
+    const releve = z.continue ? p.releveMinutes : 0
     r.push({
       zone: z,
       p: {
@@ -245,19 +204,6 @@ export function vuesZones<P extends ProblemeZones>(
         veilleDuLundi: p.veilleDuLundi?.filter(
           (v) => (v.zone ?? premiere) === z.id,
         ),
-        regles:
-          p.regles &&
-          (z.parDefaut
-            ? p.regles
-            : {
-                ...p.regles,
-                passations: {
-                  ...p.regles.passations,
-                  releveMinutes: z.releveMinutes,
-                  passationVeilleur: z.passationNuit,
-                  equipeTolerance: z.equipeTolerance,
-                },
-              }),
       },
     })
   }

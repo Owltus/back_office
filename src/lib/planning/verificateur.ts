@@ -55,6 +55,7 @@ import type {
   SalarieSolveur,
 } from '#/lib/planning/modele.ts'
 import {
+  EQUIPE_TOLERANCE,
   jourIsoleDe,
   rythmeHumain,
   apresContrat,
@@ -1606,15 +1607,13 @@ function transmissionsUneZone(
     const veille = jour > 0 ? nuitsDe(jour - 1) : veilleDuLundi
     let matinSoir = contact(matins, soirs)
     if (matinSoir && sansReleve.includes(jour)) matinSoir = 'manque'
-    // Sans passation avec le veilleur (règle de l'établissement) : rien à
-    // dire de la nuit.
-    const veilleur = (p.regles ?? REGLES_PAR_DEFAUT).passations
-      .passationVeilleur
+    // Passation avec la nuit : fixe (2026-11-06), dans une zone tenue en
+    // continu (seules regardées ici).
     r.push({
       jour,
-      nuitMatin: veilleur ? contact(veille, matins) : null,
+      nuitMatin: contact(veille, matins),
       matinSoir,
-      soirNuit: veilleur ? contact(soirs, nuits) : null,
+      soirNuit: contact(soirs, nuits),
     })
   }
   return r
@@ -1733,7 +1732,10 @@ export function equipesDesynchro(
   p: Probleme,
   affectations: AffectationSolveur[],
 ): EquipeDesynchro[] {
-  return vuesZones(p).flatMap((v) => equipesUneZone(v.p, affectations))
+  // Seulement une zone tenue en continu (règle fixe du 2026-11-06).
+  return vuesZones(p)
+    .filter((v) => v.zone.continue)
+    .flatMap((v) => equipesUneZone(v.p, affectations))
 }
 
 function equipesUneZone(
@@ -1741,8 +1743,6 @@ function equipesUneZone(
   affectations: AffectationSolveur[],
 ): EquipeDesynchro[] {
   const R = p.releveMinutes ?? 0
-  const EQUIPE_TOLERANCE = (p.regles ?? REGLES_PAR_DEFAUT).passations
-    .equipeTolerance
   const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
   const salaries = new Map(p.salaries.map((s) => [s.id, s]))
   const L = momentsDe(p)

@@ -14,7 +14,7 @@ import { MOMENTS_PAR_DEFAUT } from '#/lib/planning/moment.ts'
 import { momentsAvec } from '#/lib/planning/test/momentsTest.ts'
 import type { Horaire, Reglages } from '#/lib/planning/types.ts'
 
-const vide = { reglages: { releve_minutes: 30 } as Reglages }
+const vide = { reglages: {} as Reglages }
 const horaire = (id: number, debut: string, fin: string): Horaire =>
   ({ id, debut, fin, pause: 0, periode: null }) as unknown as Horaire
 
