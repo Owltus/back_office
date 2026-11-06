@@ -2500,10 +2500,23 @@ const PL_GROUPES: ReadonlyArray<readonly [string, string, readonly string[]]> =
 /** Importance d'un poste fictif, OUI / NON (décision utilisateur du
  * 2026-11-05) : les postes de l'accueil, jour et nuit, sont indispensables ;
  * les autres (direction, supervision, technique) ne le sont pas. */
-function plImportance(nom: string, categorie: string): string {
+/** Indispensable au fonctionnement (2026-11-06, `indispensable`). */
+function plIndispensable(nom: string, categorie: string): boolean {
   return PL_PRESENCE.has(nom) || categorie === 'veille_nuit'
-    ? 'indispensable'
-    : 'si_possible'
+}
+/** Cases et rôle d'un motif (2026-11-06) d'après son code : le seed seul
+ * les connaît, le code de l'app ne lit plus aucun code de motif. */
+function plMotifCases(
+  code: string,
+  decompte: boolean,
+  nature: string,
+): [boolean, string | null] {
+  const libre =
+    nature !== 'ecole' &&
+    (nature === 'repos' || !decompte || ['CP', 'JF', 'JFR'].includes(code))
+  const role =
+    code === 'JFR' ? 'ferie_rattrape' : code === 'R' ? 'repos_defaut' : null
+  return [libre, role]
 }
 interface PlOptions {
   forfait?: boolean
@@ -2679,12 +2692,22 @@ function genererPlanning(f: Fenetre, tables: Table[], apres: string[]): void {
     'couleur',
     'decompte',
     'nature',
+    'libre_weekend',
+    'role',
   ])
   motifs.identiteForcee = true
   const idMotif = new Map<string, number>()
   PL_MOTIFS.forEach(([code, nom, couleur, decompte, nature], i) => {
     idMotif.set(code, i + 1)
-    motifs.lignes.push([i + 1, code, nom, couleur, decompte, nature])
+    motifs.lignes.push([
+      i + 1,
+      code,
+      nom,
+      couleur,
+      decompte,
+      nature,
+      ...plMotifCases(code, decompte, nature),
+    ])
   })
   const postes = table('public.planning_postes', [
     'id',
@@ -2695,7 +2718,7 @@ function genererPlanning(f: Fenetre, tables: Table[], apres: string[]): void {
     'presence',
     'accueil_nuit',
     'ouverture',
-    'importance',
+    'indispensable',
     'jour_max_minutes',
   ])
   postes.identiteForcee = true
@@ -2715,7 +2738,7 @@ function genererPlanning(f: Fenetre, tables: Table[], apres: string[]): void {
       categorie === 'veille_nuit',
       // Réception et Club tenus dès 07:00 (2026-11-01).
       PL_PRESENCE.has(nom) ? '07:00' : null,
-      plImportance(nom, categorie),
+      plIndispensable(nom, categorie),
       // Durée max d'un service (2026-11-06) : celle de l'ancienne catégorie.
       PL_JOUR_MAX[categorie] ?? 690,
     ])

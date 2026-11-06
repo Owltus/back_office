@@ -95,8 +95,11 @@ update t_ids set m = (select id from public.planning_motifs where nom = 'Congé 
 insert into public.planning_motifs (code, nom, nature, decompte) values ('XR', 'Repos test', 'repos', false);
 alter table t_ids add column r bigint;
 update t_ids set r = (select id from public.planning_motifs where nom = 'Repos test');
--- Jour férié rattrapé (2026-11-02) : un motif de code JFR, propre au test.
-insert into public.planning_motifs (code, nom, nature, decompte) values ('JFR', 'JFR test', 'absence', true);
+-- Jour férié rattrapé (2026-11-02) : un motif propre au test. Depuis le
+-- 2026-11-06, c'est son RÔLE qui compte, jamais son code : il prend un code
+-- quelconque et le rôle (retiré au motif qui l'a, un seul motif par rôle).
+update public.planning_motifs set role = null where role = 'ferie_rattrape';
+insert into public.planning_motifs (code, nom, nature, decompte, role) values ('XJ', 'JFR test', 'absence', true, 'ferie_rattrape');
 alter table t_ids add column j bigint;
 update t_ids set j = (select id from public.planning_motifs where nom = 'JFR test');
 insert into public.planning_salaries (prenom, nom, groupe_id, competences, semaine_type)
@@ -140,7 +143,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':J', (select j from t_ids)::text);
 $$;
 
-select plan(129);
+select plan(148);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -478,12 +481,11 @@ select is(pg_temp.essai('gestion', array[
   '3-3', 'consignes : la gestion règle un chiffre exact (3 le samedi matin, 2026-11-01)');
 select is(pg_temp.essai('gestion', array[
   'delete from public.planning_consignes',
-  'insert into public.planning_consignes (jour, periode, minimum, maximum) values (5, ''matin'', 3, 4)']),
-  'err=23514', 'consignes : deux chiffres différents sont refusés (2026-11-01)');
-select is(pg_temp.essai('gestion', array[
-  'delete from public.planning_consignes',
-  'insert into public.planning_consignes (jour, periode, minimum) values (5, ''matin'', 3)']),
-  'err=23514', 'consignes : un chiffre sans plafond est refusé (2026-11-01)');
+  'insert into public.planning_consignes (jour, periode, minimum, maximum) values (5, ''matin'', 3, 4)',
+  'select minimum || ''-'' || maximum from public.planning_consignes']),
+  '3-4', 'consignes : au moins 3, au plus 4 (2026-11-06, CHECK exact retiré)');
+select is((select count(*)::text from pg_constraint where conname = 'planning_consignes_exact'),
+  '0', 'consignes : plus de contrainte de chiffre exact');
 select is(pg_temp.essai('gestion', array[
   'delete from public.planning_consignes',
   'insert into public.planning_consignes (jour, periode, minimum, maximum) values (0, ''soir'', 3, 2)']),
@@ -631,6 +633,67 @@ select is(pg_temp.essai('gestion', array[
   pg_temp.q('select public.planning_supprimer_salarie(:S2)'),
   pg_temp.q('select coalesce(s.suite_de::text, ''tete'') || ''/'' || (select (t.suite_de = :S3)::text from public.planning_salaries t where t.prenom = ''Test4'' and t.nom = ''PLANNING'') from public.planning_salaries s where s.id = :S3')]),
   'tete/true', 'premier contrat supprimé : le plus ancien suivant devient la tête, l''autre le suit');
+
+-- ------------------- motifs, équité, jours fériés en plus (2026-11-06) ---
+select is(pg_temp.essai('gestion', array[
+  'insert into public.planning_motifs (code, nom, nature, decompte, role) values (''XK'', ''Deuxième JFR'', ''absence'', true, ''ferie_rattrape'')']),
+  'err=23505', 'motifs : un seul motif par rôle');
+select is(pg_temp.essai('gestion', array[
+  'insert into public.planning_motifs (code, nom, nature, decompte, role) values (''XL'', ''Repos absence'', ''absence'', true, ''repos_defaut'')']),
+  'err=23514', 'motifs : le repos du planning est un motif de nature repos');
+select is(pg_temp.essai('gestion', array[
+  'insert into public.planning_motifs (code, nom, role) values (''XM'', ''Rôle inconnu'', ''chef'')']),
+  'err=23514', 'motifs : un rôle inconnu est refusé');
+select is(pg_temp.essai('gestion', array[
+  pg_temp.q('update public.planning_motifs set code = ''QQ'', nom = ''Rattrapé renommé'' where id = :J'),
+  pg_temp.q('insert into public.planning_absences (salarie_id, jour, motif_id, epinglee) values (:S3, :F::date + 3, :J, false)'),
+  pg_temp.q('select epinglee::text from public.planning_absences where salarie_id = :S3 and jour = :F::date + 3')]),
+  'false', 'motifs : un jour férié rattrapé renommé garde son rôle (proposition permise)');
+select is(pg_temp.essai('gestion', array[
+  'insert into public.planning_motifs (code, nom, icone, libre_weekend, reserve_forfait) values (''XN'', ''Avec icône'', ''conge'', true, true)',
+  'select icone || ''/'' || libre_weekend || ''/'' || reserve_forfait from public.planning_motifs where code = ''XN''']),
+  'conge/true/true', 'motifs : icône, week-end libre et forfait se règlent');
+select is(pg_temp.essai('gestion', array[
+  'insert into public.planning_motifs (code, nom, icone) values (''XO'', ''Icône inconnue'', ''licorne'')']),
+  'err=23514', 'motifs : une icône inconnue est refusée');
+select is((select string_agg(column_default, ',' order by column_name)
+             from information_schema.columns
+            where table_schema = 'public' and table_name = 'planning_motifs'
+              and column_name in ('libre_weekend', 'reserve_forfait')),
+  'false,false', 'motifs : un motif neuf ne libère pas le week-end et n''est pas réservé');
+select is(pg_temp.essai('gestion', array[
+  'update public.planning_reglages set weekend_jours = ''{4,5}'', weekend_nuit_veille = false, equite_criteres = ''{soirs,nuits}'', equite_semaines = 6 where id = 1',
+  'select weekend_jours::text || ''/'' || weekend_nuit_veille || ''/'' || equite_criteres::text || ''/'' || equite_semaines from public.planning_reglages where id = 1']),
+  '{4,5}/false/{soirs,nuits}/6', 'équité : la gestion règle le week-end, les critères et les semaines');
+select is(pg_temp.essai('gestion', array['update public.planning_reglages set weekend_jours = ''{7}'' where id = 1']),
+  'err=23514', 'équité : un jour du week-end hors de la semaine est refusé');
+select is(pg_temp.essai('gestion', array['update public.planning_reglages set equite_criteres = ''{licornes}'' where id = 1']),
+  'err=23514', 'équité : un critère inconnu est refusé');
+select is(pg_temp.essai('gestion', array['update public.planning_reglages set equite_semaines = 2, semaines_en_plus_alerte = 3 where id = 1']),
+  'err=23514', 'équité : l''alerte des heures en plus ne compte pas plus de semaines que le partage');
+select is(pg_temp.essai('ecriture', array['update public.planning_reglages set equite_semaines = 6 where id = 1']),
+  '0', 'équité : l''écriture ne la règle pas');
+select is((select weekend_jours::text || '/' || weekend_nuit_veille || '/' || equite_criteres::text || '/' || equite_semaines
+             from public.planning_reglages where id = 1),
+  '{5,6}/true/{weekends,soirs,matins_tot}/4', 'équité : les défauts sont ceux de l''hôtel');
+select is((select column_default from information_schema.columns
+            where table_schema = 'public' and table_name = 'planning_postes'
+              and column_name = 'indispensable'),
+  'false', 'postes : un poste neuf n''est pas indispensable');
+select is(pg_temp.essai('gestion', array[
+  'insert into public.planning_feries (jour, nom, recurrent) values (''2031-05-17'', ''Fête locale test'', true)',
+  'select nom || ''/'' || recurrent from public.planning_feries where jour = ''2031-05-17''']),
+  'Fête locale test/true', 'jours fériés en plus : la gestion en ajoute');
+select is(pg_temp.essai('gestion', array[
+  'insert into public.planning_feries (jour, nom) values (''2031-05-18'', ''Un'')',
+  'insert into public.planning_feries (jour, nom) values (''2031-05-18'', ''Deux'')']),
+  'err=23505', 'jours fériés en plus : une date une seule fois');
+select is(pg_temp.essai('ecriture', array['insert into public.planning_feries (jour, nom) values (''2031-05-19'', ''Essai'')']),
+  'err=42501', 'jours fériés en plus : l''écriture n''en ajoute pas');
+select is(pg_temp.essai('aucun', array['select count(*) from public.planning_feries']),
+  '0', 'jours fériés en plus : aucun ne les lit');
+select is(pg_temp.essai('lecture', array['select count(*) from public.planning_feries']),
+  (select count(*)::text from public.planning_feries), 'jours fériés en plus : la lecture les lit');
 
 -- Une génération pose ses repos en proposition (2026-11-03) : un motif de
 -- nature repos est accepté, comme un JFR, jamais validé d'office.
