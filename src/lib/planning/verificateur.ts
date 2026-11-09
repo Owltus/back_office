@@ -65,6 +65,12 @@ import {
   REGLES_PAR_DEFAUT,
 } from '#/lib/planning/reglesEtablissement.ts'
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
+import {
+  fautesRythme,
+  messageFaute,
+  rythmeStrictDe,
+  suiteRythme,
+} from '#/lib/planning/rythmeStrict.ts'
 import { heuresLisibles as h } from '#/lib/planning/temps.ts'
 import type { Periode, PeriodePresence } from '#/lib/planning/types.ts'
 
@@ -228,8 +234,10 @@ export function violationsSalarie(
   }
 
   // JOURS-AFFILES (2026-11-02) : plus de 6 jours de travail d'affilée,
-  // semaines voisines comprises. Permis par la loi : une alerte.
-  {
+  // semaines voisines comprises. Permis par la loi : une alerte. Au rythme 5
+  // et 2 strict (2026-11-09), RYTHME-5-2 le dit à sa place (plus de 5 jours,
+  // l'école coupe la série), comme le calcul.
+  if (!rythmeStrictDe(s, R)) {
     const travaille = (d: number) =>
       d < 0
         ? d >= -s.serieAvant
@@ -497,7 +505,8 @@ export function moraleQuiBloque(v: {
   return (
     (v.regle === 'REPOS-SEPARES' &&
       !v.message.endsWith(REPOS_SEPARES_SOUHAITE)) ||
-    (v.regle === 'JOUR-ISOLE' && v.message === JOUR_ISOLE_INTERDIT)
+    (v.regle === 'JOUR-ISOLE' && v.message === JOUR_ISOLE_INTERDIT) ||
+    v.regle === 'RYTHME-5-2'
   )
 }
 
@@ -506,6 +515,7 @@ export function moraleQuiBloque(v: {
 export const REGLES_MORALES: ReadonlySet<string> = new Set([
   'REPOS-SEPARES',
   'JOUR-ISOLE',
+  'RYTHME-5-2',
   'REPOS-COURT',
   'WEEKEND-LIBRE',
   'MOMENTS',
@@ -671,6 +681,40 @@ function alertesMorales(
           dur ? JOUR_ISOLE_INTERDIT : JOUR_ISOLE_A_EVITER,
           duJour,
         )
+  }
+
+  // RYTHME-5-2 (décision de l'utilisateur du 2026-11-09, `rythmeStrict.ts`)
+  // : 5 jours de travail puis 2 jours de repos, sauf contre un jour neutre,
+  // semaines voisines comprises. Même définition que le calcul
+  // (`rythmeStrictModele`). Bloque une place, comme REPOS-SEPARES. À l'écran
+  // d'une semaine, seulement une semaine d'au moins 3 jours de travail (un
+  // planning en cours de saisie en serait plein) ; pour juger une place, le
+  // message est court (sans les jours) : seule une faute d'un genre nouveau
+  // compte.
+  if (rythmeStrictDe(s, R)) {
+    const etats = suiteRythme(s, nbJours, (d) => parJour.has(d))
+    const jours = (d: number) =>
+      intervalle(7 * Math.floor(d / 7), 7 * Math.floor(d / 7) + 7).filter(
+        (j) => j < nbJours && parJour.has(j),
+      ).length
+    for (const f of fautesRythme(etats)) {
+      const debut = f.debut - 7
+      const fin = f.fin - 7
+      const touches =
+        f.genre === 'travail-court' || f.genre === 'travail-long'
+          ? intervalle(debut, fin + 1)
+          : [debut - 1, fin + 1]
+      const ici = liste.filter((c) => touches.includes(jourDe(c)))
+      if (!ici.length) continue
+      if (!pourUnePlace && jours(jourDe(ici[0])) < 3) continue
+      ajoute(
+        'RYTHME-5-2',
+        pourUnePlace
+          ? messageFaute(f)
+          : messageFaute({ genre: f.genre, debut, fin }, nbJours),
+        ici,
+      )
+    }
   }
 
   for (let k = 0; k < nbSemaines; k++) {

@@ -65,6 +65,7 @@ const CHAMPS_REGLAGES = [
   'jours_affiles_conseilles',
   'jour_isole',
   'rythme_contrat_min',
+  'rythme_strict',
   'repos_confort',
   'changements_moment_max',
   'moment_arriere_jours',

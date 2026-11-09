@@ -80,6 +80,13 @@ import {
 } from '#/lib/planning/moment.ts'
 import type { Moments } from '#/lib/planning/moment.ts'
 import { RELEVE_MINUTES } from '#/lib/planning/regles.ts'
+import {
+  fautesRythme,
+  messageFaute,
+  RYTHME_TRAVAIL,
+  rythmeStrictDe,
+} from '#/lib/planning/rythmeStrict.ts'
+import type { EtatRythme } from '#/lib/planning/rythmeStrict.ts'
 import { seulementLaNuit, zoneDuPoste } from '#/lib/planning/zones.ts'
 import {
   dureesImposees,
@@ -1276,6 +1283,49 @@ function pointsDesRegles(
       `${nomComplet(s)} : sa semaine type le fait travailler le ${listeJours(jours)}. Deux jours de repos de suite sont impossibles, alors que ${parLaLoi ? 'la loi les demande pour un mineur' : "les règles de l'établissement les demandent"}.`,
       cibleFiche(s.id, 'semaine'),
     )
+  }
+
+  // ------------------------------------- rythme 5 jours puis 2, strict
+  // (décision de l'utilisateur du 2026-11-09, `rythmeStrict.ts`) : un bloc
+  // de 5 jours, donc 5 jours d'affilée conseillés au moins ; et une semaine
+  // type dont les jours fixés ne le permettent pas, même définition que le
+  // calcul (lue en boucle, un jour libre est inconnu).
+  if (regles.repos.rythmeStrict) {
+    if (regles.repos.joursAffilesConseilles < RYTHME_TRAVAIL)
+      ajouter(
+        'rythme-strict-affiles',
+        'bloquant',
+        'equipe',
+        `Le rythme de 5 jours puis 2 repos demande 5 jours de travail d'affilée, mais ${regles.repos.joursAffilesConseilles} au plus sont conseillés : le planning automatique ne peut placer aucun contrat de ${heuresLisibles(regles.repos.rythmeContratMin)} et plus. Conseillez 5 jours d'affilée, ou retirez le rythme strict.`,
+        'regles',
+      )
+    for (const s of equipe) {
+      const modele = modeleDe(regles, s.type_contrat)
+      const semaine = s.semaine_type
+      const sol = {
+        contratIndicatif: !!s.forfait_jours || modele.contratIndicatif,
+        placementManuel: modele.placementManuel,
+        minutesHebdoContrat: Math.round(Number(s.heures_hebdo) * 60),
+        reposFixes: new Set(
+          [0, 1, 2, 3, 4, 5, 6].filter((j) => semaine.at(j)?.mode === 'repos'),
+        ),
+      }
+      if (!rythmeStrictDe(sol, regles)) continue
+      const etat = (j: number): EtatRythme => {
+        const mode = semaine.at(j % 7)?.mode
+        return mode === 'travail' ? 'T' : mode === 'repos' ? 'r' : 'u'
+      }
+      const suite = Array.from({ length: 21 }, (_, i) => etat(i))
+      const faute = fautesRythme(suite).find((f) => f.fin >= 7 && f.debut <= 13)
+      if (!faute) continue
+      ajouter(
+        `rythme-strict-semaine:${s.id}`,
+        'a-voir',
+        'equipe',
+        `${nomComplet(s)} : sa semaine type ne permet pas le rythme de 5 jours puis 2 repos (${messageFaute({ ...faute, debut: faute.debut - 7, fin: faute.fin - 7 }, 7).replace(/^rythme 5 et 2 non tenu : /, '')}). Le planning automatique ne suivra pas ces jours.`,
+        cibleFiche(s.id, 'semaine'),
+      )
+    }
   }
 
   // ---------------------------------------------------------------- relève

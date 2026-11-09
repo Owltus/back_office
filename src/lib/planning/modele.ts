@@ -227,6 +227,16 @@ export interface SalarieSolveur {
    * de celle d'après (`JOURS_AFFILES_MAX`) ; 0 : inconnus ou aucun. */
   serieAvant: number
   serieApres: number
+  /** Rythme 5 et 2 strict (`rythmeStrict.ts`, 2026-11-09) : jours NEUTRES
+   * de la période (école, absence décomptée, hors contrat), qui coupent le
+   * rythme. Absent (données de test) : hors contrat, école et
+   * indisponibilités hors repos fixes (`neutresDe`). */
+  joursNeutres?: ReadonlySet<number>
+  /** Rythme 5 et 2 strict : la semaine d'avant et celle d'après, jour par
+   * jour (7 lettres : T travaillé, r repos, n neutre) ; null ou absent :
+   * inconnue, rien n'est demandé. */
+  etatsAvant?: string | null
+  etatsApres?: string | null
   reposHebdoMin: number
   jourMaxPoste: boolean
   contratDebut: number | null
@@ -532,6 +542,9 @@ export interface SuivantePersonne {
   /** Jour (0 à 6) → 1 : travaillé d'office (shift gardé, école) ; 0 :
    * impossible (absence, hors contrat, repos fixe). Absent : à choisir. */
   fixes: ReadonlyMap<number, 0 | 1>
+  /** Rythme 5 et 2 strict : jours neutres (0 à 6 ; école, absence
+   * décomptée, hors contrat). Absent : aucun. */
+  neutres?: ReadonlySet<number>
   /** Jours de travail attendus (rythme de 5 jours) ; 0 : aucun. */
   attendus: number
   /** Jours d'école (travaillés d'office, mais pas à l'hôtel : ils ne

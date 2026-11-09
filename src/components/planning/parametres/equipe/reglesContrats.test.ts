@@ -147,8 +147,29 @@ describe('relecture adverse du 2026-11-05', () => {
   })
 
   it('4. un seul jour d’affilée conseillé avec le jour seul interdit : refusé', () => {
-    const s = { ...saisieDepuis(vide), jours_affiles_conseilles: 1 }
+    // Sans le rythme 5 et 2 strict, qui demande 5 jours d'affilée (plus bas).
+    const s = {
+      ...saisieDepuis(vide),
+      jours_affiles_conseilles: 1,
+      rythme_strict: false,
+    }
     expect(erreursSaisie(s).join(' ')).toMatch(/au moins 2 jours d'affilée/)
     expect(erreursSaisie({ ...s, jour_isole: 'a_eviter' })).toEqual([])
+  })
+})
+
+describe('rythme 5 jours puis 2 jours strict (2026-11-09)', () => {
+  it('lu en base, oui par défaut, et renvoyé tel quel', () => {
+    expect(saisieDepuis(vide).rythme_strict).toBe(true)
+    expect(reglagesDepuis(saisieDepuis(vide)).rythme_strict).toBe(true)
+    const non = saisieDepuis({ ...vide, reglages: { rythme_strict: false } })
+    expect(non.rythme_strict).toBe(false)
+    expect(reglagesDepuis(non).rythme_strict).toBe(false)
+  })
+  it('accepté avec 5 jours d’affilée conseillés, refusé en dessous', () => {
+    expect(erreursSaisie(saisieDepuis(vide))).toEqual([])
+    const s = { ...saisieDepuis(vide), jours_affiles_conseilles: 4 }
+    expect(erreursSaisie(s).join(' ')).toMatch(/au moins 5 jours d'affilée/)
+    expect(erreursSaisie({ ...s, rythme_strict: false })).toEqual([])
   })
 })

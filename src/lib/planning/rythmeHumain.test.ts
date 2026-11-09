@@ -18,6 +18,7 @@ import {
   raisonsBlocage,
   violations,
 } from '#/lib/planning/verificateur.ts'
+import { SANS_RYTHME_STRICT } from '#/lib/planning/test/reglesTest.ts'
 
 /*
  * Des semaines humaines (décisions d'une responsable du 2026-11-04 : « tu ne
@@ -70,6 +71,9 @@ const resoudre = (
     creneaux: jours.map((j) => cr(j)),
     imposees: new Set(imposes.map((j) => `${s.id}|j${j}`)),
     graine: 1,
+    // Le jour isolé et les jours d'affilée seuls : le rythme 5 et 2 strict
+    // (2026-11-09) a ses essais à part (`rythmeStrict.test.ts`).
+    regles: SANS_RYTHME_STRICT,
   })
   return { p, r: generer(p, highs) }
 }
@@ -242,6 +246,7 @@ describe('jamais plus de 5 jours d’affilée, semaines voisines comprises', () 
             personne(h, { joursSemainePrecedente: 5, serieAvant: serie }),
           ],
           creneaux: jours,
+          regles: SANS_RYTHME_STRICT,
         }),
         aff,
       ).filter((v) => v.regle === 'JOURS-AFFILES')

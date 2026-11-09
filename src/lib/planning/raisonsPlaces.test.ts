@@ -96,6 +96,10 @@ const MESSAGES: Record<(typeof REGLES_BLOCAGE)[number], string[]> = {
   'R-REPOS-HEBDO-MINEUR': ['mineur : pas deux jours de repos consécutifs'],
   'REPOS-SEPARES': ['ses jours de repos de la semaine ne se suivent pas'],
   'JOUR-ISOLE': ['un jour de travail seul entre deux jours sans travail'],
+  'RYTHME-5-2': [
+    'rythme 5 et 2 non tenu : repos seul',
+    'rythme 5 et 2 non tenu : moins de 5 jours de travail (5 attendus)',
+  ],
   'REPOS-COURT': [
     'seulement 11 h 15 de repos entre deux services (12 h conseillées)',
   ],
@@ -159,9 +163,10 @@ describe('raisons des places à pourvoir', () => {
         vues.add(r.cle)
       }
     }
-    // Deux sens d'une même règle ne se confondent pas au regroupement.
+    // Deux sens d'une même règle ne se confondent pas au regroupement ; les
+    // fautes du rythme 5 et 2 n'ont qu'une raison (2026-11-09).
     expect(vues.size).toBe(
-      Object.values(MESSAGES).reduce((n, l) => n + l.length, 0) - 2,
+      Object.values(MESSAGES).reduce((n, l) => n + l.length, 0) - 3,
     )
   })
 

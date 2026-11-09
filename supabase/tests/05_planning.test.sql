@@ -143,7 +143,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':J', (select j from t_ids)::text);
 $$;
 
-select plan(183);
+select plan(185);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -347,6 +347,12 @@ select is(pg_temp.essai('gestion', array[
   'update public.planning_reglages set jour_isole = ''a_eviter'', jours_affiles_conseilles = 1 where id = 1',
   'select jour_isole || ''/'' || jours_affiles_conseilles from public.planning_reglages where id = 1']),
   'a_eviter/1', 'règles : un seul jour d''affilée avec le jour seul à éviter est permis');
+select is((select rythme_strict::text from public.planning_reglages where id = 1),
+  'true', 'règles : rythme 5 jours puis 2 jours strict par défaut (2026-11-09)');
+select is(pg_temp.essai('gestion', array[
+  'update public.planning_reglages set rythme_strict = false where id = 1',
+  'select rythme_strict::text from public.planning_reglages where id = 1']),
+  'false', 'règles : la gestion peut retirer le rythme 5 jours puis 2 jours strict');
 select is(pg_temp.essai('gestion', array['update public.planning_reglages set deux_repos_de_suite = ''parfois'' where id = 1']),
   'err=23514', 'règles : deux repos de suite obligatoire, souhaité ou aucune');
 select is(pg_temp.essai('gestion', array['update public.planning_reglages set journees_contrats = ''[{"minutes_hebdo":2100}]'' where id = 1']),

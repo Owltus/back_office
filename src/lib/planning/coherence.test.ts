@@ -1699,6 +1699,36 @@ describe("règles de l'établissement impossibles (étape 8, 2026-11-05)", () =>
     expect(ids(verifierReglages(r))).not.toContain('deux-repos-impossibles:10')
   })
 
+  it('rythme 5 jours puis 2 strict : une semaine type qui l’empêche est dite, sinon rien', () => {
+    const r = propre()
+    const s = r.salaries.find((x) => x.id === 10)!
+    // Lundi et mercredi travaillés, mardi en repos : un repos seul.
+    s.semaine_type[0] = { mode: 'travail' }
+    s.semaine_type[1] = { mode: 'repos' }
+    s.semaine_type[2] = { mode: 'travail' }
+    expect(seul(r)).toMatchObject({
+      id: 'rythme-strict-semaine:10',
+      ecran: 'equipe',
+      lien: { page: '/planning/equipe', cible: 'salarie-10.semaine' },
+    })
+    expect(seul(r).texte).toContain('repos seul le mardi')
+    // Refusé seulement au rythme strict.
+    r.reglages = { rythme_strict: false }
+    expect(verifierReglages(r)).toEqual([])
+    // Accepté : mardi libre, rien de certain.
+    r.reglages = undefined
+    s.semaine_type[1] = { mode: 'auto' }
+    expect(verifierReglages(r)).toEqual([])
+  })
+
+  it('rythme 5 jours puis 2 strict : moins de 5 jours d’affilée conseillés bloque', () => {
+    const r = propre()
+    r.reglages = { jours_affiles_conseilles: 4 }
+    expect(ids(verifierReglages(r))).toContain('rythme-strict-affiles')
+    r.reglages = { jours_affiles_conseilles: 4, rythme_strict: false }
+    expect(ids(verifierReglages(r))).not.toContain('rythme-strict-affiles')
+  })
+
   /** Réception de l'accueil, un matin et un soir le lundi. */
   function accueilReleve(): Referentiel {
     return {

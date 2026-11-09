@@ -46,6 +46,7 @@ const TOUS = [0, 1, 2, 3, 4, 5, 6]
 
 /** Les règles de cet établissement (le reste : les défauts). */
 const REGLAGES: Reglages = {
+  rythme_strict: false,
   deux_repos_de_suite: 'souhaite',
   jours_affiles_conseilles: 6,
   jour_isole: 'a_eviter',
@@ -360,8 +361,14 @@ describe('les règles de l’hôtel ne s’appliquent pas quand elles sont régl
     )
 
   it('6 jours d’affilée : dits à l’hôtel (5 conseillés), pas ici (6)', () => {
-    expect(alertesDeQui(poser(undefined), 1, 'JOURS-AFFILES')).not.toEqual([])
+    // À l'hôtel, le rythme 5 et 2 strict le dit (2026-11-09) ; sans lui,
+    // les jours d'affilée conseillés.
+    expect(alertesDeQui(poser(undefined), 1, 'RYTHME-5-2')).not.toEqual([])
+    expect(
+      alertesDeQui(poser({ rythme_strict: false }), 1, 'JOURS-AFFILES'),
+    ).not.toEqual([])
     expect(alertesDeQui(poser(REGLAGES), 1, 'JOURS-AFFILES')).toEqual([])
+    expect(alertesDeQui(poser(REGLAGES), 1, 'RYTHME-5-2')).toEqual([])
   })
 
   it('repos séparés et jour isolé : interdits à l’hôtel, rien quand la règle est retirée', () => {

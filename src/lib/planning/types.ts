@@ -183,6 +183,7 @@ export interface Reglages {
   jours_affiles_conseilles?: number
   jour_isole?: JourIsole
   rythme_contrat_min?: number
+  rythme_strict?: boolean
   repos_confort?: number
   changements_moment_max?: number
   moment_arriere_jours?: number

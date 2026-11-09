@@ -17,6 +17,7 @@ import {
 import type { Fiche } from '#/lib/planning/regles.ts'
 import { MINUTES_PAR_JOUR } from '#/lib/planning/temps.ts'
 import { raisonsBlocage, violations } from '#/lib/planning/verificateur.ts'
+import { SANS_RYTHME_STRICT } from '#/lib/planning/test/reglesTest.ts'
 
 /*
  * Les journées du calcul (décisions d'une responsable du 2026-11-04) :
@@ -60,6 +61,9 @@ const resoudre = (
     creneaux,
     imposees: new Set(imposes.map((id) => `${s.id}|${id}`)),
     graine: 1,
+    // Les journées seules : le rythme 5 et 2 strict changerait les jours
+    // tenus (un repos seul entre deux jours de travail).
+    regles: SANS_RYTHME_STRICT,
   })
   return { p, r: generer(p, highs) }
 }

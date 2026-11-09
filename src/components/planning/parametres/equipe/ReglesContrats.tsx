@@ -828,8 +828,24 @@ export function ReglesContrats({
               />
             </Reglage>
             <Reglage
+              titre="Rythme 5 jours puis 2 jours strict"
+              effet={
+                b.rythme_strict
+                  ? `Pour les contrats de ${h(b.rythme_contrat_min)} et plus : toujours 5 jours de travail, puis 2 jours de repos. Seuls l'école, un congé ou le début et la fin du contrat coupent ce rythme. Une place peut rester vide pour lui.`
+                  : 'Le planning ne suit pas ce rythme. Les règles ci-dessus suffisent.'
+              }
+            >
+              <Interrupteur
+                coche={b.rythme_strict}
+                disabled={off}
+                onChange={(v) => changer({ rythme_strict: v })}
+              >
+                Rythme 5 jours puis 2 jours strict
+              </Interrupteur>
+            </Reglage>
+            <Reglage
               titre="Contrats concernés par le rythme"
-              effet={`Le jour seul et les jours d'affilée conseillés valent pour les contrats de ${h(b.rythme_contrat_min)} et plus. Un petit contrat a des jours seuls par nature.`}
+              effet={`Le jour seul, les jours d'affilée conseillés et le rythme 5 jours puis 2 jours valent pour les contrats de ${h(b.rythme_contrat_min)} et plus. Un petit contrat a des jours seuls par nature.`}
             >
               <span className="flex items-center gap-2 text-sm">
                 <Compteur

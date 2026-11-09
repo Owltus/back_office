@@ -62,6 +62,8 @@ export interface SaisieReglesContrats {
   jours_affiles_conseilles: number
   jour_isole: JourIsole
   rythme_contrat_min: number
+  /** Rythme 5 jours puis 2 jours, strict (2026-11-09). */
+  rythme_strict: boolean
   repos_confort: number
   changements_moment_max: number
   moment_arriere_jours: number
@@ -171,6 +173,7 @@ export function saisieDepuis(
     jours_affiles_conseilles: r.repos.joursAffilesConseilles,
     jour_isole: r.repos.jourIsole,
     rythme_contrat_min: r.repos.rythmeContratMin,
+    rythme_strict: r.repos.rythmeStrict,
     repos_confort: r.repos.reposConfort,
     changements_moment_max: r.repos.changementsMomentMax,
     moment_arriere_jours: r.repos.momentArriereJours,
@@ -266,6 +269,7 @@ export function reglagesDepuis(s: SaisieReglesContrats): Partial<Reglages> {
     jours_affiles_conseilles: s.jours_affiles_conseilles,
     jour_isole: s.jour_isole,
     rythme_contrat_min: s.rythme_contrat_min,
+    rythme_strict: s.rythme_strict,
     repos_confort: s.repos_confort,
     changements_moment_max: s.changements_moment_max,
     moment_arriere_jours: s.moment_arriere_jours,
@@ -404,6 +408,12 @@ export function erreursSaisie(s: SaisieReglesContrats): string[] {
   if (s.jour_isole === 'interdit' && s.jours_affiles_conseilles < 2)
     erreurs.push(
       "Avec un jour de travail seul interdit, conseillez au moins 2 jours d'affilée : sinon le planning ne peut placer personne.",
+    )
+  // Rythme 5 et 2 strict : un bloc de 5 jours, donc 5 jours d'affilée
+  // conseillés au moins (sinon personne n'est plaçable).
+  if (s.rythme_strict && s.jours_affiles_conseilles < 5)
+    erreurs.push(
+      "Avec le rythme 5 jours puis 2 repos, conseillez au moins 5 jours d'affilée : sinon le planning ne peut placer personne.",
     )
   for (const m of s.modeles)
     if (m.ferie_rattrape && m.feries_jour_meme)

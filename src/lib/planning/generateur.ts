@@ -76,6 +76,12 @@ import {
 } from '#/lib/planning/moment.ts'
 import type { Moments } from '#/lib/planning/moment.ts'
 import { vuesZones, zonesDesPostes } from '#/lib/planning/zones.ts'
+import {
+  motifsInterdits,
+  neutresDe,
+  rythmeStrictDe,
+  voisinesRythme,
+} from '#/lib/planning/rythmeStrict.ts'
 import type {
   AffectationSolveur,
   Creneau,
@@ -1916,6 +1922,11 @@ export function construire(
       }
     }
 
+    // Rythme 5 et 2 strict (décision de l'utilisateur du 2026-11-09,
+    // `rythmeStrict.ts`) : semaines voisines et esquisse comprises.
+    if (rythmeStrictDe(s, R))
+      rythmeStrictModele(m, p, s, travaille, fixes, jfrDuJour, sk, esquisse)
+
     const arrivee = premierJourSurPlace(s, p.nbJours)
     for (let k = 0; k < nbSemaines; k++) {
       const jours = intervalle(7 * k, Math.min(7 * k + 7, p.nbJours))
@@ -2117,10 +2128,22 @@ export function construire(
         // Avec l'esquisse, la semaine suivante est DANS le calcul : ses
         // jours sont des variables (ou des faits), plus une série figée.
         const fin = p.nbJours + (sk ? 7 : s.serieApres)
-        for (const [plafond, poids, conseille] of [
-          [R.repos.joursAffilesMax, POIDS_JOUR_AFFILE, false],
-          [R.repos.joursAffilesConseilles, POIDS_JOUR_AFFILE_CONSEILLE, true],
-        ] as const) {
+        // Rythme 5 et 2 strict (2026-11-09) : ses 6 jours de travail
+        // interdits (`rythmeStrictModele`) remplacent ces fenêtres, avec sa
+        // lecture des jours (l'école COUPE la série au lieu de compter comme
+        // du travail : sinon un apprenti n'a plus de bloc possible avant une
+        // semaine de CFA).
+        const fenetres = rythmeStrictDe(s, R)
+          ? []
+          : ([
+              [R.repos.joursAffilesMax, POIDS_JOUR_AFFILE, false],
+              [
+                R.repos.joursAffilesConseilles,
+                POIDS_JOUR_AFFILE_CONSEILLE,
+                true,
+              ],
+            ] as const)
+        for (const [plafond, poids, conseille] of fenetres) {
           const taille = plafond + 1
           for (let a = Math.max(debut, 1 - taille); a + taille <= fin; a++) {
             const derniere = a + taille - 1
@@ -2716,6 +2739,112 @@ function weekendsEquitables(
     m.ajoute([[1, e], ...n[i].termes, [-part, total]], '>=', -n[i].constante)
     m.cout(POIDS_EQUITE, e)
   })
+}
+
+/** Rythme 5 et 2 strict : un motif interdit (`motifsInterdits`) que seuls
+ * des jours CONNUS d'avance imposent (semaine d'avant, shifts gardés de
+ * l'esquisse) se paie par jour en trop au lieu d'être dur : le modèle reste
+ * toujours possible. Au-dessus de toute place vide : le calcul laisse une
+ * place plutôt que d'enfreindre la règle (décision de l'utilisateur). */
+export const POIDS_RYTHME_BORD = 10_000_000
+
+/**
+ * Rythme 5 jours puis 2 jours, strict (`rythmeStrict.ts`) : chaque motif
+ * interdit (6 jours de travail, un bloc de 1 à 4 jours entre deux repos, un
+ * repos seul, 3 repos ou plus entre deux jours de travail) est une
+ * contrainte « pas tous à la fois » sur la suite des jours, de la semaine
+ * d'avant (`etatsAvant`) à la suivante (l'esquisse `sk`, sinon `etatsApres`).
+ * Un jour neutre ou inconnu dans le motif : rien. Un jour posé à la main sur
+ * une place de travail du motif : rien (jamais sur un jour posé). Un repos
+ * vaut 1 - travaille - JFR pris. Toute contrainte que le planning vide
+ * (seuls les jours posés travaillés) tient reste DURE ; leur ensemble tient
+ * donc toujours. Une contrainte que les seuls faits enfreignent (la semaine
+ * d'avant) coûte `POIDS_RYTHME_BORD` par jour en trop.
+ */
+function rythmeStrictModele(
+  m: Modele,
+  p: Probleme,
+  s: SalarieSolveur,
+  travaille: ReadonlyMap<number, string>,
+  fixes: readonly Creneau[],
+  jfrDuJour: ReadonlyMap<number, string>,
+  sk: ReadonlyMap<number, string | 1> | null,
+  esquisse: SuivantePersonne | undefined,
+): void {
+  type Jour = null | { t: string | 0 | 1; n: string | null; pose: boolean }
+  const N = p.nbJours
+  const neutres = neutresDe(s)
+  const voisines = voisinesRythme(s)
+  const avant = voisines.avant
+  const apres = sk ? null : voisines.apres
+  const poses = new Set(fixes.map(jourDe))
+  const jourDu = (d: number): Jour => {
+    if (d < 0) {
+      const e = avant?.[d + 7]
+      if (!e || e === 'n' || e === 'u') return null
+      return { t: e === 'T' ? 1 : 0, n: null, pose: false }
+    }
+    if (d < N) {
+      if (poses.has(d)) return { t: 1, n: null, pose: true }
+      if (neutres.has(d)) return null
+      return {
+        t: travaille.get(d) ?? 0,
+        n: jfrDuJour.get(d) ?? null,
+        pose: false,
+      }
+    }
+    if (sk) {
+      if (d >= N + 7 || esquisse?.neutres?.has(d - N)) return null
+      return { t: sk.get(d) ?? 0, n: null, pose: false }
+    }
+    const e = apres?.[d - N]
+    if (!e || e === 'n' || e === 'u') return null
+    return { t: e === 'T' ? 1 : 0, n: null, pose: false }
+  }
+  const debut = -7
+  const fin = N + 7
+  const jours = new Map<number, Jour>()
+  for (let d = debut; d < fin; d++) jours.set(d, jourDu(d))
+  for (const motif of motifsInterdits(fin - debut)) {
+    // 6 jours de travail : un jour posé y compte (jamais plus de 5 autour
+    // de lui) ; les autres motifs ne s'écrivent pas sur un jour posé.
+    const travailSeul = motif.every((e) => e === 'T')
+    for (let a = debut; a + motif.length <= fin; a++) {
+      const termes: Terme[] = []
+      let constante = 0
+      let possible = true
+      for (let i = 0; i < motif.length && possible; i++) {
+        const j = jours.get(a + i) ?? null
+        if (!j) possible = false
+        else if (motif[i] === 'T') {
+          if (j.t === 0 || (j.pose && !travailSeul)) possible = false
+          else if (j.t === 1) constante++
+          else termes.push([1, j.t])
+        } else if (j.t === 1) possible = false
+        else {
+          constante++
+          if (j.t !== 0) termes.push([-1, j.t])
+          if (j.n) termes.push([-1, j.n])
+        }
+      }
+      if (!possible || !termes.length) continue
+      const plafond = motif.length - 1 - constante
+      // Des jours posés déjà trop nombreux : rien de plus autour, jamais
+      // un coût (les faits restent).
+      if (travailSeul) {
+        m.ajoute(termes, '<=', Math.max(plafond, 0))
+        continue
+      }
+      // Le planning vide (aucune variable à 1) la tient : dure.
+      if (plafond >= 0) {
+        m.ajoute(termes, '<=', plafond)
+        continue
+      }
+      const exces = m.continu(0, motif.length)
+      m.ajoute([...termes, [-1, exces]], '<=', plafond)
+      m.cout(POIDS_RYTHME_BORD, exces)
+    }
+  }
 }
 
 /** Une somme de termes réutilisée plusieurs fois : une variable continue

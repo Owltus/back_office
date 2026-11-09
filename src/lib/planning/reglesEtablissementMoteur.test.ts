@@ -35,6 +35,7 @@ import {
   transmissions,
   violations,
 } from '#/lib/planning/verificateur.ts'
+import { SANS_RYTHME_STRICT } from '#/lib/planning/test/reglesTest.ts'
 
 /*
  * Étape 4 du plan `planning-moteur-configurable-2026-11-05` : le moteur lit
@@ -62,11 +63,14 @@ const SANS_CONTINU: RegleEtablissement = {
   zones: [{ id: '1', nom: 'Accueil', continue: false }],
 }
 
+// Chaque règle seule : sans le rythme 5 et 2 strict (2026-11-09), qui a ses
+// propres essais (`rythmeStrict.test.ts`), sauf à le régler dans le patch.
 const regles = (patch: Patch): RegleEtablissement => {
-  const r = { ...REGLES_PAR_DEFAUT } as Record<string, unknown>
+  const base = SANS_RYTHME_STRICT
+  const r = { ...base } as Record<string, unknown>
   for (const [k, v] of Object.entries(patch))
     r[k] = {
-      ...(REGLES_PAR_DEFAUT as unknown as Record<string, object>)[k],
+      ...(base as unknown as Record<string, object>)[k],
       ...v,
     }
   return r as unknown as RegleEtablissement

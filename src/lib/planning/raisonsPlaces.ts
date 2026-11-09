@@ -72,6 +72,7 @@ export const REGLES_BLOCAGE = [
   // Règles morales du PRD (alertes d'organisation, à éviter).
   'REPOS-SEPARES',
   'JOUR-ISOLE',
+  'RYTHME-5-2',
   'REPOS-COURT',
   'WEEKEND-LIBRE',
   'MOMENTS',
@@ -288,6 +289,13 @@ export function raisonClaire(
         'Perdrait ses deux jours de repos de suite',
         mention('règle de l’hôtel'),
       )
+    // Rythme 5 jours puis 2 jours, strict (2026-11-09) : la place reste vide
+    // plutôt (décision de l'utilisateur).
+    case 'RYTHME-5-2':
+      return r(
+        'Son rythme de 5 jours puis 2 repos ne tiendrait plus',
+        mention('règle de l’hôtel'),
+      )
     case 'REPOS-COURT':
     case 'WEEKEND-LIBRE':
     case 'MOMENTS':
@@ -396,6 +404,8 @@ const PHRASES_COMMUNES: Record<(typeof REGLES_BLOCAGE)[number], string> = {
   // elles ne bloquent pas), la phrase ne sert qu'à l'exhaustivité.
   'JOUR-ISOLE':
     'Ce serait pour chacun un jour de travail seul entre deux repos.',
+  // Bloque comme les deux repos de suite (2026-11-09).
+  'RYTHME-5-2': 'Le rythme de 5 jours puis 2 repos ne tiendrait pour personne.',
   'REPOS-COURT': 'Tout le monde aurait moins de 12 h de repos.',
   'WEEKEND-LIBRE': 'Tout le monde attend son week-end libre.',
   MOMENTS: 'Tout le monde changerait trop d’horaires.',

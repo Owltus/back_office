@@ -108,6 +108,10 @@ export interface RegleEtablissement {
     jourIsole: 'interdit' | 'a_eviter' | 'aucune'
     /** Contrat (minutes) à partir duquel le rythme humain s'applique. */
     rythmeContratMin: number
+    /** Rythme 5 jours puis 2 jours, strict (décision de l'utilisateur du
+     * 2026-11-09, `rythmeStrict.ts`) : pour le rythme humain, des blocs de
+     * 5 jours de travail et de 2 jours de repos, sauf contre un jour neutre. */
+    rythmeStrict: boolean
     /** Repos conseillé entre deux services (la loi : 11 h). */
     reposConfort: number
     /** Changements de moment au plus dans la semaine. */
@@ -216,6 +220,7 @@ export const REGLES_PAR_DEFAUT: RegleEtablissement = {
     joursAffilesConseilles: 5,
     jourIsole: 'interdit',
     rythmeContratMin: 35 * H,
+    rythmeStrict: true,
     reposConfort: 12 * H,
     changementsMomentMax: 1,
     momentArriereJours: 2,
@@ -326,6 +331,7 @@ export function lireRegles(
         r.jours_affiles_conseilles ?? d.repos.joursAffilesConseilles,
       jourIsole: r.jour_isole ?? d.repos.jourIsole,
       rythmeContratMin: r.rythme_contrat_min ?? d.repos.rythmeContratMin,
+      rythmeStrict: r.rythme_strict ?? d.repos.rythmeStrict,
       reposConfort: r.repos_confort ?? d.repos.reposConfort,
       changementsMomentMax:
         r.changements_moment_max ?? d.repos.changementsMomentMax,

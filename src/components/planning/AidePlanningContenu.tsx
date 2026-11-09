@@ -987,6 +987,9 @@ export function AidePlanningContenu({
               ...(Rp.jourIsole === 'interdit'
                 ? ['jamais un jour seul entre deux repos']
                 : []),
+              ...(Rp.rythmeStrict
+                ? ['toujours 5 jours de travail puis 2 jours de repos']
+                : []),
             ])}
             . Une place reste vide plutôt que de les casser, et la page le dit :
             à vous de compenser. Seuls des shifts déjà posés ou validés peuvent
@@ -1167,6 +1170,11 @@ export function AidePlanningContenu({
               `Une semaine stable : au plus ${Rp.changementsMomentMax} changement${Rp.changementsMomentMax > 1 ? 's' : ''} de moment (matin, middle, soir, nuit) d’un jour au suivant, et plutôt du matin vers le soir que l’inverse.`,
               `Pas plus de ${Rp.nuitsAffileesMax} nuits d’affilée, puis ${Rp.reposApresNuits} jours sans travail avant de reprendre de jour.`,
               'Les mêmes jours de repos que la semaine d’avant, quand c’est possible. Après un week-end travaillé, passer ses repos au samedi et au dimanche est toujours permis : les week-ends tournent.',
+              ...(Rp.rythmeStrict
+                ? [
+                    `Pour un contrat de ${rythme} et plus, toujours 5 jours de travail puis 2 jours de repos, d’une semaine à l’autre comprise : jamais un repos seul, jamais un bloc plus court. Seuls l’école, un congé ou le début et la fin du contrat coupent ce rythme. Une place reste vide plutôt, et la page le dit. Une semaine type qui fixe deux repos décide seule.`,
+                  ]
+                : []),
               ...(Rp.jourIsole === 'interdit'
                 ? [
                     `Jamais un jour de travail seul entre deux jours sans travail, d’une semaine à l’autre comprise, pour un contrat de ${rythme} et plus. Une place reste vide plutôt, et la page le dit. Les jours avant une arrivée comptent comme du repos, ceux après un départ comme du travail.`,

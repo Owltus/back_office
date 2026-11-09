@@ -11,6 +11,7 @@ import type { DonneesSemaine } from '#/lib/planning/semaine.ts'
 import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
 import { ajouterJours, MINUTES_PAR_JOUR } from '#/lib/planning/temps.ts'
 import type { Affectation } from '#/lib/planning/types.ts'
+import { SANS_RYTHME_STRICT } from '#/lib/planning/test/reglesTest.ts'
 
 /*
  * Repos obligés (2026-11-04, décision utilisateur) : un jour sans shift
@@ -62,6 +63,9 @@ const obliges = (
     new Set(),
     passes,
     horaires,
+    // Les règles d'avant : le rythme 5 et 2 strict a ses essais à part
+    // (`rythmeStrict.test.ts`).
+    SANS_RYTHME_STRICT,
   )
 
 describe('repos obligés', () => {

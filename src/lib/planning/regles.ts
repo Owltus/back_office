@@ -230,6 +230,9 @@ export interface Fiche {
   joursAbsenceDecomptes?: number
   joursEcole?: ReadonlySet<number>
   horsContrat?: ReadonlySet<number>
+  /** Rythme 5 et 2 strict : jours neutres (école, absence décomptée, hors
+   * contrat), `SalarieSolveur.joursNeutres`. */
+  joursNeutres?: ReadonlySet<number>
   etoileFixe?: ReadonlySet<number>
   contratDebut?: number | null
   contratFin?: number | null
@@ -504,6 +507,7 @@ export function versSolveur(f: Fiche): SalarieSolveur {
     reposFixes: f.reposFixes ?? vide,
     travailFixe: f.travailFixe ?? vide,
     horsContrat: f.horsContrat ?? vide,
+    ...(f.joursNeutres ? { joursNeutres: f.joursNeutres } : {}),
     // La semaine où la journée étoile saute, son jour fixé n'a plus rien
     // de particulier : une journée de 8 h comme les autres.
     etoileFixe: etoile && !etoileSacrifiee(f) ? (f.etoileFixe ?? vide) : vide,

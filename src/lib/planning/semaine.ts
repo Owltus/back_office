@@ -109,6 +109,12 @@ import {
   rythmeHumain,
   apresContrat,
 } from '#/lib/planning/regles.ts'
+import {
+  fautesRythme,
+  rythmeStrictDe,
+  suiteRythme,
+} from '#/lib/planning/rythmeStrict.ts'
+import type { EtatRythme } from '#/lib/planning/rythmeStrict.ts'
 
 import {
   accueilActif,
@@ -836,6 +842,17 @@ export function fiche(
     // le week-end après le départ ne réduit rien.
     joursAbsenceDecomptes: decomptes + joursContratManquants(hors.size),
     horsContrat: hors,
+    // Rythme 5 et 2 strict (2026-11-09) : école, absence décomptée et hors
+    // contrat coupent le rythme ; un repos posé (sans décompte) est un repos.
+    joursNeutres: exclu
+      ? new Set([0, 1, 2, 3, 4, 5, 6])
+      : new Set([
+          ...hors,
+          ...ecole,
+          ...[...absents]
+            .filter(([, m]) => m === null || !ctx.sansDecompte.has(m))
+            .map(([j]) => j),
+        ]),
     joursEcole: ecole,
     reposFixes,
     travailFixe,
@@ -1850,11 +1867,53 @@ export function avecSemainesVoisines(
       }
     }
   }
+  // Rythme 5 et 2 strict (2026-11-09) : les semaines voisines jour par
+  // jour, T (shift), n (école, absence décomptée, hors contrat de toutes les
+  // fiches de la personne), r sinon. Inconnue (aucun shift lu) : null.
+  const shiftsVoisins = (liste: readonly Affectation[]) => {
+    const m = new Map<number | string, Set<number>>()
+    for (const a of liste) ajoute(m, k(a.salarie_id), a.jour)
+    return m
+  }
+  const travailAvant = shiftsVoisins(d.avant)
+  const travailApres = shiftsVoisins(d.apres)
+  const fichesDe = new Map<number | string, Salarie[]>()
+  for (const x of ctx.staff)
+    fichesDe.set(k(x.id), [...(fichesDe.get(k(x.id)) ?? []), x])
+  const etatsVoisins = (
+    key: number | string,
+    decalage: number,
+    travail: Map<number | string, Set<number>>,
+  ): string => {
+    const fiches = fichesDe.get(key) ?? []
+    const lundiVoisin = ajouterJours(ctx.lundi, decalage)
+    const hors = fiches.map((x) => joursHorsContrat(x, lundiVoisin))
+    const absents = fiches.map((x) =>
+      joursAbsents(x, lundiVoisin, ctx.absences),
+    )
+    let etats = ''
+    for (let j = 0; j < 7; j++) {
+      if (travail.get(key)?.has(j)) etats += 'T'
+      else if (hors.length && hors.every((h) => h.has(j))) etats += 'n'
+      else if (
+        absents.some(
+          (a) =>
+            a.has(j) &&
+            (a.get(j) === null || !ctx.sansDecompte.has(a.get(j) as number)),
+        )
+      )
+        etats += 'n'
+      else etats += 'r'
+    }
+    return etats
+  }
   const r = new Map<number, SalarieSolveur>()
   for (const [i, x] of salaries) {
     const key = k(i)
     r.set(i, {
       ...x,
+      etatsAvant: d.avant.length ? etatsVoisins(key, -7, travailAvant) : null,
+      etatsApres: d.apres.length ? etatsVoisins(key, 7, travailApres) : null,
       finServicePrecedent: fins.get(key) ?? null,
       debutServiceSuivant: debuts.get(key) ?? null,
       personne: cles.get(i) ?? null,
@@ -2540,7 +2599,9 @@ export function reposObliges(
     const plafondAffiles = rythmeHumain(sol, regles)
       ? regles.repos.joursAffilesConseilles
       : regles.repos.joursAffilesMax
-    if (affiles > plafondAffiles) {
+    // Au rythme 5 et 2 strict, ses 6 jours interdits le disent plus bas
+    // (l'école coupe la série).
+    if (affiles > plafondAffiles && !rythmeStrictDe(sol, regles)) {
       r.push({
         jour: j,
         raison: `sinon ${affiles} jours de travail d'affilée (${plafondAffiles} au plus)`,
@@ -2566,6 +2627,34 @@ export function reposObliges(
         r.push({
           jour: j,
           raison: 'sinon un jour de travail seul entre deux repos',
+        })
+        continue
+      }
+    }
+    // Rythme 5 et 2 strict (2026-11-09, `rythmeStrict.ts`) : travailler ce
+    // jour ferait une faute CERTAINE. Certain : les shifts, les jours
+    // neutres, les repos fixes ou posés, les jours passés, les semaines
+    // voisines ; un jour simplement vide est inconnu.
+    if (rythmeStrictDe(sol, regles)) {
+      const poses = new Set(siens.map(jourDe))
+      const etats = suiteRythme(sol, 7, (d) => d === j || poses.has(d)).map(
+        (e, i): EtatRythme => {
+          const d = i - 7
+          if (d < 0 || d > 6 || e !== 'r') return e
+          return d < passes || sol.reposFixes.has(d) || absents.has(d)
+            ? 'r'
+            : 'u'
+        },
+      )
+      const faute = fautesRythme(etats).some((f) =>
+        f.genre === 'travail-court' || f.genre === 'travail-long'
+          ? f.debut <= j + 7 && j + 7 <= f.fin
+          : f.debut - 1 === j + 7 || f.fin + 1 === j + 7,
+      )
+      if (faute) {
+        r.push({
+          jour: j,
+          raison: 'sinon le rythme de 5 jours puis 2 repos ne tient plus',
         })
         continue
       }
@@ -3777,14 +3866,20 @@ export function esquisseSuivante(
       const motif = motifs.get(m)
       return motif ? absenceLibre(motif) : !ctx.ecole.has(m)
     }
+    // Rythme 5 et 2 strict : jours neutres de l'esquisse.
+    const neutres = new Set<number>()
     for (let j = 0; j < 7; j++) {
       const garde = gardes.find((a) => a.salarie_id === x.id && a.jour === j)
-      if (hors.has(j)) fixes.set(j, 0)
-      else if (garde) {
+      if (hors.has(j)) {
+        fixes.set(j, 0)
+        neutres.add(j)
+      } else if (garde) {
         fixes.set(j, 1)
         postesGardes.set(j, String(garde.poste_id))
       } else if (absents.has(j)) {
         const m = absents.get(j)
+        if (m === null || m === undefined || !ctx.sansDecompte.has(m))
+          neutres.add(j)
         absences++
         if (m !== null && m !== undefined && ctx.ecole.has(m)) {
           fixes.set(j, 1)
@@ -3806,6 +3901,7 @@ export function esquisseSuivante(
       Number(x.heures_hebdo) * 60 >= ctx.regles.repos.rythmeContratMin
     personnes.set(sol.id, {
       fixes,
+      neutres,
       horsSite,
       postesGardes,
       nonLibres,

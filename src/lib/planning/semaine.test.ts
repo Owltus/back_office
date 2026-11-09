@@ -1176,8 +1176,15 @@ describe('planning de la semaine (test_api.py)', () => {
     }
   })
 
+  // L'alternance seule : avec le rythme 5 et 2 strict, une apprentie dont
+  // les jours possibles sont peu nombreux peut rester sans shift
+  // (`rythmeStrict.test.ts`).
   it('deux apprenties en alternance décalée', () => {
     const p = demo()
+    p.referentiel = {
+      ...p.referentiel,
+      reglages: { ...p.referentiel.reglages, rythme_strict: false },
+    }
     const chloe = p.salarie('Chloé').id
     const ines = p.salarie('Inès').id
     const aLEcole: string[] = []

@@ -20,6 +20,7 @@ import type { DonneesSemaine } from '#/lib/planning/semaine.ts'
 import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
 import { ajouterJours, MINUTES_PAR_JOUR } from '#/lib/planning/temps.ts'
 import type { Affectation } from '#/lib/planning/types.ts'
+import { SANS_RYTHME_STRICT } from '#/lib/planning/test/reglesTest.ts'
 
 /*
  * Horizon glissant (2026-11-04, décision utilisateur) : la semaine suivante
@@ -109,6 +110,9 @@ function cas(suivante?: Suivante): Probleme {
     ],
     creneaux: quinze(),
     ...(suivante ? { suivante } : {}),
+    // L'horizon seul : le rythme 5 et 2 strict a son essai à part
+    // (`rythmeStrict.test.ts`).
+    regles: SANS_RYTHME_STRICT,
   })
 }
 

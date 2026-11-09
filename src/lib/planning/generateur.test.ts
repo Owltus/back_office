@@ -17,6 +17,7 @@ import type {
   Resultat,
   SalarieSolveur,
 } from '#/lib/planning/modele.ts'
+import { REGLES_PAR_DEFAUT } from '#/lib/planning/reglesEtablissement.ts'
 import { MINUTES_PAR_JOUR } from '#/lib/planning/temps.ts'
 import {
   manquants,
@@ -25,6 +26,7 @@ import {
   trous as trousVerifies,
   violations,
 } from '#/lib/planning/verificateur.ts'
+import { SANS_RYTHME_STRICT } from '#/lib/planning/test/reglesTest.ts'
 
 /*
  * Port de `backend/tests/test_generateur.py` (prototype) : le moteur (ici
@@ -378,7 +380,13 @@ describe('générateur', () => {
     )
     const idsCourts = new Set(courts.map((c) => c.id))
     const tenusPar = (s: SalarieSolveur): [Probleme, Set<string>] => {
-      const p = probleme({ salaries: [s], creneaux: [...courts, ...pleins] })
+      // La journée étoile seule : sans le rythme 5 et 2 strict, qui ne
+      // laisse pas trois repos entre le jour court et les jours pleins.
+      const p = probleme({
+        salaries: [s],
+        creneaux: [...courts, ...pleins],
+        regles: SANS_RYTHME_STRICT,
+      })
       return [p, pris(gen(p))]
     }
 
@@ -430,12 +438,15 @@ describe('générateur', () => {
     expect(r.manques).toEqual([])
   })
 
+  // La règle seule, sans le rythme 5 et 2 strict (2026-11-09), qui garde
+  // ici moins de soirs (`rythmeStrict.test.ts`).
   it('deux repos de suite, avant les besoins (2026-11-04)', () => {
     let p = probleme({
       salaries: [receptionniste('r0')],
       creneaux: range(7).map((j) =>
         creneau(`soir-${j}`, 'reception', j, 15, 22),
       ),
+      regles: SANS_RYTHME_STRICT,
     })
     const jours = new Set(
       gen(p).affectations.map((a) => Number(a.creneauId.split('-')[1])),
@@ -453,6 +464,7 @@ describe('générateur', () => {
       creneaux: [0, 1, 2, 4, 5].map((j) =>
         creneau(`soir-${j}`, 'reception', j, 15, 22),
       ),
+      regles: SANS_RYTHME_STRICT,
     })
     const r = gen(p)
     expect(r.affectations.length).toBe(4)
@@ -554,9 +566,10 @@ describe('générateur', () => {
     expect(violations(p, r.affectations)).toEqual([])
 
     const fixes = matins.map((c) => aff('r0', c.id))
-    // Six jours : sans deux repos de suite non plus (2026-11-04).
+    // Six jours : sans deux repos de suite non plus (2026-11-04), ni le
+    // rythme 5 et 2 (2026-11-09 : 6 jours de travail d'affilée).
     expect(reglesDe(p, [...fixes, aff('r0', 'soir-0')])).toEqual(
-      new Set(['R-REPOS-HEBDO-35H', 'REPOS-SEPARES']),
+      new Set(['R-REPOS-HEBDO-35H', 'REPOS-SEPARES', 'RYTHME-5-2']),
     )
     expect(violations(p, fixes)).toEqual([])
     const sans = probleme({
@@ -629,6 +642,9 @@ describe('générateur', () => {
  * commit 7e9a566, avant toute modification du générateur). Le même modèle
  * donne la même solution : rien ne bouge pour une semaine sans cycles.
  */
+/** Empreinte du modèle avec le rythme 5 et 2 strict (le défaut). */
+const EMPREINTE_STRICT = '69e93268'
+
 describe('sans remplaçant, consigne ni présence : le modèle d’avant', () => {
   /** FNV-1a 32 bits, assez pour reconnaître un texte. */
   const empreinte = (texte: string) => {
@@ -640,7 +656,9 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
     return h.toString(16).padStart(8, '0')
   }
 
-  it('même texte LP sur des semaines tirées au hasard', () => {
+  // Rythme 5 et 2 strict (2026-11-09) : réglage à non, le modèle d'avant au
+  // caractère près ; à oui, une empreinte relevée à part (plus bas).
+  const textesLp = (strict: boolean) => {
     const arbSalarie = fc.record({
       contratH: fc.integer({ min: 0, max: 39 }),
       depannage: fc.boolean(),
@@ -696,12 +714,26 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
             soir: c.debutH >= 13,
           }))
           textes.push(
-            construire(probleme({ salaries, creneaux, graine })).modele.lp(),
+            construire(
+              probleme({
+                salaries,
+                creneaux,
+                graine,
+                regles: {
+                  ...REGLES_PAR_DEFAUT,
+                  repos: { ...REGLES_PAR_DEFAUT.repos, rythmeStrict: strict },
+                },
+              }),
+            ).modele.lp(),
           )
         },
       ),
       { numRuns: 80, seed: 20261030 },
     )
+    return textes.join('\n=====\n')
+  }
+
+  it('même texte LP sur des semaines tirées au hasard', () => {
     // 05fa1c2a : jour isolé contre un congé, plus de 6 jours d'affilée, et
     // mineur un jour férié, plus de 5 jours d'affilée, dans le pire coût
     // d'une place (2026-11-02).
@@ -742,7 +774,17 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
     // reproduisent l'hôtel ; la continuité obligatoire (D8) ne touche que les
     // variables de trou et de passation, et ces créneaux n'ont ni moment de
     // l'accueil ni nuit (aucun trou, aucune passation).
-    expect(empreinte(textes.join('\n=====\n'))).toBe('8874c146')
+    // Inchangée par le rythme 5 et 2 strict (2026-11-09) quand le réglage est
+    // à non : `rythmeStrictModele` n'écrit rien.
+    expect(empreinte(textesLp(false))).toBe('8874c146')
+  })
+
+  it('rythme 5 et 2 strict : une empreinte à part', () => {
+    // EMPREINTE_STRICT (2026-11-09, réglage à oui, le défaut) : les mêmes
+    // semaines, plus les motifs interdits du rythme 5 et 2
+    // (`rythmeStrictModele`) pour les contrats de 35 h et plus ; ces
+    // semaines n'ont pas de semaine voisine, donc aucun coût de bord.
+    expect(empreinte(textesLp(true))).toBe(EMPREINTE_STRICT)
   })
 })
 
@@ -992,7 +1034,9 @@ describe('réduction des remplaçants : même optimum', () => {
       ...place(2 * j, j, 7, 7, 1, [-1, 1, 2]),
       ...place(2 * j + 1, j, 15, 8, 1, [-2, -1, 1]),
     ])
-    const p = probleme({ salaries, creneaux })
+    // La réduction seule : le rythme 5 et 2 strict ajoute des contraintes
+    // de jours, pas de paires (même preuve).
+    const p = probleme({ salaries, creneaux, regles: SANS_RYTHME_STRICT })
     const avec = construire(p)
     const sans = construire(p, { reduire: false })
     expect(avec.modele.contraintes.length).toBeLessThan(
