@@ -2900,7 +2900,12 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   repos seuls 0 → 0, blocs hors 5 / 2 10 → 8 (tous dus à des faits : semaines validées, semaine
   type), les blocs de 7 et 9 jours avant une semaine de CFA disparus, heures dues manquantes
   8 → 29-36 h (deux apprentis hors du rythme après une semaine validée : la règle a ce prix),
-  0 infraction, 12,2 s au pire par semaine (2,9 s le matin).
+  0 infraction, 12,2 s au pire par semaine (2,9 s le matin). FORMATION = TOUJOURS DU TRAVAIL
+  (décision utilisateur du 2026-11-09, même de deux semaines, jamais neutre) : case du motif
+  `planning_motifs.rythme_travail` (migration `20261109110000`, ajout + FO marqué, livraison
+  `--avec-donnees`, « Compte comme du travail pour le rythme » dans le volet d'un motif compté dans
+  les heures), statut `f` de `statutAbsence` ; dans une suite mêlée, un jour de formation ne coupe
+  pas la suite d'absences et n'y compte pas (`CCCC FF CCCC` = `nnnn TT nnnn`).
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

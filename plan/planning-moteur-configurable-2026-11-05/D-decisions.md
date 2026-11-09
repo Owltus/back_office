@@ -152,3 +152,22 @@ ci-dessus.
   blocs hors 5 et 2 10 → 8 (tous dus à des faits), plus de bloc de 7 ou 9 jours avant une
   semaine de CFA, heures dues manquantes 8 → 29-36 h (deux apprentis hors du rythme après une
   semaine validée), aucune infraction, 12,2 s au pire par semaine.
+
+**2026-11-09, rythme 5 et 2 : la formation compte toujours comme du travail (décision
+utilisateur).** Une formation compte TOUJOURS comme du travail pour le rythme, même de deux
+semaines ; elle ne devient jamais neutre, contrairement à un congé ou une maladie de plus de 5
+jours. Révise le « choix de l'agent » ci-dessus pour la formation.
+
+- Réglable, jamais lu par code : case du motif `planning_motifs.rythme_travail` (migration
+  d'ajout `20261109110000`, défaut non ; le motif FO déjà en base est marqué, livraison
+  `--avec-donnees`). Écran : « Compte comme du travail pour le rythme » dans le volet d'un motif
+  d'absence compté dans les heures (Horaires et absences).
+- Suite mêlée congé + formation : la formation ne COUPE pas la suite d'absences et n'y COMPTE
+  pas. Seuls les jours de congé (ou maladie…) de la suite font sa longueur ; au-delà de 5, ils
+  sont neutres, la formation reste du travail. `CCCC FF CCCC` : `nnnn TT nnnn` ; `CCC F CC` :
+  5 jours de congé, du travail, 6 jours d'affilée (faute). Un congé de deux semaines coupé
+  d'une journée de formation reste une absence longue.
+- Une source (`statutAbsence`, `resoudreAbsences`, lus par `rythmeAutour`) pour le calcul, le
+  vérificateur et les repos obligés ; « À vérifier » lit le motif d'une absence de la semaine
+  type par la même fonction. Repos proposés sur un congé et prix de la règle inchangés.
+  Empreintes 8874c146 et fb6eed48 inchangées (aucune formation dans les données de test).

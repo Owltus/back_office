@@ -691,7 +691,11 @@ sur le mois (deux personnes, une journée chacune).
   (congé, maladie, formation, férié chômé, JFR) comptent comme du TRAVAIL (un apprenti fait
   « 5 jours, 2 repos, 5 jours d'école, 2 repos ») ; le repos posé, fixe ou sans décompte compte
   comme du REPOS ; seuls le hors contrat et une absence de plus de 5 jours d'affilée sont
-  NEUTRES. Avant tout le reste pour le calcul (une place reste vide plutôt ; quand des faits la
+  NEUTRES. Révisé encore le même jour (décision de l'utilisateur) : une FORMATION compte
+  TOUJOURS comme du travail, même de deux semaines, jamais neutre (case du motif « Compte comme
+  du travail pour le rythme », `rythme_travail`) ; au milieu d'un congé, elle ne coupe pas
+  l'absence et n'y compte pas (« 4 jours de congé, 2 de formation, 4 de congé » : le congé reste
+  une absence longue, neutre). Avant tout le reste pour le calcul (une place reste vide plutôt ; quand des faits la
   rendent impossible, le moins de fautes possible, jamais une semaine vide), y compris sur la
   semaine suivante esquissée ; jamais sur un jour posé ;
   une semaine type à deux repos fixes ou plus décide seule. Alerte RYTHME-5-2 (« règle de
