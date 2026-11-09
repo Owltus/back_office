@@ -74,6 +74,7 @@ import {
 } from '#/lib/planning/reglesEtablissement.ts'
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import {
+  estReposSeul,
   estReposTropLong,
   estTransition,
   fauteScellee,
@@ -81,6 +82,7 @@ import {
   jourConnu,
   joursRythmeDe,
   messageFaute,
+  messageReposSeul,
   messageTransition,
   rythmeStrictDe,
   suiteRythme,
@@ -523,7 +525,11 @@ function nouvelles(apres: Violation[], avant: Violation[]): Violation[] {
     const k = cleViolation(v)
     const n = reste.get(k) ?? 0
     if (n === 0) return true
-    if (v.regle === 'RYTHME-5-2' || v.regle === REGLE_TRANSITION)
+    if (
+      v.regle === 'RYTHME-5-2' ||
+      v.regle === REGLE_TRANSITION ||
+      v.regle === 'RYTHME-REPOS-SEUL'
+    )
       reste.set(k, n - 1)
     return false
   })
@@ -545,7 +551,10 @@ export function moraleQuiBloque(v: {
     (v.regle === 'REPOS-SEPARES' &&
       !v.message.endsWith(REPOS_SEPARES_SOUHAITE)) ||
     (v.regle === 'JOUR-ISOLE' && v.message === JOUR_ISOLE_INTERDIT) ||
-    v.regle === 'RYTHME-5-2'
+    v.regle === 'RYTHME-5-2' ||
+    // Un repos seul coûte plus de 3 places (urgence) : pour UNE place, il
+    // bloque (2026-11-09).
+    v.regle === 'RYTHME-REPOS-SEUL'
   )
 }
 
@@ -556,6 +565,7 @@ export const REGLES_MORALES: ReadonlySet<string> = new Set([
   'JOUR-ISOLE',
   'RYTHME-5-2',
   'RYTHME-TRANSITION',
+  'RYTHME-REPOS-SEUL',
   'REPOS-COURT',
   'WEEKEND-LIBRE',
   'MOMENTS',
@@ -764,6 +774,18 @@ function alertesMorales(
           pourUnePlace
             ? messageTransition(f)
             : messageTransition({ genre: f.genre, debut, fin }, nbJours),
+          ici,
+        )
+        continue
+      }
+      // Un REPOS SEUL : permis en urgence (manque de personnel), dit, jamais
+      // bloquant (décision de l'utilisateur du 2026-11-09).
+      if (estReposSeul(f)) {
+        ajoute(
+          'RYTHME-REPOS-SEUL',
+          pourUnePlace
+            ? messageReposSeul(f)
+            : messageReposSeul({ debut }, nbJours),
           ici,
         )
         continue

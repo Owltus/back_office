@@ -147,6 +147,7 @@ interface ProblemeZones {
     poste: string
     accueil: boolean
     zone?: string | null
+    indispensable?: boolean
   }>
   consignes: ReadonlyArray<{ zone?: string }>
   releveMinutes?: number
@@ -225,7 +226,11 @@ type CreneauGroupe = {
   poste: string
   accueil?: boolean
   zone?: string | null
+  indispensable?: boolean
 }
+
+/** Le lieu d'un poste indispensable, dit en clair. */
+export const LIEU_INDISPENSABLES = 'sur les postes indispensables'
 
 /** Où une personne qui n'est jamais seule (soutien, contrat « jamais sans un
  * salarié confirmé ») cherche qui l'accompagne : `groupe` rend une clé, la
@@ -238,7 +243,14 @@ type CreneauGroupe = {
  * confirmé à un autre poste de la même zone : accompagné). Un poste sans
  * zone : le poste seul. La zone d'un créneau est celle de `zoneDuCreneau`
  * (un candidat de l'accueil sans zone, données de test : la première).
- * Aucun nom ni id lu : le nom de la zone n'est que pour le texte. */
+ * Aucun nom ni id lu : le nom de la zone n'est que pour le texte.
+ *
+ * POSTES INDISPENSABLES (décision de l'utilisateur du même jour : « je ne
+ * peux pas laisser tourner un hôtel avec juste des stagiaires et
+ * apprentis… tu peux avoir un stagiaire seul en réception et un employé
+ * non stagiaire au club, c'est ok ») : tous les postes indispensables
+ * (`estIndispensable`, réglage du poste) forment UN groupe, quelle que soit
+ * leur zone. Un poste non indispensable garde sa zone, sinon lui-même. */
 export function accompagnement(p: ProblemeZones): {
   groupe: (c: CreneauGroupe) => string
   lieu: (c: CreneauGroupe) => string
@@ -248,10 +260,12 @@ export function accompagnement(p: ProblemeZones): {
   const zoneDe_ = (c: CreneauGroupe) => c.zone ?? desPostes.get(c.poste) ?? null
   return {
     groupe: (c) => {
+      if (c.indispensable) return 'indispensables'
       const z = zoneDe_(c)
       return z === null ? `poste:${c.poste}` : `zone:${z}`
     },
     lieu: (c) => {
+      if (c.indispensable) return LIEU_INDISPENSABLES
       const z = zoneDe_(c)
       const nom = z === null ? undefined : zones.find((x) => x.id === z)?.nom
       return nom === undefined ? 'sur ce poste' : `dans la zone ${nom}`

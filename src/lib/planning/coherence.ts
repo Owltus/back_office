@@ -90,6 +90,7 @@ import {
 } from '#/lib/planning/rythmeStrict.ts'
 import type { StatutRythme } from '#/lib/planning/rythmeStrict.ts'
 import { seulementLaNuit, zoneDuPoste } from '#/lib/planning/zones.ts'
+import { estIndispensable } from '#/lib/planning/modele.ts'
 import {
   dureesImposees,
   journeesDuContrat,
@@ -896,8 +897,14 @@ export function verifierReglages(
     )
     if (!accompagnes.length) continue
     const zone = zoneDuPoste(p)
-    const voisins =
-      zone === null ? [p] : r.postes.filter((q) => zoneDuPoste(q) === zone)
+    // Un poste indispensable : tous les postes indispensables ouverts
+    // (2026-11-09) ; sinon la zone, sinon le poste.
+    const indispensable = estIndispensable(p)
+    const voisins = indispensable
+      ? r.postes.filter((q) => !q.ferme && estIndispensable(q))
+      : zone === null
+        ? [p]
+        : r.postes.filter((q) => zoneDuPoste(q) === zone)
     const confirmes = voisins.flatMap((q) =>
       tenants(q.id, autonome).filter(
         (s) => !modele(s).accompagne && !modele(s).placementManuel,
@@ -911,9 +918,11 @@ export function verifierReglages(
       `sans-confirme:${p.id}`,
       'a-voir',
       'equipe',
-      nomZone === undefined
-        ? `Le poste ${p.nom} n’a aucun salarié confirmé (titulaire ou dépannage) : ${listeOu(contrats)} n’y seront jamais placés, ils ne sont jamais sans un salarié confirmé.`
-        : `La zone ${nomZone} n’a aucun salarié confirmé (titulaire ou dépannage) : ${listeOu(contrats)} ne seront jamais placés au poste ${p.nom}, ils ne sont jamais sans un salarié confirmé.`,
+      indispensable
+        ? `Aucun poste indispensable n’a de salarié confirmé (titulaire ou dépannage) : ${listeOu(contrats)} ne seront jamais placés au poste ${p.nom}, ils ne sont jamais sans un salarié confirmé.`
+        : nomZone === undefined
+          ? `Le poste ${p.nom} n’a aucun salarié confirmé (titulaire ou dépannage) : ${listeOu(contrats)} n’y seront jamais placés, ils ne sont jamais sans un salarié confirmé.`
+          : `La zone ${nomZone} n’a aucun salarié confirmé (titulaire ou dépannage) : ${listeOu(contrats)} ne seront jamais placés au poste ${p.nom}, ils ne sont jamais sans un salarié confirmé.`,
     )
   }
 

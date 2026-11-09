@@ -201,43 +201,54 @@ export function fautesRythme(etats: readonly EtatRythme[]): FauteRythme[] {
 }
 
 /*
- * TRANSITION (décision de l'utilisateur du 2026-11-09 : « oui, mais
- * vraiment si utile »). Décaler les jours de repos de quelqu'un demande UNE
- * semaine hors du rythme : 3 repos de suite une fois (les repos reculent
- * d'un jour), ou un bloc de 4 jours une fois (ils avancent d'un jour).
- * Sans cela, une équipe dont trois personnes ont les mêmes repos les garde
- * toute l'année (5 + 2 = 7), et le matin de ce jour-là reste sans personne
- * confirmée. Une transition reste une faute au sens de `fautesRythme` ;
- * `estTransition` la reconnaît, le calcul la paie moins cher (au-dessus
- * d'une place, sous les heures dues : `prixTransition`, generateur.ts), au
- * plus une par personne sur `FENETRE_TRANSITION` jours, et le vérificateur
- * la dit comme un changement de jours de repos, sans bloquer.
+ * TRANSITION (décisions de l'utilisateur du 2026-11-09 : « oui, mais
+ * vraiment si utile », puis « ne place jamais plus de deux jours de repos à
+ * la suite, c'est pas possible »). Décaler les jours de repos de quelqu'un
+ * demande UN bloc de 4 jours entre deux repos (les repos avancent d'un
+ * jour) : c'est la seule transition. Sans elle, une équipe dont trois
+ * personnes ont les mêmes repos les garde toute l'année (5 + 2 = 7), et le
+ * matin de ce jour-là reste sans personne confirmée. Une transition reste
+ * une faute au sens de `fautesRythme` ; `estTransition` la reconnaît, le
+ * calcul la paie moins cher (au-dessus d'une place, sous une heure due,
+ * `prixOrdre`, generateur.ts) et le vérificateur la dit comme un changement
+ * de jours de repos, sans bloquer.
  *
- * REPOS TROP LONG : 4 repos ou plus entre deux blocs de travail
- * (`estReposTropLong`), jamais par le calcul (« les repos de quatre jours,
- * c'est non ») ; quand les faits l'imposent, il est dit quand même.
+ * REPOS TROP LONG : 3 repos ou plus entre deux blocs de travail
+ * (`estReposTropLong`), jamais par le calcul ; quand les faits l'imposent
+ * (le bloc et tous ces repos connus d'avance, `fauteScellee`), le calcul ne
+ * l'écrit pas, et le vérificateur le dit quand même.
+ *
+ * REPOS SEUL (« possible, mais dans un cas vraiment d'urgence si manque de
+ * personnel ») : un repos entre deux blocs, au plus un par personne sur
+ * `FENETRE_RYTHME` jours (`estReposSeul`, `reposSeulsRecents`) ; dit
+ * « repos seul (manque de personnel) », sans bloquer.
  */
 
-/** Repos entre deux blocs au-delà duquel c'est « trop long » : jamais. */
-export const REPOS_TROP_LONG = RYTHME_REPOS + 2
+/** Repos entre deux blocs à partir duquel c'est « trop long » : jamais. */
+export const REPOS_TROP_LONG = RYTHME_REPOS + 1
 
-/** Une personne ne fait au plus qu'une transition sur ces jours (4
- * semaines, la fenêtre du partage des week-ends). */
-export const FENETRE_TRANSITION = 28
+/** La fenêtre où se comptent les transitions et les repos seuls déjà faits
+ * (4 semaines, celle du partage des week-ends). */
+export const FENETRE_RYTHME = 28
+/** Ancien nom (transitions comptées sur 4 semaines). */
+export const FENETRE_TRANSITION = FENETRE_RYTHME
 
-/** Une faute qui décale les repos d'un jour : 3 repos de suite entre deux
- * blocs, ou un bloc de 4 jours entre deux repos. */
+/** Une faute qui décale les repos d'un jour : un bloc de 4 jours entre deux
+ * repos. */
 export function estTransition(
   f: Pick<FauteRythme, 'genre' | 'debut' | 'fin'>,
 ): boolean {
-  const n = f.fin - f.debut + 1
   return (
-    (f.genre === 'repos-long' && n === RYTHME_REPOS + 1) ||
-    (f.genre === 'travail-court' && n === RYTHME_TRAVAIL - 1)
+    f.genre === 'travail-court' && f.fin - f.debut + 1 === RYTHME_TRAVAIL - 1
   )
 }
 
-/** 4 repos ou plus entre deux blocs de travail. */
+/** Un repos seul entre deux blocs (urgence). */
+export function estReposSeul(f: Pick<FauteRythme, 'genre'>): boolean {
+  return f.genre === 'repos-seul'
+}
+
+/** 3 repos ou plus entre deux blocs de travail. */
 export function estReposTropLong(
   f: Pick<FauteRythme, 'genre' | 'debut' | 'fin'>,
 ): boolean {
@@ -246,19 +257,17 @@ export function estReposTropLong(
 
 /** Ce que coûte un motif interdit au calcul (`motifsInterdits`) :
  *   - `six` : 6 jours de travail, DUR ;
- *   - `dur` : 4 repos ou plus entre deux blocs, au-dessus des heures dues
- *     (le modèle reste possible quand les faits l'imposent) ;
- *   - `transition` : 3 repos, ou un bloc de 4 jours ;
- *   - `fort` : un repos seul, un bloc de 1 à 3 jours. */
-export type GenreMotif = 'six' | 'dur' | 'transition' | 'fort'
+ *   - `dur` : 3 repos ou plus entre deux blocs, au-dessus de tout (le
+ *     modèle reste possible quand les faits l'imposent) ;
+ *   - `transition` : un bloc de 4 jours ;
+ *   - `urgence` : un repos seul ;
+ *   - `fort` : un bloc de 1 à 3 jours. */
+export type GenreMotif = 'six' | 'dur' | 'transition' | 'urgence' | 'fort'
 
 export function genreMotif(motif: readonly ('T' | 'r')[]): GenreMotif {
   if (motif.every((e) => e === 'T')) return 'six'
   const n = motif.length - 2
-  if (motif[0] === 'T') {
-    if (n >= REPOS_TROP_LONG) return 'dur'
-    return n === RYTHME_REPOS + 1 ? 'transition' : 'fort'
-  }
+  if (motif[0] === 'T') return n >= REPOS_TROP_LONG ? 'dur' : 'urgence'
   return n === RYTHME_TRAVAIL - 1 ? 'transition' : 'fort'
 }
 
@@ -266,6 +275,11 @@ export function genreMotif(motif: readonly ('T' | 'r')[]): GenreMotif {
  * personne) : seules celles dont les deux bords sont dans la suite. */
 export function transitionsDans(etats: readonly EtatRythme[]): number {
   return fautesRythme(etats).filter(estTransition).length
+}
+
+/** Les repos seuls faits sur une suite de jours connus. */
+export function reposSeulsDans(etats: readonly EtatRythme[]): number {
+  return fautesRythme(etats).filter(estReposSeul).length
 }
 
 /** Le message d'une transition faite : un changement de jours de repos,
@@ -278,13 +292,22 @@ export function messageTransition(
     nbJours === undefined
       ? ''
       : ` du ${nomJourRythme(f.debut, nbJours)} au ${nomJourRythme(f.fin, nbJours)}`
-  return f.genre === 'repos-long'
-    ? `${CHANGEMENT_REPOS} : 3 jours de repos${jours}`
-    : `${CHANGEMENT_REPOS} : 4 jours de travail${jours}`
+  return `${CHANGEMENT_REPOS} : 4 jours de travail${jours}`
 }
 
 /** Début commun des messages d'une transition. */
 export const CHANGEMENT_REPOS = 'changement de jours de repos'
+
+/** Le message d'un repos seul. Sans `nbJours` : sans le jour. */
+export function messageReposSeul(
+  f: Pick<FauteRythme, 'debut'>,
+  nbJours?: number,
+): string {
+  return `${REPOS_SEUL_URGENCE}${nbJours === undefined ? '' : ` le ${nomJourRythme(f.debut, nbJours)}`}`
+}
+
+/** Début commun des messages d'un repos seul. */
+export const REPOS_SEUL_URGENCE = 'repos seul (manque de personnel)'
 
 /** Un jour connu d'avance, que le planning ne décide pas : hors de la
  * période (semaine voisine), ou une indisponibilité (absence, école, repos
@@ -308,8 +331,10 @@ export function jourConnu(
 }
 
 /** Une faute que les FAITS ont déjà faite : plus de 2 repos entre deux
- * blocs, quand le bloc d'un côté et les 3 repos qui le touchent sont connus
- * d'avance (`connu`, même repère que la faute, `jourConnu`). La reprise de l'autre côté ne peut
+ * blocs, quand le bloc d'un côté et TOUS ces repos sont connus d'avance
+ * (`connu`, même repère que la faute, `jourConnu` ; révisé le 2026-11-09 :
+ * avant, le bloc et 3 repos scellaient aussi 4, 5… repos, et rien
+ * n'obligeait à reprendre au 4e jour). La reprise de l'autre côté ne peut
  * plus l'éviter qu'en ne reprenant jamais : le calcul ne l'interdit pas, le
  * vérificateur et les repos obligés ne la disent pas (relecture du
  * 2026-11-09 : une semaine d'avant finie par 3 repos bloquait toute la
@@ -319,10 +344,7 @@ export function fauteScellee(
   connu: (i: number) => boolean,
 ): boolean {
   if (f.genre !== 'repos-long') return false
-  // Le bloc et 3 repos connus scellent 3 repos ou plus (une transition) ;
-  // 4 repos ou plus ne sont scellés que si le bloc et 4 repos sont connus
-  // (« jamais 4 repos », sauf si les faits les imposent, 2026-11-09).
-  const k = Math.min(f.fin - f.debut + 1, REPOS_TROP_LONG) + 1
+  const k = f.fin - f.debut + 2
   const tous = (de: number, pas: number) => {
     for (let i = 0; i < k; i++) if (!connu(de + pas * i)) return false
     return true

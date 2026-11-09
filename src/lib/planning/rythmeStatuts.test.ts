@@ -453,17 +453,21 @@ describe('le calcul et le vérificateur', () => {
       "rythme 5 et 2 non tenu : 7 jours de travail d'affilée du samedi au vendredi d'après (5 au plus)",
     )
     // Hors du rythme (un seul repos le dimanche d'avant) : aucune semaine
-    // sans faute. Depuis le 2026-11-09, une TRANSITION (un bloc de 4 jours,
-    // le lundi en repos avec le dimanche) plutôt qu'un repos seul : la
-    // faute au rythme passe avant les 7 h dues de la semaine.
+    // sans faute. Les heures dues passent avant un repos seul (décision de
+    // l'utilisateur du 2026-11-09) : 5 jours, et UN repos seul le dimanche
+    // avant le CFA, dit « manque de personnel », plutôt que 7 h perdues.
     const { r } = resoudre(s)
-    expect(tenus(r)).toEqual([1, 2, 3, 4])
+    expect(tenus(r)).toEqual([1, 2, 3, 4, 5])
     expect(rythmeDit(p, r.affectations)).toEqual([])
     expect(
-      violations(p, r.affectations).filter(
-        (v) => v.regle === 'RYTHME-TRANSITION',
-      ),
-    ).toHaveLength(1)
+      violations(p, r.affectations)
+        .filter((v) => v.regle === 'RYTHME-REPOS-SEUL')
+        .map((v) => v.message),
+    ).toEqual(['repos seul (manque de personnel) le dimanche'])
+    // Un repos seul déjà fait sur 4 semaines : le second coûte comme 3
+    // repos ; le bloc de 4 jours (transition) et 7 h de moins, plutôt.
+    const deja = resoudre(personne({ ...s, reposSeulsRecents: 1 }))
+    expect(tenus(deja.r)).toEqual([1, 2, 3, 4])
     // Dans le rythme : 5 jours puis les 2 repos avant le CFA, sans faute.
     const dans = resoudre(personne({ ...AVANT, etatsApres: 'TTTTTrr' }))
     expect(tenus(dans.r)).toEqual([0, 1, 2, 3, 4])
@@ -523,12 +527,23 @@ describe('le calcul et le vérificateur', () => {
     expect(tenus(r)).toEqual([])
   })
   it('congé de 3 jours : 2 shifts ; de 5 jours : rien ; de deux semaines : neutre', () => {
+    // Les heures dues de la semaine, congé retiré (14 h, puis 0).
     const trois = resoudre(
-      personne({ ...AVANT, ...travailSansShift([0, 1, 2]) }),
+      personne({
+        ...AVANT,
+        ...travailSansShift([0, 1, 2]),
+        minutesHebdoContrat: 14 * H,
+        minutesContrat: 35 * H,
+      }),
     )
     expect(tenus(trois.r)).toEqual([3, 4])
     const cinq = resoudre(
-      personne({ ...AVANT, ...travailSansShift([0, 1, 2, 3, 4]) }),
+      personne({
+        ...AVANT,
+        ...travailSansShift([0, 1, 2, 3, 4]),
+        minutesHebdoContrat: 0,
+        minutesContrat: 35 * H,
+      }),
     )
     expect(tenus(cinq.r)).toEqual([])
     // Retour d'un congé de deux semaines le jeudi (la semaine d'avant et
@@ -538,6 +553,8 @@ describe('le calcul et le vérificateur', () => {
       joursSemainePrecedente: 0,
       indisponibilites: new Set([0, 1, 2]),
       joursNeutres: new Set([0, 1, 2]),
+      minutesHebdoContrat: 28 * H,
+      minutesContrat: 35 * H,
     })
     const l = resoudre(long)
     expect(tenus(l.r)).toEqual([3, 4, 5, 6])
@@ -568,7 +585,11 @@ describe('le calcul et le vérificateur', () => {
     const t = tenus(r)
     expect(t).toHaveLength(5)
     expect(t[4] - t[0]).toBe(4)
-    expect(rythmeDit(p, r.affectations)).toEqual([])
+    // Reprise le mardi : les 3 repos des faits sont dits (jamais de 3 repos
+    // par le calcul, mais ceux-là sont imposés), pas un 4e.
+    expect(rythmeDit(p, r.affectations)).toEqual([
+      "rythme 5 et 2 non tenu : 3 jours de repos du samedi d'avant au lundi entre deux blocs de travail (2 attendus)",
+    ])
     // Refusé : un repos posé SEUL entre deux blocs.
     const seul = personne({
       etatsAvant: 'rrTTTTT',
@@ -580,9 +601,13 @@ describe('le calcul et le vérificateur', () => {
       salarieId: 'a',
       creneauId: `j${j}`,
     }))
-    expect(rythmeDit(q, affs)).toContain(
-      'rythme 5 et 2 non tenu : repos seul le lundi',
-    )
+    // Dit comme un repos seul (permis en urgence, 2026-11-09), pas comme
+    // une faute qui bloque.
+    expect(
+      violations(q, affs)
+        .filter((v) => v.regle === 'RYTHME-REPOS-SEUL')
+        .map((v) => v.message),
+    ).toEqual(['repos seul (manque de personnel) le lundi'])
   })
   it('jour férié chômé : un jour de travail ; refusé : 5 shifts autour', () => {
     const s = personne({ ...AVANT, ...travailSansShift([2]) })
@@ -619,6 +644,8 @@ describe('le calcul et le vérificateur', () => {
       indisponibilites: new Set([0, 1]),
       joursNeutres: new Set([0, 1]),
       etatsApres: 'TTTTTrr',
+      minutesHebdoContrat: 21 * H,
+      minutesContrat: 35 * H,
     })
     const { p, r } = resoudre(s)
     expect(tenus(r)).toEqual([2, 3, 4])

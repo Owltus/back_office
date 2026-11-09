@@ -249,6 +249,9 @@ export interface SalarieSolveur {
    * `estTransition`) déjà faites sur les `FENETRE_TRANSITION` jours avant
    * la semaine, lues pour une génération (`historique`). Absent : aucune. */
   transitionsRecentes?: number
+  /** Rythme 5 et 2 strict : repos seuls (urgence, `estReposSeul`) déjà
+   * faits sur les mêmes jours. Absent : aucun. */
+  reposSeulsRecents?: number
   reposHebdoMin: number
   jourMaxPoste: boolean
   contratDebut: number | null

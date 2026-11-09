@@ -194,9 +194,17 @@ describe('le calcul', () => {
     const dits = violations(p, affs).filter((v) => v.regle === 'RYTHME-5-2')
     expect(dits.map((v) => v.message)).toEqual([
       'rythme 5 et 2 non tenu : 2 jours de travail du mardi au mercredi (5 attendus)',
-      'rythme 5 et 2 non tenu : repos seul le jeudi',
     ])
     expect(dits.every(moraleQuiBloque)).toBe(true)
+    // Le repos seul (2026-11-09) : permis en urgence seulement ; pour une
+    // place, il bloque.
+    const seul = violations(p, affs).filter(
+      (v) => v.regle === 'RYTHME-REPOS-SEUL',
+    )
+    expect(seul.map((v) => v.message)).toEqual([
+      'repos seul (manque de personnel) le jeudi',
+    ])
+    expect(seul.every(moraleQuiBloque)).toBe(true)
     expect(dits.every((v) => v.nature === 'organisation')).toBe(true)
   })
   it('refusé : un bloc de 3 entre deux repos, la place reste vide et le dit', () => {
@@ -227,20 +235,27 @@ describe('le calcul', () => {
     })
     expect(tenus(resoudre(debut, [4, 5, 6]).r)).toEqual([4, 5, 6])
   })
-  it('3 repos entre deux blocs : une transition, une seule sur 4 semaines ; accepté si le 3e est un congé (du travail)', () => {
+  it('refusé : 3 repos entre deux blocs quand la reprise est possible ; imposés par les faits : dits ; accepté si le 3e est un congé (du travail)', () => {
     // La semaine d'avant finit par 5 jours : lundi et mardi en repos. Rien
-    // le mercredi : jeudi reprend après 3 repos, un changement de jours de
-    // repos (2026-11-09). Refusé s'il y en a déjà eu un.
+    // le mercredi : jeudi reprendrait après 3 repos (décision de
+    // l'utilisateur du 2026-11-09 : « jamais plus de deux jours de repos à
+    // la suite »).
     const avant = { etatsAvant: 'rrTTTTT', joursSemainePrecedente: 5 }
-    expect(tenus(resoudre(personne(avant), [3, 4, 5, 6]).r)).toEqual([
-      3, 4, 5, 6,
-    ])
+    // Un créneau le mercredi : la reprise se fait le mercredi.
+    const { p: p3, r: r3 } = resoudre(personne(avant), [2, 3, 4, 5, 6])
+    expect(tenus(r3)).toEqual([2, 3, 4, 5, 6])
+    expect(lue(p3, r3.affectations)).toEqual([])
+    // Aucun créneau du lundi au mercredi : 3 repos imposés par les faits
+    // (`fauteScellee`), la personne reprend le jeudi, et c'est dit.
+    const { p: p4, r: r4 } = resoudre(personne(avant), [3, 4, 5, 6])
+    expect(tenus(r4)).toEqual([3, 4, 5, 6])
     expect(
-      tenus(
-        resoudre(personne({ ...avant, transitionsRecentes: 1 }), [3, 4, 5, 6])
-          .r,
-      ),
-    ).toEqual([])
+      violations(p4, r4.affectations)
+        .filter((v) => v.regle === 'RYTHME-5-2')
+        .map((v) => v.message),
+    ).toEqual([
+      'rythme 5 et 2 non tenu : 3 jours de repos du lundi au mercredi entre deux blocs de travail (2 attendus)',
+    ])
     // Un jour de congé le mercredi compte comme du travail : mercredi et
     // jeudi au dimanche font le bloc de 5 après les 2 repos.
     const conge = personne({

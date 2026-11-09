@@ -567,9 +567,10 @@ describe('générateur', () => {
 
     const fixes = matins.map((c) => aff('r0', c.id))
     // Six jours : sans deux repos de suite non plus (2026-11-04), ni le
-    // rythme 5 et 2 (2026-11-09 : 6 jours de travail d'affilée).
+    // rythme 5 et 2 (2026-11-09 : un repos seul, dit « manque de
+    // personnel » depuis le même jour).
     expect(reglesDe(p, [...fixes, aff('r0', 'soir-0')])).toEqual(
-      new Set(['R-REPOS-HEBDO-35H', 'REPOS-SEPARES', 'RYTHME-5-2']),
+      new Set(['R-REPOS-HEBDO-35H', 'REPOS-SEPARES', 'RYTHME-REPOS-SEUL']),
     )
     expect(violations(p, fixes)).toEqual([])
     const sans = probleme({
@@ -643,7 +644,7 @@ describe('générateur', () => {
  * donne la même solution : rien ne bouge pour une semaine sans cycles.
  */
 /** Empreinte du modèle avec le rythme 5 et 2 strict (le défaut). */
-const EMPREINTE_STRICT = '8818eea4'
+const EMPREINTE_STRICT = '15e530ae'
 
 describe('sans remplaçant, consigne ni présence : le modèle d’avant', () => {
   /** FNV-1a 32 bits, assez pour reconnaître un texte. */
@@ -789,7 +790,12 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
     // coefficient de chaque variable de manque et sa place dans l'objectif
     // changent. Ces semaines n'ont ni chiffre de l'accueil (pas
     // d'équilibre) ni rythme strict : rien d'autre ne bouge.
-    expect(empreinte(textesLp(false))).toBe('d5e6159c')
+    // 5f88f9d7 (2026-11-09, suite des décisions de l'utilisateur) : le
+    // prix d'une heure due se lit désormais au-dessus d'un repos seul
+    // (`urgence`, 3 places), et le pire coût d'une place compte un
+    // apprenti ou un stagiaire de plus au même moment (`POIDS_EPARPILLER`) :
+    // tous les prix de place et d'heure changent, rien d'autre.
+    expect(empreinte(textesLp(false))).toBe('5f88f9d7')
   })
 
   it('rythme 5 et 2 strict : une empreinte à part', () => {
@@ -811,6 +817,10 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
     // (comme d5e6159c), et les motifs rangés par genre (`genreMotif`) : une
     // transition (3 repos, bloc de 4) a une variable de plus à son prix,
     // au plus une par personne ; 4 repos ou plus au prix `dur`.
+    // 15e530ae (2026-11-09, suite) : comme 5f88f9d7, plus les motifs
+    // rangés autrement : 3 repos au prix `dur`, le repos seul au prix
+    // `urgence` (un sur 4 semaines), les transitions (bloc de 4) sans
+    // plafond, à prix croissant (`prixTransition`).
     expect(empreinte(textesLp(true))).toBe(EMPREINTE_STRICT)
   })
 })

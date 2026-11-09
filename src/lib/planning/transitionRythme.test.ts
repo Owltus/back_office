@@ -5,8 +5,11 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import {
   generer,
   PLACES_PAR_TRANSITION,
+  PLACES_REPOS_SEUL,
+  PLACES_TRANSITION_MAX,
   prixFauteRythme,
   prixOrdre,
+  prixTransition,
 } from '#/lib/planning/generateur.ts'
 import type { Highs } from '#/lib/planning/generateur.ts'
 import {
@@ -23,16 +26,19 @@ import type {
 import { desequilibres } from '#/lib/planning/presence.ts'
 import type { PresenceOut } from '#/lib/planning/presence.ts'
 import {
+  estReposSeul,
   estReposTropLong,
   estTransition,
   fautesRythme,
   genreMotif,
   motifsInterdits,
+  reposSeulsDans,
   transitionsDans,
 } from '#/lib/planning/rythmeStrict.ts'
 import type { EtatRythme } from '#/lib/planning/rythmeStrict.ts'
 import { preparerGeneration } from '#/lib/planning/semaine.ts'
 import type { SemaineOut } from '#/lib/planning/semaine.ts'
+import { apprentieCfa } from '#/lib/planning/test/apprentieCfa.ts'
 import { hotelMercredi } from '#/lib/planning/test/hotelMercredi.ts'
 import { PlanningMemoire } from '#/lib/planning/test/planningMemoire.ts'
 import { MINUTES_PAR_JOUR } from '#/lib/planning/temps.ts'
@@ -62,33 +68,39 @@ beforeAll(async () => {
 const suite = (texte: string) => [...texte] as EtatRythme[]
 
 describe('la définition', () => {
-  it('transition : 3 repos entre deux blocs, ou un bloc de 4 jours entre deux repos', () => {
+  it('transition : seulement un bloc de 4 jours entre deux repos', () => {
     const t = (texte: string) =>
       fautesRythme(suite(texte)).map((f) => estTransition(f))
-    expect(t('TTTTTrrrTTTTT')).toEqual([true])
     expect(t('rrTTTTrr')).toEqual([true])
-    // Refusé : un repos seul, un bloc de 3, 4 repos.
+    // Refusé : 3 repos (plus jamais une transition, 2026-11-09), un repos
+    // seul, un bloc de 3.
+    expect(t('TTTTTrrrTTTTT')).toEqual([false])
     expect(t('TTTTTrTTTT')).toEqual([false])
     expect(t('rrTTTrr')).toEqual([false])
-    expect(t('TTTTTrrrrTTTTT')).toEqual([false])
   })
-  it('4 repos ou plus : trop long ; 3 non', () => {
+  it('3 repos ou plus : trop long ; 2 non', () => {
     const long = (texte: string) =>
       fautesRythme(suite(texte)).map((f) => estReposTropLong(f))
+    expect(long('TrrrT')).toEqual([true])
     expect(long('TrrrrT')).toEqual([true])
-    expect(long('TrrrrrT')).toEqual([true])
-    expect(long('TrrrT')).toEqual([false])
+    expect(long('TrrT')).toEqual([])
     // Contre un jour neutre : aucune faute du tout.
-    expect(long('TrrrrnT')).toEqual([])
+    expect(long('TrrrnT')).toEqual([])
+  })
+  it('repos seul : un repos entre deux blocs', () => {
+    const seul = (texte: string) =>
+      fautesRythme(suite(texte)).map((f) => estReposSeul(f))
+    expect(seul('TTTTTrTTTTT')).toEqual([true])
+    expect(seul('TTTTTrrTTTTT')).toEqual([])
+    expect(reposSeulsDans(suite('TTTTTrTTTTrrTTTTTrr'))).toBe(1)
   })
   it('le genre de chaque motif interdit du calcul', () => {
     const g = (texte: string) => genreMotif([...texte] as Array<'T' | 'r'>)
     expect(g('TTTTTT')).toBe('six')
-    expect(g('TrrrrT')).toBe('dur')
+    expect(g('TrrrT')).toBe('dur')
     expect(g('TrrrrrrT')).toBe('dur')
-    expect(g('TrrrT')).toBe('transition')
     expect(g('rTTTTr')).toBe('transition')
-    expect(g('TrT')).toBe('fort')
+    expect(g('TrT')).toBe('urgence')
     expect(g('rTTTr')).toBe('fort')
     expect(g('rTr')).toBe('fort')
     // Chaque motif a son genre, et la même règle que `fautesRythme`.
@@ -98,6 +110,7 @@ describe('la définition', () => {
       expect(f).toHaveLength(1)
       expect(estTransition(f[0])).toBe(genreMotif(m) === 'transition')
       expect(estReposTropLong(f[0])).toBe(genreMotif(m) === 'dur')
+      expect(estReposSeul(f[0])).toBe(genreMotif(m) === 'urgence')
     }
   })
   it('les transitions déjà faites, comptées sur le passé connu', () => {
@@ -109,20 +122,28 @@ describe('la définition', () => {
 })
 
 describe('les prix de l’ordre', () => {
-  it('place < transition < deux places < une heure due < une faute < 4 repos', () => {
+  it('place < transition < repos seul < une heure due < une faute < 3 repos', () => {
     fc.assert(
       fc.property(
         fc.array(fc.integer({ min: -5e7, max: 5e7 }), { minLength: 1 }),
         fc.integer({ min: 0, max: 48 * H }),
-        (couts, minutes) => {
+        fc.integer({ min: 0, max: 12 }),
+        (couts, minutes, rang) => {
           const p = prixOrdre(couts, minutes)
           const place = Math.max(1, ...couts.map(Math.abs))
           expect(p.place).toBe(place)
+          // Une transition : plus qu'une place, sous deux ; la suivante un
+          // peu plus, jamais au-dessus du repos seul.
           expect(p.transition).toBeGreaterThan(place)
           expect(p.transition).toBeLessThan(2 * place + 1)
-          // Une heure due vaut plus qu'une transition et une place.
-          expect(60 * p.minuteDue).toBeGreaterThan(p.transition + place)
-          // Une faute vaut plus que la semaine du plus gros contrat.
+          expect(prixTransition(p, 0)).toBe(p.transition)
+          expect(prixTransition(p, rang + 1)).toBeGreaterThanOrEqual(
+            prixTransition(p, rang),
+          )
+          expect(prixTransition(p, rang)).toBeLessThan(p.urgence)
+          // Un repos seul : plus que toute transition, sous une heure due.
+          expect(60 * p.minuteDue).toBeGreaterThan(p.urgence + place)
+          // Un bloc court vaut plus que la semaine du plus gros contrat.
           expect(p.fort).toBeGreaterThan(p.minuteDue * minutes)
           expect(p.fort).toBeGreaterThanOrEqual(prixFauteRythme([place]))
           expect(p.dur).toBeGreaterThan(p.fort)
@@ -131,6 +152,7 @@ describe('les prix de l’ordre', () => {
     )
     expect(PLACES_PAR_TRANSITION).toBeGreaterThan(1)
     expect(PLACES_PAR_TRANSITION).toBeLessThan(2)
+    expect(PLACES_REPOS_SEUL).toBeGreaterThan(PLACES_TRANSITION_MAX)
   })
 })
 
@@ -176,39 +198,26 @@ const tenus = (r: { affectations: AffectationSolveur[] }) =>
   r.affectations.map((a) => Number(a.creneauId.slice(1))).sort((a, b) => a - b)
 
 describe('le calcul', () => {
-  it('accepté : une transition (3 repos) quand elle donne les places et les heures', () => {
-    // La semaine d'avant finit par 5 jours : lundi et mardi en repos ;
-    // rien le mercredi, donc 3 repos avant de reprendre le jeudi.
-    const s = personne({ etatsAvant: 'rrTTTTT', joursSemainePrecedente: 5 })
-    const { p, r } = resoudre(s, [3, 4, 5, 6])
-    expect(tenus(r)).toEqual([3, 4, 5, 6])
+  it('pas de plafond de transitions : déjà 4 sur 4 semaines, la suivante se fait pour les heures', () => {
+    // Un seul repos le dimanche d'avant, le CFA la semaine d'après, un
+    // repos seul déjà fait : un bloc de 4 (transition) plutôt qu'aucun
+    // jour, même avec 4 transitions déjà faites.
+    const s = personne({
+      etatsAvant: 'rTTTTTr',
+      joursSemainePrecedente: 5,
+      etatsApres: 'TTTTTrr',
+      reposSeulsRecents: 1,
+      transitionsRecentes: 4,
+    })
+    const { p, r } = resoudre(s, [0, 1, 2, 3, 4, 5, 6])
+    expect(tenus(r)).toEqual([1, 2, 3, 4])
     const dits = violations(p, r.affectations).filter(
       (v) => v.regle === REGLE_TRANSITION,
     )
     expect(dits.map((v) => v.message)).toEqual([
-      'changement de jours de repos : 3 jours de repos du lundi au mercredi',
+      'changement de jours de repos : 4 jours de travail du mardi au vendredi',
     ])
-    // Dite, jamais bloquante.
     expect(dits.some(moraleQuiBloque)).toBe(false)
-    expect(
-      violations(p, r.affectations).some((v) => v.regle === 'RYTHME-5-2'),
-    ).toBe(false)
-  })
-  it('refusé : une seconde transition sur 4 semaines', () => {
-    const s = personne({
-      etatsAvant: 'rrTTTTT',
-      joursSemainePrecedente: 5,
-      transitionsRecentes: 1,
-    })
-    expect(tenus(resoudre(s, [3, 4, 5, 6]).r)).toEqual([])
-  })
-  it('refusé : jamais 4 repos entre deux blocs, même pour les heures dues', () => {
-    // 2 repos à la fin de la semaine d'avant, possible du vendredi au
-    // dimanche seulement : 6 repos avant de reprendre. Rien.
-    const s = personne({ etatsAvant: 'TTTTTrr', joursSemainePrecedente: 5 })
-    expect(tenus(resoudre(s, [4, 5, 6]).r)).toEqual([])
-    // Accepté : 2 repos, puis 5 jours.
-    expect(tenus(resoudre(s, [0, 1, 2, 3, 4]).r)).toEqual([0, 1, 2, 3, 4])
   })
   it('refusé : la transition qui ne sert à rien (aucune place de plus)', () => {
     // Repos du mardi et du mercredi (semaine d'avant : lundi travaillé, puis
@@ -225,9 +234,7 @@ describe('le calcul', () => {
       violations(p, r.affectations).some((v) => v.regle === REGLE_TRANSITION),
     ).toBe(false)
   })
-  it('les heures dues avant les places : 4 jours de travail plutôt que 3 repos', () => {
-    // 39 h (4 × 8 h + 7 h) : la transition qui garde 5 jours dans la
-    // semaine passe devant celle qui en retire un.
+  it('les heures dues passent avant : 39 h en 5 jours, rythme gardé', () => {
     const s = personne({
       minutesHebdoContrat: 39 * H,
       journeePleine: 8 * H,
@@ -251,6 +258,50 @@ describe('le calcul', () => {
     }, 0)
     expect(minutes).toBeGreaterThanOrEqual(5 * 8 * H)
   })
+})
+
+// ----------------------------------- l'apprentie avant son CFA (fictif)
+
+describe('repos mercredi-jeudi, CFA le lundi 14 (fictif)', () => {
+  it('jamais 3 repos ; au plus un repos seul ; 7 h perdues au plus, et pourquoi', () => {
+    const { referentiel, absences, avant } = apprentieCfa()
+    const m = new PlanningMemoire(referentiel, absences, '2026-11-09', highs)
+    m.avecHistorique = true
+    for (const a of avant) m.semaines.set(a.lundi, [...m.shifts(a.lundi), a])
+    const semaines = ['2026-11-30', '2026-12-07', '2026-12-14'].map((lundi) =>
+      m.generer(lundi, {
+        graine: 1,
+        horizon: { suivanteRecalculee: lundi !== '2026-12-14' },
+      }),
+    )
+    const alertes = semaines.flatMap((s) =>
+      s.bilan.flatMap((b) => b.alertes.map((a) => ({ s, a }))),
+    )
+    // Jamais 3 repos de suite.
+    expect(
+      alertes.filter(({ a }) => /\d+ jours de repos/.test(a.message)),
+    ).toEqual([])
+    // Au plus un repos seul sur ces semaines.
+    expect(
+      new Set(
+        alertes
+          .filter(({ a }) => a.regle === 'RYTHME-REPOS-SEUL')
+          .map(({ s, a }) => `${s.lundi}|${a.message}`),
+      ).size,
+    ).toBeLessThanOrEqual(1)
+    // Les heures : la suite « mercredi-jeudi » jusqu'au samedi-dimanche
+    // d'avant le CFA demande deux repos seuls pour ne rien perdre (vérifié
+    // à la main sur toutes les suites possibles) ; avec un seul, une
+    // journée (7 h) se perd. C'est le plus petit manque permis.
+    const manque = semaines
+      .slice(0, 2)
+      .reduce(
+        (t, s) =>
+          t + Math.max(0, s.bilan[0].minutes_contrat - s.bilan[0].minutes),
+        0,
+      )
+    expect(manque).toBeLessThanOrEqual(7 * H)
+  }, 120_000)
 })
 
 // --------------------------------------------------------- l'équilibre

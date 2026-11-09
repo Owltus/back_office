@@ -480,7 +480,7 @@ function phraseContrat(m: ModeleContratRegle): string {
     )
   if (m.accompagne)
     p.push(
-      'Jamais sans un salarié confirmé : pendant tout son shift, toujours avec quelqu’un de titulaire ou en dépannage dont le contrat n’a pas cette case, sur n’importe quel poste de la même zone (sur son poste s’il n’a pas de zone), même s’il est lui-même titulaire. Sinon, la place reste vide.',
+      'Jamais sans un salarié confirmé : pendant tout son shift, toujours avec quelqu’un de titulaire ou en dépannage dont le contrat n’a pas cette case. Sur un poste indispensable, cette personne peut être sur n’importe quel poste indispensable (un stagiaire seul sur l’un, un salarié confirmé sur un autre, c’est bon) ; sur un autre poste, sur un poste de la même zone (sur son poste s’il n’a pas de zone). Même s’il est lui-même titulaire. Sinon, la place reste vide. Le planning éparpille aussi les apprentis et stagiaires : un par matin et un par soir quand c’est possible.',
     )
   if (m.jourMaxMinutes !== null)
     p.push(
@@ -789,7 +789,7 @@ export function AidePlanningContenu({
               'Titulaire : son poste habituel. L’app le place en premier.',
               'Dépannage : il sait tenir le poste, mais ce n’est pas le sien. L’app ne le prend que si aucun titulaire ne peut.',
               'Soutien : apprenti ou stagiaire. Il compte, mais jamais seul : quelqu’un de titulaire ou en dépannage est là pendant tout son shift, sur un poste de la même zone, ou sur son poste s’il n’a pas de zone.',
-              'Salarié confirmé : un apprenti ou un stagiaire n’est jamais sans quelqu’un de titulaire ou en dépannage d’un autre contrat, pendant tout son shift, même s’il est titulaire. Peu importe le poste de cette personne s’il est dans la même zone (page Postes) ; un poste sans zone demande quelqu’un sur le même poste. C’est la case Jamais sans un salarié confirmé du type de contrat, dans Équipe, Règles des contrats.',
+              'Salarié confirmé : un apprenti ou un stagiaire n’est jamais sans quelqu’un de titulaire ou en dépannage d’un autre contrat, pendant tout son shift, même s’il est titulaire. Sur un poste indispensable (page Postes), cette personne est sur n’importe quel poste indispensable ; sur un autre poste, dans la même zone, ou sur le même poste sans zone. C’est la case Jamais sans un salarié confirmé du type de contrat, dans Équipe, Règles des contrats.',
             ]}
           />
         </Sous>
@@ -1001,7 +1001,7 @@ export function AidePlanningContenu({
               ...(Rp.rythmeStrict
                 ? [
                     'toujours 5 jours de travail puis 2 jours de repos',
-                    'jamais 4 jours de repos ou plus entre deux blocs de travail',
+                    'jamais plus de 2 jours de repos à la suite entre deux blocs de travail',
                   ]
                 : []),
             ])}
@@ -1012,9 +1012,9 @@ export function AidePlanningContenu({
           <li>
             <span className="font-medium text-foreground">Les heures dues</span>{' '}
             : chacun fait toutes les heures de son contrat, quoi qu’il arrive.
-            Une heure due passe avant une place, un changement de jours de repos
-            et le partage entre le matin et le soir. Quand une heure manque
-            encore, la page dit pourquoi.
+            Une heure due passe avant une place, un repos seul, un changement de
+            jours de repos et le partage entre le matin et le soir. Quand une
+            heure manque encore, la page dit pourquoi.
           </li>
           <li>
             <span className="font-medium text-foreground">
@@ -1040,11 +1040,20 @@ export function AidePlanningContenu({
               <span className="font-medium text-foreground">
                 Le changement de jours de repos
               </span>{' '}
-              : pour déplacer les repos de quelqu’un d’un jour, une semaine fait
-              3 repos de suite ou un bloc de 4 jours, une fois. Seulement s’il
-              remplit plus d’une place qui resterait vide autrement, une fois
-              par personne sur 4 semaines, et la page le dit. Sans lui, trois
-              personnes aux mêmes repos les gardent toute l’année.
+              : pour avancer les repos de quelqu’un d’un jour, une semaine fait
+              un bloc de 4 jours (jamais 3 repos de suite). Seulement s’il
+              remplit plus d’une place qui resterait vide autrement, ou pour ses
+              heures, et la page le dit. Sans lui, trois personnes aux mêmes
+              repos les gardent toute l’année.
+            </li>
+          )}
+          {Rp.rythmeStrict && (
+            <li>
+              <span className="font-medium text-foreground">Le repos seul</span>{' '}
+              : un seul jour de repos entre deux blocs, seulement en cas de
+              manque de personnel (plus de 3 places qui resteraient vides) ou
+              pour les heures de quelqu’un, une fois par personne sur 4
+              semaines. La page le dit : repos seul, manque de personnel.
             </li>
           )}
           <li>
@@ -1212,7 +1221,7 @@ export function AidePlanningContenu({
               'Les mêmes jours de repos que la semaine d’avant, quand c’est possible. Après un week-end travaillé, passer ses repos au samedi et au dimanche est toujours permis : les week-ends tournent.',
               ...(Rp.rythmeStrict
                 ? [
-                    `Pour un contrat de ${rythme} et plus, toujours 5 jours de travail puis 2 jours de repos, d’une semaine à l’autre comprise : jamais un repos seul, jamais un bloc plus court. L’école, une formation (quelle que soit sa durée) et une absence de 5 jours au plus (congé, maladie, jour férié) comptent comme des jours de travail : 5 jours d’école, puis 2 repos. Seuls le début et la fin du contrat, et une absence de plus de 5 jours, coupent ce rythme. Une place reste vide plutôt, et la page le dit. Une semaine type qui fixe deux repos décide seule. Jamais 4 jours de repos ou plus entre deux blocs, sauf si des absences ou des shifts validés les imposent. Pour déplacer ses repos d’un jour, une semaine peut faire 3 repos de suite ou un bloc de 4 jours, une fois sur 4 semaines, seulement si cela remplit des places qui resteraient vides : la page le dit comme un changement de jours de repos.`,
+                    `Pour un contrat de ${rythme} et plus, toujours 5 jours de travail puis 2 jours de repos, d’une semaine à l’autre comprise : jamais un repos seul, jamais un bloc plus court. L’école, une formation (quelle que soit sa durée) et une absence de 5 jours au plus (congé, maladie, jour férié) comptent comme des jours de travail : 5 jours d’école, puis 2 repos. Seuls le début et la fin du contrat, et une absence de plus de 5 jours, coupent ce rythme. Une place reste vide plutôt, et la page le dit. Une semaine type qui fixe deux repos décide seule. Jamais plus de 2 jours de repos à la suite entre deux blocs, sauf si des absences ou des shifts validés les imposent. Pour avancer ses repos d’un jour, une semaine peut faire un bloc de 4 jours, seulement si cela remplit des places qui resteraient vides ou garde ses heures : la page le dit comme un changement de jours de repos. Un repos seul reste l’urgence : une fois sur 4 semaines au plus.`,
                   ]
                 : []),
               ...(Rp.jourIsole === 'interdit'

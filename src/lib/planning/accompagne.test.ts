@@ -799,3 +799,94 @@ describe('le vérificateur : un shift posé à la main', () => {
     ).toHaveLength(1)
   })
 })
+
+describe('postes indispensables : un seul groupe (2026-11-09)', () => {
+  const ind = { indispensable: true }
+  it('accepté : un stagiaire seul à la Réception, un salarié confirmé au Club', () => {
+    const p = probleme({
+      salaries: [apprenti('st'), sal('cdi')],
+      creneaux: [
+        place('r1', 'rec', 7, 15, ind),
+        place('c1', 'club', 7, 15, ind),
+      ],
+      imposees: new Set(['cdi|c1']),
+      graine: 1,
+    })
+    const r = gen(p)
+    expect(qui(r)).toEqual(['cdi@c1', 'st@r1'])
+    expect(accompagnesSeuls(p, r.affectations)).toEqual([])
+  })
+  it('refusé : un apprenti à la Réception et un stagiaire au Club, sans salarié confirmé', () => {
+    const p = probleme({
+      salaries: [apprenti('ap'), apprenti('st')],
+      creneaux: [
+        place('r1', 'rec', 7, 15, ind),
+        place('c1', 'club', 7, 15, ind),
+      ],
+      graine: 1,
+    })
+    expect(qui(gen(p))).toEqual([])
+    const posees = [
+      { salarieId: 'ap', creneauId: 'r1' },
+      { salarieId: 'st', creneauId: 'c1' },
+    ]
+    const dits = accompagnesSeuls(p, posees)
+    expect(dits).toHaveLength(2)
+    expect(dits[0].message).toContain('sur les postes indispensables')
+    expect(
+      raisonClaire('ACCOMPAGNE-SEUL', dits[0].message, 0).phrase,
+    ).toContain('sur les postes indispensables')
+  })
+  it('un poste NON indispensable garde sa règle : le confirmé doit être sur ce poste', () => {
+    const p = probleme({
+      salaries: [apprenti('st'), sal('cdi')],
+      creneaux: [place('t1', 'tech', 7, 15), place('c1', 'club', 7, 15, ind)],
+      imposees: new Set(['cdi|c1']),
+      graine: 1,
+    })
+    expect(qui(gen(p))).toEqual(['cdi@c1'])
+  })
+  it('éparpiller : un apprenti ou stagiaire par matin quand c’est possible, pas deux le même', () => {
+    // Deux matins ; le salarié confirmé au Club les deux jours ; deux
+    // apprentis qui doivent chacun un shift, possibles les deux jours.
+    const matin = (id: string, poste: string, jour: number): Creneau =>
+      creneau({
+        id,
+        poste,
+        debut: jour * J + 7 * H,
+        fin: jour * J + 15 * H,
+        effectif: 0,
+        facultatif: 2,
+        jourPlanning: jour,
+        moment: 'matin',
+        indispensable: true,
+      })
+    const creneaux = [
+      matin('c0', 'club', 0),
+      matin('c1', 'club', 1),
+      matin('r0', 'rec', 0),
+      matin('r1', 'rec', 1),
+    ]
+    const app = (id: string) =>
+      apprenti(id, {
+        minutesHebdoContrat: 8 * H,
+        joursTravaillesMaxSemaine: 1,
+        joursPreferesSemaine: 1,
+      })
+    for (const graine of [1, 2, 3, 4, 5, 6]) {
+      const r = gen(
+        probleme({
+          salaries: [app('a1'), app('a2'), sal('cdi')],
+          creneaux,
+          imposees: new Set(['cdi|c0', 'cdi|c1']),
+          graine,
+        }),
+      )
+      const jours = r.affectations
+        .filter((a) => a.salarieId !== 'cdi')
+        .map((a) => a.creneauId.slice(1))
+        .sort()
+      expect([graine, jours]).toEqual([graine, ['0', '1']])
+    }
+  })
+})

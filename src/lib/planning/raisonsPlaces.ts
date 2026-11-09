@@ -14,6 +14,7 @@
  * portent plusieurs sens).
  */
 
+import { LIEU_INDISPENSABLES } from '#/lib/planning/zones.ts'
 import { cibleFiche } from '#/lib/planning/coherence.ts'
 import type { LienReglage, PartieFiche } from '#/lib/planning/coherence.ts'
 import type { APourvoirOut } from '#/lib/planning/semaine.ts'
@@ -74,6 +75,7 @@ export const REGLES_BLOCAGE = [
   'JOUR-ISOLE',
   'RYTHME-5-2',
   'RYTHME-TRANSITION',
+  'RYTHME-REPOS-SEUL',
   'REPOS-COURT',
   'WEEKEND-LIBRE',
   'MOMENTS',
@@ -299,8 +301,9 @@ export function raisonClaire(
     // jamais écrit ici).
     case 'ACCOMPAGNE-SEUL': {
       const zone = message.match(/dans la zone (.+) à ces heures$/)?.[1]
+      const indispensables = message.includes(LIEU_INDISPENSABLES)
       return r(
-        `Aucun salarié confirmé ${zone ? `dans la zone ${zone}` : 'sur ce poste'} à ces heures`,
+        `Aucun salarié confirmé ${indispensables ? LIEU_INDISPENSABLES : zone ? `dans la zone ${zone}` : 'sur ce poste'} à ces heures`,
         mention('règle de l’hôtel'),
       )
     }
@@ -309,6 +312,13 @@ export function raisonClaire(
     case 'RYTHME-5-2':
       return r(
         'Son rythme de 5 jours puis 2 repos ne tiendrait plus',
+        mention('règle de l’hôtel'),
+      )
+    // Un repos seul : seulement quand il manque beaucoup de monde
+    // (2026-11-09), jamais pour une place.
+    case 'RYTHME-REPOS-SEUL':
+      return r(
+        'N’aurait qu’un jour de repos (manque de personnel seulement)',
         mention('règle de l’hôtel'),
       )
     case 'RYTHME-TRANSITION':
@@ -423,6 +433,7 @@ const PHRASES_COMMUNES: Record<(typeof REGLES_BLOCAGE)[number], string> = {
   // Bloque comme les deux repos de suite (2026-11-09).
   'RYTHME-5-2': 'Le rythme de 5 jours puis 2 repos ne tiendrait pour personne.',
   'RYTHME-TRANSITION': 'Chacun changerait ses jours de repos.',
+  'RYTHME-REPOS-SEUL': 'Chacun n’aurait qu’un jour de repos.',
   'REPOS-COURT': 'Tout le monde aurait moins de 12 h de repos.',
   'WEEKEND-LIBRE': 'Tout le monde attend son week-end libre.',
   MOMENTS: 'Tout le monde changerait trop d’horaires.',

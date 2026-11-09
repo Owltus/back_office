@@ -120,6 +120,7 @@ import {
   rythmeStrictDe,
   statutAbsence,
   suiteRythme,
+  reposSeulsDans,
   transitionsDans,
 } from '#/lib/planning/rythmeStrict.ts'
 import type { EtatRythme, StatutRythme } from '#/lib/planning/rythmeStrict.ts'
@@ -2137,8 +2138,8 @@ export function avecSemainesVoisines(
     travailPasse.set(decalage, m)
     ajoute(m, k(a.salarie_id), a.jour)
   }
-  const transitionsRecentes = (key: number | string): number => {
-    if (!d.historique) return 0
+  const passeRythme = (key: number | string): EtatRythme[] | null => {
+    if (!d.historique) return null
     const etats: EtatRythme[] = []
     for (let w = -FENETRE_TRANSITION; w < 0; w += 7) {
       const lue =
@@ -2146,14 +2147,20 @@ export function avecSemainesVoisines(
       const semaine = lue ? etatsVoisins(key, w, lue) : null
       etats.push(...(lireSemaineVoisine(semaine) ?? Array(7).fill('u')))
     }
-    return transitionsDans(etats)
+    return etats
   }
   const r = new Map<number, SalarieSolveur>()
   for (const [i, x] of salaries) {
     const key = k(i)
     r.set(i, {
       ...x,
-      transitionsRecentes: transitionsRecentes(key),
+      ...(() => {
+        const passe = passeRythme(key)
+        return {
+          transitionsRecentes: passe ? transitionsDans(passe) : 0,
+          reposSeulsRecents: passe ? reposSeulsDans(passe) : 0,
+        }
+      })(),
       etatsAvant: d.avant.length ? etatsVoisins(key, -7, travailAvant) : null,
       etatsApres: d.apres.length ? etatsVoisins(key, 7, travailApres) : null,
       finServicePrecedent: fins.get(key) ?? null,
