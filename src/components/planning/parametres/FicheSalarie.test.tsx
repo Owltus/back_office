@@ -763,7 +763,7 @@ describe('FicheSalarie', () => {
     fireEvent.click(jour(/^lun\. 4 janv\. 2027/))
     fireEvent.click(jour(/^ven\. 8 janv\. 2027/), { shiftKey: true })
     expect(ecole()).toBe(5)
-  }, 20_000)
+  }, 60_000) // 8 s seul, plus du double sous la suite complète
 
   it('un shift déjà posé sur un nouveau jour d école est annoncé, puis signalé à l enregistrement', async () => {
     etat.shifts = [

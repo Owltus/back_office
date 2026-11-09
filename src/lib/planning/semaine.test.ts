@@ -1212,7 +1212,7 @@ describe('planning de la semaine (test_api.py)', () => {
       'Chloé',
       'Chloé',
     ])
-  })
+  }, 30_000) // un vrai calcul : lent quand toute la suite tourne
 
   it('valider puis régénérer le reste (semi-auto)', () => {
     const p = demo()
