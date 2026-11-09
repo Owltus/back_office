@@ -708,6 +708,32 @@ sur le mois (deux personnes, une journée chacune).
   avant une semaine de CFA, blocs hors 5 et 2 10 → 8 (tous dus à des faits), heures dues
   manquantes 8 → 29-36 h (deux apprentis hors du rythme après une semaine validée), aucune
   infraction, 12,2 s au pire par semaine.
+- **Correctif du 2026-11-09 (signalement utilisateur).** Un jour posé (shift validé) faisait
+  SAUTER tout motif qui le contenait : une apprentie, après une semaine d'école et un lundi
+  validé, recevait « 3 jours, 2 repos, 2 jours » puis « 3 jours, 4 repos », sans que la faute
+  coûte rien. Un jour posé compte désormais comme du travail connu, comme l'école ; il n'est
+  jamais retiré, la faute se paie sur les autres jours. Banc : blocs hors 5 et 2 8 → 3 (contre
+  les propositions anciennes de la semaine d'après), places à pourvoir 12-13 → 11.
+- **Statut.** EN PLACE (local, non livré) le 2026-11-09.
+
+#### 21. Un apprenti ou un stagiaire jamais sans un salarié confirmé
+
+- **Pourquoi.** Décision de l'utilisateur, 2026-11-09 : « imagine un hôtel où tout le personnel
+  sur le poste sont des apprentis, pas ouf niveau responsabilité. Donc toujours avec un CDI ou
+  CDD hôtelier normal, et pareil pour les stagiaires. » Décembre généré montrait un mercredi
+  matin tenu par un apprenti et deux stagiaires de 07:30 à 15:15, les CDI n'arrivant qu'à 14:30.
+- **Comment.** Case du type de contrat « Jamais sans un salarié confirmé » (Stagiaire et
+  Apprenti). Une personne dont le contrat a la case, quel que soit son niveau (titulaire compris)
+  et quel que soit leur nombre, n'est jamais sur son poste sans, à tout moment de son shift, une
+  personne titulaire ou en dépannage du même poste dont le contrat n'a pas la case. La définition
+  du soutien jamais seul (même poste, en même temps) étendue à toute la durée du shift
+  (`morceaux`). DUR pour le calcul (la place reste vide plutôt), jamais sur un shift posé ;
+  alerte ACCOMPAGNE-SEUL sur un shift posé à la main ; raison d'une place vide ; « À vérifier »
+  pour un poste sans aucun salarié confirmé.
+- **Mesuré.** Banc de décembre (copie locale, en mémoire, horizon, 3 graines) : quarts d'heure
+  sans salarié confirmé 548 à 664 → 4 (un shift validé), places à pourvoir 11 → 28
+  (les mercredis et jeudis matin, où seuls des apprentis et des stagiaires sont libres), heures
+  dues manquantes 29 → 29, aucune infraction, 38,7 s au pire par semaine.
 - **Statut.** EN PLACE (local, non livré) le 2026-11-09.
 
 ### Tableau récapitulatif
@@ -734,6 +760,7 @@ sur le mois (deux personnes, une journée chacune).
 | 18  | Journées de 7 h / 8 h (35 h, 39 h)  | DUR (35 h et 39 h)           | `journeesDuCalcul`, `etoileSacrifiee`, `journeeDe`, JOURNEE-TYPE, HEURES-FAITES      |
 | 19  | Middle coup de main, matin ensemble | en place (local, non livré)  | `moment.ts`, `momentsAccueil`, `momentLibre`, `coutArriveeMatin`, `POIDS_SEUL_QUART` |
 | 20  | 5 jours puis 2 repos, strict        | DUR (35 h et plus, réglable) | `rythmeStrict.ts`, `rythmeStrictModele`, `prixFauteRythme`, alerte RYTHME-5-2        |
+| 21  | Jamais sans un salarié confirmé     | DUR (case du contrat)        | `accompagne`, `confirmeSur`, `morceaux`, alerte ACCOMPAGNE-SEUL                      |
 
 Le code des règles 1, 3, 4, 6, 7, 8, 12, 13 et 14 date du 2026-11-02 : en place en local, pas
 encore livré. Relecture du 2026-11-03 (banc de 7 scénarios réels, en mémoire) : règles 1, 4, 8, 9,
@@ -980,15 +1007,15 @@ jour de 7 h. La journée étoile se fait sur un vrai horaire d'au moins 7 h et d
 
 ### 7.3 Par type de contrat
 
-| Contrat       | Ce qu'il faut savoir                                                                                                                                                 |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| CDI, CDD      | Rythme de 5 jours dès 35 h. CDD : fin de contrat obligatoire.                                                                                                        |
-| Temps partiel | Heures en plus : 1/3 du contrat au plus, total sous 35 h.                                                                                                            |
-| Forfait jours | Pas d'heures comptées, 13 h d'amplitude, 5 jours. Poste tenu par lui seul (la Direction) : pas de place les jours où il est absent (`sansSonCadre`).                 |
-| Apprenti      | Fin de contrat obligatoire. École jour par jour, journée complète. Ligne vide hors école tant que la semaine n'est pas remplie. Soutien : jamais seul sur son poste. |
-| Stagiaire     | 10 h par jour au plus. Fin obligatoire. Soutien. Pas de JFR.                                                                                                         |
-| Extra         | Jamais de fin, interrupteur Actif. Placé seulement sur l'accueil, en dernier avant une place vide (`coutExtra`). Jamais de repos déduit. Pas de JFR.                 |
-| Mineur        | 8 h par jour, 35 h, 12 h de repos, 2 repos qui se suivent, aucune nuit.                                                                                              |
+| Contrat       | Ce qu'il faut savoir                                                                                                                                                                                             |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CDI, CDD      | Rythme de 5 jours dès 35 h. CDD : fin de contrat obligatoire.                                                                                                                                                    |
+| Temps partiel | Heures en plus : 1/3 du contrat au plus, total sous 35 h.                                                                                                                                                        |
+| Forfait jours | Pas d'heures comptées, 13 h d'amplitude, 5 jours. Poste tenu par lui seul (la Direction) : pas de place les jours où il est absent (`sansSonCadre`).                                                             |
+| Apprenti      | Fin de contrat obligatoire. École jour par jour, journée complète. Ligne vide hors école tant que la semaine n'est pas remplie. Soutien : jamais seul sur son poste. Jamais sans un salarié confirmé (règle 21). |
+| Stagiaire     | 10 h par jour au plus. Fin obligatoire. Soutien. Pas de JFR. Jamais sans un salarié confirmé (règle 21).                                                                                                         |
+| Extra         | Jamais de fin, interrupteur Actif. Placé seulement sur l'accueil, en dernier avant une place vide (`coutExtra`). Jamais de repos déduit. Pas de JFR.                                                             |
+| Mineur        | 8 h par jour, 35 h, 12 h de repos, 2 repos qui se suivent, aucune nuit.                                                                                                                                          |
 
 ### 7.4 Début et fin de contrat
 

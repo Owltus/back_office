@@ -2931,6 +2931,49 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   `--avec-donnees`, « Compte comme du travail pour le rythme » dans le volet d'un motif compté dans
   les heures), statut `f` de `statutAbsence` ; dans une suite mêlée, un jour de formation ne coupe
   pas la suite d'absences et n'y compte pas (`CCCC FF CCCC` = `nnnn TT nnnn`).
+- **RYTHME 5 ET 2 : UN JOUR POSÉ EST DU TRAVAIL (correctif du 2026-11-09, signalement
+  utilisateur : une apprentie, EEEEE RR puis un lundi validé, recevait « TTT rr TT » puis
+  « TTT rrrr » avant la semaine d'école suivante, alors que TTTTT rr deux fois était possible)**.
+  Cause prouvée en mémoire (copie locale, « Compléter le mois », horizon) : `rythmeStrictModele`
+  SAUTAIT tout motif interdit dont un jour de travail était posé (reste du temps où les motifs
+  étaient durs) ; le lundi validé retirait donc toutes les fautes qui le contenaient, et
+  « 3 jours puis 2 repos » ne coûtait rien (forcer TTTTT coûtait 30 de plus sur 37 millions ;
+  les places du week-end le faisaient choisir). Le vérificateur, lui, la disait. Désormais un
+  jour posé est du travail CONNU (constante 1, comme l'école), le motif se paie sur les autres
+  jours, le jour posé n'est jamais retiré, le modèle reste toujours possible ; un jour posé est
+  aussi « connu » pour `fauteScellee`. Ce n'était PAS l'horizon : la semaine k+2 (école) n'a pas
+  besoin d'être lue pour ce cas (lecture de ses faits non faite, voir le rapport). Test
+  `rythmeStrict.test.ts` (« un jour posé compte comme du travail ») : TTT rr TT avant, TTTTT rr
+  après. Empreintes 8874c146 et fb6eed48 inchangées. Banc décembre (3 graines) : blocs hors 5 / 2
+  8 → 3 (les 3 contre les propositions d'avant de la semaine du 04/01), motif de l'apprentie
+  TTTTTrr / TTTTTrr, places à pourvoir 12-13 → 11.
+- **JAMAIS SANS UN SALARIÉ CONFIRMÉ (décision utilisateur du 2026-11-09 : « imagine un hôtel où
+  tout le personnel sur le poste sont des apprentis, pas ouf niveau responsabilité. Donc
+  toujours avec un CDI ou CDD hôtelier normal, et pareil pour les stagiaires »)**. Case du type
+  de contrat `planning_modeles_contrat.accompagne` (migration `20261109130000`, ajout, oui pour
+  Stagiaire et Apprenti : livraison `--avec-donnees`), « Jamais sans un salarié confirmé » dans
+  Équipe, Règles des contrats (`ModeleContratRegle.accompagne`, `SalarieSolveur.accompagne`).
+  Une personne dont le contrat a la case, QUEL QUE SOIT SON NIVEAU (titulaire compris) et quel
+  que soit leur nombre, n'est sur son POSTE qu'avec, À TOUT MOMENT de son shift, une personne
+  CONFIRMÉE sur le même poste (`confirmeSur` : titulaire ou dépannage, contrat sans la case).
+  UNE définition, `morceaux` (modele.ts) : le shift coupé aux bornes des shifts du même poste qui
+  le croisent, chaque morceau avec ceux qui le couvrent en entier ; c'est la définition du
+  soutien jamais seul (`ensemble`, même poste, heures qui se chevauchent) ÉTENDUE à toute la
+  durée. ⚠ Le chevauchement seul ne servait à rien : au banc, avant la règle, aucun shift
+  d'apprenti ou de stagiaire n'était sans chevauchement (le soutien le garantissait déjà), mais
+  548 à 664 quarts d'heure étaient passés sans salarié confirmé (un mercredi matin : un apprenti et
+  deux stagiaires de 07:30 à 15:15, « accompagnés » par des CDI arrivés à 14:30). Calcul : DUR,
+  une contrainte par morceau utile (`morceauxUtiles` : un morceau dont les créneaux qui couvrent
+  contiennent ceux d'un autre est sauté, même espace de solutions), jamais sur un shift posé ;
+  le soutien jamais seul de l'accueil n'est plus écrit pour une personne accompagnée (impliqué).
+  Vérificateur ACCOMPAGNE-SEUL (organisation, « seul sur ce poste pendant 1 h 30 » ou « tout le
+  shift »), raison d'une place « Aucun salarié confirmé sur ce poste à ces heures » (règle de
+  l'hôtel, bloque), « À vérifier » `sans-confirme:<poste>` (un poste où des contrats à la case
+  sont, sans personne confirmée qui le tienne). Tests `accompagne.test.ts` (23, 14 mutants
+  tués). Banc décembre (3 graines) : quarts d'heure sans salarié confirmé 548 à 664 →
+  4 (un shift validé), places à pourvoir 11 → 28 (mercredi et jeudi matin de chaque
+  semaine : seuls des apprentis et des stagiaires sont libres), heures dues manquantes
+  29 → 29, 0 infraction, 38,7 s au pire par semaine.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 
