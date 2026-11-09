@@ -49,7 +49,7 @@ import {
 } from '#/lib/planning/affichage.ts'
 import { messageErreur } from '#/lib/planning/erreurs.ts'
 import { planningKeys } from '#/lib/planning/keys.ts'
-import { analyser } from '#/lib/planning/semaine.ts'
+import { analyser, refusAbsenceSurReposFixe } from '#/lib/planning/semaine.ts'
 import type { SemaineOut, ShiftOut } from '#/lib/planning/semaine.ts'
 import {
   ajouterShift,
@@ -1088,6 +1088,14 @@ export function VueMois({
                       )
                     )
                       return notifier(MSG_HORS, 'attention')
+                    // R1 : une absence sur un repos fixe est ignorée.
+                    const repos = refusAbsenceSurReposFixe(
+                      referentiel,
+                      menu.salarieId,
+                      menu.date,
+                      motifId,
+                    )
+                    if (repos) return notifier(repos, 'attention')
                     void executer(
                       reperesMenu.lundi,
                       () => poserAbsences(menu.salarieId, [menu.date], motifId),
@@ -1168,6 +1176,16 @@ export function VueMois({
             if (horsContrat(lundi, sid, jour)) {
               setEdition(null)
               return notifier(MSG_HORS, 'attention')
+            }
+            const repos = refusAbsenceSurReposFixe(
+              referentiel,
+              sid,
+              ajouterJours(lundi, jour),
+              motifId,
+            )
+            if (repos) {
+              setEdition(null)
+              return notifier(repos, 'attention')
             }
             depuisEditeur(
               lundi,

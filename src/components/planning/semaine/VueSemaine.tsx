@@ -51,6 +51,7 @@ import {
   sousContrat,
 } from '#/lib/planning/affichage.ts'
 import { messageErreur } from '#/lib/planning/erreurs.ts'
+import { refusAbsenceSurReposFixe } from '#/lib/planning/semaine.ts'
 import type { SemaineOut, ShiftOut } from '#/lib/planning/semaine.ts'
 import * as service from '#/lib/planning/service.ts'
 import { ajouterJours, heureAffichee, lundiDe } from '#/lib/planning/temps.ts'
@@ -835,7 +836,15 @@ export function VueSemaine({
         : {
             ...motifsDuJour(referentiel.motifs, p),
             actuel: motifActuel,
-            onPoser: (motifId) =>
+            onPoser: (motifId) => {
+              // R1 : une absence sur un repos fixe est ignorée.
+              const repos = refusAbsenceSurReposFixe(
+                referentiel,
+                sid,
+                ajouterJours(lundi, j),
+                motifId,
+              )
+              if (repos) return notifier(repos, 'attention')
               siOuverte(
                 () =>
                   void executer(
@@ -848,7 +857,8 @@ export function VueSemaine({
                     'Absence non posée',
                     o,
                   ),
-              ),
+              )
+            },
           },
     })
   }
@@ -1075,6 +1085,13 @@ export function VueSemaine({
           }}
           onPoserAbsence={(sid, jour, motifId) => {
             setEdition(null)
+            const repos = refusAbsenceSurReposFixe(
+              referentiel,
+              sid,
+              ajouterJours(lundi, jour),
+              motifId,
+            )
+            if (repos) return notifier(repos, 'attention')
             void executer(
               () =>
                 service.poserAbsences(

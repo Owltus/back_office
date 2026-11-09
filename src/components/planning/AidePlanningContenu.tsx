@@ -935,6 +935,7 @@ export function AidePlanningContenu({
               'Une case vide reste vide : l’app ne devine aucun repos. La génération pose les repos en proposition ; à la main, on les pose d’un clic droit. Un repos posé, proposé ou validé, se retire avec Vider la case.',
               `Repos obligé : un jour où la personne ne peut pas travailler (${affiles}, plus de jours que permis dans la semaine, ou moins de ${h(REPOS_QUOTIDIEN)} de repos entre deux services). Il s’affiche Repos, en proposition, et la raison apparaît au survol.`,
               'En congé toute la semaine, deux jours de congé deviennent des repos proposés : les jours de congé ne sont pas des jours de repos.',
+              'Un congé ne se pose pas sur un repos de la semaine type : ce jour reste un repos. Une période posée d’un coup saute ces jours, et la fiche le dit.',
               'Apprentis et stagiaires : leur ligne reste vide, sauf l’école, tant que la semaine n’est pas remplie.',
               'Un repos proposé part avec les propositions quand on recalcule ou qu’on efface.',
             ]}

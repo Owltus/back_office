@@ -18,6 +18,7 @@ import {
   ficheApercu,
   niveauParDefaut,
   nouvelleCle,
+  phrasePeriodeReposFixes,
   reglerJour,
   reglerNiveau,
 } from '#/components/planning/parametres/equipe/brouillon.ts'
@@ -715,6 +716,21 @@ export function SectionAbsences({
                 </Button>
               </Tip>
             )}
+            {(() => {
+              const phrase = phrasePeriodeReposFixes(
+                p,
+                b.semaine_type,
+                referentiel.motifs,
+              )
+              return phrase ? (
+                <p
+                  className="basis-full text-xs text-muted-foreground"
+                  data-testid="periode-repos-fixes"
+                >
+                  {phrase}
+                </p>
+              ) : null
+            })()}
           </li>
         ))}
       </ul>

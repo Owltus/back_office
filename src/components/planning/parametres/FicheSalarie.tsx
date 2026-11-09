@@ -100,7 +100,11 @@ import {
   listeContrats,
   nomContrat,
 } from '#/lib/planning/reglesEtablissement.ts'
-import { estEcole } from '#/lib/planning/semaine.ts'
+import {
+  estEcole,
+  joursSautesReposFixes,
+  phraseReposFixes,
+} from '#/lib/planning/semaine.ts'
 import {
   enregistrerSalarie,
   fetchAbsencesSalarie,
@@ -364,6 +368,20 @@ function CorpsFiche({
   const verrous = () =>
     qc.getQueryData<Referentiel>(planningKeys.referentiel())?.verrous ??
     referentiel.verrous
+  /** Les jours d'absence voulus, sans ceux qui tombent sur un repos fixe
+   * (R1, décision utilisateur du 2026-11-09 : la plage les saute, ils
+   * restent des repos ; un jour déjà enregistré n'est pas touché). */
+  const joursSaisis = () => {
+    const jours = joursDesPeriodes(b.absences)
+    const sautes = joursSautesReposFixes(
+      jours,
+      b.semaine_type,
+      referentiel.motifs,
+      joursInitiaux,
+    )
+    for (const d of sautes) jours.delete(d)
+    return { jours, sautes }
+  }
 
   // Les autres contrats de la personne (parcours, 2026-11-03).
   const autresContrats = () =>
@@ -427,14 +445,11 @@ function CorpsFiche({
       setB((x) => ({ ...x, id: idFiche }))
       let gardes = 0
       let retires: Affectation[] = []
+      const saisie = joursSaisis()
       const r2 = await ecrire(async () => {
         const base = b.id === null ? [] : await absencesEnBase(idFiche)
         const { diff, gardes: jours } = horsSemainesVerrouillees(
-          fusionnerAbsences(
-            joursEnBase(base),
-            joursInitiaux,
-            joursDesPeriodes(b.absences),
-          ),
+          fusionnerAbsences(joursEnBase(base), joursInitiaux, saisie.jours),
           verrous(),
         )
         gardes = jours.length
@@ -453,9 +468,10 @@ function CorpsFiche({
         notifier(r2.message, 'danger')
         return
       }
-      if (gardes || retires.length)
+      const repos = phraseReposFixes(saisie.sautes)
+      if (gardes || retires.length || repos)
         notifier(
-          `Fiche enregistrée.${messageJoursGardes(gardes)}${messageShiftsRetires(retires)}`,
+          `Fiche enregistrée.${repos ? ` ${repos}` : ''}${messageJoursGardes(gardes)}${messageShiftsRetires(retires)}`,
           'attention',
         )
       else notifier('Fiche enregistrée')
@@ -627,11 +643,7 @@ function CorpsFiche({
           referentiel.postes,
           referentiel.groupes,
           referentiel.motifs,
-          joursFusionnes(
-            joursEnBase(base),
-            joursInitiaux,
-            joursDesPeriodes(b.absences),
-          ),
+          joursFusionnes(joursEnBase(base), joursInitiaux, joursSaisis().jours),
           regles,
         )
         await enregistrerSalarie(plan.ancien, id)

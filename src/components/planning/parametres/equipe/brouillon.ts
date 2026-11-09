@@ -23,7 +23,11 @@ import {
 } from '#/lib/planning/reglesEtablissement.ts'
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 
-import { estEcole } from '#/lib/planning/semaine.ts'
+import {
+  estEcole,
+  joursSautesReposFixes,
+  phraseReposFixes,
+} from '#/lib/planning/semaine.ts'
 import { ajouterJours, ecartJours, lundiDe } from '#/lib/planning/temps.ts'
 import { JOURS } from '#/lib/planning/types.ts'
 import type {
@@ -221,6 +225,20 @@ export function joursDesPeriodes(
     for (const j of datesEntre(p.debut, p.fin)) r.set(j, p.motif_id)
   }
   return r
+}
+
+/** R1 (décision utilisateur du 2026-11-09) : la phrase d'une période qui
+ * couvre des repos fixes de la semaine type, « Les vendredis et samedis
+ * sont ses repos : ils restent des repos. » ; vide sinon. Ces jours sont
+ * sautés à l'enregistrement (`joursSautesReposFixes`). */
+export function phrasePeriodeReposFixes(
+  p: Pick<PeriodeBrouillon, 'debut' | 'fin' | 'motif_id' | 'lue'>,
+  semaineType: Salarie['semaine_type'],
+  motifs: ReadonlyArray<Pick<Motif, 'id' | 'nature' | 'decompte'>>,
+): string {
+  if (!periodeLisible(p)) return ''
+  const jours = new Map(datesEntre(p.debut, p.fin).map((d) => [d, p.motif_id]))
+  return phraseReposFixes(joursSautesReposFixes(jours, semaineType, motifs))
 }
 
 export function joursEnBase(absences: Absence[]): Map<string, number> {

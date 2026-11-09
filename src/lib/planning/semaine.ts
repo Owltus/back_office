@@ -676,6 +676,120 @@ export function avecFeriesDuJour(
   d: DonneesSemaine,
   lundi: string,
 ): Map<number, Map<string, number>> {
+  return sansAbsencesSurReposFixes(
+    avecFeriesDuJourBruts(d, lundi),
+    d.referentiel,
+  )
+}
+
+/** R1, congé sur un repos fixe (décision utilisateur du 2026-11-09 : « tu
+ * ne devrais pas pouvoir poser des jours de vacances sur des jours de repos
+ * fixes ; tu peux le faire, mais c'est ignoré et remplacé par les jours de
+ * repos classiques »). Une absence DÉCOMPTÉE (congé, maladie, formation,
+ * jour férié, JFR…) posée un jour « Repos » de la semaine type est
+ * IGNORÉE : le jour reste un repos fixe, il n'est décompté ni des heures
+ * dues ni des jours pris, il est un repos pour le rythme, et l'écran montre
+ * le repos fixe. Jamais l'école, ni un motif sans décompte ou de nature
+ * repos. SEULE définition : le contexte (`contexte`, donc moteur,
+ * vérificateur, heures dues, rythme, repos obligés et affichage) et la
+ * saisie (la fiche et le planning sautent ces jours) la lisent. Rien n'est
+ * effacé en base : une absence déjà enregistrée est relue, puis ignorée. */
+export function absenceIgnoree(
+  semaineType: Salarie['semaine_type'],
+  date: string,
+  motif: Pick<Motif, 'nature' | 'decompte'> | undefined,
+): boolean {
+  if (!motif || !motif.decompte) return false
+  if (motif.nature === 'ecole' || motif.nature === 'repos') return false
+  return semaineType.at(ecartJours(lundiDe(date), date))?.mode === 'repos'
+}
+
+/** R1 à la saisie : les jours d'une plage d'absences (date → motif) qui
+ * tombent sur un repos fixe et que la saisie SAUTE (`absenceIgnoree`). Un
+ * jour déjà enregistré tel quel (`deja`, même motif) n'est pas sauté : la
+ * saisie ne le touche pas, rien n'est effacé. */
+export function joursSautesReposFixes(
+  jours: ReadonlyMap<string, number>,
+  semaineType: Salarie['semaine_type'],
+  motifs: ReadonlyArray<Pick<Motif, 'id' | 'nature' | 'decompte'>>,
+  deja: ReadonlyMap<string, number> = new Map(),
+): string[] {
+  const parId = new Map(motifs.map((m) => [m.id, m]))
+  return [...jours]
+    .filter(
+      ([date, m]) =>
+        deja.get(date) !== m && absenceIgnoree(semaineType, date, parId.get(m)),
+    )
+    .map(([date]) => date)
+    .sort()
+}
+
+/** La phrase de l'écran quand une saisie saute des repos fixes (R1) : « Les
+ * vendredis et samedis sont ses repos : ils restent des repos. » Un seul
+ * jour : « Le samedi est son repos : il reste un repos. » Vide : rien. */
+export function phraseReposFixes(dates: readonly string[]): string {
+  if (!dates.length) return ''
+  const jours = [...new Set(dates.map((d) => ecartJours(lundiDe(d), d)))].sort(
+    (a, b) => a - b,
+  )
+  const nom = (j: number) => JOURS[j].toLowerCase()
+  if (dates.length === 1)
+    return `Le ${nom(jours[0])} est son repos : il reste un repos.`
+  const pluriel = jours.map((j) => `${nom(j)}s`)
+  const liste =
+    pluriel.length === 1
+      ? pluriel[0]
+      : `${pluriel.slice(0, -1).join(', ')} et ${pluriel.at(-1)}`
+  return `Les ${liste} sont ses repos : ils restent des repos.`
+}
+
+/** R1 au planning (clic droit, volet) : poser une absence décomptée sur un
+ * repos fixe n'écrit rien ; rend la phrase à montrer, vide si la pose est
+ * permise. */
+export function refusAbsenceSurReposFixe(
+  ref: Pick<Referentiel, 'salaries' | 'motifs'>,
+  salarieId: number,
+  date: string,
+  motifId: number | null,
+): string {
+  const x = ref.salaries.find((s) => s.id === salarieId)
+  if (!x || motifId === null) return ''
+  return phraseReposFixes(
+    joursSautesReposFixes(
+      new Map([[date, motifId]]),
+      x.semaine_type,
+      ref.motifs,
+    ),
+  )
+}
+
+/** Les absences (salarié → date → motif) sans celles qu'ignore R1
+ * (`absenceIgnoree`). */
+export function sansAbsencesSurReposFixes(
+  absences: Map<number, Map<string, number>>,
+  ref: Pick<Referentiel, 'salaries' | 'motifs'>,
+): Map<number, Map<string, number>> {
+  const motifs = new Map(ref.motifs.map((m) => [m.id, m]))
+  const semaines = new Map(ref.salaries.map((x) => [x.id, x.semaine_type]))
+  const r = new Map<number, Map<string, number>>()
+  for (const [id, siennes] of absences) {
+    const semaine = semaines.get(id)
+    const gardees = semaine
+      ? new Map(
+          [...siennes].filter(
+            ([date, m]) => !absenceIgnoree(semaine, date, motifs.get(m)),
+          ),
+        )
+      : siennes
+    r.set(id, gardees.size === siennes.size ? siennes : gardees)
+  }
+  return r
+}
+
+function avecFeriesDuJourBruts(
+  d: DonneesSemaine,
+  lundi: string,
+): Map<number, Map<string, number>> {
   const r = indexerAbsences(d.absences)
   const jf = d.referentiel.motifs.find((m) => m.role === 'ferie_chome')
   if (!jf) return r
@@ -737,6 +851,24 @@ export function joursHorsContrat(x: Salarie, lundi: string): Set<number> {
  * ne coûtent rien (départ le jeudi, 3 jours hors contrat : 1). */
 export function joursContratManquants(hors: number): number {
   return Math.max(0, hors - (7 - JOURS_CONTRAT))
+}
+
+/** R2, deux repos par semaine même en congé (décisions utilisateur du
+ * 2026-11-02 et du 2026-11-09) : repos dus dans une semaine civile qui a
+ * `hors` jours hors contrat (ou passés vides) : 2, un de moins par jour
+ * hors contrat au-delà de 2 (`joursContratManquants`). Repos fixes compris :
+ * une personne qui n'en a qu'un en reçoit un de plus. */
+export function reposDusSemaine(hors: number): number {
+  return Math.min(2, Math.max(0, 7 - hors - JOURS_CONTRAT))
+}
+
+/** R2 : jours d'absence DÉCOMPTÉE au plus dans une semaine civile, `7 - 2
+ * repos dus` moins les jours hors contrat (5 sans eux). Les jours en trop
+ * sont des repos proposés (`reposDeduits`, `placerRepos`), qui ne retirent
+ * aucune heure due (« Valider » les écrit à la place du congé). Les jours
+ * d'un repos fixe n'en sont jamais (R1, `absenceIgnoree`). */
+export function absencesDecompteesMax(hors: number): number {
+  return 7 - hors - reposDusSemaine(hors)
 }
 
 /** Jours de la semaine où la personne n'est pas là, avec le motif. */
@@ -913,7 +1045,11 @@ export function fiche(
     // présence ») : seuls les jours de contrat qui manquent sont décomptés.
     // Départ le jeudi : 4 jours présents, 1 journée en moins (39 h : 32 h) ;
     // le week-end après le départ ne réduit rien.
-    joursAbsenceDecomptes: decomptes + joursContratManquants(hors.size),
+    // R2 (2026-11-09) : au plus 5 jours d'absence décomptée par semaine
+    // (`absencesDecompteesMax`) ; au-delà, ce sont ses repos.
+    joursAbsenceDecomptes:
+      Math.min(decomptes, absencesDecompteesMax(hors.size)) +
+      joursContratManquants(hors.size),
     horsContrat: hors,
     // Rythme 5 et 2 strict (révisé le 2026-11-09, `rythmeAutour`) : hors
     // contrat et absence longue coupent le rythme ; école et absence
@@ -2578,7 +2714,7 @@ export function reposDeduits(
   const enContrat = 7 - sol.horsContrat.size - passesVides.size
   const attendus = Math.min(sol.joursPreferesSemaine, enContrat)
   if (!(remplie || couvert || pris >= attendus)) return []
-  const voulus = Math.min(2, Math.max(0, enContrat - JOURS_CONTRAT))
+  const voulus = reposDusSemaine(7 - enContrat)
   const choisis = new Set(
     placerRepos(
       etats.map((e, j) => (passesVides.has(j) ? 'travail' : e)),
