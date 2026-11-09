@@ -2974,6 +2974,15 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   4 (un shift validé), places à pourvoir 11 → 28 (mercredi et jeudi matin de chaque
   semaine : seuls des apprentis et des stagiaires sont libres), heures dues manquantes
   29 → 29, 0 infraction, 38,7 s au pire par semaine.
+  **PAR ZONE (décision utilisateur du même jour : « peu importe sur le poste, mais il faut du
+  monde… je ne veux pas de poste en dur »)** : un poste rangé dans une ZONE (page Postes) se lit
+  sur toute la zone — un salarié confirmé sur N'IMPORTE QUEL poste de la zone, autonome sur le
+  poste qu'il tient ; un poste sans zone garde la règle par poste. UNE source,
+  `accompagnement(p)` (zones.ts : `groupe`, clé zone sinon poste ; `lieu`, « dans la zone
+  <nom> » lu dans les règles), passée à `ensemble` / `morceaux` par le calcul, le vérificateur,
+  les raisons d'une place et « À vérifier » ; `contratsPostesReglables.test.ts` refuse tout nom
+  ou id de zone écrit. Banc : rien ne bouge (28 places : le mercredi et le jeudi matin, AUCUN
+  salarié confirmé de la zone n'est libre, la zone n'y peut rien ; sans la règle, 11).
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

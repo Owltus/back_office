@@ -217,3 +217,44 @@ export function zoneDuCreneau(
 ): string | null {
   return c.zone ?? zonesDesPostes(p).get(c.poste) ?? null
 }
+
+// ------------------------------------------- qui accompagne (2026-11-09)
+
+/** Ce que l'accompagnement lit d'un créneau. */
+type CreneauGroupe = {
+  poste: string
+  accueil?: boolean
+  zone?: string | null
+}
+
+/** Où une personne qui n'est jamais seule (soutien, contrat « jamais sans un
+ * salarié confirmé ») cherche qui l'accompagne : `groupe` rend une clé, la
+ * même pour deux créneaux où l'un accompagne l'autre ; `lieu` la dit en
+ * clair.
+ *
+ * Décision de l'utilisateur du 2026-11-09 : « peu importe sur le poste, mais
+ * il faut du monde… je ne veux pas de poste en dur ». Un poste rangé dans une
+ * zone (page Postes) : toute la ZONE (un apprenti à un poste, un salarié
+ * confirmé à un autre poste de la même zone : accompagné). Un poste sans
+ * zone : le poste seul. La zone d'un créneau est celle de `zoneDuCreneau`
+ * (un candidat de l'accueil sans zone, données de test : la première).
+ * Aucun nom ni id lu : le nom de la zone n'est que pour le texte. */
+export function accompagnement(p: ProblemeZones): {
+  groupe: (c: CreneauGroupe) => string
+  lieu: (c: CreneauGroupe) => string
+} {
+  const desPostes = zonesDesPostes(p)
+  const zones = zonesDe(p)
+  const zoneDe_ = (c: CreneauGroupe) => c.zone ?? desPostes.get(c.poste) ?? null
+  return {
+    groupe: (c) => {
+      const z = zoneDe_(c)
+      return z === null ? `poste:${c.poste}` : `zone:${z}`
+    },
+    lieu: (c) => {
+      const z = zoneDe_(c)
+      const nom = z === null ? undefined : zones.find((x) => x.id === z)?.nom
+      return nom === undefined ? 'sur ce poste' : `dans la zone ${nom}`
+    },
+  }
+}

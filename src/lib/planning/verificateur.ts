@@ -15,7 +15,11 @@ import {
 import { posteDeZone } from '#/lib/planning/cycles.ts'
 import type { PresencePoste } from '#/lib/planning/cycles.ts'
 import { ecartConsigne } from '#/lib/planning/presence.ts'
-import { vuesZones, zoneDuCreneau } from '#/lib/planning/zones.ts'
+import {
+  accompagnement,
+  vuesZones,
+  zoneDuCreneau,
+} from '#/lib/planning/zones.ts'
 
 import {
   dernierMoment,
@@ -38,6 +42,7 @@ import {
   duree,
   ensemble,
   morceaux,
+  parPosteSeul,
   jourDe,
   presenceMax,
   autonomeSur,
@@ -54,6 +59,7 @@ import {
 import type {
   AffectationSolveur,
   Creneau,
+  GroupeDe,
   Probleme,
   SalarieSolveur,
 } from '#/lib/planning/modele.ts'
@@ -1036,14 +1042,7 @@ export function soutiensSeuls(
   p: Probleme,
   affectations: AffectationSolveur[],
 ): Violation[] {
-  const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
-  const salaries = new Map(p.salaries.map((s) => [s.id, s]))
-  const presents: Array<[SalarieSolveur, Creneau]> = []
-  for (const a of affectations) {
-    const s = salaries.get(a.salarieId)
-    const c = creneaux.get(a.creneauId)
-    if (s && c) presents.push([s, c])
-  }
+  const presents = presentsDe(p, affectations)
   const erreurs: Violation[] = []
   for (const [s, c] of presents) {
     // Un niveau « jamais seul » (D9 : le soutien), accompagné d'une personne
@@ -1069,30 +1068,55 @@ export function soutiensSeuls(
   return erreurs
 }
 
+/** « tout le shift » ou « pendant 4 h ». */
+const quand = (seul: number, c: Creneau) =>
+  seul >= duree(c) ? 'tout le shift' : `pendant ${h(seul)}`
+
+/** Qui accompagne une personne qui n'est jamais seule : un référent
+ * (soutien) ou un salarié confirmé (`confirmeSur`). */
+type Accompagnant = (s: SalarieSolveur, poste: string) => boolean
+
+/** Les minutes d'un créneau où `s` serait sans personne qui l'accompagne
+ * (`accompagnant`, lu sur le poste que l'autre tient) dans son groupe (la
+ * zone de son poste, sinon le poste, `accompagnement`) : les morceaux
+ * (`morceaux`) qu'aucun créneau d'une telle personne ne couvre. La SEULE
+ * définition des deux règles (soutien jamais seul, salarié confirmé), la
+ * même que le calcul (`generateur.ts`). */
+export function minutesSeul(
+  s: SalarieSolveur,
+  c: Creneau,
+  presents: ReadonlyArray<readonly [SalarieSolveur, Creneau]>,
+  accompagnant: Accompagnant,
+  groupe: GroupeDe = parPosteSeul,
+): number {
+  const avec = presents
+    .filter(([autre, d]) => autre.id !== s.id && accompagnant(autre, d.poste))
+    .map(([, d]) => d)
+  return morceaux(c, avec, groupe)
+    .filter((o) => !o.par.length)
+    .reduce((t, o) => t + o.fin - o.debut, 0)
+}
+
 /** Règle du salarié confirmé (décision de l'utilisateur du 2026-11-09). */
 export const REGLE_ACCOMPAGNE = 'ACCOMPAGNE-SEUL'
 /** Son message, pour les raisons d'une place. */
-export const MESSAGE_ACCOMPAGNE =
-  'jamais sans un salarié confirmé : aucun n’est sur ce poste à ces heures'
+export const messageAccompagne = (lieu = 'sur ce poste') =>
+  `jamais sans un salarié confirmé : aucun n’est ${lieu} à ces heures`
+export const MESSAGE_ACCOMPAGNE = messageAccompagne()
 
 /** Les minutes d'un créneau où une personne dont le contrat a la case
  * « Jamais sans un salarié confirmé » (`accompagne`) serait sans personne
- * confirmée (`confirmeSur`) sur le même poste : les morceaux (`morceaux`)
- * qu'aucun créneau d'une personne confirmée ne couvre. 0 : toujours
- * accompagnée, ou contrat sans la case. Même définition que le calcul
- * (`generateur.ts`, JAMAIS SANS UN SALARIÉ CONFIRMÉ). */
+ * confirmée (`confirmeSur`) dans son groupe (la zone de son poste, sinon le
+ * poste : `accompagnement`, décision de l'utilisateur du 2026-11-09). 0 :
+ * toujours accompagnée, ou contrat sans la case. `minutesSeul`. */
 export function minutesSansConfirme(
   s: SalarieSolveur,
   c: Creneau,
   presents: ReadonlyArray<readonly [SalarieSolveur, Creneau]>,
+  groupe: GroupeDe = parPosteSeul,
 ): number {
   if (!s.accompagne) return 0
-  const confirmes = presents
-    .filter(([autre, d]) => autre.id !== s.id && confirmeSur(autre, d.poste))
-    .map(([, d]) => d)
-  return morceaux(c, confirmes)
-    .filter((o) => !o.par.length)
-    .reduce((t, o) => t + o.fin - o.debut, 0)
+  return minutesSeul(s, c, presents, confirmeSur, groupe)
 }
 
 /** Sans salarié confirmé un moment au moins de ce créneau. */
@@ -1100,8 +1124,9 @@ export function sansConfirme(
   s: SalarieSolveur,
   c: Creneau,
   presents: ReadonlyArray<readonly [SalarieSolveur, Creneau]>,
+  groupe: GroupeDe = parPosteSeul,
 ): boolean {
-  return minutesSansConfirme(s, c, presents) > 0
+  return minutesSansConfirme(s, c, presents, groupe) > 0
 }
 
 /** Les présents d'une liste d'affectations : [personne, créneau]. */
@@ -1129,14 +1154,15 @@ export function accompagnesSeuls(
   affectations: AffectationSolveur[],
 ): Violation[] {
   const presents = presentsDe(p, affectations)
+  const { groupe, lieu } = accompagnement(p)
   const erreurs: Violation[] = []
   for (const [s, c] of presents) {
-    const seul = minutesSansConfirme(s, c, presents)
+    const seul = minutesSansConfirme(s, c, presents, groupe)
     if (!seul) continue
     erreurs.push({
       salarieId: s.id,
       regle: REGLE_ACCOMPAGNE,
-      message: `jamais sans un salarié confirmé : seul sur ce poste ${seul >= duree(c) ? 'tout le shift' : `pendant ${h(seul)}`}`,
+      message: `jamais sans un salarié confirmé : seul ${lieu(c)} ${quand(seul, c)}`,
       creneaux: [c.id],
       nature: 'organisation',
     })
@@ -1497,6 +1523,7 @@ export function raisonsBlocageAccueil(
     .filter((c): c is Creneau => c !== undefined)
   const raisons = new Map<string, Violation[]>()
   const presents = presentsDe(p, affectations)
+  const acc = accompagnement(p)
   for (const s of p.salaries) {
     const siens = affectations
       .filter((a) => a.salarieId === s.id)
@@ -1513,7 +1540,7 @@ export function raisonsBlocageAccueil(
           violationsSalarie(s, [...siens, cible], p.nbJours, true, p.regles),
           avant,
         ),
-        ...raisonAccompagne(s, cible, presents),
+        ...raisonAccompagne(s, cible, presents, acc),
       ]
       if (meilleure === null || liste.length < meilleure.length)
         meilleure = liste
@@ -1549,6 +1576,7 @@ export function raisonsBlocage(
   const raisons = new Map<string, Violation[]>()
   if (!cible) return raisons
   const presents = presentsDe(p, affectations)
+  const acc = accompagnement(p)
   for (const s of p.salaries) {
     const n = niveauSur(s, cible.poste)
     if (!n?.autonome) continue
@@ -1581,7 +1609,7 @@ export function raisonsBlocage(
     )
     let liste = [
       ...nouvelles(apres, avant),
-      ...raisonAccompagne(s, cible, presents),
+      ...raisonAccompagne(s, cible, presents, acc),
     ]
     if (s.placementManuel && liste.length === 0) {
       liste = [
@@ -1605,13 +1633,14 @@ function raisonAccompagne(
   s: SalarieSolveur,
   cible: Creneau,
   presents: ReadonlyArray<readonly [SalarieSolveur, Creneau]>,
+  acc: ReturnType<typeof accompagnement>,
 ): Violation[] {
-  return sansConfirme(s, cible, presents)
+  return sansConfirme(s, cible, presents, acc.groupe)
     ? [
         {
           salarieId: s.id,
           regle: 'ACCOMPAGNE-SEUL',
-          message: MESSAGE_ACCOMPAGNE,
+          message: messageAccompagne(acc.lieu(cible)),
           creneaux: [cible.id],
           nature: 'organisation',
         },

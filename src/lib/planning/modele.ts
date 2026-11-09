@@ -458,13 +458,25 @@ export function confirmeSur(s: SalarieSolveur, poste: string): boolean {
   return !s.accompagne && referentSur(s, poste)
 }
 
-/** « En même temps » (soutien jamais seul) : deux créneaux du MÊME poste
+/** Ce que l'accompagnement lit d'un créneau pour le ranger (`GroupeDe`). */
+export type CreneauGroupe = Pick<Creneau, 'poste' | 'debut' | 'fin'> &
+  Partial<Pick<Creneau, 'zone' | 'accueil'>>
+
+/** La clé du groupe où une personne cherche qui l'accompagne : la zone du
+ * poste, sinon le poste (`accompagnement`, zones.ts, 2026-11-09). Par
+ * défaut, le poste seul (données de test sans zone). */
+export type GroupeDe = (c: CreneauGroupe) => string
+export const parPosteSeul: GroupeDe = (c) => `poste:${c.poste}`
+
+/** « En même temps » (soutien jamais seul, salarié confirmé) : deux
+ * créneaux du MÊME groupe (`GroupeDe` : la zone du poste, sinon le poste)
  * dont les heures se chevauchent. Lu par le calcul et le vérificateur. */
 export function ensemble(
-  c: Pick<Creneau, 'poste' | 'debut' | 'fin'>,
-  d: Pick<Creneau, 'poste' | 'debut' | 'fin'>,
+  c: CreneauGroupe,
+  d: CreneauGroupe,
+  groupe: GroupeDe = parPosteSeul,
 ): boolean {
-  return d.poste === c.poste && d.debut < c.fin && c.debut < d.fin
+  return groupe(d) === groupe(c) && d.debut < c.fin && c.debut < d.fin
 }
 
 /** Un morceau d'un créneau et les créneaux qui le couvrent en entier. */
@@ -474,19 +486,20 @@ export interface Morceau<C> {
   par: C[]
 }
 
-/** « À tout moment » (salarié confirmé, 2026-11-09) : le créneau `c` coupé
- * aux bornes des créneaux de `ds` qui le croisent (même poste, `ensemble`),
- * chaque morceau avec les créneaux qui le couvrent EN ENTIER. Une personne
- * accompagnée est couverte si chaque morceau a au moins un salarié confirmé.
- * La seule définition : le calcul écrit une contrainte par morceau, le
+/** « À tout moment » (2026-11-09) : le créneau `c` coupé aux bornes des
+ * créneaux de `ds` qui le croisent (même groupe, `ensemble`), chaque morceau
+ * avec les créneaux qui le couvrent EN ENTIER. Une personne qui n'est jamais
+ * seule est couverte si chaque morceau a au moins une personne qui
+ * l'accompagne. La seule définition, pour les DEUX règles (soutien jamais
+ * seul, salarié confirmé) : le calcul écrit une contrainte par morceau, le
  * vérificateur et les raisons d'une place cherchent un morceau sans
- * personne. Le soutien jamais seul, lui, se contente d'un chevauchement
- * (`ensemble`) : la règle du salarié confirmé l'étend à toute la durée. */
-export function morceaux<C extends Pick<Creneau, 'poste' | 'debut' | 'fin'>>(
-  c: Pick<Creneau, 'poste' | 'debut' | 'fin'>,
+ * personne. */
+export function morceaux<C extends CreneauGroupe>(
+  c: CreneauGroupe,
   ds: readonly C[],
+  groupe: GroupeDe = parPosteSeul,
 ): Array<Morceau<C>> {
-  const autour = ds.filter((d) => ensemble(c, d))
+  const autour = ds.filter((d) => ensemble(c, d, groupe))
   const bornes = new Set([c.debut, c.fin])
   for (const d of autour) {
     if (d.debut > c.debut && d.debut < c.fin) bornes.add(d.debut)

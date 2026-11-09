@@ -480,7 +480,7 @@ function phraseContrat(m: ModeleContratRegle): string {
     )
   if (m.accompagne)
     p.push(
-      'Jamais sans un salarié confirmé : sur son poste, toujours avec quelqu’un de titulaire ou en dépannage dont le contrat n’a pas cette case, même s’il est lui-même titulaire. Sinon, la place reste vide.',
+      'Jamais sans un salarié confirmé : pendant tout son shift, toujours avec quelqu’un de titulaire ou en dépannage dont le contrat n’a pas cette case, sur n’importe quel poste de la même zone (sur son poste s’il n’a pas de zone), même s’il est lui-même titulaire. Sinon, la place reste vide.',
     )
   if (m.jourMaxMinutes !== null)
     p.push(
@@ -789,7 +789,7 @@ export function AidePlanningContenu({
               'Titulaire : son poste habituel. L’app le place en premier.',
               'Dépannage : il sait tenir le poste, mais ce n’est pas le sien. L’app ne le prend que si aucun titulaire ne peut.',
               'Soutien : apprenti ou stagiaire. Il compte, mais jamais seul.',
-              'Salarié confirmé : un apprenti ou un stagiaire n’est jamais sur son poste sans quelqu’un de titulaire ou en dépannage d’un autre contrat, en même temps, même s’il est titulaire. C’est la case Jamais sans un salarié confirmé du type de contrat, dans Équipe, Règles des contrats.',
+              'Salarié confirmé : un apprenti ou un stagiaire n’est jamais sans quelqu’un de titulaire ou en dépannage d’un autre contrat, pendant tout son shift, même s’il est titulaire. Peu importe le poste de cette personne s’il est dans la même zone (page Postes) ; un poste sans zone demande quelqu’un sur le même poste. C’est la case Jamais sans un salarié confirmé du type de contrat, dans Équipe, Règles des contrats.',
             ]}
           />
         </Sous>

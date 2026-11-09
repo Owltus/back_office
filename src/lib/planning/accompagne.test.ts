@@ -24,6 +24,7 @@ import { versSolveur } from '#/lib/planning/regles.ts'
 import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
 import { PlanningMemoire } from '#/lib/planning/test/planningMemoire.ts'
 import { sansAccompagne } from '#/lib/planning/test/reglesTest.ts'
+import { accompagnement } from '#/lib/planning/zones.ts'
 import {
   accompagnesSeuls,
   raisonsBlocage,
@@ -41,7 +42,10 @@ import {
  * si, à TOUT MOMENT de ce créneau, une personne confirmée (autonome, contrat
  * sans la case) est sur le même poste (`morceaux` : la définition du soutien
  * jamais seul, étendue à toute la durée). Accepté et refusé, pour le calcul (places et accueil), le
- * vérificateur, les raisons d'une place. Données fictives.
+ * vérificateur, les raisons d'une place. « Le même poste » : la ZONE du
+ * poste quand il en a une, sinon le poste (décision du même jour : « peu
+ * importe sur le poste, mais il faut du monde », `accompagnement`).
+ * Données fictives.
  */
 
 const H = 60
@@ -352,6 +356,13 @@ describe('le calcul : l’accueil (candidats et chiffre du moment)', () => {
     expect(gen(p).affectations).toEqual([])
     const raisons = raisonsBlocageAccueil(p, [], ['m']).get('a')!
     expect(raisons.map((v) => v.regle)).toEqual(['ACCOMPAGNE-SEUL'])
+    // La raison nomme la zone (son nom, lu dans les règles).
+    expect(raisons[0].message).toBe(
+      'jamais sans un salarié confirmé : aucun n’est dans la zone Accueil à ces heures',
+    )
+    expect(raisonClaire('ACCOMPAGNE-SEUL', raisons[0].message, 1).phrase).toBe(
+      'Aucun salarié confirmé dans la zone Accueil à ces heures',
+    )
   })
   it('accepté : le matin à 2, un CDI et l’apprenti', () => {
     const p = probleme({
@@ -365,7 +376,7 @@ describe('le calcul : l’accueil (candidats et chiffre du moment)', () => {
     expect(accompagnesSeuls(p, r.affectations)).toEqual([])
     expect(soutiensSeuls(p, r.affectations)).toEqual([])
   })
-  it('refusé : le CDI sur le Club, l’apprenti à la Réception', () => {
+  it('accepté : le CDI au Club, l’apprenti à la Réception (même zone)', () => {
     const p = probleme({
       salaries: [
         sal('t', { postes: new Set(['club']) }),
@@ -378,8 +389,34 @@ describe('le calcul : l’accueil (candidats et chiffre du moment)', () => {
       consignes: [chiffre('matin', 2)],
       nbJours: 1,
     })
-    // Même règle que le soutien : sur le même poste.
-    expect(qui(gen(p))).toEqual(['t@mc'])
+    // « Peu importe sur le poste, mais il faut du monde » : la zone.
+    const r = gen(p)
+    expect(qui(r)).toEqual(['a@mr', 't@mc'])
+    expect(accompagnesSeuls(p, r.affectations)).toEqual([])
+  })
+  it('refusé : un apprenti et un stagiaire seuls dans la zone', () => {
+    const p = probleme({
+      salaries: [
+        apprenti('a', { postes: new Set(['rec']) }),
+        apprenti('st', { postes: new Set(['club']) }),
+      ],
+      creneaux: [
+        cand('mr', 'rec', 7, 15, ['matin']),
+        cand('mc', 'club', 7, 15, ['matin']),
+      ],
+      consignes: [chiffre('matin', 2)],
+      nbJours: 1,
+    })
+    expect(gen(p).affectations).toEqual([])
+    // Posés à la main : chacun est dit, la zone nommée.
+    const dits = accompagnesSeuls(p, [
+      { salarieId: 'a', creneauId: 'mr' },
+      { salarieId: 'st', creneauId: 'mc' },
+    ])
+    expect(dits.map((v) => v.message)).toEqual([
+      'jamais sans un salarié confirmé : seul dans la zone Accueil tout le shift',
+      'jamais sans un salarié confirmé : seul dans la zone Accueil tout le shift',
+    ])
   })
   it('refusé : le salarié confirmé du matin part avant la fin du middle', () => {
     const p = probleme({
@@ -392,6 +429,113 @@ describe('le calcul : l’accueil (candidats et chiffre du moment)', () => {
       nbJours: 1,
     })
     expect(qui(gen(p))).toEqual(['t@m'])
+  })
+})
+
+describe('la zone du poste (décision de l’utilisateur du 2026-11-09)', () => {
+  const zp = (
+    id: string,
+    poste: string,
+    d: number,
+    f: number,
+    zone: string | null,
+  ) => place(id, poste, d, f, { zone })
+  it('le groupe : la zone si le poste en a une, sinon le poste', () => {
+    const p = probleme({ salaries: [], creneaux: [], nbJours: 1 })
+    const { groupe, lieu } = accompagnement(p)
+    expect(groupe(zp('a', 'rec', 8, 15, '1'))).toBe(
+      groupe(zp('b', 'club', 8, 15, '1')),
+    )
+    expect(groupe(zp('a', 'rec', 8, 15, '1'))).not.toBe(
+      groupe(zp('b', 'club', 8, 15, '2')),
+    )
+    expect(groupe(zp('a', 'rec', 8, 15, null))).not.toBe(
+      groupe(zp('b', 'club', 8, 15, null)),
+    )
+    expect(groupe(zp('a', 'rec', 8, 15, null))).toBe(
+      groupe(zp('b', 'rec', 9, 16, null)),
+    )
+    expect(lieu(zp('a', 'rec', 8, 15, '1'))).toBe('dans la zone Accueil')
+    expect(lieu(zp('a', 'rec', 8, 15, null))).toBe('sur ce poste')
+    // `ensemble` et `morceaux` suivent le groupe donné.
+    expect(
+      ensemble(zp('a', 'rec', 8, 15, '1'), zp('b', 'club', 9, 16, '1'), groupe),
+    ).toBe(true)
+    expect(
+      ensemble(zp('a', 'rec', 8, 15, '1'), zp('b', 'club', 9, 16, '1')),
+    ).toBe(false)
+  })
+  it('accepté : places de deux postes de la même zone', () => {
+    const p = probleme({
+      salaries: [sal('t', { postes: new Set(['club']) }), apprenti('a')],
+      creneaux: [zp('p1', 'club', 7, 16, '1'), zp('p2', 'rec', 8, 15, '1')],
+      nbJours: 1,
+    })
+    const r = gen(p)
+    expect(qui(r)).toEqual(['a@p2', 't@p1'])
+    expect(violations(p, r.affectations)).toEqual([])
+    // Raison d'une place : le salarié confirmé du Club suffit.
+    expect(
+      raisonsBlocage(p, [{ salarieId: 't', creneauId: 'p1' }], 'p2')
+        .get('a')
+        ?.map((v) => v.regle) ?? [],
+    ).not.toContain('ACCOMPAGNE-SEUL')
+  })
+  it('refusé : un poste sans zone garde la règle par poste', () => {
+    for (const zones of [
+      ['1', null],
+      [null, '1'],
+      [null, null],
+      ['1', '2'],
+    ] as const) {
+      const p = probleme({
+        salaries: [sal('t', { postes: new Set(['club']) }), apprenti('a')],
+        creneaux: [
+          zp('p1', 'club', 7, 16, zones[0]),
+          zp('p2', 'rec', 8, 15, zones[1]),
+        ],
+        nbJours: 1,
+      })
+      expect(qui(gen(p))).toEqual(['t@p1'])
+      expect(
+        raisonsBlocage(p, [{ salarieId: 't', creneauId: 'p1' }], 'p2')
+          .get('a')!
+          .map((v) => v.regle),
+      ).toEqual(['ACCOMPAGNE-SEUL'])
+    }
+  })
+  it('refusé : dans la zone, mais pas pendant tout le shift', () => {
+    const p = probleme({
+      salaries: [sal('t', { postes: new Set(['club']) }), apprenti('a')],
+      creneaux: [zp('p1', 'club', 7, 13, '1'), zp('p2', 'rec', 8, 15, '1')],
+      nbJours: 1,
+    })
+    expect(qui(gen(p))).toEqual(['t@p1'])
+    expect(
+      accompagnesSeuls(p, [
+        { salarieId: 't', creneauId: 'p1' },
+        { salarieId: 'a', creneauId: 'p2' },
+      ]).map((v) => v.message),
+    ).toEqual([
+      'jamais sans un salarié confirmé : seul dans la zone Accueil pendant 2 h',
+    ])
+  })
+  it('le niveau de l’autre se lit sur le poste qu’il tient', () => {
+    // Le CDI tient le Club en soutien : pas confirmé, même dans la zone.
+    const p = probleme({
+      salaries: [
+        sal('t', { postes: new Set(), postesSoutien: new Set(['club']) }),
+        apprenti('a', { postes: new Set(['rec']) }),
+      ],
+      creneaux: [zp('p1', 'club', 7, 16, '1'), zp('p2', 'rec', 8, 15, '1')],
+      nbJours: 1,
+    })
+    expect(
+      accompagnesSeuls(p, [
+        { salarieId: 't', creneauId: 'p1' },
+        { salarieId: 'a', creneauId: 'p2' },
+      ]).map((v) => v.regle),
+    ).toEqual(['ACCOMPAGNE-SEUL'])
   })
 })
 
@@ -442,6 +586,42 @@ describe('À vérifier', () => {
     expect(points(sansConfirme)).toEqual([`sans-confirme:${club}`])
     // La case décochée : plus rien à dire.
     expect(points(sansAccompagne(sansConfirme))).toEqual([])
+  })
+  it('la zone : un salarié confirmé sur un autre poste de la zone suffit', () => {
+    const { referentiel: r } = hotelDemo('2026-11-02')
+    const club = r.postes.find((p) => p.nom === 'Club')!.id
+    const rec = r.postes.find((p) => p.nom === 'Réception')!.id
+    const enZone = {
+      ...r,
+      postes: r.postes.map((p) =>
+        p.id === club || p.id === rec ? { ...p, zone_id: 7 } : p,
+      ),
+      zones: [{ id: 7, nom: 'Hall', ordre: 0, continue: true }],
+    }
+    const confirme = (t: string) => t !== 'apprenti' && t !== 'stagiaire'
+    const sans = (ref: typeof r, postes: number[]) => ({
+      ...ref,
+      salaries: ref.salaries.map((s) =>
+        confirme(s.type_contrat)
+          ? {
+              ...s,
+              competences: s.competences.filter(
+                (c) => !postes.includes(c.poste_id),
+              ),
+            }
+          : s,
+      ),
+    })
+    const points = (ref: typeof r) =>
+      verifierReglages(ref).filter((p) => p.id.startsWith('sans-confirme:'))
+    // Personne de confirmé au Club, mais à la Réception : la zone suffit.
+    expect(points(sans(enZone, [club]))).toEqual([])
+    // Personne dans toute la zone : dit, la zone nommée.
+    const dits = points(sans(enZone, [club, rec]))
+    expect(dits.map((p) => p.id).sort()).toEqual(
+      [`sans-confirme:${club}`, `sans-confirme:${rec}`].sort(),
+    )
+    expect(dits[0].texte).toMatch(/^La zone Hall n’a aucun salarié confirmé/)
   })
 })
 

@@ -885,7 +885,9 @@ export function verifierReglages(
   // 2026-11-09) : un poste où des personnes dont le contrat a la case
   // (apprentis, stagiaires) sont, mais que personne de confirmé ne tient
   // (autonome, contrat sans la case, placé par le planning) : le planning ne
-  // les y placera jamais.
+  // les y placera jamais. Un poste rangé dans une zone : un salarié confirmé
+  // sur N'IMPORTE QUEL poste ouvert de la zone suffit (`accompagnement`,
+  // zones.ts : « peu importe sur le poste, mais il faut du monde »).
   for (const p of r.postes) {
     if (p.ferme) continue
     const modele = (s: Salarie) => modeleDe(regles, s.type_contrat)
@@ -893,16 +895,25 @@ export function verifierReglages(
       (s) => modele(s).accompagne,
     )
     if (!accompagnes.length) continue
-    const confirmes = tenants(p.id, autonome).filter(
-      (s) => !modele(s).accompagne && !modele(s).placementManuel,
+    const zone = zoneDuPoste(p)
+    const voisins =
+      zone === null ? [p] : r.postes.filter((q) => zoneDuPoste(q) === zone)
+    const confirmes = voisins.flatMap((q) =>
+      tenants(q.id, autonome).filter(
+        (s) => !modele(s).accompagne && !modele(s).placementManuel,
+      ),
     )
     if (confirmes.length) continue
     const contrats = [...new Set(accompagnes.map((s) => modele(s).nom))]
+    const nomZone =
+      zone === null ? undefined : regles.zones.find((z) => z.id === zone)?.nom
     ajouter(
       `sans-confirme:${p.id}`,
       'a-voir',
       'equipe',
-      `Le poste ${p.nom} n’a aucun salarié confirmé (titulaire ou dépannage) : ${listeOu(contrats)} n’y seront jamais placés, ils ne sont jamais sans un salarié confirmé.`,
+      nomZone === undefined
+        ? `Le poste ${p.nom} n’a aucun salarié confirmé (titulaire ou dépannage) : ${listeOu(contrats)} n’y seront jamais placés, ils ne sont jamais sans un salarié confirmé.`
+        : `La zone ${nomZone} n’a aucun salarié confirmé (titulaire ou dépannage) : ${listeOu(contrats)} ne seront jamais placés au poste ${p.nom}, ils ne sont jamais sans un salarié confirmé.`,
     )
   }
 

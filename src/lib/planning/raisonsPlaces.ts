@@ -293,11 +293,15 @@ export function raisonClaire(
       )
     // Jamais sans un salarié confirmé (décision de l'utilisateur du
     // 2026-11-09) : la place reste vide plutôt.
-    case 'ACCOMPAGNE-SEUL':
+    // Un poste rangé dans une zone : la zone, lue dans le message (son nom,
+    // jamais écrit ici).
+    case 'ACCOMPAGNE-SEUL': {
+      const zone = message.match(/dans la zone (.+) à ces heures$/)?.[1]
       return r(
-        'Aucun salarié confirmé sur ce poste à ces heures',
+        `Aucun salarié confirmé ${zone ? `dans la zone ${zone}` : 'sur ce poste'} à ces heures`,
         mention('règle de l’hôtel'),
       )
+    }
     // Rythme 5 jours puis 2 jours, strict (2026-11-09) : la place reste vide
     // plutôt (décision de l'utilisateur).
     case 'RYTHME-5-2':

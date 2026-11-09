@@ -78,7 +78,11 @@ import {
   rangMoment,
 } from '#/lib/planning/moment.ts'
 import type { Moments } from '#/lib/planning/moment.ts'
-import { vuesZones, zonesDesPostes } from '#/lib/planning/zones.ts'
+import {
+  accompagnement,
+  vuesZones,
+  zonesDesPostes,
+} from '#/lib/planning/zones.ts'
 import {
   fauteScellee,
   jourConnu,
@@ -1632,11 +1636,20 @@ export function construire(
   // (`confirmeSur` : autonome, son contrat sans la case) est sur le même
   // poste : le créneau est coupé en morceaux (`morceaux`, la définition du
   // soutien jamais seul étendue à toute la durée) et chaque morceau demande
-  // un confirmé sur un créneau qui le couvre en entier. DUR, comme le
-  // soutien : sinon la place reste vide. Jamais sur un shift posé (il reste ;
+  // un confirmé sur un créneau qui le couvre en entier. « Le même poste » :
+  // la ZONE du poste quand il en a une, sinon le poste (décision de
+  // l'utilisateur du 2026-11-09, « peu importe sur le poste, mais il faut du
+  // monde », `accompagnement`, zones.ts) ; le niveau de l'autre se lit sur
+  // le poste qu'il tient. DUR, comme le soutien : sinon la place reste vide. Jamais sur un shift posé (il reste ;
   // le vérificateur le dit, ACCOMPAGNE-SEUL). Le modèle reste toujours
   // possible : ne pas venir tient la règle. Une somme par ensemble de
   // créneaux qui couvrent, partagée entre les morceaux qui ont le même.
+  const { groupe } = accompagnement(p)
+  const parGroupe = new Map<string, Creneau[]>()
+  for (const c of p.creneaux) {
+    const g = groupe(c)
+    parGroupe.set(g, [...(parGroupe.get(g) ?? []), c])
+  }
   const sommesConfirmes = new Map<string, Terme[]>()
   const confirmesDe = (par: readonly Creneau[]): Terme[] => {
     const k = par.map((d) => d.id).join(',')
@@ -1657,9 +1670,9 @@ export function construire(
       if (!v || imposees.has(k)) continue
       // Les morceaux dont les créneaux qui couvrent contiennent ceux d'un
       // autre morceau sont sautés : leur contrainte suit de l'autre.
-      avec ??= morceauxUtiles(morceaux(c, parPoste.get(c.poste) ?? [])).map(
-        (o) => confirmesDe(o.par),
-      )
+      avec ??= morceauxUtiles(
+        morceaux(c, parGroupe.get(groupe(c)) ?? [], groupe),
+      ).map((o) => confirmesDe(o.par))
       for (const t of avec)
         m.ajoute([[1, v], ...t.map(([k2, w]) => [-k2, w] as Terme)], '<=', 0)
     }

@@ -455,6 +455,19 @@ describe('aucun code de contrat ni catégorie lu par le code (lot 1a)', () => {
     ).toEqual([])
   })
 
+  // Jamais sans un salarié confirmé, soutien jamais seul (décision de
+  // l'utilisateur du 2026-11-09 : « je ne veux pas de poste en dur ») : la
+  // zone se lit par son réglage, jamais par un nom ou un id écrit.
+  it('aucun nom ni id de zone écrit dans le code (hors zone par défaut)', () => {
+    expect(
+      lignes(
+        /['"`]Accueil['"`]|zone(?:_id|Id)?\s*[!=]==?\s*['"`]?\d|\d['"`]?\s*[!=]==?\s*\w*\.?zone(?:_id|Id)?\b/,
+        // La zone de l'hôtel quand la base n'en porte aucune (tests).
+        ['lib/planning/zones.ts'],
+      ),
+    ).toEqual([])
+  })
+
   it('la zone d’un poste remplace presence et accueil_nuit (lot 2, A5)', () => {
     expect(
       lignes(

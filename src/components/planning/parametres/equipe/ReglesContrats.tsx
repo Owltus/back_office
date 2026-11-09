@@ -681,7 +681,7 @@ export function ReglesContrats({
                 <Effet
                   texte={
                     modele.accompagne
-                      ? 'Toujours avec un salarié confirmé sur son poste (titulaire ou dépannage, d’un contrat sans cette case). Sinon, la place reste vide.'
+                      ? 'Toujours avec un salarié confirmé pendant tout son shift (titulaire ou dépannage, d’un contrat sans cette case), sur un poste de la même zone, ou sur son poste s’il n’a pas de zone. Sinon, la place reste vide.'
                       : 'Peut être seul sur son poste, selon son niveau.'
                   }
                 >

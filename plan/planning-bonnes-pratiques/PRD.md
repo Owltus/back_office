@@ -725,16 +725,21 @@ sur le mois (deux personnes, une journée chacune).
 - **Comment.** Case du type de contrat « Jamais sans un salarié confirmé » (Stagiaire et
   Apprenti). Une personne dont le contrat a la case, quel que soit son niveau (titulaire compris)
   et quel que soit leur nombre, n'est jamais sur son poste sans, à tout moment de son shift, une
-  personne titulaire ou en dépannage du même poste dont le contrat n'a pas la case. La définition
-  du soutien jamais seul (même poste, en même temps) étendue à toute la durée du shift
-  (`morceaux`). DUR pour le calcul (la place reste vide plutôt), jamais sur un shift posé ;
+  personne titulaire ou en dépannage dont le contrat n'a pas la case, sur un poste de la même
+  ZONE (décision de l'utilisateur du même jour : « peu importe sur le poste, mais il faut du
+  monde… je ne veux pas de poste en dur » ; aujourd'hui, Réception et Club dans la zone
+  Accueil), ou sur le même poste quand il n'a pas de zone. Son niveau se lit sur le poste
+  qu'elle tient. La définition du soutien jamais seul étendue à toute la durée du shift
+  (`morceaux`, `accompagnement` dans `zones.ts`). DUR pour le calcul (la place reste vide plutôt), jamais sur un shift posé ;
   alerte ACCOMPAGNE-SEUL sur un shift posé à la main ; raison d'une place vide ; « À vérifier »
   pour un poste sans aucun salarié confirmé.
 - **Mesuré.** Banc de décembre (copie locale, en mémoire, horizon, 3 graines) : quarts d'heure
   sans salarié confirmé 548 à 664 → 4 (un shift validé), places à pourvoir 11 → 28
   (les mercredis et jeudis matin, où seuls des apprentis et des stagiaires sont libres), heures
-  dues manquantes 29 → 29, aucune infraction, 38,7 s au pire par semaine.
-- **Statut.** EN PLACE (local, non livré) le 2026-11-09.
+  dues manquantes 29 → 29, aucune infraction, 38,7 s au pire par semaine. Par zone : rien ne
+  bouge (28 places, 29 h, 4 quarts d'heure) ; ces matins-là, aucun salarié confirmé de la zone
+  n'est libre, sur aucun poste.
+- **Statut.** EN PLACE (local, non livré) le 2026-11-09, par zone le même jour.
 
 ### Tableau récapitulatif
 
