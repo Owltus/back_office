@@ -57,6 +57,31 @@ pourtant mauvais pour ceux qui les vivent.
 
 ## 2. Ordre des priorités
 
+**ORDRE DU 2026-11-09 (décisions de l'utilisateur : « oui, mais vraiment si utile ; tu as beaucoup
+de règles de fonctionnement qui peuvent rentrer en conflit ; tous les membres du personnel doivent
+pouvoir faire toutes leurs heures quoi qu'il arrive ; les repos de quatre jours, c'est non ; les
+moments où tu places quatre personnes le soir alors que personne le matin, c'est non »).** Il passe
+devant l'ordre plus bas là où ils diffèrent :
+
+1. **La loi**, dure.
+2. **Le rythme 5 et 2** (règle 20) : jamais 6 jours de travail d'affilée (dur), jamais 4 repos ou
+   plus entre deux blocs (au-dessus de tout ; quand des absences, l'école, des shifts validés ou la
+   semaine voisine l'imposent, le calcul reste possible et la page le dit) ; un repos seul ou un
+   bloc de 1 à 3 jours garde le prix fort (au-dessus de la semaine d'heures dues).
+3. **Les heures dues du contrat, quoi qu'il arrive** : une heure due vaut plus qu'un changement de
+   jours de repos et une place ensemble.
+4. **Les places des postes indispensables**, salarié confirmé dur (règle 21).
+5. **Le changement de jours de repos** (règle 22) : seulement s'il remplit plus d'une place et
+   demie qui resterait vide autrement, une fois par personne sur 4 semaines.
+6. **L'équilibre entre les moments d'une zone** (règle 23), au prix d'une place.
+7. Le reste, dans l'ordre plus bas.
+
+Les prix se lisent sur la place la plus chère de la semaine (`prixOrdre`) : l'ordre tient quels
+que soient les réglages d'importance. Limite assumée : sous une heure, un horaire plus court de 15
+ou 30 minutes peut encore tenir une place.
+
+Ce qui suit est l'ordre d'avant, gardé là où le 2026-11-09 ne dit rien.
+
 Quand deux choses se contredisent, on tranche dans cet ordre. Il est le même pour la personne qui
 fait le planning et pour le calcul.
 
@@ -745,31 +770,78 @@ sur le mois (deux personnes, une journée chacune).
   n'est libre, sur aucun poste.
 - **Statut.** EN PLACE (local, non livré) le 2026-11-09, par zone le même jour.
 
+#### 22. Changer ses jours de repos, une fois, si c'est vraiment utile
+
+- **Pourquoi.** Décision de l'utilisateur, 2026-11-09 : « oui, mais vraiment si utile ». Au
+  rythme 5 et 2, 5 + 2 = 7 : des repos posés le mercredi le restent toute l'année. Sur la copie
+  de décembre, trois salariés confirmés du matin avaient leur repos le mercredi : aucun mercredi
+  matin tenable, les apprentis et stagiaires (règle 21) renvoyés le soir (0 le matin, 4 ou 5 le
+  soir), 28 places à pourvoir.
+- **Comment.** Une TRANSITION décale les repos d'un jour : 3 repos de suite une fois (ils
+  reculent) ou un bloc de 4 jours une fois (ils avancent) (`estTransition`, `rythmeStrict.ts`).
+  Elle coûte 1,5 place du palier le plus haut (`PLACES_PAR_TRANSITION`, `prixOrdre`) : elle ne se
+  fait que si elle remplit plus d'une place et demie qui resterait vide. Sous les heures dues :
+  celle qui garde 5 jours dans la semaine (le bloc de 4) passe devant celle qui en retire un. Une
+  seule par personne sur 4 semaines (`FENETRE_TRANSITION`, `transitionsRecentes` lu sur les
+  semaines d'avant), la suivante au prix fort. Dite « changement de jours de repos »
+  (RYTHME-TRANSITION), jamais bloquante ; un repos obligé ne naît jamais d'une transition.
+- **Mesuré.** Banc de décembre (copie locale, en mémoire, « Compléter le mois », horizon, 3
+  graines, mêmes résultats aux trois) : places à pourvoir 28 → 12 (les 12 restantes : plus
+  personne n'a d'heures, raison HEURES-FAITES), mercredis matin 0 sur 3 → 3 sur 3 et jeudis 1 sur
+  3 → 3 sur 3, soirs de ces jours 3 à 5 pour 2 → 2 pour 2. Deux transitions : le salarié confirmé
+  aux repos mardi-mercredi passe au lundi-mardi par un bloc de 4 jours (du jeudi 3 au dimanche
+  6 décembre), sans perdre une heure ; une apprentie, avant sa semaine de CFA. Repos de 4 jours
+  ou plus 1 → 0, aucune infraction, 28,6 → 8,4 s au pire par semaine.
+- **Heures dues qui manquent encore (22 h, contre 29).** (1) Un CDI dont le contrat finit le
+  lundi 30/11 : ce lundi est un repos VALIDÉ, ses 8 h dues ne peuvent pas être faites (un repos
+  sans décompte ne les retire pas). (2) Une apprentie, 14 h la semaine du 7/12 (21 avant) : sa
+  semaine du 23/11, validée, met ses repos au mercredi-jeudi, et sa semaine de CFA du 14/12 (du
+  lundi au vendredi) exige les repos au samedi-dimanche d'avant ; passer de l'un à l'autre en
+  deux semaines demanderait trois transitions. Avec une seule, le calcul fait un bloc de 4 jours
+  et un bloc de 2 (une faute au prix fort) plutôt que 4 repos ou un repos seul de plus.
+- **Statut.** EN PLACE (local, non livré) le 2026-11-09.
+
+#### 23. Jamais du monde en trop sur un moment pendant qu'un autre manque
+
+- **Pourquoi.** Décision de l'utilisateur, 2026-11-09 : « les moments où tu places quatre
+  personnes le soir alors que personne le matin, c'est non ».
+- **Comment.** Dans une zone, un jour : une personne au-dessus du chiffre d'un moment pendant
+  qu'un autre moment est sous son minimum coûte une place (`equilibreMoments`, une variable 0/1
+  par paire de moments ; aucun nom de moment ni de zone, les chiffres du tableau). Un horaire qui
+  compte dans les deux moments n'est pas « en trop ». Sous les heures dues : une personne qui n'a
+  pas d'autre moment pour ses heures vient quand même, et la page le dit en clair (« Mercredi 9 :
+  0 le matin, 4 le soir à l'Accueil », `desequilibres`, `phraseDesequilibre`).
+- **Mesuré.** Banc de décembre (3 graines) : jours où un moment manque pendant qu'un autre est
+  en trop, 4 → 0 (tous des mercredis : 0 le matin, 3 à 5 le soir).
+- **Statut.** EN PLACE (local, non livré) le 2026-11-09.
+
 ### Tableau récapitulatif
 
-| N°  | Règle                               | Statut                       | Où                                                                                   |
-| --- | ----------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------ |
-| 1   | Deux repos qui se suivent           | en place                     | `POIDS_REPOS_SEPARES`, `placerRepos`, alerte REPOS-SEPARES                           |
-| 2   | 5 jours d'affilée au plus (35 h +)  | DUR (35 h et plus)           | `JOURS_AFFILES_CONSEILLES`, `rythmeHumain`, alerte JOURS-AFFILES                     |
-| 3   | 12 h entre deux services            | en place                     | `REPOS_CONFORT`, `POIDS_REPOS_COURT`, alerte REPOS-COURT                             |
-| 4   | Un week-end libre par mois          | en place, partage d'abord    | `weekendLibreAvant`, `weekendLibere`, `POIDS_WEEKEND_LIBRE`, WEEKEND-LIBRE / -LIBERE |
-| 5   | Repos posé ou validé sacré          | en place                     | `reposFixes`, `epinglee`, `planning_valider_avec_repos`                              |
-| 6   | Semaine stable                      | en place                     | `CHANGEMENTS_MOMENT_MAX`, `POIDS_MOMENT_EN_TROP`, `POIDS_MOMENT_ARRIERE`, MOMENTS    |
-| 7   | Nuits avec mesure                   | en place                     | `NUITS_AFFILEES_MAX`, `REPOS_APRES_NUITS`, `POIDS_NUIT_AFFILEE`, alerte NUITS        |
-| 8   | Mêmes repos d'une semaine à l'autre | en place (préférence)        | `reposAvant`, `weekendTravailleAvant`, `POIDS_MEMES_REPOS`, MEMES-REPOS              |
-| 9   | Pas de jour isolé                   | DUR (35 h et plus)           | `rythmeHumain`, `POIDS_DIMANCHE_SEUL`, alerte JOUR-ISOLE                             |
-| 10  | Moments pénibles partagés           | en place (sauf nuits)        | `SEMAINES_EQUITE`, `POIDS_EQUITE`, `equiteDe`                                        |
-| 11  | Jours de fête partagés              | reportée                     | (un an d'historique manque)                                                          |
-| 12  | Heures en plus partagées            | en place                     | `coefsHeuresPlus`, `POIDS_EQUITE_HEURES_PLUS`, alerte HEURES-PLUS                    |
-| 13  | Retour de congé en douceur          | en place                     | `CONGE_LONG`, `retourConge`, `POIDS_RETOUR_*`, alerte RETOUR-CONGE                   |
-| 14  | École des apprentis protégée        | en place                     | `ECOLE_VEILLE_FIN`, `ECOLE_LENDEMAIN_DEBUT`, `POIDS_ECOLE_ABORDS`, ECOLE-ABORDS      |
-| 15  | Planning qui se tient               | en place                     | `imposees`, PL423, PL409, `raisonsPlaces.ts`                                         |
-| 16  | Jour férié rattrapé (JFR)           | en place (local, non livré)  | `feries.ts`, `droitAuRattrapage`, `POIDS_JFR_EN_ATTENTE`, alerte JOUR-FERIE          |
-| 17  | Équipe ensemble (soir, relève)      | en place (local, non livré)  | `equipesSynchro`, `EQUIPE_TOLERANCE`, `POIDS_RELEVE_CHACUN`, `equipesDesynchro`      |
-| 18  | Journées de 7 h / 8 h (35 h, 39 h)  | DUR (35 h et 39 h)           | `journeesDuCalcul`, `etoileSacrifiee`, `journeeDe`, JOURNEE-TYPE, HEURES-FAITES      |
-| 19  | Middle coup de main, matin ensemble | en place (local, non livré)  | `moment.ts`, `momentsAccueil`, `momentLibre`, `coutArriveeMatin`, `POIDS_SEUL_QUART` |
-| 20  | 5 jours puis 2 repos, strict        | DUR (35 h et plus, réglable) | `rythmeStrict.ts`, `rythmeStrictModele`, `prixFauteRythme`, alerte RYTHME-5-2        |
-| 21  | Jamais sans un salarié confirmé     | DUR (case du contrat)        | `accompagne`, `confirmeSur`, `morceaux`, alerte ACCOMPAGNE-SEUL                      |
+| N°  | Règle                                | Statut                       | Où                                                                                   |
+| --- | ------------------------------------ | ---------------------------- | ------------------------------------------------------------------------------------ |
+| 1   | Deux repos qui se suivent            | en place                     | `POIDS_REPOS_SEPARES`, `placerRepos`, alerte REPOS-SEPARES                           |
+| 2   | 5 jours d'affilée au plus (35 h +)   | DUR (35 h et plus)           | `JOURS_AFFILES_CONSEILLES`, `rythmeHumain`, alerte JOURS-AFFILES                     |
+| 3   | 12 h entre deux services             | en place                     | `REPOS_CONFORT`, `POIDS_REPOS_COURT`, alerte REPOS-COURT                             |
+| 4   | Un week-end libre par mois           | en place, partage d'abord    | `weekendLibreAvant`, `weekendLibere`, `POIDS_WEEKEND_LIBRE`, WEEKEND-LIBRE / -LIBERE |
+| 5   | Repos posé ou validé sacré           | en place                     | `reposFixes`, `epinglee`, `planning_valider_avec_repos`                              |
+| 6   | Semaine stable                       | en place                     | `CHANGEMENTS_MOMENT_MAX`, `POIDS_MOMENT_EN_TROP`, `POIDS_MOMENT_ARRIERE`, MOMENTS    |
+| 7   | Nuits avec mesure                    | en place                     | `NUITS_AFFILEES_MAX`, `REPOS_APRES_NUITS`, `POIDS_NUIT_AFFILEE`, alerte NUITS        |
+| 8   | Mêmes repos d'une semaine à l'autre  | en place (préférence)        | `reposAvant`, `weekendTravailleAvant`, `POIDS_MEMES_REPOS`, MEMES-REPOS              |
+| 9   | Pas de jour isolé                    | DUR (35 h et plus)           | `rythmeHumain`, `POIDS_DIMANCHE_SEUL`, alerte JOUR-ISOLE                             |
+| 10  | Moments pénibles partagés            | en place (sauf nuits)        | `SEMAINES_EQUITE`, `POIDS_EQUITE`, `equiteDe`                                        |
+| 11  | Jours de fête partagés               | reportée                     | (un an d'historique manque)                                                          |
+| 12  | Heures en plus partagées             | en place                     | `coefsHeuresPlus`, `POIDS_EQUITE_HEURES_PLUS`, alerte HEURES-PLUS                    |
+| 13  | Retour de congé en douceur           | en place                     | `CONGE_LONG`, `retourConge`, `POIDS_RETOUR_*`, alerte RETOUR-CONGE                   |
+| 14  | École des apprentis protégée         | en place                     | `ECOLE_VEILLE_FIN`, `ECOLE_LENDEMAIN_DEBUT`, `POIDS_ECOLE_ABORDS`, ECOLE-ABORDS      |
+| 15  | Planning qui se tient                | en place                     | `imposees`, PL423, PL409, `raisonsPlaces.ts`                                         |
+| 16  | Jour férié rattrapé (JFR)            | en place (local, non livré)  | `feries.ts`, `droitAuRattrapage`, `POIDS_JFR_EN_ATTENTE`, alerte JOUR-FERIE          |
+| 17  | Équipe ensemble (soir, relève)       | en place (local, non livré)  | `equipesSynchro`, `EQUIPE_TOLERANCE`, `POIDS_RELEVE_CHACUN`, `equipesDesynchro`      |
+| 18  | Journées de 7 h / 8 h (35 h, 39 h)   | DUR (35 h et 39 h)           | `journeesDuCalcul`, `etoileSacrifiee`, `journeeDe`, JOURNEE-TYPE, HEURES-FAITES      |
+| 19  | Middle coup de main, matin ensemble  | en place (local, non livré)  | `moment.ts`, `momentsAccueil`, `momentLibre`, `coutArriveeMatin`, `POIDS_SEUL_QUART` |
+| 20  | 5 jours puis 2 repos, strict         | DUR (35 h et plus, réglable) | `rythmeStrict.ts`, `rythmeStrictModele`, `prixOrdre`, alerte RYTHME-5-2              |
+| 21  | Jamais sans un salarié confirmé      | DUR (case du contrat)        | `accompagne`, `confirmeSur`, `morceaux`, alerte ACCOMPAGNE-SEUL                      |
+| 22  | Changer ses repos, si vraiment utile | 1,5 place, 1 sur 4 semaines  | `estTransition`, `prixOrdre`, `transitionsRecentes`, alerte RYTHME-TRANSITION        |
+| 23  | Matin et soir équilibrés             | une place (sous les heures)  | `equilibreMoments`, `desequilibres`, `phraseDesequilibre`                            |
 
 Le code des règles 1, 3, 4, 6, 7, 8, 12, 13 et 14 date du 2026-11-02 : en place en local, pas
 encore livré. Relecture du 2026-11-03 (banc de 7 scénarios réels, en mémoire) : règles 1, 4, 8, 9,

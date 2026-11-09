@@ -2988,6 +2988,43 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   les raisons d'une place et « À vérifier » ; `contratsPostesReglables.test.ts` refuse tout nom
   ou id de zone écrit. Banc : rien ne bouge (28 places : le mercredi et le jeudi matin, AUCUN
   salarié confirmé de la zone n'est libre, la zone n'y peut rien ; sans la règle, 11).
+- **ORDRE DE DÉCISION DU 2026-11-09 (décisions utilisateur : « oui, mais vraiment si utile ; tu
+  as beaucoup de règles qui peuvent rentrer en conflit ; tous les membres du personnel doivent
+  pouvoir faire toutes leurs heures quoi qu'il arrive ; les repos de quatre jours, c'est non ;
+  quatre personnes le soir alors que personne le matin, c'est non »)**. En tête de
+  `generateur.ts`, il passe devant l'ordre d'avant : (1) la loi ; (2) le rythme 5 et 2 : 6 jours
+  DURS, 4 repos ou plus entre deux blocs au prix `dur` (au-dessus de tout, jamais par le calcul,
+  coût de bord si les faits l'imposent, toujours dit par le vérificateur), repos seul et bloc de
+  1 à 3 jours au prix `fort` (au-dessus d'une semaine d'heures dues) ; (3) les HEURES DUES, une
+  heure valant plus qu'une transition et une place ensemble ; (4) les places (paliers), salarié
+  confirmé dur ; (5) la TRANSITION = changement de jours de repos (3 repos de suite OU un bloc
+  de 4 jours, `estTransition`, rythmeStrict.ts) à `PLACES_PAR_TRANSITION` = 1,5 place, une par
+  personne sur 4 semaines (`FENETRE_TRANSITION`, `SalarieSolveur.transitionsRecentes` lu sur
+  `historique` par `avecSemainesVoisines`), la suivante au prix fort ; (6) l'ÉQUILIBRE entre les
+  moments d'une zone (`equilibreMoments` : du monde en trop sur un moment pendant qu'un autre
+  manque, au prix d'une place ; un horaire de deux moments n'est pas « en trop » ; oracle
+  `desequilibres`, presence.ts, `SemaineOut.desequilibres`, points d'attention « Mercredi 9 :
+  0 le matin, 4 le soir à l'Accueil », `phraseDesequilibre`) ; (7) le reste. Prix posés À LA FIN
+  sur la place la plus chère (`prixOrdre` : `place`, `transition`, `minuteDue`, `fort`, `dur`),
+  donc l'ordre tient quels que soient les paliers ; limite assumée : sous l'heure, 15 ou 30 min
+  dues d'un horaire plus court peuvent tenir une place. Vérificateur : RYTHME-TRANSITION
+  (« changement de jours de repos », jamais bloquant, dans `REGLES_MORALES` et les raisons),
+  4 repos ou plus dits même scellés ; `fauteScellee` ne scelle 4 repos que si le bloc et 4 repos
+  sont connus ; repos obligés : une transition n'oblige à rien. Horizon : la semaine d'APRÈS
+  l'esquisse entre dans la suite par ses faits (école, absence courte, `SuivantePersonne.apres`,
+  absences lues jusqu'à lundi + 20, `fetchSemainePourGeneration`). CORRECTIF trouvé au passage :
+  la somme des salariés confirmés d'un groupe de candidats de l'accueil était bornée au nombre de
+  CRÉNEAUX (`sommer`), pas de personnes : trois confirmés sur deux horaires rendaient le modèle
+  impossible (le calcul en laissait un sans shift) ; borne = `borneDe`. Tests
+  `transitionRythme.test.ts` (définition, prix par propriété, calcul, équilibre, cas fictif du
+  mercredi `test/hotelMercredi.ts` avec `PlanningMemoire.avecHistorique`), 10 mutants tués.
+  Empreintes : d5e6159c (sans rythme strict, prix des heures) et 8818eea4 (strict). Banc
+  décembre (copie locale, en mémoire, horizon, 3 graines) : places à pourvoir 28 → 12, mercredis
+  matin 0 / 3 → 3 / 3 et jeudis 1 / 3 → 3 / 3 (soirs 3 à 5 / 2 → 2 / 2), deux transitions (le
+  confirmé aux repos mardi-mercredi passe au lundi-mardi ; une apprentie avant sa semaine de
+  CFA), jours de déséquilibre 4 → 0, repos de 4 jours ou plus 1 → 0 (remplacé par un bloc de 2
+  jours, prix fort, chez cette apprentie), heures dues manquantes 29 → 22 h (deux cas imposés
+  par les faits, voir le PRD), 0 infraction, 28,6 → 8,4 s au pire par semaine.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 
