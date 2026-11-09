@@ -2274,7 +2274,24 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   autres jours libres quand les heures sont faites. Un congé posé 7 jours :
   2 des jours montrent « Repos » (proposition), « Valider » les écrit à la
   place du congé (migration `20261102110000_planning_repos_sur_conge` : garde
-  6 absences décomptées dans la semaine, jamais l'école). Moteur :
+  6 absences décomptées dans la semaine, jamais l'école). **CONGÉ SUR UN
+  REPOS FIXE (décision utilisateur du 2026-11-09 : « tu peux le faire, mais
+  c'est ignoré et remplacé par les jours de repos classiques »)** : R1, une
+  absence décomptée (pas l'école, pas un motif sans décompte ou de nature
+  repos) posée un jour « Repos » de la semaine type est IGNORÉE
+  (`absenceIgnoree`, seule définition, appliquée une fois dans `contexte` par
+  `avecFeriesDuJour`, donc moteur, vérificateur, heures dues, rythme, repos
+  obligés et affichage) : le jour reste le repos fixe, ni heures dues ni
+  jours pris ; la fiche, le clic droit et le volet SAUTENT ces jours
+  (`joursSautesReposFixes`, phrase `phraseReposFixes` : « Les vendredis et
+  samedis sont ses repos : ils restent des repos. ») ; rien n'est effacé en
+  base, une absence déjà enregistrée est relue puis ignorée. R2, sans repos
+  fixes (ou avec un seul, qui compte dans les 2) : au plus `7 - 2 repos dus`
+  absences décomptées par semaine civile (`reposDusSemaine`,
+  `absencesDecompteesMax`, hors contrat compris), les jours en trop sont les
+  repos sur congé ci-dessus. Cas réel (veilleur 39 h, repos fixes vendredi
+  et samedi, congé du dimanche au samedi) : 4 congés, 8 h dues, la nuit du
+  dimanche posée, puis 5 nuits. Moteur :
   `POIDS_JOUR_ISOLE` (4 000) sur un jour travaillé voisin d'un jour sans
   travail possible et sans travail de l'autre côté (bord, école, hors
   contrat = travail ; partout, il doublait le temps de calcul). Au plus
@@ -2884,7 +2901,8 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   TRAVAIL = shift (proposé, validé, verrouillé), école (CFA : `TTTTTrr EEEEErr`, une école de 3
   jours se complète de 2 shifts), absence au décompte (congé, maladie, formation, sans solde, férié
   chômé, JFR pris ou proposé, jours fériés ajoutés pour stagiaires et encadrement, absence de la
-  semaine type) quand elle dure 5 jours au plus ; REPOS = repos fixe, repos posé ou proposé, absence
+  semaine type) quand elle dure 5 jours au plus ; REPOS = repos fixe (même sous un congé posé, R1
+  du 2026-11-09, `absenceIgnoree`), repos posé ou proposé, absence
   sans décompte (repos exceptionnel, récupération, repos forfait), jour sans rien (jour passé
   vide compris), repos sur congé une fois validé ; NEUTRE = hors contrat et ABSENCE LONGUE (plus
   de 5 absences décomptées d'affilée, semaines voisines comprises, `ABSENCE_LONGUE` : elle

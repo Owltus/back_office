@@ -908,6 +908,25 @@ faible :
 Un jour de congé en trop (plus de 5 dans la semaine) peut devenir un repos : l'écran y montre
 Repos, Valider l'écrit à la place du congé.
 
+**Congés et repos fixes (décision du 2026-11-09)** : « tu ne devrais pas pouvoir poser des jours de
+vacances sur des jours de repos fixes ; tu peux le faire, mais c'est ignoré et remplacé par les
+jours de repos classiques ».
+
+- **R1.** Une absence décomptée (congé, maladie, formation, jour férié, JFR) posée un jour « Repos »
+  de la semaine type est ignorée : le jour reste un repos fixe (heures dues, jours pris, rythme,
+  écran). La saisie d'une plage (fiche, clic droit, volet) saute ces jours et le dit : « Les
+  vendredis et samedis sont ses repos : ils restent des repos. » Une absence déjà enregistrée est
+  relue puis ignorée, jamais effacée. L'école, un motif sans décompte et un repos posé ne sont pas
+  concernés. `absenceIgnoree`, `joursSautesReposFixes` (`semaine.ts`).
+- **R2.** Sans repos fixes, au plus `7 - 2 repos dus` jours d'absence décomptée par semaine civile
+  (moins les jours hors contrat) ; les jours en trop sont des repos proposés, placés par
+  `placerRepos`, validables. Avec un seul repos fixe : il compte dans les 2, R2 en ajoute un.
+  Pour le rythme, ces repos ne comptent qu'une fois validés. `reposDusSemaine`,
+  `absencesDecompteesMax`.
+- **Statut.** EN PLACE. Cas réel (veilleur 39 h, repos fixes vendredi et samedi, congé du dimanche
+  au samedi) : 4 congés et 8 h dues au lieu de 6 congés et rien, la nuit du dimanche posée puis
+  5 nuits.
+
 Un repos déduit n'est posé que sur une semaine remplie (générée ou faite à la main), ou quand les
 heures sont couvertes, ou quand 5 jours sont pris. Jamais pour un extra. Pour un apprenti ou un
 stagiaire, seulement sur une semaine remplie.
