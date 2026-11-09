@@ -89,6 +89,7 @@ import {
   joursRythmeDe,
   motifsInterdits,
   RYTHME_REPOS,
+  reposSeulsPermis,
   rythmeStrictDe,
   voisinesRythme,
 } from '#/lib/planning/rythmeStrict.ts'
@@ -2269,7 +2270,17 @@ export function construire(
           paires.push(libre)
         }
         if (paires.length) {
-          if (!s.reposConsecutifs && forceDeux === 'souhaite') {
+          // Avant une semaine d'école, au rythme 5 et 2 strict, ce rythme dit
+          // déjà les deux repos de suite et son urgence (le repos seul, payé
+          // à son prix, deux permis) : la paire de la semaine devient
+          // souhaitée (2026-11-10 ; dure, elle interdisait tout repos seul).
+          // Ailleurs elle reste dure : souple partout, une semaine de l'hôtel
+          // d'essai passait de quelques secondes au plafond de 60 s.
+          if (
+            !s.reposConsecutifs &&
+            (forceDeux === 'souhaite' ||
+              (!!s.ecoleProche && rythmeStrictDe(s, R)))
+          ) {
             const perdue = m.continu(0, 1)
             m.ajoute(
               [...paires.map((v) => [1, v] as Terme), [1, perdue]],
@@ -3247,7 +3258,7 @@ function rythmeStrictModele(
   // prix `dur`.
   const transitions: Terme[] = []
   const reposSeuls: Terme[] = []
-  const urgencesPermises = (s.reposSeulsRecents ?? 0) > 0 ? 0 : 1
+  const urgencesPermises = reposSeulsPermis(s)
   for (const motif of motifsInterdits(fin - debut)) {
     // 6 jours de travail : DURS, un jour posé y compte (jamais plus de 5
     // autour de lui) ; les autres motifs se paient, un jour posé y compte

@@ -282,6 +282,23 @@ export function reposSeulsDans(etats: readonly EtatRythme[]): number {
   return fautesRythme(etats).filter(estReposSeul).length
 }
 
+/** Repos seuls permis sur 4 semaines : un ; deux avant une semaine
+ * d'école (la semaine d'avant, et celle d'encore avant si la même
+ * transition l'exige), pour faire toutes les heures (décision de
+ * l'utilisateur du 2026-11-09). */
+export const REPOS_SEULS_MAX = 1
+export const REPOS_SEULS_MAX_AVANT_ECOLE = 2
+
+/** Les repos seuls que le calcul peut encore faire, à leur prix d'urgence,
+ * d'après ceux déjà faits sur 4 semaines. */
+export function reposSeulsPermis(s: {
+  reposSeulsRecents?: number
+  ecoleProche?: boolean
+}): number {
+  const max = s.ecoleProche ? REPOS_SEULS_MAX_AVANT_ECOLE : REPOS_SEULS_MAX
+  return Math.max(0, max - (s.reposSeulsRecents ?? 0))
+}
+
 /** Le message d'une transition faite : un changement de jours de repos,
  * pas une faute. Sans `nbJours` : sans les jours. */
 export function messageTransition(

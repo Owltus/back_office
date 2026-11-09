@@ -33,6 +33,7 @@ import {
   genreMotif,
   motifsInterdits,
   reposSeulsDans,
+  reposSeulsPermis,
   transitionsDans,
 } from '#/lib/planning/rythmeStrict.ts'
 import type { EtatRythme } from '#/lib/planning/rythmeStrict.ts'
@@ -263,7 +264,7 @@ describe('le calcul', () => {
 // ----------------------------------- l'apprentie avant son CFA (fictif)
 
 describe('repos mercredi-jeudi, CFA le lundi 14 (fictif)', () => {
-  it('jamais 3 repos ; au plus un repos seul ; 7 h perdues au plus, et pourquoi', () => {
+  it('toutes les heures avant le CFA : jamais 3 repos, deux repos seuls au plus (exception de l’école)', () => {
     const { referentiel, absences, avant } = apprentieCfa()
     const m = new PlanningMemoire(referentiel, absences, '2026-11-09', highs)
     m.avecHistorique = true
@@ -281,27 +282,46 @@ describe('repos mercredi-jeudi, CFA le lundi 14 (fictif)', () => {
     expect(
       alertes.filter(({ a }) => /\d+ jours de repos/.test(a.message)),
     ).toEqual([])
-    // Au plus un repos seul sur ces semaines.
+    // Au plus deux repos seuls (la suite « mercredi-jeudi » jusqu'au
+    // samedi-dimanche d'avant le CFA en demande deux pour ne rien perdre,
+    // vérifié à la main sur toutes les suites possibles).
     expect(
       new Set(
         alertes
           .filter(({ a }) => a.regle === 'RYTHME-REPOS-SEUL')
           .map(({ s, a }) => `${s.lundi}|${a.message}`),
       ).size,
-    ).toBeLessThanOrEqual(1)
-    // Les heures : la suite « mercredi-jeudi » jusqu'au samedi-dimanche
-    // d'avant le CFA demande deux repos seuls pour ne rien perdre (vérifié
-    // à la main sur toutes les suites possibles) ; avec un seul, une
-    // journée (7 h) se perd. C'est le plus petit manque permis.
-    const manque = semaines
-      .slice(0, 2)
-      .reduce(
-        (t, s) =>
-          t + Math.max(0, s.bilan[0].minutes_contrat - s.bilan[0].minutes),
-        0,
-      )
-    expect(manque).toBeLessThanOrEqual(7 * H)
+    ).toBeLessThanOrEqual(2)
+    // Aucune heure perdue.
+    for (const s of semaines.slice(0, 2))
+      expect([s.lundi, s.bilan[0].minutes]).toEqual([
+        s.lundi,
+        s.bilan[0].minutes_contrat,
+      ])
   }, 120_000)
+  it('sans semaine d’école proche : un seul repos seul sur 4 semaines', () => {
+    expect(reposSeulsPermis({})).toBe(1)
+    expect(reposSeulsPermis({ reposSeulsRecents: 1 })).toBe(0)
+    expect(reposSeulsPermis({ ecoleProche: true })).toBe(2)
+    expect(reposSeulsPermis({ ecoleProche: true, reposSeulsRecents: 1 })).toBe(
+      1,
+    )
+    expect(reposSeulsPermis({ ecoleProche: true, reposSeulsRecents: 2 })).toBe(
+      0,
+    )
+    // Le calcul : un repos seul déjà fait ; sans école proche, le bloc de 4
+    // et 7 h de moins ; avec, le second repos seul et toutes les heures.
+    const s = personne({
+      etatsAvant: 'rTTTTTr',
+      joursSemainePrecedente: 5,
+      etatsApres: 'TTTTTrr',
+      reposSeulsRecents: 1,
+    })
+    expect(tenus(resoudre(s, [0, 1, 2, 3, 4, 5, 6]).r)).toEqual([1, 2, 3, 4])
+    expect(
+      tenus(resoudre({ ...s, ecoleProche: true }, [0, 1, 2, 3, 4, 5, 6]).r),
+    ).toEqual([1, 2, 3, 4, 5])
+  })
 })
 
 // --------------------------------------------------------- l'équilibre

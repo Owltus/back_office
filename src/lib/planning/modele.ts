@@ -252,6 +252,10 @@ export interface SalarieSolveur {
   /** Rythme 5 et 2 strict : repos seuls (urgence, `estReposSeul`) déjà
    * faits sur les mêmes jours. Absent : aucun. */
   reposSeulsRecents?: number
+  /** Une semaine d'école (motif de nature école) la semaine d'après ou
+   * celle d'encore après : un second repos seul sur 4 semaines est permis
+   * (`reposSeulsPermis`). Absent : non. */
+  ecoleProche?: boolean
   reposHebdoMin: number
   jourMaxPoste: boolean
   contratDebut: number | null

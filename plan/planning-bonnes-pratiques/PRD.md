@@ -792,21 +792,25 @@ sur le mois (deux personnes, une journée chacune).
   (`prixTransition`), sans plafond de nombre, toujours sous une heure due. Le REPOS SEUL coûte 3
   places (`PLACES_REPOS_SEUL`) : au-dessus de toute transition et de toute place d'un poste non
   indispensable, sous une heure due ; un par personne sur 4 semaines (`reposSeulsRecents`), le
-  second au prix des 3 repos. Dits « changement de jours de repos » (RYTHME-TRANSITION, jamais
+  second au prix des 3 repos ; DEUX avant une semaine d'école (la semaine d'avant et celle
+  d'encore avant, motif de nature école, décision de l'utilisateur du 2026-11-10 : « pour faire
+  toutes les heures »). Ces semaines-là, au rythme strict, la paire de repos de la semaine
+  n'est plus dure (elle interdisait le second repos seul) ; ailleurs elle le reste (souple
+  partout, une semaine de l'hôtel d'essai atteignait le plafond de 60 s). Dits « changement de jours de repos » (RYTHME-TRANSITION, jamais
   bloquant) et « repos seul (manque de personnel) » (RYTHME-REPOS-SEUL, bloque une place seule).
 - **Mesuré.** Banc de décembre (copie locale, en mémoire, « Compléter le mois », horizon, 3
   graines identiques) : places à pourvoir 28 → 10 (les 10 : plus personne n'a d'heures), 0 repos
-  de 3 jours, 0 repos seul, 2 transitions (le salarié confirmé aux repos mardi-mercredi passe au
-  lundi-mardi, une apprentie avant sa semaine de CFA), mercredis et jeudis matin 3 sur 3 (sauf le
-  17 : 2 sur 3), aucune infraction, 5,1 s au pire par semaine.
-- **Heures dues qui manquent encore (22 h).** (1) Un CDI dont le contrat finit le lundi 30/11 :
+  de 3 jours, 1 repos seul (une apprentie avant sa semaine de CFA), 1 transition (le salarié
+  confirmé aux repos mardi-mercredi passe au lundi-mardi), mercredis et jeudis matin 3 sur 3 (sauf
+  le 17 : 2 sur 3), aucune infraction, 11,3 s au pire par semaine.
+- **Heures dues qui manquent encore (15 h ; 22 h avant l'exception de l'école).** (1) Un CDI dont le contrat finit le lundi 30/11 :
   ce lundi est un repos VALIDÉ, ses 8 h dues ne peuvent pas être faites. (2) Une apprentie, 14 h
   la semaine du 7/12 : ses repos validés au mercredi-jeudi, son CFA du 14/12 exige les repos au
   samedi-dimanche d'avant. Toutes les suites possibles ont été vérifiées : sans repos seul, aucune
-  ne tient sans faute ; avec un, 7 h se perdent ; avec deux, aucune. Elle a déjà un repos seul
-  validé le 6/11 : le second coûte comme 3 repos, donc le calcul fait un bloc de 2 jours (prix
-  fort) et perd 14 h. Cas fictif `apprentieCfa.ts` (sans repos seul d'avant) : 7 h perdues, un
-  repos seul, aucun 3 repos.
+  ne tient sans faute ; avec un, 7 h se perdent ; avec deux, aucune. Avant l'école, deux repos
+  seuls sont permis sur 4 semaines, mais elle en a déjà un validé le 15/11 (le dimanche avant son
+  CFA de novembre) : un seul de plus, 7 h perdues (avant l'exception : 14 h). Cas fictif
+  `apprentieCfa.ts` (sans repos seul d'avant) : 0 h perdue, aucun 3 repos.
 - **Statut.** EN PLACE (local, non livré) le 2026-11-09.
 
 #### 23. Jamais du monde en trop sur un moment pendant qu'un autre manque

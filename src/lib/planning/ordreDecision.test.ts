@@ -215,7 +215,9 @@ describe('P1 : une place nécessaire passe avant le 6e jour et les heures en plu
   it('la loi passe avant : jamais un 7e jour pour tenir une place', () => {
     const p = probleme({
       salaries: [personne('a', 35)],
-      creneaux: [0, 1, 2, 3, 4, 5, 6].map((j) => creneau(`m${j}`, j, 7, 12)),
+      // Des journées de 7 h : 5 jours font le contrat (avec 5 h, les heures
+      // dues feraient venir un 6e jour, quitte à un repos seul, 2026-11-09).
+      creneaux: [0, 1, 2, 3, 4, 5, 6].map((j) => creneau(`m${j}`, j, 7, 14)),
     })
     const r = gen(p)
     // Deux repos de suite (2026-11-04) : cinq jours, deux places vides.

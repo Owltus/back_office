@@ -537,7 +537,9 @@ describe('générateur', () => {
   })
 
   it('repos hebdomadaire de 35 h consécutives', () => {
-    const s = receptionniste('r0', 43, {
+    // 35 h, faites par les 5 matins posés (à 43 h, les heures dues font
+    // venir le lundi, quitte à un repos seul, depuis le 2026-11-09).
+    const s = receptionniste('r0', 35, {
       joursTravaillesMaxSemaine: 6,
       reposHebdoMin: 35 * H,
     })
@@ -821,6 +823,8 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
     // rangés autrement : 3 repos au prix `dur`, le repos seul au prix
     // `urgence` (un sur 4 semaines), les transitions (bloc de 4) sans
     // plafond, à prix croissant (`prixTransition`).
+    // Inchangée le 2026-11-10 : la paire de repos de la semaine ne devient
+    // souhaitée qu'avant une semaine d'école (aucune ici).
     expect(empreinte(textesLp(true))).toBe(EMPREINTE_STRICT)
   })
 })

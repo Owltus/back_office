@@ -493,7 +493,14 @@ describe('le calcul et le vérificateur', () => {
     expect(dits.length).toBeLessThanOrEqual(2)
   })
   it('CFA du lundi au vendredi : le week-end en repos ; refusé : le samedi travaillé', () => {
-    const s = personne({ ...AVANT, ...travailSansShift([0, 1, 2, 3, 4], true) })
+    // Heures dues de la semaine, école retirée (2026-11-09 : les heures
+    // passent avant un repos seul, un contrat plein ferait venir le dimanche).
+    const s = personne({
+      ...AVANT,
+      ...travailSansShift([0, 1, 2, 3, 4], true),
+      minutesHebdoContrat: 0 * H,
+      minutesContrat: 35 * H,
+    })
     const { p, r } = resoudre(s)
     expect(r.statut).not.toBe('inconnu')
     expect(tenus(r)).toEqual([])
@@ -501,7 +508,12 @@ describe('le calcul et le vérificateur', () => {
     expect(rythmeDit(p, [{ salarieId: 'a', creneauId: 'j5' }])).toHaveLength(1)
   })
   it('CFA de 3 jours : complété par 2 shifts ; refusé : 3 jours seuls', () => {
-    const s = personne({ ...AVANT, ...travailSansShift([0, 1, 2], true) })
+    const s = personne({
+      ...AVANT,
+      ...travailSansShift([0, 1, 2], true),
+      minutesHebdoContrat: 14 * H,
+      minutesContrat: 35 * H,
+    })
     const { p, r } = resoudre(s)
     expect(tenus(r)).toEqual([3, 4])
     expect(rythmeDit(p, r.affectations)).toEqual([])
@@ -610,7 +622,12 @@ describe('le calcul et le vérificateur', () => {
     ).toEqual(['repos seul (manque de personnel) le lundi'])
   })
   it('jour férié chômé : un jour de travail ; refusé : 5 shifts autour', () => {
-    const s = personne({ ...AVANT, ...travailSansShift([2]) })
+    const s = personne({
+      ...AVANT,
+      ...travailSansShift([2]),
+      minutesHebdoContrat: 28 * H,
+      minutesContrat: 35 * H,
+    })
     const { p, r } = resoudre(s)
     expect(tenus(r)).toEqual([0, 1, 3, 4])
     expect(rythmeDit(p, r.affectations)).toEqual([])

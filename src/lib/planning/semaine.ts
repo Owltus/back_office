@@ -2159,6 +2159,20 @@ export function avecSemainesVoisines(
         return {
           transitionsRecentes: passe ? transitionsDans(passe) : 0,
           reposSeulsRecents: passe ? reposSeulsDans(passe) : 0,
+          // Une semaine d'école la semaine d'après ou celle d'encore après
+          // (motif de nature école, `ctx.ecole`) : un second repos seul est
+          // permis (`reposSeulsPermis`, 2026-11-09).
+          ecoleProche: [7, 14].some((dec) =>
+            (fichesDe.get(key) ?? []).some((f) =>
+              [
+                ...joursAbsents(
+                  f,
+                  ajouterJours(ctx.lundi, dec),
+                  ctx.absences,
+                ).values(),
+              ].some((m) => m !== null && m !== undefined && ctx.ecole.has(m)),
+            ),
+          ),
         }
       })(),
       etatsAvant: d.avant.length ? etatsVoisins(key, -7, travailAvant) : null,

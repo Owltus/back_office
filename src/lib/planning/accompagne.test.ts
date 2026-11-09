@@ -890,3 +890,44 @@ describe('postes indispensables : un seul groupe (2026-11-09)', () => {
     }
   })
 })
+
+describe('apprenti TITULAIRE sur un poste indispensable (rappel du 2026-11-10)', () => {
+  const ind = { indispensable: true }
+  it('refusé : seul une partie de son shift ; signalé au vérificateur', () => {
+    // Le salarié confirmé n'est là que de 7 h à 11 h (au Club) ; l'apprenti,
+    // titulaire de la Réception, de 7 h à 15 h : seul de 11 h à 15 h.
+    const app = apprenti('ap')
+    expect(confirmeSur(app, 'rec')).toBe(false)
+    const p = probleme({
+      salaries: [app, sal('cdi')],
+      creneaux: [
+        place('r1', 'rec', 7, 15, ind),
+        place('c1', 'club', 7, 11, ind),
+      ],
+      imposees: new Set(['cdi|c1']),
+      graine: 1,
+    })
+    expect(qui(gen(p))).toEqual(['cdi@c1'])
+    const dits = accompagnesSeuls(p, [
+      { salarieId: 'cdi', creneauId: 'c1' },
+      { salarieId: 'ap', creneauId: 'r1' },
+    ])
+    expect(dits.map((v) => [v.salarieId, v.message])).toEqual([
+      [
+        'ap',
+        'jamais sans un salarié confirmé : seul sur les postes indispensables pendant 4 h',
+      ],
+    ])
+    // Accepté : le salarié confirmé couvre tout le shift.
+    const q = probleme({
+      salaries: [app, sal('cdi')],
+      creneaux: [
+        place('r1', 'rec', 7, 15, ind),
+        place('c1', 'club', 7, 15, ind),
+      ],
+      imposees: new Set(['cdi|c1']),
+      graine: 1,
+    })
+    expect(qui(gen(q))).toEqual(['ap@r1', 'cdi@c1'])
+  })
+})

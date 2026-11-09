@@ -3000,8 +3000,12 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   d'heures dues) ; (3) les HEURES DUES : une heure vaut plus qu'un repos seul et une place
   ensemble (`minuteDue`) ; (4) les places (paliers) ; (5) le REPOS SEUL, urgence
   (`PLACES_REPOS_SEUL` = 3 places : il faut plus de 3 places, ou des heures, pour le faire), un par
-  personne sur 4 semaines (`reposSeulsRecents`), le second au prix `dur`, dit « repos seul (manque
-  de personnel) » (RYTHME-REPOS-SEUL, bloque UNE place) ; puis la TRANSITION = un bloc de 4 jours
+  personne sur 4 semaines (`reposSeulsRecents`), le second au prix `dur`, SAUF avant une semaine
+  d'école (motif de nature école la semaine d'après ou celle d'encore après, `ecoleProche`,
+  décision utilisateur du 2026-11-10) : deux sur 4 semaines (`reposSeulsPermis`) ; dit « repos seul
+  (manque de personnel) » (RYTHME-REPOS-SEUL, bloque UNE place). Avant une semaine d'école, au
+  rythme strict, la paire de repos de la SEMAINE devient souhaitée (dure, elle interdisait le
+  second repos seul ; souple partout, une semaine de l'hôtel d'essai atteignait 60 s) ; puis la TRANSITION = un bloc de 4 jours
   (`estTransition` ; 3 repos ne sont plus une transition) à 1,5 place, la suivante de la même
   personne sur 4 semaines + 0,5, au plus 2,5 (`prixTransition`), SANS plafond de nombre, toujours
   sous une heure due ; dite RYTHME-TRANSITION, jamais bloquante ; (6) l'ÉQUILIBRE entre les moments
@@ -3020,12 +3024,12 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   mercredi-jeudi, CFA le lundi 14 », `test/apprentieCfa.ts`), `accompagne.test.ts` (postes
   indispensables, éparpiller), cas du mercredi `test/hotelMercredi.ts`. Empreintes 5f88f9d7 et
   15e530ae. Banc décembre (copie locale, en mémoire, horizon, 3 graines identiques) : places à
-  pourvoir 10 (toutes HEURES-FAITES), 0 repos de 3 jours, 0 repos seul, 2 transitions, mercredis
-  et jeudis matin 3 / 3 (sauf le 17 : 2 / 3), soirs 2 / 2, 0 déséquilibre, 0 infraction, heures
-  dues manquantes 22 h : 8 h d'un CDI dont le dernier jour de contrat est un repos validé, 14 h
-  d'une apprentie entre sa semaine validée (repos mercredi-jeudi) et son CFA du 14/12 (il faudrait
-  un repos seul, mais elle en a déjà un, validé, le 6/11 : le second coûte comme 3 repos), 5,1 s au
-  pire par semaine.
+  pourvoir 10 (toutes HEURES-FAITES), 0 repos de 3 jours, 1 repos seul (l'apprentie, avant son
+  CFA), 1 transition, mercredis et jeudis matin 3 / 3 (sauf le 17 : 2 / 3), soirs 2 / 2, 0
+  déséquilibre, 0 infraction, heures dues manquantes 15 h : 8 h d'un CDI dont le dernier jour de
+  contrat est un repos validé, 7 h d'une apprentie entre sa semaine validée (repos
+  mercredi-jeudi) et son CFA du 14/12 (zéro demanderait deux repos seuls cette semaine-là, or
+  elle en a déjà un validé le 15/11, dans les 4 semaines), 11,3 s au pire par semaine.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 
