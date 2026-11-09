@@ -765,7 +765,7 @@ export function AidePlanningContenu({
               `Entre deux équipes, la suivante arrive au plus tard quand la précédente part, nuit comprise. Le planning préfère qu’elles se croisent : l’équipe du matin et celle du soir ensemble ${duree(RELEVE_MINUTES)} chaque jour, pour la relève. Ces règles sont les mêmes pour toute zone tenue en continu, sans réglage.`,
               'Passation avec la nuit : le dernier du soir part à son arrivée, le premier du matin arrive avant son départ.',
               `Une équipe ensemble : le soir, les personnes arrivent à ${duree(EQUIPE_TOLERANCE)} près et partent à ${duree(EQUIPE_TOLERANCE)} près, pour que personne ne reste seul. Chacune croise le matin le temps de la relève. Le matin, l’équipe arrive à l’heure d’ouverture du poste, comme dans les plannings faits à la main. Quand il manque du monde, le manque est partagé entre le matin et le soir plutôt que de laisser une personne seule. Une alerte dit quand ce n’est pas possible.`,
-              'Un apprenti ou un stagiaire compte dans le chiffre de l’accueil, mais n’est jamais seul sur son poste.',
+              'Un apprenti ou un stagiaire compte dans le chiffre de l’accueil, mais n’est jamais seul : quelqu’un de titulaire ou en dépannage est dans la zone pendant tout son shift.',
             ]}
           />
           <Exemple>
@@ -788,7 +788,7 @@ export function AidePlanningContenu({
             items={[
               'Titulaire : son poste habituel. L’app le place en premier.',
               'Dépannage : il sait tenir le poste, mais ce n’est pas le sien. L’app ne le prend que si aucun titulaire ne peut.',
-              'Soutien : apprenti ou stagiaire. Il compte, mais jamais seul.',
+              'Soutien : apprenti ou stagiaire. Il compte, mais jamais seul : quelqu’un de titulaire ou en dépannage est là pendant tout son shift, sur un poste de la même zone, ou sur son poste s’il n’a pas de zone.',
               'Salarié confirmé : un apprenti ou un stagiaire n’est jamais sans quelqu’un de titulaire ou en dépannage d’un autre contrat, pendant tout son shift, même s’il est titulaire. Peu importe le poste de cette personne s’il est dans la même zone (page Postes) ; un poste sans zone demande quelqu’un sur le même poste. C’est la case Jamais sans un salarié confirmé du type de contrat, dans Équipe, Règles des contrats.',
             ]}
           />

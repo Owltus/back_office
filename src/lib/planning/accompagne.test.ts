@@ -539,6 +539,119 @@ describe('la zone du poste (décision de l’utilisateur du 2026-11-09)', () => 
   })
 })
 
+describe('soutien jamais seul : pendant tout le shift, dans la zone (2026-11-09)', () => {
+  /** En soutien sur la Réception et le Club, des heures à faire. */
+  const soutien = (id: string, kw: Partial<SalarieSolveur> = {}) =>
+    sal(id, {
+      postes: new Set(),
+      postesSoutien: new Set(['rec', 'club']),
+      minutesHebdoContrat: 7 * H,
+      ...kw,
+    })
+  it('accepté : un titulaire là pendant tout son shift', () => {
+    const p = probleme({
+      salaries: [sal('t', { postes: new Set(['rec']) }), soutien('s')],
+      creneaux: [cand('m', 'rec', 7, 15, ['matin'])],
+      consignes: [chiffre('matin', 2)],
+      nbJours: 1,
+    })
+    const r = gen(p)
+    expect(qui(r)).toEqual(['s@m', 't@m'])
+    expect(soutiensSeuls(p, r.affectations)).toEqual([])
+  })
+  it('refusé : un soutien qui ne croise le titulaire qu’une heure', () => {
+    // Le titulaire ne peut faire que 7 h - 9 h (fin de contrat) : le
+    // soutien de 8 h à 15 h serait seul six heures. Un chevauchement
+    // suffisait avant le 2026-11-09.
+    const p = probleme({
+      salaries: [
+        sal('t', { postes: new Set(['rec']), contratFin: 9 * H }),
+        soutien('s', { contratDebut: 8 * H }),
+      ],
+      creneaux: [
+        cand('m1', 'rec', 7, 9, ['matin']),
+        cand('m2', 'rec', 8, 15, ['matin']),
+      ],
+      consignes: [chiffre('matin', 2)],
+      nbJours: 1,
+    })
+    expect(qui(gen(p))).toEqual(['t@m1'])
+    const dits = soutiensSeuls(p, [
+      { salarieId: 't', creneauId: 'm1' },
+      { salarieId: 's', creneauId: 'm2' },
+    ])
+    expect(dits.map((v) => v.message)).toEqual([
+      'en soutien sur ce poste : ne peut pas être seul, personne d’autonome dans la zone Accueil pendant 6 h',
+    ])
+  })
+  it('refusé : deux soutiens ensemble ne s’accompagnent pas', () => {
+    const p = probleme({
+      salaries: [soutien('s1'), soutien('s2')],
+      creneaux: [cand('m', 'rec', 7, 15, ['matin'])],
+      consignes: [chiffre('matin', 2)],
+      nbJours: 1,
+    })
+    expect(gen(p).affectations).toEqual([])
+    expect(
+      soutiensSeuls(p, [
+        { salarieId: 's1', creneauId: 'm' },
+        { salarieId: 's2', creneauId: 'm' },
+      ]).map((v) => v.salarieId),
+    ).toEqual(['s1', 's2'])
+  })
+  it('accepté : en soutien à la Réception, le titulaire au Club (même zone)', () => {
+    const p = probleme({
+      salaries: [sal('t', { postes: new Set(['club']) }), soutien('s')],
+      creneaux: [
+        cand('mr', 'rec', 7, 15, ['matin']),
+        cand('mc', 'club', 7, 15, ['matin']),
+      ],
+      consignes: [chiffre('matin', 2)],
+      nbJours: 1,
+    })
+    const r = gen(p)
+    expect(r.affectations.map((a) => a.salarieId).sort()).toEqual(['s', 't'])
+    expect(soutiensSeuls(p, r.affectations)).toEqual([])
+  })
+  it('poste sans zone : le poste seul', () => {
+    const essai = (zone: string | null) =>
+      probleme({
+        salaries: [sal('t', { postes: new Set(['club']) }), soutien('s')],
+        creneaux: [
+          place('p1', 'club', 7, 16, { zone }),
+          place('p2', 'rec', 8, 15, { zone, effectif: 0, soutien: 1 }),
+        ],
+        nbJours: 1,
+      })
+    // Même zone : accompagné.
+    const z = essai('1')
+    expect(qui(gen(z))).toEqual(['s@p2', 't@p1'])
+    // Sans zone : la Réception n'a personne d'autonome, il ne vient pas.
+    const sans = essai(null)
+    expect(qui(gen(sans))).toEqual(['t@p1'])
+    expect(
+      soutiensSeuls(sans, [
+        { salarieId: 't', creneauId: 'p1' },
+        { salarieId: 's', creneauId: 'p2' },
+      ]).map((v) => v.regle),
+    ).toEqual(['SOUTIEN-SEUL'])
+  })
+  it('besoin : un remplaçant d’une autre heure sur la même place ne suffit plus', () => {
+    // Avant : « sur la même place » suffisait, même à d'autres heures.
+    // Désormais : à tout moment du shift du soutien.
+    const p = probleme({
+      salaries: [sal('t', { postes: new Set(['rec']) }), soutien('s')],
+      creneaux: [
+        place('b', 'rec', 14, 22, { soutien: 1 }),
+        place('r', 'rec', 7, 15, { place: 'b', effectif: 0 }),
+      ],
+      nbJours: 1,
+    })
+    const r = gen(p)
+    expect(soutiensSeuls(p, r.affectations)).toEqual([])
+  })
+})
+
 describe('l’hôtel fictif, semaine entière', () => {
   it('la case cochée : aucun apprenti ni stagiaire seul, aucune infraction ; décochée : un apprenti titulaire tient une place seul', () => {
     const LUNDI = '2026-11-02'

@@ -138,7 +138,8 @@ dues manquées 36 h → 36 h ou 43 h selon la graine ; 29/06 → 26/10 : trous d
 et 3 passations manquées → 0 sur la graine qui en avait, une à deux places vides de plus (une
 même personne ne tient pas une place ET la continuité, toutes deux P1). Un apprenti ou un
 stagiaire (D9) compte comme autonome sur un poste où il est titulaire ou en dépannage ; en
-soutien, jamais seul (règle de l'établissement, non réglable).
+soutien, jamais seul (règle de l'établissement, non réglable) : depuis le 2026-11-09, pendant
+tout son shift, dans la zone de son poste (règle 21).
 
 **IMPORTANCE DES POSTES ET BESOINS RÉGLÉS (D4, D11, décisions utilisateur du 2026-11-05 : « les
 hôteliers sont plus importants sur les postes de Club et Réception ou la nuit » ; « quand il
@@ -730,7 +731,10 @@ sur le mois (deux personnes, une journée chacune).
   monde… je ne veux pas de poste en dur » ; aujourd'hui, Réception et Club dans la zone
   Accueil), ou sur le même poste quand il n'a pas de zone. Son niveau se lit sur le poste
   qu'elle tient. La définition du soutien jamais seul étendue à toute la durée du shift
-  (`morceaux`, `accompagnement` dans `zones.ts`). DUR pour le calcul (la place reste vide plutôt), jamais sur un shift posé ;
+  (`morceaux`, `accompagnement` dans `zones.ts`). Le SOUTIEN jamais seul suit la même exigence
+  depuis le même jour (décision de l'utilisateur) : une personne autonome là pendant tout son
+  shift, dans la zone de son poste ou, sans zone, sur le poste (avant : un simple chevauchement,
+  ou la même place pour un besoin). Une fonction pour les deux (`minutesSeul`). DUR pour le calcul (la place reste vide plutôt), jamais sur un shift posé ;
   alerte ACCOMPAGNE-SEUL sur un shift posé à la main ; raison d'une place vide ; « À vérifier »
   pour un poste sans aucun salarié confirmé.
 - **Mesuré.** Banc de décembre (copie locale, en mémoire, horizon, 3 graines) : quarts d'heure

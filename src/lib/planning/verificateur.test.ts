@@ -455,8 +455,12 @@ describe('couverture, soutien, raisons', () => {
       .filter((r) => r === 'SOUTIEN-SEUL')
   }
 
-  it('un soutien est accompagné seulement sur le même poste en même temps', () => {
-    expect(soutienAvec(cr('d', 0, 8 * H, 12 * H))).toEqual([])
+  it('un soutien est accompagné sur le même poste pendant TOUT son shift (2026-11-09)', () => {
+    expect(soutienAvec(cr('d', 0, 8 * H, 17 * H))).toEqual([])
+    expect(soutienAvec(cr('d', 0, 9 * H, 17 * H))).toEqual([])
+    // Croisé une partie seulement : seul le reste du temps.
+    expect(soutienAvec(cr('d', 0, 8 * H, 12 * H))).toEqual(['SOUTIEN-SEUL'])
+    expect(soutienAvec(cr('d', 0, 10 * H, 17 * H))).toEqual(['SOUTIEN-SEUL'])
     expect(soutienAvec(cr('d', 0, 9 * H, 17 * H, 'club'))).toEqual([
       'SOUTIEN-SEUL',
     ])

@@ -392,8 +392,10 @@ describe('un soutien compte, jamais seul (D5)', () => {
     expect(ecarts(p, r)).toEqual([-1])
   })
 
-  it('refusé : accompagné sur le MÊME poste, pas sur l’autre', () => {
-    // Le titulaire ne tient que la Réception, l'apprenti que le Club.
+  it('accepté : accompagné sur un autre poste de la même zone (2026-11-09)', () => {
+    // Le titulaire ne tient que la Réception, l'apprenti que le Club : les
+    // deux candidats sont de l'accueil, la même zone (« peu importe sur le
+    // poste, mais il faut du monde »). Un poste sans zone : accompagne.test.ts.
     const p = probleme({
       salaries: [
         sal('t', { postes: new Set(['rec']) }),
@@ -404,7 +406,7 @@ describe('un soutien compte, jamais seul (D5)', () => {
       nbJours: 1,
     })
     const r = gen(p)
-    expect(qui(r)).toEqual(['t@rm'])
+    expect(qui(r)).toEqual(['app@cm', 't@rm'])
     expect(soutiensSeuls(p, r.affectations)).toEqual([])
   })
 

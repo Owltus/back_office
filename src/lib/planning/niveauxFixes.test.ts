@@ -211,7 +211,9 @@ describe('soutien', () => {
       soutiensSeuls(p, [{ salarieId: 's', creneauId: 'p' }]).map(
         (v) => v.message,
       ),
-    ).toEqual(['en soutien sur ce poste : ne peut pas être seul'])
+    ).toEqual([
+      'en soutien sur ce poste : ne peut pas être seul, personne d’autonome sur ce poste tout le shift',
+    ])
   })
   it('avec un titulaire ou un dépannage', () => {
     for (const autonome of [NIVEAU_TITULAIRE, NIVEAU_DEPANNAGE]) {

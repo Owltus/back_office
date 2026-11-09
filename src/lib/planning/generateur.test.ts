@@ -643,7 +643,7 @@ describe('générateur', () => {
  * donne la même solution : rien ne bouge pour une semaine sans cycles.
  */
 /** Empreinte du modèle avec le rythme 5 et 2 strict (le défaut). */
-const EMPREINTE_STRICT = 'fb6eed48'
+const EMPREINTE_STRICT = 'ed536f1a'
 
 describe('sans remplaçant, consigne ni présence : le modèle d’avant', () => {
   /** FNV-1a 32 bits, assez pour reconnaître un texte. */
@@ -776,7 +776,13 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
     // l'accueil ni nuit (aucun trou, aucune passation).
     // Inchangée par le rythme 5 et 2 strict (2026-11-09) quand le réglage est
     // à non : `rythmeStrictModele` n'écrit rien.
-    expect(empreinte(textesLp(false))).toBe('8874c146')
+    // 99598680 (2026-11-09, soutien jamais seul pendant tout le shift,
+    // décision de l'utilisateur) : ces semaines tirent des soutiens et des
+    // places avec `soutien` ; leur ligne « soutien <= les référents de la
+    // même place » devient une ligne par morceau du shift (`morceaux`), avec
+    // les référents des créneaux du même poste qui couvrent ce morceau (ces
+    // créneaux n'ont pas de zone : le poste). Le reste du modèle est le même.
+    expect(empreinte(textesLp(false))).toBe('99598680')
   })
 
   it('rythme 5 et 2 strict : une empreinte à part', () => {
@@ -792,6 +798,8 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
     // Et (même jour, fb6eed48) : les motifs autres que les 6 jours ne sont
     // plus durs mais payés (`prixFauteRythme`, plus que tout le reste) ;
     // un motif qui ne peut jamais être en faute n'est pas écrit.
+    // ed536f1a (2026-11-09, soutien jamais seul pendant tout le shift) :
+    // même changement que l'empreinte sans le rythme strict (99598680).
     expect(empreinte(textesLp(true))).toBe(EMPREINTE_STRICT)
   })
 })

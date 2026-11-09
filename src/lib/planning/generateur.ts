@@ -38,7 +38,6 @@ import {
   cleAEviter,
   confirmeSur,
   dansLeContrat,
-  ensemble,
   morceaux,
   duree,
   jourDe,
@@ -1414,10 +1413,7 @@ export function construire(
     const autonomes: string[] = []
     /** Rang de niveau de chaque autonome (nombre par niveau, 2026-11-06). */
     const rangs: number[] = []
-    const referents: string[] = []
     const soutiens: Array<[SalarieSolveur, string, Creneau]> = []
-    /** Autonomes « jamais seuls » (un niveau autonome qui l'est). */
-    const seuls: Array<[SalarieSolveur, string, Creneau]> = []
     for (const c of membres) {
       for (const s of p.salaries) {
         const v = x.get(cle(s.id, c.id))
@@ -1427,8 +1423,6 @@ export function construire(
         else {
           autonomes.push(v)
           rangs.push(n?.rang ?? 0)
-          if (referentSur(s, c.poste)) referents.push(v)
-          else if (jamaisSeulSur(s, c.poste)) seuls.push([s, v, c])
         }
         // P4 : un dépannage coûte, un titulaire libre passe devant (D13) ;
         // un niveau entre les deux, une part du prix (`partSur`).
@@ -1491,12 +1485,8 @@ export function construire(
           )
       }
     }
-    // Un niveau autonome « jamais seul » : avec une personne qui ne l'est
-    // pas, sur la même place.
-    for (const [s, v, c] of seuls) {
-      if (!imposees.has(cle(s.id, c.id)))
-        m.ajoute([[1, v], ...referents.map((a) => [-1, a] as Terme)], '<=', 0)
-    }
+    // « Jamais seul » (soutien) : la règle commune, plus bas (JAMAIS SEUL,
+    // PENDANT TOUT LE SHIFT), plus seulement sur la même place.
     if (soutiens.length) {
       const nbImposes = soutiens.filter(([s, , c]) =>
         imposees.has(cle(s.id, c.id)),
@@ -1506,13 +1496,6 @@ export function construire(
         '<=',
         Math.max(tete.soutien, nbImposes),
       )
-      // Soutien jamais seul : compté sur la place entière, avec une
-      // personne autonome qui n'est pas elle-même « jamais seule ».
-      for (const [s, v, c] of soutiens) {
-        if (!imposees.has(cle(s.id, c.id)) && jamaisSeulSur(s, c.poste)) {
-          m.ajoute([[1, v], ...referents.map((a) => [-1, a] as Terme)], '<=', 0)
-        }
-      }
     }
   }
 
@@ -1596,52 +1579,38 @@ export function construire(
     return r
   }
 
-  // Candidats de l'accueil : le prix du dépannage ou de l'extra (D7), et un
-  // soutien jamais seul (D5) : chaque soutien non imposé <= les autonomes
-  // du MÊME poste dont le créneau chevauche le sien (la règle de
-  // `soutiensSeuls`, le vérificateur). Un soutien n'est pas autonome : il ne
-  // s'accompagne pas lui-même.
-  const parPoste = new Map<string, Creneau[]>()
-  for (const c of p.creneaux)
-    parPoste.set(c.poste, [...(parPoste.get(c.poste) ?? []), c])
+  // Candidats de l'accueil : le prix du dépannage ou de l'extra (D7).
   for (const c of p.creneaux) {
     if (!c.accueil || c.ferme) continue
-    let avec: Terme[] | null = null
     for (const s of p.salaries) {
-      const k = cle(s.id, c.id)
-      const v = x.get(k)
+      const v = x.get(cle(s.id, c.id))
       if (!v) continue
       const part = partSur(s, c.poste)
       if (s.placementManuel) m.cout(coutExtra(c, R), v)
       else if (part > 0) m.cout(coutDepannage(c) * part, v)
-      // Une personne accompagnée (plus bas) a déjà plus fort : un salarié
-      // confirmé (référent) qui couvre tout son créneau.
-      if (!jamaisSeulSur(s, c.poste) || imposees.has(k) || s.accompagne)
-        continue
-      if (!avec) {
-        avec = []
-        for (const d of parPoste.get(c.poste) ?? [])
-          if (ensemble(c, d)) avec.push(...termesDe(d, 'referents'))
-        avec = sommer(avec)
-      }
-      m.ajoute([[1, v], ...avec.map(([k2, w]) => [-k2, w] as Terme)], '<=', 0)
     }
   }
 
-  // JAMAIS SANS UN SALARIÉ CONFIRMÉ (décision de l'utilisateur du
-  // 2026-11-09 : « toujours avec un CDI ou CDD hôtelier normal, et pareil
-  // pour les stagiaires »). Une personne dont le contrat a la case
-  // (`accompagne`), quel que soit son niveau (titulaire compris), n'est sur
-  // un créneau que si, à TOUT MOMENT de ce créneau, une personne CONFIRMÉE
-  // (`confirmeSur` : autonome, son contrat sans la case) est sur le même
-  // poste : le créneau est coupé en morceaux (`morceaux`, la définition du
-  // soutien jamais seul étendue à toute la durée) et chaque morceau demande
-  // un confirmé sur un créneau qui le couvre en entier. « Le même poste » :
-  // la ZONE du poste quand il en a une, sinon le poste (décision de
-  // l'utilisateur du 2026-11-09, « peu importe sur le poste, mais il faut du
-  // monde », `accompagnement`, zones.ts) ; le niveau de l'autre se lit sur
-  // le poste qu'il tient. DUR, comme le soutien : sinon la place reste vide. Jamais sur un shift posé (il reste ;
-  // le vérificateur le dit, ACCOMPAGNE-SEUL). Le modèle reste toujours
+  // JAMAIS SEUL, PENDANT TOUT LE SHIFT (décisions de l'utilisateur du
+  // 2026-11-09). Deux règles, une définition (`morceaux`, `minutesSeul` au
+  // vérificateur) :
+  // - SOUTIEN JAMAIS SEUL (D5, D9) : un niveau « jamais seul » n'est sur un
+  //   créneau que si, à TOUT MOMENT de ce créneau, une personne autonome qui
+  //   ne l'est pas elle-même (`referentSur`) est là (avant : un simple
+  //   chevauchement, ou la même place pour un besoin) ;
+  // - SALARIÉ CONFIRMÉ (« toujours avec un CDI ou CDD hôtelier normal, et
+  //   pareil pour les stagiaires ») : une personne dont le contrat a la case
+  //   (`accompagne`), quel que soit son niveau (titulaire compris), avec à
+  //   tout moment une personne CONFIRMÉE (`confirmeSur` : autonome, son
+  //   contrat sans la case). Plus fort que le soutien (un confirmé est un
+  //   référent) : une personne qui a les deux n'a que celle-ci.
+  // « Là » : dans le même GROUPE, la zone du poste quand il en a une, sinon
+  // le poste (`accompagnement`, zones.ts : « peu importe sur le poste, mais
+  // il faut du monde »). Le niveau de l'autre se lit sur le poste qu'il
+  // tient. Le créneau est coupé en morceaux et chaque morceau demande une
+  // telle personne sur un créneau qui le couvre en entier. DUR : sinon la
+  // place reste vide. Jamais sur un shift posé (il reste ; le vérificateur
+  // le dit, SOUTIEN-SEUL, ACCOMPAGNE-SEUL). Le modèle reste toujours
   // possible : ne pas venir tient la règle. Une somme par ensemble de
   // créneaux qui couvrent, partagée entre les morceaux qui ont le même.
   const { groupe } = accompagnement(p)
@@ -1650,29 +1619,43 @@ export function construire(
     const g = groupe(c)
     parGroupe.set(g, [...(parGroupe.get(g) ?? []), c])
   }
-  const sommesConfirmes = new Map<string, Terme[]>()
-  const confirmesDe = (par: readonly Creneau[]): Terme[] => {
-    const k = par.map((d) => d.id).join(',')
-    let t = sommesConfirmes.get(k)
+  const sommesAvec = new Map<string, Terme[]>()
+  const avecDe = (
+    quoi: 'referents' | 'confirmes',
+    par: readonly Creneau[],
+  ): Terme[] => {
+    const k = `${quoi}|${par.map((d) => d.id).join(',')}`
+    let t = sommesAvec.get(k)
     if (!t) {
-      t = sommer(par.flatMap((d) => termesDe(d, 'confirmes')))
-      sommesConfirmes.set(k, t)
+      t = sommer(par.flatMap((d) => termesDe(d, quoi)))
+      sommesAvec.set(k, t)
     }
     return t
   }
   for (const c of p.creneaux) {
     if (c.ferme) continue
-    let avec: Terme[][] | null = null
+    let utiles: Array<{ par: readonly Creneau[] }> | null = null
+    const lignes = new Map<string, Terme[][]>()
     for (const s of p.salaries) {
-      if (!s.accompagne) continue
+      const quoi = s.accompagne
+        ? 'confirmes'
+        : jamaisSeulSur(s, c.poste)
+          ? 'referents'
+          : null
+      if (!quoi) continue
       const k = cle(s.id, c.id)
       const v = x.get(k)
       if (!v || imposees.has(k)) continue
       // Les morceaux dont les créneaux qui couvrent contiennent ceux d'un
       // autre morceau sont sautés : leur contrainte suit de l'autre.
-      avec ??= morceauxUtiles(
+      utiles ??= morceauxUtiles(
         morceaux(c, parGroupe.get(groupe(c)) ?? [], groupe),
-      ).map((o) => confirmesDe(o.par))
+      )
+      let avec = lignes.get(quoi)
+      if (!avec) {
+        avec = utiles.map((o) => avecDe(quoi, o.par))
+        lignes.set(quoi, avec)
+      }
       for (const t of avec)
         m.ajoute([[1, v], ...t.map(([k2, w]) => [-k2, w] as Terme)], '<=', 0)
     }

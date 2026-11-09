@@ -40,7 +40,6 @@ import {
   confirmeSur,
   dansLeContrat,
   duree,
-  ensemble,
   morceaux,
   parPosteSeul,
   jourDe,
@@ -1037,33 +1036,31 @@ export function violations(
   return erreurs
 }
 
-/** Un profil « soutien » a toujours un collègue autonome sur le même poste. */
+/** Un profil « soutien » (un niveau « jamais seul », D9) a toujours, à TOUT
+ * MOMENT de son shift, une personne autonome qui ne l'est pas elle-même
+ * (`referentSur`) dans son groupe : la zone de son poste, sinon le poste
+ * (décision de l'utilisateur du 2026-11-09, `accompagnement`). Avant, un
+ * simple chevauchement suffisait. Même définition que le salarié confirmé
+ * (`minutesSeul`). */
 export function soutiensSeuls(
   p: Probleme,
   affectations: AffectationSolveur[],
 ): Violation[] {
   const presents = presentsDe(p, affectations)
+  const { groupe, lieu } = accompagnement(p)
   const erreurs: Violation[] = []
   for (const [s, c] of presents) {
-    // Un niveau « jamais seul » (D9 : le soutien), accompagné d'une personne
-    // autonome qui ne l'est pas.
     if (!jamaisSeulSur(s, c.poste)) continue
-    const accompagne = presents.some(
-      ([autre, d]) =>
-        autre.id !== s.id && referentSur(autre, d.poste) && ensemble(c, d),
-    )
-    if (!accompagne) {
-      const n = niveauSur(s, c.poste)
-      erreurs.push({
-        salarieId: s.id,
-        regle: 'SOUTIEN-SEUL',
-        message: n?.autonome
-          ? `${n.nom} sur ce poste : ne peut pas être seul`
-          : 'en soutien sur ce poste : ne peut pas être seul',
-        creneaux: [c.id],
-        nature: 'organisation',
-      })
-    }
+    const seul = minutesSeul(s, c, presents, referentSur, groupe)
+    if (!seul) continue
+    const n = niveauSur(s, c.poste)
+    erreurs.push({
+      salarieId: s.id,
+      regle: 'SOUTIEN-SEUL',
+      message: `${n?.autonome ? `${n.nom} sur ce poste` : 'en soutien sur ce poste'} : ne peut pas être seul, personne d’autonome ${lieu(c)} ${quand(seul, c)}`,
+      creneaux: [c.id],
+      nature: 'organisation',
+    })
   }
   return erreurs
 }

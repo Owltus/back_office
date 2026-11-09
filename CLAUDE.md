@@ -2872,6 +2872,11 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   obligation. Dépannage (`occasionnel`) : placé à défaut de titulaire,
   autonome, coûte la part fixe du dépannage (`part` 1, comme avant A7).
   Soutien (`soutien`) : jamais seul, avec un titulaire et / ou un dépannage.
+  ⚠ Depuis le 2026-11-09 (décision utilisateur, même exigence que le salarié
+  confirmé) : avec lui PENDANT TOUT SON SHIFT (plus un simple chevauchement,
+  ni « la même place » pour un besoin), dans la ZONE de son poste, sinon sur
+  le poste ; une définition pour les deux règles (`morceaux`,
+  `accompagnement`, `minutesSeul`), empreintes 99598680 et ed536f1a.
   Ordre GARDÉ : les heures du contrat (35 h, 39 h) passent avant « titulaire
   avant dépannage » (un dépannage qui manque d'heures passe devant un
   titulaire qui a les siennes). UNE source, `lib/planning/niveaux.ts`

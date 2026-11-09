@@ -858,19 +858,30 @@ describe('cycles : un autre code du même cycle tient la place (D5, D13, D16)', 
     expect(r.affectations).toHaveLength(2)
   })
 
-  it('soutien jamais seul : compté sur la place entière', () => {
+  it('soutien jamais seul : pendant tout son shift, plus sur la place entière (2026-11-09)', () => {
     const soutien = personne('s', 7, {
       postes: new Set(),
       postesSoutien: new Set(['r']),
     })
     const avecSoutien = [{ ...besoin, soutien: 1 }, remplacant]
+    // Le titulaire ne peut faire que M6 (10 h - 17 h) : le soutien de M3
+    // (7 h - 14 h) serait seul de 7 h à 10 h. Avant le 2026-11-09, la même
+    // place suffisait.
     const r = gen(
       probleme({
         salaries: [soutien, personne('t', 7, seulement('M6'))],
         creneaux: avecSoutien,
       }),
     )
-    expect(new Set(tenue(r))).toEqual(new Set(['s@b1', 't@r1-M6']))
+    expect(tenue(r)).toEqual(['t@r1-M6'])
+    // Le titulaire sur M3 : le soutien est là avec lui tout son shift.
+    const ensemble = gen(
+      probleme({
+        salaries: [soutien, personne('t', 7, seulement('M3'))],
+        creneaux: avecSoutien,
+      }),
+    )
+    expect(new Set(tenue(ensemble))).toEqual(new Set(['s@b1', 't@b1']))
     const seul = gen(probleme({ salaries: [soutien], creneaux: avecSoutien }))
     expect(seul.affectations).toEqual([])
   })
@@ -1176,9 +1187,10 @@ describe('cycles : pas de trou entre deux équipes (D10)', () => {
     )
     expect(qui(r, 'mid')).toEqual(['c'])
     expect(r.trous).toEqual([])
-    // Un soutien n'est pas autonome : il ne compte pas. Ici il est posé sur
-    // un middle 15 h - 21 h dont la place est tenue par d sur son autre
-    // code, 16 h - 22 h : de 15 h à 16 h, il n'y a que le soutien.
+    // Un soutien n'est pas autonome : il ne compte pas. Ici il est posé À LA
+    // MAIN sur un middle 15 h - 21 h dont la place est tenue par d sur son
+    // autre code, 16 h - 22 h : de 15 h à 16 h, il n'y a que le soutien (le
+    // calcul ne le placerait pas seul, depuis le 2026-11-09).
     const s = personne('s', 6, {
       postes: new Set(),
       postesSoutien: new Set(['r']),
@@ -1199,6 +1211,7 @@ describe('cycles : pas de trou entre deux équipes (D10)', () => {
       probleme({
         salaries: [...equipe, s, d],
         creneaux: [matin, soir, mid, midR],
+        imposees: new Set(['s|mid']),
       }),
     )
     expect(qui(r2, 'mid')).toEqual(['s'])
