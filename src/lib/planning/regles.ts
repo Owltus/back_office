@@ -521,6 +521,7 @@ export function versSolveur(f: Fiche): SalarieSolveur {
     journeePleine: reglesDe(f).contrats.journeePleine,
     contratIndicatif: !!f.forfaitJours || modeleFiche(f).contratIndicatif,
     placementManuel: modeleFiche(f).placementManuel,
+    accompagne: modeleFiche(f).accompagne,
     shiftImpose: f.shiftImpose ?? [],
     shiftsAutorises: f.shiftsAutorises ?? new Set(),
     postesOccasionnels: f.postesOccasionnels ?? new Set(),
@@ -606,6 +607,12 @@ export function resume(f: Fiche): LigneRegle[] {
     lignes.push([
       'R-ECOLE-HEURES',
       `Un jour d'école compte comme une journée de travail complète (${heuresLisibles(s.minutesEcoleJour)})`,
+    ])
+  }
+  if (modele.accompagne) {
+    lignes.push([
+      'ACCOMPAGNE',
+      `${modele.nom} : jamais sans un salarié confirmé sur son poste`,
     ])
   }
   if (f.mineur) {

@@ -881,6 +881,31 @@ export function verifierReglages(
     )
   }
 
+  // Jamais sans un salarié confirmé (décision de l'utilisateur du
+  // 2026-11-09) : un poste où des personnes dont le contrat a la case
+  // (apprentis, stagiaires) sont, mais que personne de confirmé ne tient
+  // (autonome, contrat sans la case, placé par le planning) : le planning ne
+  // les y placera jamais.
+  for (const p of r.postes) {
+    if (p.ferme) continue
+    const modele = (s: Salarie) => modeleDe(regles, s.type_contrat)
+    const accompagnes = tenants(p.id, () => true).filter(
+      (s) => modele(s).accompagne,
+    )
+    if (!accompagnes.length) continue
+    const confirmes = tenants(p.id, autonome).filter(
+      (s) => !modele(s).accompagne && !modele(s).placementManuel,
+    )
+    if (confirmes.length) continue
+    const contrats = [...new Set(accompagnes.map((s) => modele(s).nom))]
+    ajouter(
+      `sans-confirme:${p.id}`,
+      'a-voir',
+      'equipe',
+      `Le poste ${p.nom} n’a aucun salarié confirmé (titulaire ou dépannage) : ${listeOu(contrats)} n’y seront jamais placés, ils ne sont jamais sans un salarié confirmé.`,
+    )
+  }
+
   // ------------------------------------------------ tableau de l'accueil
   // Un chiffre demandé sans aucun poste de l'accueil : rien ne le tiendra.
   if (!accueil && r.consignes.some((c) => chiffreAccueil(c) > 0)) {

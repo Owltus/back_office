@@ -143,7 +143,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':J', (select j from t_ids)::text);
 $$;
 
-select plan(191);
+select plan(195);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -388,6 +388,20 @@ select is(pg_temp.essai('gestion', array[
   'update public.planning_modeles_contrat set soutien_par_defaut = false where type_contrat = ''apprenti''',
   'select soutien_par_defaut::text from public.planning_modeles_contrat where type_contrat = ''apprenti''']),
   'false', 'modèles de contrat : la gestion décoche « Proposé en soutien »');
+-- Jamais sans un salarié confirmé (20261109130000).
+select col_not_null('public', 'planning_modeles_contrat', 'accompagne',
+  'modèles de contrat : accompagne jamais nul');
+select col_default_is('public', 'planning_modeles_contrat', 'accompagne', 'false',
+  'modèles de contrat : accompagne à non par défaut');
+select is((select string_agg(type_contrat || '=' || accompagne, ',' order by type_contrat)
+             from public.planning_modeles_contrat
+            where type_contrat in ('cdi', 'cdd', 'stagiaire', 'apprenti')),
+  'apprenti=true,cdd=false,cdi=false,stagiaire=true',
+  'modèles de contrat : apprenti et stagiaire jamais sans un salarié confirmé');
+select is(pg_temp.essai('gestion', array[
+  'update public.planning_modeles_contrat set accompagne = false where type_contrat = ''stagiaire''',
+  'select accompagne::text from public.planning_modeles_contrat where type_contrat = ''stagiaire''']),
+  'false', 'modèles de contrat : la gestion décoche « Jamais sans un salarié confirmé »');
 select is(pg_temp.essai('gestion', array[
   'update public.planning_modeles_contrat set placement_manuel = true where type_contrat = ''cdd''',
   'select placement_manuel::text from public.planning_modeles_contrat where type_contrat = ''cdd''']),

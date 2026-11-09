@@ -105,6 +105,7 @@ const CHAMPS_MODELE = [
   'feries_jour_meme',
   'alternance',
   'soutien_par_defaut',
+  'accompagne',
 ] as const satisfies ReadonlyArray<keyof ModeleContrat>
 const COL_MODELE_CONTRAT = ['type_contrat', ...CHAMPS_MODELE].join(', ')
 

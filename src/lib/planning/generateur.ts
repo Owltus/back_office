@@ -36,7 +36,10 @@ import {
 import {
   cle,
   cleAEviter,
+  confirmeSur,
   dansLeContrat,
+  ensemble,
+  morceaux,
   duree,
   jourDe,
   presenceMax,
@@ -1521,7 +1524,13 @@ export function construire(
   // réduction). Un shift posé (`a…`) garde ses variables propres.
   const sommesAccueil = new Map<
     string,
-    { tous: Terme[]; autonomes: Terme[]; referents: Terme[]; n: number }
+    {
+      tous: Terme[]
+      autonomes: Terme[]
+      referents: Terme[]
+      confirmes: Terme[]
+      n: number
+    }
   >()
   const sommer = (termes: Terme[]): Terme[] => {
     if (termes.length <= 1) return termes
@@ -1534,6 +1543,7 @@ export function construire(
     const tous: Terme[] = []
     const autonomes: Terme[] = []
     const referents: Terme[] = []
+    const confirmes: Terme[] = []
     for (const s of p.salaries) {
       const v = x.get(cle(s.id, c.id))
       if (!v) continue
@@ -1541,15 +1551,20 @@ export function construire(
       if (soutienSur(s, c.poste)) continue
       autonomes.push([1, v])
       if (referentSur(s, c.poste)) referents.push([1, v])
+      if (confirmeSur(s, c.poste)) confirmes.push([1, v])
     }
     if (!tous.length) continue
     const memes = autonomes.length === tous.length
     const sa = sommer(autonomes)
+    // À l'hôtel, les autonomes sont tous des référents : la même somme.
+    const sr = referents.length === autonomes.length ? sa : sommer(referents)
     sommesAccueil.set(c.id, {
       tous: memes ? sa : sommer(tous),
       autonomes: sa,
-      // À l'hôtel, les autonomes sont tous des référents : la même somme.
-      referents: referents.length === autonomes.length ? sa : sommer(referents),
+      referents: sr,
+      // Aucun contrat « accompagné » parmi les référents : la même somme
+      // (jamais de variable en plus quand la règle ne sert pas).
+      confirmes: confirmes.length === referents.length ? sr : sommer(confirmes),
       n: tous.length,
     })
   }
@@ -1557,7 +1572,7 @@ export function construire(
    * variables une à une sinon. */
   const termesDe = (
     c: Creneau,
-    quoi: 'tous' | 'autonomes' | 'referents',
+    quoi: 'tous' | 'autonomes' | 'referents' | 'confirmes',
   ): Terme[] => {
     if (c.accueil) return sommesAccueil.get(c.id)?.[quoi] ?? []
     const r: Terme[] = []
@@ -1568,7 +1583,9 @@ export function construire(
         quoi === 'tous' ||
         (quoi === 'autonomes'
           ? !soutienSur(s, c.poste)
-          : referentSur(s, c.poste))
+          : quoi === 'referents'
+            ? referentSur(s, c.poste)
+            : confirmeSur(s, c.poste))
       )
         r.push([1, v])
     }
@@ -1593,15 +1610,58 @@ export function construire(
       const part = partSur(s, c.poste)
       if (s.placementManuel) m.cout(coutExtra(c, R), v)
       else if (part > 0) m.cout(coutDepannage(c) * part, v)
-      if (!jamaisSeulSur(s, c.poste) || imposees.has(k)) continue
+      // Une personne accompagnée (plus bas) a déjà plus fort : un salarié
+      // confirmé (référent) qui couvre tout son créneau.
+      if (!jamaisSeulSur(s, c.poste) || imposees.has(k) || s.accompagne)
+        continue
       if (!avec) {
         avec = []
         for (const d of parPoste.get(c.poste) ?? [])
-          if (d.debut < c.fin && c.debut < d.fin)
-            avec.push(...termesDe(d, 'referents'))
+          if (ensemble(c, d)) avec.push(...termesDe(d, 'referents'))
         avec = sommer(avec)
       }
       m.ajoute([[1, v], ...avec.map(([k2, w]) => [-k2, w] as Terme)], '<=', 0)
+    }
+  }
+
+  // JAMAIS SANS UN SALARIÉ CONFIRMÉ (décision de l'utilisateur du
+  // 2026-11-09 : « toujours avec un CDI ou CDD hôtelier normal, et pareil
+  // pour les stagiaires »). Une personne dont le contrat a la case
+  // (`accompagne`), quel que soit son niveau (titulaire compris), n'est sur
+  // un créneau que si, à TOUT MOMENT de ce créneau, une personne CONFIRMÉE
+  // (`confirmeSur` : autonome, son contrat sans la case) est sur le même
+  // poste : le créneau est coupé en morceaux (`morceaux`, la définition du
+  // soutien jamais seul étendue à toute la durée) et chaque morceau demande
+  // un confirmé sur un créneau qui le couvre en entier. DUR, comme le
+  // soutien : sinon la place reste vide. Jamais sur un shift posé (il reste ;
+  // le vérificateur le dit, ACCOMPAGNE-SEUL). Le modèle reste toujours
+  // possible : ne pas venir tient la règle. Une somme par ensemble de
+  // créneaux qui couvrent, partagée entre les morceaux qui ont le même.
+  const sommesConfirmes = new Map<string, Terme[]>()
+  const confirmesDe = (par: readonly Creneau[]): Terme[] => {
+    const k = par.map((d) => d.id).join(',')
+    let t = sommesConfirmes.get(k)
+    if (!t) {
+      t = sommer(par.flatMap((d) => termesDe(d, 'confirmes')))
+      sommesConfirmes.set(k, t)
+    }
+    return t
+  }
+  for (const c of p.creneaux) {
+    if (c.ferme) continue
+    let avec: Terme[][] | null = null
+    for (const s of p.salaries) {
+      if (!s.accompagne) continue
+      const k = cle(s.id, c.id)
+      const v = x.get(k)
+      if (!v || imposees.has(k)) continue
+      // Les morceaux dont les créneaux qui couvrent contiennent ceux d'un
+      // autre morceau sont sautés : leur contrainte suit de l'autre.
+      avec ??= morceauxUtiles(morceaux(c, parPoste.get(c.poste) ?? [])).map(
+        (o) => confirmesDe(o.par),
+      )
+      for (const t of avec)
+        m.ajoute([[1, v], ...t.map(([k2, w]) => [-k2, w] as Terme)], '<=', 0)
     }
   }
 
@@ -2927,6 +2987,36 @@ function rythmeStrictModele(
       excesRythme.push(exces)
     }
   }
+}
+
+/** Les morceaux d'un créneau qui comptent pour le calcul (salarié
+ * confirmé) : un morceau dont les créneaux qui le couvrent CONTIENNENT ceux
+ * d'un autre morceau n'ajoute rien (sa contrainte « au moins un confirmé
+ * parmi eux » suit de l'autre) ; deux morceaux couverts par les mêmes
+ * créneaux n'en font qu'un. Même espace de solutions, moins de lignes. */
+export function morceauxUtiles<C extends { id: string }>(
+  ms: ReadonlyArray<{ par: readonly C[] }>,
+): Array<{ par: readonly C[] }> {
+  const cle = (o: { par: readonly C[] }) =>
+    o.par
+      .map((d) => d.id)
+      .sort()
+      .join(',')
+  const ensembles = new Map<string, Set<string>>()
+  for (const o of ms) ensembles.set(cle(o), new Set(o.par.map((d) => d.id)))
+  const listes = [...ensembles.values()]
+  const contient = (a: Set<string>, b: Set<string>) =>
+    a.size > b.size && [...b].every((x) => a.has(x))
+  const vus = new Set<string>()
+  const r: Array<{ par: readonly C[] }> = []
+  for (const o of ms) {
+    const k = cle(o)
+    const a = ensembles.get(k) as Set<string>
+    if (vus.has(k) || listes.some((b) => contient(a, b))) continue
+    vus.add(k)
+    r.push(o)
+  }
+  return r
 }
 
 /** Une somme de termes réutilisée plusieurs fois : une variable continue

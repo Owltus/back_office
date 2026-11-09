@@ -478,6 +478,10 @@ function phraseContrat(m: ModeleContratRegle): string {
     p.push(
       'Proposé en soutien quand on ajoute un poste (jamais seul), modifiable dans la fiche.',
     )
+  if (m.accompagne)
+    p.push(
+      'Jamais sans un salarié confirmé : sur son poste, toujours avec quelqu’un de titulaire ou en dépannage dont le contrat n’a pas cette case, même s’il est lui-même titulaire. Sinon, la place reste vide.',
+    )
   if (m.jourMaxMinutes !== null)
     p.push(
       `Au plus ${h(Math.min(m.jourMaxMinutes, JOUR_MAX_LOI))} par jour, mêmes repos que les salariés.`,
@@ -785,6 +789,7 @@ export function AidePlanningContenu({
               'Titulaire : son poste habituel. L’app le place en premier.',
               'Dépannage : il sait tenir le poste, mais ce n’est pas le sien. L’app ne le prend que si aucun titulaire ne peut.',
               'Soutien : apprenti ou stagiaire. Il compte, mais jamais seul.',
+              'Salarié confirmé : un apprenti ou un stagiaire n’est jamais sur son poste sans quelqu’un de titulaire ou en dépannage d’un autre contrat, en même temps, même s’il est titulaire. C’est la case Jamais sans un salarié confirmé du type de contrat, dans Équipe, Règles des contrats.',
             ]}
           />
         </Sous>

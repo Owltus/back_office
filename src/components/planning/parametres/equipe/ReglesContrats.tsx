@@ -680,6 +680,21 @@ export function ReglesContrats({
                 </Effet>
                 <Effet
                   texte={
+                    modele.accompagne
+                      ? 'Toujours avec un salarié confirmé sur son poste (titulaire ou dépannage, d’un contrat sans cette case). Sinon, la place reste vide.'
+                      : 'Peut être seul sur son poste, selon son niveau.'
+                  }
+                >
+                  <Interrupteur
+                    coche={!!modele.accompagne}
+                    disabled={off}
+                    onChange={(v) => changerModele({ accompagne: v })}
+                  >
+                    Jamais sans un salarié confirmé
+                  </Interrupteur>
+                </Effet>
+                <Effet
+                  texte={
                     modele.mineur_possible
                       ? 'La fiche peut être déclarée mineure : la loi des mineurs s’applique alors.'
                       : 'Toujours majeur.'

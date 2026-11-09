@@ -156,6 +156,7 @@ function modeleDeLaBase(m: ModeleContratRegle): ModeleContrat {
     feries_jour_meme: m.feriesJourMeme,
     alternance: m.alternance,
     soutien_par_defaut: m.soutienParDefaut,
+    accompagne: m.accompagne,
   }
 }
 
@@ -220,6 +221,7 @@ export function contratNeuf(s: SaisieReglesContrats): ModeleContrat {
     feries_jour_meme: false,
     alternance: false,
     soutien_par_defaut: false,
+    accompagne: false,
   }
 }
 

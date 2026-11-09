@@ -83,6 +83,8 @@ export const REGLES_BLOCAGE = [
   'ECOLE-ABORDS',
   // Niveau demandé par le besoin (2026-11-05).
   'TITULAIRE-DEMANDE',
+  // Jamais sans un salarié confirmé (2026-11-09).
+  'ACCOMPAGNE-SEUL',
   'EXTRA',
 ] as const
 
@@ -289,6 +291,13 @@ export function raisonClaire(
         'Perdrait ses deux jours de repos de suite',
         mention('règle de l’hôtel'),
       )
+    // Jamais sans un salarié confirmé (décision de l'utilisateur du
+    // 2026-11-09) : la place reste vide plutôt.
+    case 'ACCOMPAGNE-SEUL':
+      return r(
+        'Aucun salarié confirmé sur ce poste à ces heures',
+        mention('règle de l’hôtel'),
+      )
     // Rythme 5 jours puis 2 jours, strict (2026-11-09) : la place reste vide
     // plutôt (décision de l'utilisateur).
     case 'RYTHME-5-2':
@@ -416,6 +425,8 @@ const PHRASES_COMMUNES: Record<(typeof REGLES_BLOCAGE)[number], string> = {
   'ECOLE-ABORDS': 'Tout le monde est trop près d’un jour d’école.',
   'TITULAIRE-DEMANDE':
     'Les personnes libres n’ont pas le niveau que la place demande.',
+  'ACCOMPAGNE-SEUL':
+    'Aucun salarié confirmé n’est là pour les personnes libres.',
   EXTRA: 'Seuls des extras sont libres.',
 }
 

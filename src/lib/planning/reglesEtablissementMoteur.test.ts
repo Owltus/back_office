@@ -577,9 +577,15 @@ describe('D9 : apprenti ou stagiaire selon son niveau sur le poste', () => {
     postes: new Set<string>(),
     ...kw,
   })
-  const seul = (f: Fiche) => {
+  // La case « Jamais sans un salarié confirmé » (2026-11-09) décochée : le
+  // niveau seul décide (la case est regardée dans `accompagne.test.ts`).
+  const seul = (f: Fiche, accompagne = false) => {
     const c = [cr('j0', 0, 8, 15, { soutien: 1 })]
-    const p = probleme({ salaries: [versSolveur(f)], creneaux: c, graine: 1 })
+    const p = probleme({
+      salaries: [{ ...versSolveur(f), accompagne }],
+      creneaux: c,
+      graine: 1,
+    })
     return { p, r: generer(p, highs) }
   }
   it('titulaire ou en dépannage : autonome, il tient la place seul', () => {
@@ -593,6 +599,8 @@ describe('D9 : apprenti ou stagiaire selon son niveau sur le poste', () => {
       expect(
         violations(p, r.affectations).filter((v) => v.regle === 'SOUTIEN-SEUL'),
       ).toEqual([])
+      // Avec la case (le défaut de l'hôtel) : jamais seul, même titulaire.
+      expect(seul(f, true).r.affectations).toEqual([])
     }
   })
   it('en soutien : jamais seul, ni par le calcul ni posé à la main', () => {

@@ -42,6 +42,7 @@ import {
 import { REGLES_BLOCAGE } from '#/lib/planning/raisonsPlaces.ts'
 import type { DonneesSemaine, SemaineOut } from '#/lib/planning/semaine.ts'
 import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
+import { sansAccompagne } from '#/lib/planning/test/reglesTest.ts'
 import { hotelReel } from '#/lib/planning/test/hotelReel.ts'
 import { avecCode, codeTest } from '#/lib/planning/test/codesTest.ts'
 import { PlanningMemoire } from '#/lib/planning/test/planningMemoire.ts'
@@ -95,7 +96,12 @@ const range = (a: number, b?: number) => {
 }
 
 function demo(aujourdhui = AUJOURDHUI): PlanningMemoire {
-  const { referentiel, absences } = hotelDemo(LUNDI)
+  // Hôtel du prototype : un apprenti titulaire y tient une place seul. La
+  // case « Jamais sans un salarié confirmé » (2026-11-09) est décochée ici,
+  // regardée dans `accompagne.test.ts`.
+  const demoHotel = hotelDemo(LUNDI)
+  const { absences } = demoHotel
+  const referentiel = sansAccompagne(demoHotel.referentiel)
   return new PlanningMemoire(referentiel, absences, aujourdhui, highs)
 }
 

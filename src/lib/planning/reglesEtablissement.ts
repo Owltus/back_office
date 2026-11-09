@@ -81,6 +81,11 @@ export interface ModeleContratRegle {
   /** Niveau Soutien proposé quand on ajoute un poste dans la fiche (une
    * proposition, modifiable ; séparé de l'alternance, 2026-11-09). */
   soutienParDefaut: boolean
+  /** Jamais sans un salarié confirmé (décision de l'utilisateur du
+   * 2026-11-09) : une personne de ce contrat n'est jamais sur son poste
+   * sans une personne présente en même temps, au niveau autonome, dont le
+   * contrat n'a pas cette case (`accompagnesSeuls`). */
+  accompagne: boolean
 }
 
 export interface RegleEtablissement {
@@ -204,6 +209,7 @@ const MODELE_ORDINAIRE: Omit<ModeleContratRegle, 'code' | 'nom' | 'ordre'> = {
   feriesJourMeme: false,
   alternance: false,
   soutienParDefaut: false,
+  accompagne: false,
 }
 
 /** L'hôtel d'aujourd'hui, chiffre pour chiffre (B3). */
@@ -283,6 +289,8 @@ export const REGLES_PAR_DEFAUT: RegleEtablissement = {
       // utilisateur du 2026-11-09, migration 20261109120000).
       alternance: false,
       soutienParDefaut: true,
+      // Jamais sans un salarié confirmé (migration 20261109130000).
+      accompagne: true,
     },
     apprenti: {
       ...MODELE_ORDINAIRE,
@@ -294,6 +302,7 @@ export const REGLES_PAR_DEFAUT: RegleEtablissement = {
       finObligatoire: true,
       alternance: true,
       soutienParDefaut: true,
+      accompagne: true,
     },
   },
 }
@@ -410,6 +419,7 @@ function lireModeles(
       feriesJourMeme: m.feries_jour_meme,
       alternance: m.alternance,
       soutienParDefaut: m.soutien_par_defaut ?? d.soutienParDefaut,
+      accompagne: m.accompagne ?? d.accompagne,
     }
   }
   return r

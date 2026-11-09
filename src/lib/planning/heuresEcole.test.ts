@@ -308,7 +308,13 @@ describe('R-ECOLE-HEURES dans le générateur', () => {
     // Trois services de 8 h : 24 h + 14 h d'école = 38 h, donc deux au plus.
     const creneaux = [2, 3, 4].map((j) => cr(`h${j}`, j, 8, 16))
     // Le plafond légal, pas les journées de l'hôtel (`journeesDuCalcul`).
-    const s = { ...versSolveur(fiche({ mineur: true })), journeesCalcul: null }
+    // Seul sur le poste : la règle du salarié confirmé (2026-11-09) est
+    // regardée à part (`accompagne.test.ts`).
+    const s = {
+      ...versSolveur(fiche({ mineur: true })),
+      journeesCalcul: null,
+      accompagne: false,
+    }
     const avec = probleme({ salaries: [s], creneaux })
     const r = generer(avec, highs)
     expect(r.affectations).toHaveLength(2)
@@ -327,6 +333,7 @@ describe('R-ECOLE-HEURES dans le générateur', () => {
     const s = {
       ...versSolveur(fiche({ minutesHebdo: 39 * H })),
       journeesCalcul: null,
+      accompagne: false,
     }
     const p = probleme({ salaries: [s], creneaux })
     const r = generer(p, highs)

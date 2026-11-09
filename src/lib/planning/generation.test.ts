@@ -11,6 +11,7 @@ import {
 } from '#/lib/planning/semaine.ts'
 import type { DonneesSemaine, NouveauShift } from '#/lib/planning/semaine.ts'
 import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
+import { sansAccompagne } from '#/lib/planning/test/reglesTest.ts'
 import { ajouterJours } from '#/lib/planning/temps.ts'
 import type { Affectation } from '#/lib/planning/types.ts'
 
@@ -48,7 +49,12 @@ function poser(
 }
 
 function donnees(affectations: Affectation[] = []): DonneesSemaine {
-  const { referentiel, absences } = hotelDemo(LUNDI)
+  // Hôtel du prototype : un apprenti titulaire y tient une place seul. La
+  // case « Jamais sans un salarié confirmé » (2026-11-09) est décochée ici,
+  // regardée dans `accompagne.test.ts`.
+  const demoHotel = hotelDemo(LUNDI)
+  const { absences } = demoHotel
+  const referentiel = sansAccompagne(demoHotel.referentiel)
   return {
     lundi: LUNDI,
     referentiel,

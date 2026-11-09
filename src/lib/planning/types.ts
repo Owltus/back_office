@@ -252,6 +252,9 @@ export interface ModeleContrat {
   /** Niveau Soutien proposé à l'ajout d'un poste dans la fiche (une
    * proposition, modifiable). Absent (données de test) : le défaut. */
   soutien_par_defaut?: boolean
+  /** Jamais sans un salarié confirmé sur son poste (2026-11-09). Absent
+   * (données de test) : le défaut. */
+  accompagne?: boolean
 }
 
 export interface Groupe {

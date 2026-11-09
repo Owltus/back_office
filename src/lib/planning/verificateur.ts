@@ -33,8 +33,11 @@ import {
 } from '#/lib/planning/eligibilite.ts'
 import {
   cle,
+  confirmeSur,
   dansLeContrat,
   duree,
+  ensemble,
+  morceaux,
   jourDe,
   presenceMax,
   autonomeSur,
@@ -1024,6 +1027,7 @@ export function violations(
     erreurs.push(...entreFiches(fiches, parSalarie))
   }
   erreurs.push(...soutiensSeuls(p, affectations))
+  erreurs.push(...accompagnesSeuls(p, affectations))
   return erreurs
 }
 
@@ -1047,11 +1051,7 @@ export function soutiensSeuls(
     if (!jamaisSeulSur(s, c.poste)) continue
     const accompagne = presents.some(
       ([autre, d]) =>
-        autre.id !== s.id &&
-        referentSur(autre, d.poste) &&
-        d.poste === c.poste &&
-        d.debut < c.fin &&
-        c.debut < d.fin,
+        autre.id !== s.id && referentSur(autre, d.poste) && ensemble(c, d),
     )
     if (!accompagne) {
       const n = niveauSur(s, c.poste)
@@ -1065,6 +1065,81 @@ export function soutiensSeuls(
         nature: 'organisation',
       })
     }
+  }
+  return erreurs
+}
+
+/** Règle du salarié confirmé (décision de l'utilisateur du 2026-11-09). */
+export const REGLE_ACCOMPAGNE = 'ACCOMPAGNE-SEUL'
+/** Son message, pour les raisons d'une place. */
+export const MESSAGE_ACCOMPAGNE =
+  'jamais sans un salarié confirmé : aucun n’est sur ce poste à ces heures'
+
+/** Les minutes d'un créneau où une personne dont le contrat a la case
+ * « Jamais sans un salarié confirmé » (`accompagne`) serait sans personne
+ * confirmée (`confirmeSur`) sur le même poste : les morceaux (`morceaux`)
+ * qu'aucun créneau d'une personne confirmée ne couvre. 0 : toujours
+ * accompagnée, ou contrat sans la case. Même définition que le calcul
+ * (`generateur.ts`, JAMAIS SANS UN SALARIÉ CONFIRMÉ). */
+export function minutesSansConfirme(
+  s: SalarieSolveur,
+  c: Creneau,
+  presents: ReadonlyArray<readonly [SalarieSolveur, Creneau]>,
+): number {
+  if (!s.accompagne) return 0
+  const confirmes = presents
+    .filter(([autre, d]) => autre.id !== s.id && confirmeSur(autre, d.poste))
+    .map(([, d]) => d)
+  return morceaux(c, confirmes)
+    .filter((o) => !o.par.length)
+    .reduce((t, o) => t + o.fin - o.debut, 0)
+}
+
+/** Sans salarié confirmé un moment au moins de ce créneau. */
+export function sansConfirme(
+  s: SalarieSolveur,
+  c: Creneau,
+  presents: ReadonlyArray<readonly [SalarieSolveur, Creneau]>,
+): boolean {
+  return minutesSansConfirme(s, c, presents) > 0
+}
+
+/** Les présents d'une liste d'affectations : [personne, créneau]. */
+function presentsDe(
+  p: Probleme,
+  affectations: AffectationSolveur[],
+): Array<[SalarieSolveur, Creneau]> {
+  const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
+  const salaries = new Map(p.salaries.map((s) => [s.id, s]))
+  const r: Array<[SalarieSolveur, Creneau]> = []
+  for (const a of affectations) {
+    const s = salaries.get(a.salarieId)
+    const c = creneaux.get(a.creneauId)
+    if (s && c) r.push([s, c])
+  }
+  return r
+}
+
+/** Jamais sans un salarié confirmé (décision de l'utilisateur du
+ * 2026-11-09) : un apprenti ou un stagiaire (contrat qui a la case), quel
+ * que soit son niveau, posé sans personne confirmée en même temps sur son
+ * poste. Le calcul ne le fait jamais ; un shift posé à la main, si. */
+export function accompagnesSeuls(
+  p: Probleme,
+  affectations: AffectationSolveur[],
+): Violation[] {
+  const presents = presentsDe(p, affectations)
+  const erreurs: Violation[] = []
+  for (const [s, c] of presents) {
+    const seul = minutesSansConfirme(s, c, presents)
+    if (!seul) continue
+    erreurs.push({
+      salarieId: s.id,
+      regle: REGLE_ACCOMPAGNE,
+      message: `jamais sans un salarié confirmé : seul sur ce poste ${seul >= duree(c) ? 'tout le shift' : `pendant ${h(seul)}`}`,
+      creneaux: [c.id],
+      nature: 'organisation',
+    })
   }
   return erreurs
 }
@@ -1421,6 +1496,7 @@ export function raisonsBlocageAccueil(
     .map((id) => creneaux.get(id))
     .filter((c): c is Creneau => c !== undefined)
   const raisons = new Map<string, Violation[]>()
+  const presents = presentsDe(p, affectations)
   for (const s of p.salaries) {
     const siens = affectations
       .filter((a) => a.salarieId === s.id)
@@ -1432,10 +1508,13 @@ export function raisonsBlocageAccueil(
     let meilleure: Violation[] | null = null
     for (const cible of cibles) {
       if (!autonomeSur(s, cible.poste)) continue
-      const liste = nouvelles(
-        violationsSalarie(s, [...siens, cible], p.nbJours, true, p.regles),
-        avant,
-      )
+      const liste = [
+        ...nouvelles(
+          violationsSalarie(s, [...siens, cible], p.nbJours, true, p.regles),
+          avant,
+        ),
+        ...raisonAccompagne(s, cible, presents),
+      ]
       if (meilleure === null || liste.length < meilleure.length)
         meilleure = liste
       if (!liste.length) break
@@ -1469,6 +1548,7 @@ export function raisonsBlocage(
   const cible = creneaux.get(creneauId)
   const raisons = new Map<string, Violation[]>()
   if (!cible) return raisons
+  const presents = presentsDe(p, affectations)
   for (const s of p.salaries) {
     const n = niveauSur(s, cible.poste)
     if (!n?.autonome) continue
@@ -1499,7 +1579,10 @@ export function raisonsBlocage(
       true,
       p.regles,
     )
-    let liste = nouvelles(apres, avant)
+    let liste = [
+      ...nouvelles(apres, avant),
+      ...raisonAccompagne(s, cible, presents),
+    ]
     if (s.placementManuel && liste.length === 0) {
       liste = [
         {
@@ -1514,6 +1597,26 @@ export function raisonsBlocage(
     raisons.set(s.id, liste)
   }
   return raisons
+}
+
+/** La raison « salarié confirmé » d'une personne pour une place : présente
+ * quand elle prendrait la place sans personne confirmée à côté. */
+function raisonAccompagne(
+  s: SalarieSolveur,
+  cible: Creneau,
+  presents: ReadonlyArray<readonly [SalarieSolveur, Creneau]>,
+): Violation[] {
+  return sansConfirme(s, cible, presents)
+    ? [
+        {
+          salarieId: s.id,
+          regle: 'ACCOMPAGNE-SEUL',
+          message: MESSAGE_ACCOMPAGNE,
+          creneaux: [cible.id],
+          nature: 'organisation',
+        },
+      ]
+    : []
 }
 
 // ------------------------------------------- ouverture et relève (2026-11-01)

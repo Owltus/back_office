@@ -574,13 +574,18 @@ describe('9. mineurs', () => {
     // Plus de raccourci (2026-11-02) : le matin de 8 h 45 de présence a sa
     // version étoile de 7 h 45 (un horaire qui existe, même place) ; le
     // mineur (8 h au plus) prend celle-ci.
-    const s = versSolveur({
-      id: 'm',
-      postes: new Set(['r']),
-      typeContrat: 'apprenti',
-      minutesHebdo: 35 * H,
-      mineur: true,
-    })
+    // Seul sur le poste : la règle du salarié confirmé (2026-11-09) est
+    // regardée à part (`accompagne.test.ts`).
+    const s = {
+      ...versSolveur({
+        id: 'm',
+        postes: new Set(['r']),
+        typeContrat: 'apprenti',
+        minutesHebdo: 35 * H,
+        mineur: true,
+      }),
+      accompagne: false,
+    }
     const matin = creneauModele({
       id: 'c',
       poste: 'r',

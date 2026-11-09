@@ -117,6 +117,9 @@ const MESSAGES: Record<(typeof REGLES_BLOCAGE)[number], string[]> = {
   'TITULAIRE-DEMANDE': [
     'en dépannage sur ce poste : la place demande un titulaire',
   ],
+  'ACCOMPAGNE-SEUL': [
+    'jamais sans un salarié confirmé : aucun n’est sur ce poste à ces heures',
+  ],
   EXTRA: ['extra disponible : à appeler et poser à la main'],
 }
 

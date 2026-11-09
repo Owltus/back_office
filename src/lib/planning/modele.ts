@@ -211,6 +211,9 @@ export interface SalarieSolveur {
   journeesCalcul: ReadonlySet<number> | null
   contratIndicatif: boolean
   placementManuel: boolean
+  /** Jamais sans un salarié confirmé sur son poste (contrat qui a la case,
+   * 2026-11-09, `confirmeSur`, `ensemble`). */
+  accompagne: boolean
   horsContrat: ReadonlySet<number>
   etoileFixe: ReadonlySet<number>
   finServicePrecedent: number | null
@@ -352,6 +355,7 @@ export function salarieSolveur(
     journeesCalcul: null,
     contratIndicatif: false,
     placementManuel: false,
+    accompagne: false,
     horsContrat: vide,
     etoileFixe: vide,
     finServicePrecedent: null,
@@ -444,6 +448,62 @@ export function jamaisSeulSur(s: SalarieSolveur, poste: string): boolean {
 export function referentSur(s: SalarieSolveur, poste: string): boolean {
   const n = niveauSur(s, poste)
   return n !== null && n.autonome && !n.jamaisSeul
+}
+
+/** Un salarié CONFIRMÉ sur ce poste (décision de l'utilisateur du
+ * 2026-11-09) : il accompagne une personne dont le contrat a la case
+ * « Jamais sans un salarié confirmé » (`accompagne`). Autonome (titulaire ou
+ * dépannage), pas lui-même jamais seul, et son contrat n'a pas la case. */
+export function confirmeSur(s: SalarieSolveur, poste: string): boolean {
+  return !s.accompagne && referentSur(s, poste)
+}
+
+/** « En même temps » (soutien jamais seul) : deux créneaux du MÊME poste
+ * dont les heures se chevauchent. Lu par le calcul et le vérificateur. */
+export function ensemble(
+  c: Pick<Creneau, 'poste' | 'debut' | 'fin'>,
+  d: Pick<Creneau, 'poste' | 'debut' | 'fin'>,
+): boolean {
+  return d.poste === c.poste && d.debut < c.fin && c.debut < d.fin
+}
+
+/** Un morceau d'un créneau et les créneaux qui le couvrent en entier. */
+export interface Morceau<C> {
+  debut: number
+  fin: number
+  par: C[]
+}
+
+/** « À tout moment » (salarié confirmé, 2026-11-09) : le créneau `c` coupé
+ * aux bornes des créneaux de `ds` qui le croisent (même poste, `ensemble`),
+ * chaque morceau avec les créneaux qui le couvrent EN ENTIER. Une personne
+ * accompagnée est couverte si chaque morceau a au moins un salarié confirmé.
+ * La seule définition : le calcul écrit une contrainte par morceau, le
+ * vérificateur et les raisons d'une place cherchent un morceau sans
+ * personne. Le soutien jamais seul, lui, se contente d'un chevauchement
+ * (`ensemble`) : la règle du salarié confirmé l'étend à toute la durée. */
+export function morceaux<C extends Pick<Creneau, 'poste' | 'debut' | 'fin'>>(
+  c: Pick<Creneau, 'poste' | 'debut' | 'fin'>,
+  ds: readonly C[],
+): Array<Morceau<C>> {
+  const autour = ds.filter((d) => ensemble(c, d))
+  const bornes = new Set([c.debut, c.fin])
+  for (const d of autour) {
+    if (d.debut > c.debut && d.debut < c.fin) bornes.add(d.debut)
+    if (d.fin > c.debut && d.fin < c.fin) bornes.add(d.fin)
+  }
+  const triees = [...bornes].sort((a, b) => a - b)
+  const r: Array<Morceau<C>> = []
+  for (let i = 0; i + 1 < triees.length; i++) {
+    const debut = triees[i]
+    const fin = triees[i + 1]
+    r.push({
+      debut,
+      fin,
+      par: autour.filter((d) => d.debut <= debut && d.fin >= fin),
+    })
+  }
+  return r
 }
 
 /** Part du prix du dépannage (0 : le niveau préféré ou non autonome). */
