@@ -2645,120 +2645,138 @@ export function reposObliges(
   const travaille = new Set(siens.map(jourDe))
   for (const [j, m] of absents) if (m !== null && ecole.has(m)) travaille.add(j)
   const r: ReposOblige[] = []
-  for (let j = passes; j < 7; j++) {
-    if (travaille.has(j) || sol.horsContrat.has(j) || sol.reposFixes.has(j))
-      continue
-    if (absents.has(j)) {
-      const m = absents.get(j)
-      if (m === null || m === undefined || !motifsRepos.has(m)) continue
-    }
-    let gauche = 0
-    while (j - gauche - 1 >= 0 && travaille.has(j - gauche - 1)) gauche++
-    if (j - gauche === 0) gauche += sol.serieAvant
-    let droite = 0
-    while (j + droite + 1 <= 6 && travaille.has(j + droite + 1)) droite++
-    if (j + droite === 6) droite += sol.serieApres
-    const affiles = gauche + 1 + droite
-    // 5 au plus depuis le 2026-11-04 pour un contrat de 35 h et plus
-    // (`rythmeHumain`), comme le calcul et JOURS-AFFILES ; 6 sinon.
-    const plafondAffiles = rythmeHumain(sol, regles)
-      ? regles.repos.joursAffilesConseilles
-      : regles.repos.joursAffilesMax
-    // Au rythme 5 et 2 strict, ses 6 jours interdits le disent plus bas
-    // (école et absences courtes comptées comme du travail).
-    if (affiles > plafondAffiles && !rythmeStrictDe(sol, regles)) {
-      r.push({
-        jour: j,
-        raison: `sinon ${affiles} jours de travail d'affilée (${plafondAffiles} au plus)`,
-      })
-      continue
-    }
-    // Un jour seul entre deux repos certains (2026-11-04, `rythmeHumain`) :
-    // le calcul ne le pose pas. Certain : une absence (hors école) ou un
-    // repos fixe ; le jour voisin d'une semaine connue et libre. Un jour
-    // simplement vide ne l'est pas (il peut encore être travaillé).
-    if (jourIsoleDe(sol, regles) === 'interdit') {
-      const libreSur = (d: number): boolean => {
-        if (apresContrat(sol, d)) return false
-        if (d < 0)
-          return sol.joursSemainePrecedente !== null && sol.serieAvant === 0
-        if (d > 6)
-          return sol.joursSemaineSuivante !== null && sol.serieApres === 0
-        if (travaille.has(d)) return false
-        // Avant l'arrivée (hors contrat, pas après la fin) : du repos.
-        return sol.horsContrat.has(d) || sol.reposFixes.has(d) || absents.has(d)
+  // Un repos obligé en entraîne d'autres (2026-11-09, signalement de
+  // l'utilisateur : après 5 jours d'école, seul le samedi était montré, le
+  // dimanche restait vide alors qu'un repos seul est une faute). Chaque
+  // passe tient les repos obligés des passes d'avant pour CERTAINS ; on
+  // repasse tant qu'il en vient de nouveaux. Sûr : un jour obligé est un
+  // repos dans tout planning qui tient les règles.
+  const obliges = new Set<number>()
+  for (let vu = -1; vu !== r.length;) {
+    vu = r.length
+    for (const o of r) obliges.add(o.jour)
+    for (let j = passes; j < 7; j++) {
+      if (obliges.has(j)) continue
+      if (travaille.has(j) || sol.horsContrat.has(j) || sol.reposFixes.has(j))
+        continue
+      if (absents.has(j)) {
+        const m = absents.get(j)
+        if (m === null || m === undefined || !motifsRepos.has(m)) continue
       }
-      if (libreSur(j - 1) && libreSur(j + 1)) {
+      let gauche = 0
+      while (j - gauche - 1 >= 0 && travaille.has(j - gauche - 1)) gauche++
+      if (j - gauche === 0) gauche += sol.serieAvant
+      let droite = 0
+      while (j + droite + 1 <= 6 && travaille.has(j + droite + 1)) droite++
+      if (j + droite === 6) droite += sol.serieApres
+      const affiles = gauche + 1 + droite
+      // 5 au plus depuis le 2026-11-04 pour un contrat de 35 h et plus
+      // (`rythmeHumain`), comme le calcul et JOURS-AFFILES ; 6 sinon.
+      const plafondAffiles = rythmeHumain(sol, regles)
+        ? regles.repos.joursAffilesConseilles
+        : regles.repos.joursAffilesMax
+      // Au rythme 5 et 2 strict, ses 6 jours interdits le disent plus bas
+      // (école et absences courtes comptées comme du travail).
+      if (affiles > plafondAffiles && !rythmeStrictDe(sol, regles)) {
         r.push({
           jour: j,
-          raison: 'sinon un jour de travail seul entre deux repos',
+          raison: `sinon ${affiles} jours de travail d'affilée (${plafondAffiles} au plus)`,
         })
         continue
       }
-    }
-    // Rythme 5 et 2 strict (2026-11-09, `rythmeStrict.ts`) : travailler ce
-    // jour ferait une faute CERTAINE. Certain : les shifts, l'école et les
-    // absences (travail ou neutres, `rythmeAutour`), les repos fixes ou
-    // posés, les jours passés, les semaines voisines ; un jour simplement
-    // vide est inconnu.
-    if (rythmeStrictDe(sol, regles)) {
-      const poses = new Set(siens.map(jourDe))
-      const etats = suiteRythme(sol, 7, (d) => d === j || poses.has(d)).map(
-        (e, i): EtatRythme => {
-          const d = i - 7
-          if (d < 0 || d > 6 || e !== 'r') return e
-          return d < passes || sol.reposFixes.has(d) || absents.has(d)
-            ? 'r'
-            : 'u'
-        },
-      )
-      // Une faute déjà faite par les faits (`fauteScellee`, le jour essayé
-      // n'en est pas un) n'oblige à rien.
-      const connu = (i: number) =>
-        i !== j + 7 && (i - 7 < passes || jourConnu(sol, i - 7, 7))
-      const faute = fautesRythme(etats).some(
-        (f) =>
-          !fauteScellee(f, connu) &&
-          (f.genre === 'travail-court' || f.genre === 'travail-long'
-            ? f.debut <= j + 7 && j + 7 <= f.fin
-            : f.debut - 1 === j + 7 || f.fin + 1 === j + 7),
-      )
-      if (faute) {
+      // Un jour seul entre deux repos certains (2026-11-04, `rythmeHumain`) :
+      // le calcul ne le pose pas. Certain : une absence (hors école) ou un
+      // repos fixe ; le jour voisin d'une semaine connue et libre. Un jour
+      // simplement vide ne l'est pas (il peut encore être travaillé).
+      if (jourIsoleDe(sol, regles) === 'interdit') {
+        const libreSur = (d: number): boolean => {
+          if (apresContrat(sol, d)) return false
+          if (d < 0)
+            return sol.joursSemainePrecedente !== null && sol.serieAvant === 0
+          if (d > 6)
+            return sol.joursSemaineSuivante !== null && sol.serieApres === 0
+          if (travaille.has(d)) return false
+          // Avant l'arrivée (hors contrat, pas après la fin) : du repos.
+          return (
+            sol.horsContrat.has(d) || sol.reposFixes.has(d) || absents.has(d)
+          )
+        }
+        if (libreSur(j - 1) && libreSur(j + 1)) {
+          r.push({
+            jour: j,
+            raison: 'sinon un jour de travail seul entre deux repos',
+          })
+          continue
+        }
+      }
+      // Rythme 5 et 2 strict (2026-11-09, `rythmeStrict.ts`) : travailler ce
+      // jour ferait une faute CERTAINE. Certain : les shifts, l'école et les
+      // absences (travail ou neutres, `rythmeAutour`), les repos fixes ou
+      // posés, les jours passés, les semaines voisines ; un jour simplement
+      // vide est inconnu.
+      if (rythmeStrictDe(sol, regles)) {
+        const poses = new Set(siens.map(jourDe))
+        const etats = suiteRythme(sol, 7, (d) => d === j || poses.has(d)).map(
+          (e, i): EtatRythme => {
+            const d = i - 7
+            if (d < 0 || d > 6 || e !== 'r') return e
+            return d < passes ||
+              sol.reposFixes.has(d) ||
+              absents.has(d) ||
+              obliges.has(d)
+              ? 'r'
+              : 'u'
+          },
+        )
+        // Une faute déjà faite par les faits (`fauteScellee`, le jour essayé
+        // n'en est pas un) n'oblige à rien.
+        const connu = (i: number) =>
+          i !== j + 7 &&
+          (i - 7 < passes || obliges.has(i - 7) || jourConnu(sol, i - 7, 7))
+        const faute = fautesRythme(etats).some(
+          (f) =>
+            !fauteScellee(f, connu) &&
+            (f.genre === 'travail-court' || f.genre === 'travail-long'
+              ? f.debut <= j + 7 && j + 7 <= f.fin
+              : f.debut - 1 === j + 7 || f.fin + 1 === j + 7),
+        )
+        if (faute) {
+          r.push({
+            jour: j,
+            raison: 'sinon le rythme de 5 jours puis 2 repos ne tient plus',
+          })
+          continue
+        }
+      }
+      // Plafond de jours de la semaine (un mineur : 5).
+      if (travaille.size >= sol.joursTravaillesMaxSemaine) {
         r.push({
           jour: j,
-          raison: 'sinon le rythme de 5 jours puis 2 repos ne tient plus',
+          raison: `sinon ${travaille.size + 1} jours de travail dans la semaine (${sol.joursTravaillesMaxSemaine} au plus)`,
         })
         continue
       }
-    }
-    // Plafond de jours de la semaine (un mineur : 5).
-    if (travaille.size >= sol.joursTravaillesMaxSemaine) {
-      r.push({
-        jour: j,
-        raison: `sinon ${travaille.size + 1} jours de travail dans la semaine (${sol.joursTravaillesMaxSemaine} au plus)`,
+      if (!horaires.length) continue
+      const avant = siens.filter((c) => jourDe(c) < j).map((c) => c.fin)
+      const apres = siens.filter((c) => jourDe(c) > j).map((c) => c.debut)
+      const fin = avant.length ? Math.max(...avant) : sol.finServicePrecedent
+      const debut = apres.length ? Math.min(...apres) : sol.debutServiceSuivant
+      const repos = sol.reposQuotidienMin
+      const tient = horaires.some((h) => {
+        const [d0, f0] = bornes(lundi, j, h.debut, h.fin)
+        return (
+          (fin === null || d0 >= fin + repos) &&
+          (debut === null || f0 <= debut - repos)
+        )
       })
-      continue
+      if (!tient)
+        r.push({
+          jour: j,
+          raison: `sinon moins de ${heuresLisibles(repos)} de repos entre deux services`,
+        })
     }
-    if (!horaires.length) continue
-    const avant = siens.filter((c) => jourDe(c) < j).map((c) => c.fin)
-    const apres = siens.filter((c) => jourDe(c) > j).map((c) => c.debut)
-    const fin = avant.length ? Math.max(...avant) : sol.finServicePrecedent
-    const debut = apres.length ? Math.min(...apres) : sol.debutServiceSuivant
-    const repos = sol.reposQuotidienMin
-    const tient = horaires.some((h) => {
-      const [d0, f0] = bornes(lundi, j, h.debut, h.fin)
-      return (
-        (fin === null || d0 >= fin + repos) &&
-        (debut === null || f0 <= debut - repos)
-      )
-    })
-    if (!tient)
-      r.push({
-        jour: j,
-        raison: `sinon moins de ${heuresLisibles(repos)} de repos entre deux services`,
-      })
   }
-  return r
+  return r.sort((a, b) => a.jour - b.jour)
 }
 
 /** La semaine a été remplie (génération ou à la main) : au moins un shift qui

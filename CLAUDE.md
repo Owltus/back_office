@@ -2890,7 +2890,9 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   `POIDS_RYTHME_BORD`, donc d'abord le moins de fautes, puis les places ; durs, ils laissaient
   une semaine VIDE quand des faits rendaient la règle impossible), vérificateur RYTHME-5-2
   (bloque une place, « règle de l'hôtel », un 2e repos seul compte comme une faute de plus,
-  `nouvelles`), repos obligés, « À vérifier ». FAUTE SCELLÉE (`fauteScellee`, `jourConnu`) :
+  `nouvelles`), repos obligés (EN CASCADE depuis le 2026-11-09, signalement utilisateur : un
+  repos obligé est tenu pour certain et on repasse, donc samedi ET dimanche autour d'une semaine
+  d'école, plus un seul), « À vérifier ». FAUTE SCELLÉE (`fauteScellee`, `jourConnu`) :
   plus de 2 repos entre deux blocs dont le bloc et 3 repos d'un côté sont connus d'avance
   (semaine voisine, absence, école, repos posé ou fixe, hors contrat) n'est ni écrite ni dite,
   sinon toute reprise était interdite. Il REMPLACE pour ces personnes les fenêtres de jours

@@ -249,3 +249,53 @@ describe('repos obligés dans la semaine analysée', () => {
     })
   })
 })
+
+/*
+ * Rythme 5 et 2 strict (signalement de l'utilisateur du 2026-11-09) : autour
+ * d'une semaine d'école, seul UN repos était montré de chaque côté. Le
+ * samedi après l'école est obligé (sinon 6 jours) ; le dimanche l'est AUSSI,
+ * une fois le samedi tenu pour un repos (sinon un repos seul). Même chose
+ * avant l'école.
+ */
+describe('repos obligés au rythme 5 et 2 strict', () => {
+  const EC = 50
+  const ecoleSur = (jours: number[]) =>
+    new Map([[ID, new Map(jours.map((j) => [ajouterJours(LUNDI, j), EC]))]])
+  const strict = (
+    kw: Parameters<typeof sol>[0],
+    absences = new Map<number, Map<string, number>>(),
+  ) =>
+    reposObliges(
+      x,
+      sol({ minutesHebdoContrat: 35 * H, ...kw }),
+      [],
+      LUNDI,
+      absences,
+      new Set([EC]),
+      new Set(),
+      0,
+      SEPT_HEURES,
+    ).map((o) => o.jour)
+
+  it("après 5 jours d'école : samedi ET dimanche", () => {
+    const ecole = [0, 1, 2, 3, 4]
+    expect(
+      strict(
+        {
+          indisponibilites: new Set(ecole),
+          joursTravailRythme: new Set(ecole),
+          joursHorsSite: new Set(ecole),
+        },
+        ecoleSur(ecole),
+      ),
+    ).toEqual([5, 6])
+  })
+  it("avant 5 jours d'école la semaine d'après : samedi ET dimanche", () => {
+    expect(strict({ etatsApres: 'TTTTTrr', joursSemaineSuivante: 5 })).toEqual([
+      5, 6,
+    ])
+  })
+  it('sans école autour : rien d’obligé', () => {
+    expect(strict({})).toEqual([])
+  })
+})
