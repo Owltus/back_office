@@ -426,6 +426,9 @@ export interface Contexte {
   affectations: Affectation[]
   sansDecompte: Set<number>
   ecole: Set<number>
+  /** Motifs qui comptent toujours comme du travail pour le rythme 5 et 2
+   * (`rythme_travail`, formation). Absent (données de test) : aucun. */
+  rythmeTravail?: Set<number>
   /** Motifs de nature repos (un repos posé à une date). */
   motifsRepos: Set<number>
   /** salarié → (date → motif) */
@@ -517,6 +520,11 @@ export function contexte(d: DonneesSemaine): Contexte {
       d.referentiel.motifs.filter((m) => !m.decompte).map((m) => m.id),
     ),
     ecole: new Set(d.referentiel.motifs.filter(estEcole).map((m) => m.id)),
+    rythmeTravail: new Set(
+      d.referentiel.motifs
+        .filter((m) => m.decompte && !!m.rythme_travail)
+        .map((m) => m.id),
+    ),
     motifsRepos,
     absences: avecFeriesDuJour(d, lundi),
     reposProposes: new Set(
@@ -774,7 +782,8 @@ export function borneContrat(
 /** Rythme 5 et 2 strict (`rythmeStrict.ts`, révisé le 2026-11-09) : ce que
  * valent pour le rythme les jours d'une fiche qui ne dépendent pas d'un
  * shift, de deux semaines avant `lundi` à la fin de la semaine d'après (clé :
- * jour relatif à `lundi`). T : école, absence décomptée de 5 jours au plus ;
+ * jour relatif à `lundi`). T : école, formation (`rythmeTravail`, quelle
+ * que soit sa durée), absence décomptée de 5 jours au plus ;
  * n : hors contrat, absence longue (plus de 5 jours d'affilée) ; r : absence
  * sans décompte (repos posé ou proposé, repos exceptionnel, récupération).
  * Un jour sans absence et dans le contrat n'y est pas : un shift le rend
@@ -784,7 +793,7 @@ export function borneContrat(
 export function rythmeAutour(
   x: Salarie,
   lundi: string,
-  ctx: Pick<Contexte, 'sansDecompte' | 'ecole' | 'absences'>,
+  ctx: Pick<Contexte, 'sansDecompte' | 'ecole' | 'absences' | 'rythmeTravail'>,
 ): Map<number, EtatRythme> {
   const DEBUT = -14
   const statuts: StatutRythme[] = []
@@ -797,7 +806,12 @@ export function rythmeAutour(
         hors.has(j)
           ? 'n'
           : absents.has(j)
-            ? statutAbsence(absents.get(j), ctx.ecole, ctx.sansDecompte)
+            ? statutAbsence(
+                absents.get(j),
+                ctx.ecole,
+                ctx.sansDecompte,
+                ctx.rythmeTravail,
+              )
             : // Rien (ou un shift) : coupe une suite d'absences.
               'u',
       )
@@ -812,7 +826,7 @@ export function rythmeAutour(
 function rythmeDeLaFiche(
   x: Salarie,
   lundi: string,
-  ctx: Pick<Contexte, 'sansDecompte' | 'ecole' | 'absences'>,
+  ctx: Pick<Contexte, 'sansDecompte' | 'ecole' | 'absences' | 'rythmeTravail'>,
   exclu: boolean,
 ): { joursNeutres: Set<number>; joursTravailRythme: Set<number> } {
   if (exclu)
@@ -829,7 +843,7 @@ function rythmeDeLaFiche(
 export function fiche(
   x: Salarie,
   lundi: string,
-  ctx: Pick<Contexte, 'sansDecompte' | 'ecole' | 'absences'> &
+  ctx: Pick<Contexte, 'sansDecompte' | 'ecole' | 'absences' | 'rythmeTravail'> &
     Partial<Pick<Contexte, 'horaires' | 'regles'>>,
   exclu = false,
 ): Fiche {

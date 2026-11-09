@@ -401,6 +401,11 @@ describe('Horaires et absences', () => {
     expect(
       carte.queryByRole('switch', { name: 'Compté dans les heures' }),
     ).toBeNull()
+    expect(
+      carte.queryByRole('switch', {
+        name: 'Compte comme du travail pour le rythme',
+      }),
+    ).toBeNull()
     fireEvent.click(carte.getByRole('button', { name: 'Enregistrer' }))
     await waitFor(() =>
       expect(service.enregistrerMotif).toHaveBeenCalledWith(
@@ -414,9 +419,40 @@ describe('Horaires et absences', () => {
           // week-end, aucun rôle.
           libre_weekend: false,
           reserve_forfait: false,
+          rythme_travail: false,
           role: null,
           icone: null,
         },
+        3,
+      ),
+    )
+  })
+
+  it('motif : « compte comme du travail pour le rythme » (formation), seulement compté dans les heures', async () => {
+    service.enregistrerMotif.mockResolvedValue(3)
+    monter(<HorairesPage />)
+    const carte = within(carteMaladie())
+    const caseRythme = () =>
+      carte.queryByRole('switch', {
+        name: 'Compte comme du travail pour le rythme',
+      })
+    // Pas compté dans les heures : un repos pour le rythme, pas de case.
+    fireEvent.click(
+      carte.getByRole('switch', { name: 'Compté dans les heures' }),
+    )
+    expect(caseRythme()).toBeNull()
+    fireEvent.click(
+      carte.getByRole('switch', { name: 'Compté dans les heures' }),
+    )
+    fireEvent.click(caseRythme()!)
+    fireEvent.click(carte.getByRole('button', { name: 'Enregistrer' }))
+    await waitFor(() =>
+      expect(service.enregistrerMotif).toHaveBeenCalledWith(
+        expect.objectContaining({
+          code: 'MA',
+          decompte: true,
+          rythme_travail: true,
+        }),
         3,
       ),
     )

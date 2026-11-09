@@ -143,7 +143,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':J', (select j from t_ids)::text);
 $$;
 
-select plan(185);
+select plan(187);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -799,6 +799,14 @@ select is((select string_agg(column_default, ',' order by column_name)
             where table_schema = 'public' and table_name = 'planning_motifs'
               and column_name in ('libre_weekend', 'reserve_forfait')),
   'false,false', 'motifs : un motif neuf ne libère pas le week-end et n''est pas réservé');
+select is((select column_default || '/' || is_nullable from information_schema.columns
+            where table_schema = 'public' and table_name = 'planning_motifs'
+              and column_name = 'rythme_travail'),
+  'false/NO', 'motifs : un motif neuf ne compte pas toujours comme du travail pour le rythme');
+select is(pg_temp.essai('gestion', array[
+  'insert into public.planning_motifs (code, nom, rythme_travail) values (''XT'', ''Stage long'', true)',
+  'select rythme_travail::text from public.planning_motifs where code = ''XT''']),
+  'true', 'motifs : la gestion règle « compte comme du travail pour le rythme »');
 select is(pg_temp.essai('gestion', array[
   'update public.planning_reglages set weekend_jours = ''{4,5}'', weekend_nuit_veille = false, equite_criteres = ''{soirs,nuits}'', equite_semaines = 6 where id = 1',
   'select weekend_jours::text || ''/'' || weekend_nuit_veille || ''/'' || equite_criteres::text || ''/'' || equite_semaines from public.planning_reglages where id = 1']),

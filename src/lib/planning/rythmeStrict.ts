@@ -20,8 +20,12 @@
  *     - un jour d'école (motif de nature école, CFA) : un apprenti fait 5
  *       jours d'école puis 2 repos comme 5 jours à l'hôtel
  *       (`TTTTTrr EEEEErr`) ; une école de 3 jours se complète de 2 shifts ;
+ *     - un jour d'un motif qui compte TOUJOURS comme du travail
+ *       (`rythme_travail`, la formation à l'hôtel ; décision de
+ *       l'utilisateur du 2026-11-09 : « même une formation de deux
+ *       semaines »), quelle que soit sa durée : jamais neutre ;
  *     - un jour d'ABSENCE DÉCOMPTÉE (motif au décompte : congé payé,
- *       maladie, formation, sans solde, jour férié chômé, jour férié
+ *       maladie, sans solde, jour férié chômé, jour férié
  *       rattrapé pris, absence autorisée, congé décès, absence de la semaine
  *       type, et les jours fériés ajoutés au calcul pour les stagiaires et
  *       l'encadrement, `avecFeriesDuJour`) : il remplace un jour de travail
@@ -43,6 +47,16 @@
  *       long), semaines voisines comprises. Elle contient déjà ses repos : on
  *       n'exige pas deux repos juste après. L'école, un repos, un shift ou un
  *       jour hors contrat coupe la suite.
+ *   SUITE MÊLÉE congé + formation : un jour de formation ne COUPE pas la
+ *     suite d'absences et n'y COMPTE pas. La longueur est le nombre de jours
+ *     d'absence décomptée (hors formation) de la suite d'absences et de
+ *     formations ; s'il dépasse 5, ces jours sont neutres ; la formation,
+ *     elle, reste du travail. `CCCC FF CCCC` : 8 jours de congé, neutres,
+ *     2 jours de formation entre eux (`nnnn TT nnnn`, aucune faute) ;
+ *     `CCC F CC` : 5 jours de congé, du travail, soit 6 jours de travail
+ *     d'affilée (faute, comme 3 jours de congé, un shift et 2 jours de
+ *     congé). Un congé de deux semaines coupé d'une journée de formation
+ *     reste donc une absence longue.
  *   INCONNU (u) : une semaine voisine non lue, rien n'est demandé.
  * Les autres marques d'un motif ne comptent pas ici : `libre_weekend`
  * (partage des week-ends), `reserve_forfait` (cadres au forfait, jamais au
@@ -63,8 +77,9 @@ import { REGLES_PAR_DEFAUT } from '#/lib/planning/reglesEtablissement.ts'
 export type EtatRythme = 'T' | 'r' | 'n' | 'u'
 
 /** Un jour avant la règle de l'absence longue : `a` une absence décomptée
- * (hors école), le reste comme `EtatRythme`. */
-export type StatutRythme = EtatRythme | 'a'
+ * (hors école), `f` un motif qui compte toujours comme du travail
+ * (`rythme_travail`, formation), le reste comme `EtatRythme`. */
+export type StatutRythme = EtatRythme | 'a' | 'f'
 
 /** Une suite d'absences décomptées de PLUS de 5 jours est neutre ; de 1 à 5
  * jours, elle compte comme du travail. */
@@ -103,9 +118,10 @@ export function rythmeStrictDe(
 }
 
 /** Les absences décomptées d'une suite, rangées : une suite de plus de
- * `ABSENCE_LONGUE` jours devient neutre, une plus courte du travail. Le
- * reste est rendu tel quel. Une suite qui touche le bord est lue sur ce qui
- * en est connu. */
+ * `ABSENCE_LONGUE` jours devient neutre, une plus courte du travail. Un
+ * jour de formation (`f`) est du travail ; il ne coupe pas la suite et n'y
+ * compte pas (suite mêlée, en tête du fichier). Le reste est rendu tel
+ * quel. Une suite qui touche le bord est lue sur ce qui en est connu. */
 export function resoudreAbsences(
   statuts: readonly StatutRythme[],
 ): EtatRythme[] {
@@ -113,15 +129,22 @@ export function resoudreAbsences(
   let i = 0
   while (i < statuts.length) {
     const e = statuts[i]
-    if (e !== 'a') {
+    if (e !== 'a' && e !== 'f') {
       r.push(e)
       i++
       continue
     }
     let f = i
-    while (f + 1 < statuts.length && statuts[f + 1] === 'a') f++
-    const longue = f - i + 1 > ABSENCE_LONGUE
-    for (let k = i; k <= f; k++) r.push(longue ? 'n' : 'T')
+    while (
+      f + 1 < statuts.length &&
+      (statuts[f + 1] === 'a' || statuts[f + 1] === 'f')
+    )
+      f++
+    let absences = 0
+    for (let k = i; k <= f; k++) if (statuts[k] === 'a') absences++
+    const longue = absences > ABSENCE_LONGUE
+    for (let k = i; k <= f; k++)
+      r.push(statuts[k] === 'f' ? 'T' : longue ? 'n' : 'T')
     i = f + 1
   }
   return r
@@ -129,16 +152,20 @@ export function resoudreAbsences(
 
 /** Le statut d'un jour d'absence d'après son motif : école = travail ;
  * motif sans décompte (repos, repos exceptionnel, récupération, repos
- * forfait) = repos ; motif au décompte, ou absence sans motif (semaine
- * type) = absence décomptée, rangée ensuite par `resoudreAbsences`. */
+ * forfait) = repos ; motif au décompte qui compte toujours comme du travail
+ * (`rythmeTravail`, formation) = `f` ; autre motif au décompte, ou absence
+ * sans motif (semaine type) = absence décomptée ; `f` et `a` rangés ensuite
+ * par `resoudreAbsences`. */
 export function statutAbsence(
   motif: number | null | undefined,
   ecole: ReadonlySet<number>,
   sansDecompte: ReadonlySet<number>,
+  rythmeTravail: ReadonlySet<number> = new Set(),
 ): StatutRythme {
   if (motif !== null && motif !== undefined) {
     if (ecole.has(motif)) return 'T'
     if (sansDecompte.has(motif)) return 'r'
+    if (rythmeTravail.has(motif)) return 'f'
   }
   return 'a'
 }

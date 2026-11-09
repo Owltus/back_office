@@ -86,6 +86,7 @@ import {
   resoudreAbsences,
   RYTHME_TRAVAIL,
   rythmeStrictDe,
+  statutAbsence,
 } from '#/lib/planning/rythmeStrict.ts'
 import type { StatutRythme } from '#/lib/planning/rythmeStrict.ts'
 import { seulementLaNuit, zoneDuPoste } from '#/lib/planning/zones.ts'
@@ -1292,6 +1293,16 @@ function pointsDesRegles(
   // type dont les jours fixés ne le permettent pas, même définition que le
   // calcul (lue en boucle, un jour libre est inconnu).
   if (regles.repos.rythmeStrict) {
+    // Les motifs lus comme le calcul (`rythmeAutour`, `statutAbsence`).
+    const ecoleR = new Set(
+      r.motifs.filter((m) => m.nature === 'ecole').map((m) => m.id),
+    )
+    const sansDecompteR = new Set(
+      r.motifs.filter((m) => !m.decompte).map((m) => m.id),
+    )
+    const rythmeTravailR = new Set(
+      r.motifs.filter((m) => m.decompte && !!m.rythme_travail).map((m) => m.id),
+    )
     if (regles.repos.joursAffilesConseilles < RYTHME_TRAVAIL)
       ajouter(
         'rythme-strict-affiles',
@@ -1312,16 +1323,24 @@ function pointsDesRegles(
         ),
       }
       if (!rythmeStrictDe(sol, regles)) continue
-      // Une absence de la semaine type est une absence décomptée : du
-      // travail, ou neutre si elle dure plus de 5 jours (`resoudreAbsences`).
+      // Une absence de la semaine type se lit par son motif, comme au
+      // calcul (`statutAbsence`) : école ou formation = travail, sans
+      // décompte = repos, sinon absence décomptée, du travail ou neutre si
+      // elle dure plus de 5 jours (`resoudreAbsences`).
       const etat = (j: number): StatutRythme => {
-        const mode = semaine.at(j % 7)?.mode
+        const jour = semaine.at(j % 7)
+        const mode = jour?.mode
         return mode === 'travail'
           ? 'T'
           : mode === 'repos'
             ? 'r'
             : mode === 'absence'
-              ? 'a'
+              ? statutAbsence(
+                  jour?.type_absence_id,
+                  ecoleR,
+                  sansDecompteR,
+                  rythmeTravailR,
+                )
               : 'u'
       }
       const suite = resoudreAbsences(

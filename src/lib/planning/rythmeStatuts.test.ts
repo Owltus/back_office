@@ -55,18 +55,21 @@ beforeAll(async () => {
 })
 
 /** Une suite écrite en lettres de l'écran : T shift, E école, C congé, M
- * maladie, F jour férié chômé, J jour férié rattrapé, R repos posé, r
- * rien, n hors contrat, u inconnu. */
+ * maladie, F jour férié chômé, J jour férié rattrapé, O formation (motif
+ * `rythme_travail`), R repos posé, r rien, n hors contrat, u inconnu. */
 const lettres = (texte: string): StatutRythme[] =>
   [...texte.replace(/ /g, '')].map((c) =>
     c === 'T' || c === 'E'
       ? 'T'
       : 'CMFJ'.includes(c)
         ? 'a'
-        : c === 'R'
-          ? 'r'
-          : (c as EtatRythme),
+        : c === 'O'
+          ? 'f'
+          : c === 'R'
+            ? 'r'
+            : (c as EtatRythme),
   )
+const resolu = (texte: string) => resoudreAbsences(lettres(texte)).join('')
 const fautes = (texte: string) =>
   fautesRythme(resoudreAbsences(lettres(texte))).map((f) => f.genre)
 
@@ -138,15 +141,61 @@ describe('les statuts (définition)', () => {
     expect(statutAbsence(1, ecole, sans)).toBe('a')
     expect(statutAbsence(null, ecole, sans)).toBe('a')
   })
+  it('statutAbsence : un motif « compte comme du travail » (formation) = f, jamais une absence', () => {
+    const ecole = new Set([2])
+    const sans = new Set([12])
+    const travail = new Set([4])
+    expect(statutAbsence(4, ecole, sans, travail)).toBe('f')
+    // Sans le réglage : une absence décomptée comme avant.
+    expect(statutAbsence(4, ecole, sans)).toBe('a')
+    expect(statutAbsence(1, ecole, sans, travail)).toBe('a')
+    expect(statutAbsence(null, ecole, sans, travail)).toBe('a')
+  })
+  it('formation de 10 jours : du travail, jamais neutre (décision du 2026-11-09)', () => {
+    expect(resolu('OOOOOOOOOO')).toBe('TTTTTTTTTT')
+    // Accepté : deux semaines de formation au rythme, 5 jours puis 2 repos.
+    expect(fautes('TTTTTrr OOOOOrr OOOOOrr TTTTTrr')).toEqual([])
+    // Refusé : 10 jours de formation d'affilée, un bloc de 10.
+    expect(fautes('TTTTTrr OOOOOOOOOO rr')).toEqual(['travail-long'])
+    // Refusé : une formation de 3 jours seule entre deux repos.
+    expect(fautes('TTTTTrr OOOrrrr')).toContain('travail-court')
+  })
+  it('congé de 10 jours : toujours neutre', () => {
+    expect(resolu('CCCCCCCCCC')).toBe('nnnnnnnnnn')
+    expect(fautes('TTTTTrr CCCCCCCCCC TTTrr')).toEqual([])
+    expect(resolu('MMMMMMMMMM')).toBe('nnnnnnnnnn')
+  })
+  it('suite mêlée : la formation ne coupe pas la suite et n’y compte pas', () => {
+    // 8 jours de congé autour de 2 jours de formation : neutres, la
+    // formation reste du travail.
+    expect(resolu('CCCCOOCCCC')).toBe('nnnnTTnnnn')
+    expect(fautes('TTTTTrr CCCCOOCCCC TTTrr')).toEqual([])
+    // Deux semaines de congé avec une journée de formation au milieu :
+    // toujours une absence longue.
+    expect(resolu('CCCCCCOCCCCCC')).toBe('nnnnnnTnnnnnn')
+    // 5 jours de congé seulement (la formation ne compte pas) : du travail,
+    // 6 jours d'affilée, refusé.
+    expect(resolu('CCCOCC')).toBe('TTTTTT')
+    expect(fautes('TTTTTrr CCCOCCr')).toEqual(['travail-long'])
+    // 6 jours de congé et 1 de formation : neutres sauf la formation.
+    expect(resolu('CCCOCCC')).toBe('nnnTnnn')
+    // La formation en bord de suite : du travail, le congé compté seul.
+    expect(resolu('OCCCCCC')).toBe('Tnnnnnn')
+    expect(resolu('OCCCCC')).toBe('TTTTTT')
+    // Un repos, l'école ou un shift coupent toujours la suite.
+    expect(resolu('CCCOCCRCCC')).toBe('TTTTTTrTTT')
+  })
   it('une seule règle, statuts compris : les motifs du calcul disent les fautes', () => {
-    const statut = fc.constantFrom<StatutRythme>('T', 'r', 'a', 'n', 'u')
+    const statut = fc.constantFrom<StatutRythme>('T', 'r', 'a', 'f', 'n', 'u')
     fc.assert(
       fc.property(fc.array(statut, { minLength: 1, maxLength: 28 }), (s) => {
         const etats = resoudreAbsences(s)
-        // Jamais d'absence restée telle quelle ; le reste inchangé.
+        // Jamais d'absence restée telle quelle ; une formation toujours du
+        // travail ; le reste inchangé.
         expect(etats.length).toBe(s.length)
         etats.forEach((e, i) => {
-          if (s[i] !== 'a') expect(e).toBe(s[i])
+          if (s[i] === 'f') expect(e).toBe('T')
+          else if (s[i] !== 'a') expect(e).toBe(s[i])
           else expect(['T', 'n']).toContain(e)
         })
         const motifs = motifsInterdits(etats.length)
@@ -160,21 +209,24 @@ describe('les statuts (définition)', () => {
       { numRuns: 3000, seed: 20261109 },
     )
   })
-  it('une absence longue est exactement une suite de plus de 5 absences', () => {
+  it('une absence longue est exactement une suite de plus de 5 absences, formations non comptées', () => {
     fc.assert(
       fc.property(
-        fc.array(fc.constantFrom<StatutRythme>('a', 'r', 'T'), {
+        fc.array(fc.constantFrom<StatutRythme>('a', 'f', 'r', 'T'), {
           maxLength: 30,
         }),
         (s) => {
           const etats = resoudreAbsences(s)
+          const absence = (k: number) => s[k] === 'a' || s[k] === 'f'
           for (let i = 0; i < s.length; i++) {
+            if (s[i] === 'f') expect(etats[i]).toBe('T')
             if (s[i] !== 'a') continue
             let g = i
-            while (g > 0 && s[g - 1] === 'a') g--
+            while (g > 0 && absence(g - 1)) g--
             let d = i
-            while (d + 1 < s.length && s[d + 1] === 'a') d++
-            expect(etats[i]).toBe(d - g + 1 > ABSENCE_LONGUE ? 'n' : 'T')
+            while (d + 1 < s.length && absence(d + 1)) d++
+            const conges = s.slice(g, d + 1).filter((e) => e === 'a').length
+            expect(etats[i]).toBe(conges > ABSENCE_LONGUE ? 'n' : 'T')
           }
         },
       ),
@@ -215,10 +267,12 @@ const fiche = (kw: Partial<Salarie> = {}): Salarie => ({
 })
 const EC = 2
 const CP = 1
+const FO = 4
 const REPOS = 12
-const ctxDe = (jours: Record<string, number>) => ({
+const ctxDe = (jours: Record<string, number>, formation = true) => ({
   ecole: new Set([EC]),
   sansDecompte: new Set([REPOS]),
+  rythmeTravail: new Set(formation ? [FO] : []),
   absences: new Map([[1, new Map(Object.entries(jours))]]),
 })
 const jours = (de: string, n: number, motif: number) =>
@@ -255,6 +309,30 @@ describe('les statuts lus sur les absences (rythmeAutour)', () => {
     expect(semaineLue(long)).toBe('nnnnnnn')
     expect(semaineLue(long, -7)).toBe('...nnnn')
     expect(semaineLue(long, 7)).toBe('n......')
+  })
+  it('formation de deux semaines : du travail les deux semaines ; sans le réglage, neutre', () => {
+    const a = rythmeAutour(fiche(), LUNDI, ctxDe(jours(LUNDI, 10, FO)))
+    expect(semaineLue(a)).toBe('TTTTTTT')
+    expect(semaineLue(a, 7)).toBe('TTT....')
+    const sans = rythmeAutour(
+      fiche(),
+      LUNDI,
+      ctxDe(jours(LUNDI, 10, FO), false),
+    )
+    expect(semaineLue(sans)).toBe('nnnnnnn')
+  })
+  it('suite mêlée lue sur les données : congé, formation, congé', () => {
+    const a = rythmeAutour(
+      fiche(),
+      LUNDI,
+      ctxDe({
+        ...jours(LUNDI, 4, CP),
+        ...jours('2026-12-11', 2, FO),
+        ...jours('2026-12-13', 4, CP),
+      }),
+    )
+    expect(semaineLue(a)).toBe('nnnnTTn')
+    expect(semaineLue(a, 7)).toBe('nnn....')
   })
   it('un repos posé coupe un congé ; un repos posé est un repos', () => {
     const a = rythmeAutour(

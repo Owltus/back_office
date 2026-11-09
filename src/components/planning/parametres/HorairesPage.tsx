@@ -172,6 +172,7 @@ const saisieMotif = (m: Motif): SaisieMotif => ({
   nature: m.nature,
   libre_weekend: m.libre_weekend ?? (m.nature === 'repos' || !m.decompte),
   reserve_forfait: !!m.reserve_forfait,
+  rythme_travail: !!m.rythme_travail,
   role: m.role ?? null,
   icone: m.icone ?? null,
 })
@@ -275,6 +276,7 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
       nature: 'absence',
       libre_weekend: false,
       reserve_forfait: false,
+      rythme_travail: false,
       role: null,
       icone: null,
     })
@@ -1135,6 +1137,31 @@ function CarteMotif({
             Réservé au forfait jours
             <span className="block text-xs text-muted-foreground">
               Proposé seulement aux personnes au forfait jours.
+            </span>
+          </span>
+        </label>
+      )}
+
+      {/* Rythme 5 jours puis 2 (décision de l'utilisateur du 2026-11-09) :
+          une formation compte toujours comme du travail, même longue. Sans
+          objet pour un motif qui n'est pas compté dans les heures (c'est un
+          repos pour le rythme). */}
+      {m.nature === 'absence' && m.decompte && (
+        <label className="flex items-start gap-2 text-sm">
+          <Switch
+            checked={!!m.rythme_travail}
+            disabled={desactive}
+            onCheckedChange={(rythme_travail) => changer({ rythme_travail })}
+            aria-label="Compte comme du travail pour le rythme"
+            className="mt-0.5"
+          />
+          <span>
+            Compte comme du travail pour le rythme
+            <span className="block text-xs text-muted-foreground">
+              Pour le rythme de 5 jours puis 2 repos, ces jours comptent
+              toujours comme des jours de travail, même sur deux semaines. Comme
+              une formation. Sinon, une absence de plus de 5 jours coupe le
+              rythme.
             </span>
           </span>
         </label>

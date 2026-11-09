@@ -105,6 +105,10 @@ export interface Motif {
   /** Proposé seulement aux personnes au forfait jours (à la place du nom
    * « forfait »). Absent : non. */
   reserve_forfait?: boolean
+  /** Compte TOUJOURS comme du travail pour le rythme 5 jours puis 2 jours,
+   * même sur une longue période (formation, décision de l'utilisateur du
+   * 2026-11-09). Lu pour un motif au décompte seulement. Absent : non. */
+  rythme_travail?: boolean
   /** Rôle du motif pour le planning, un motif par rôle (à la place des
    * codes JF, JFR, R). Absent : aucun. */
   role?: RoleMotif | null

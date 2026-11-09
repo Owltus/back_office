@@ -1721,6 +1721,33 @@ describe("règles de l'établissement impossibles (étape 8, 2026-11-05)", () =>
     expect(verifierReglages(r)).toEqual([])
   })
 
+  it('rythme 5 jours puis 2 strict : une absence de la semaine type se lit par son motif (formation = travail)', () => {
+    const r = propre()
+    const motif = (id: number, rythme_travail: boolean) => ({
+      id,
+      code: `M${id}`,
+      nom: `Motif ${id}`,
+      couleur: '#000000',
+      decompte: true,
+      nature: 'absence' as const,
+      rythme_travail,
+    })
+    r.motifs = [motif(1, false), motif(4, true)]
+    const s = r.salaries.find((x) => x.id === 10)!
+    // Toute la semaine en congé : une absence longue, neutre, rien à dire.
+    s.semaine_type = Array.from({ length: 7 }, () => ({
+      mode: 'absence' as const,
+      type_absence_id: 1,
+    }))
+    expect(verifierReglages(r)).toEqual([])
+    // Toute la semaine en formation : du travail, 7 jours d'affilée.
+    s.semaine_type = Array.from({ length: 7 }, () => ({
+      mode: 'absence' as const,
+      type_absence_id: 4,
+    }))
+    expect(ids(verifierReglages(r))).toContain('rythme-strict-semaine:10')
+  })
+
   it('rythme 5 jours puis 2 strict : moins de 5 jours d’affilée conseillés bloque', () => {
     const r = propre()
     r.reglages = { jours_affiles_conseilles: 4 }

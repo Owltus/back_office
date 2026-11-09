@@ -2694,6 +2694,7 @@ function genererPlanning(f: Fenetre, tables: Table[], apres: string[]): void {
     'nature',
     'libre_weekend',
     'role',
+    'rythme_travail',
   ])
   motifs.identiteForcee = true
   const idMotif = new Map<string, number>()
@@ -2707,6 +2708,9 @@ function genererPlanning(f: Fenetre, tables: Table[], apres: string[]): void {
       decompte,
       nature,
       ...plMotifCases(code, decompte, nature),
+      // Une formation compte toujours comme du travail pour le rythme 5 et
+      // 2 (2026-11-09, `rythme_travail`).
+      code === 'FO',
     ])
   })
   const postes = table('public.planning_postes', [
