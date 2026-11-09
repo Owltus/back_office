@@ -253,8 +253,8 @@ describe('le calcul', () => {
     const r = generer(p, highs)
     expect(r.statut).not.toBe('inconnu')
     expect(tenus(r)).toContain(2)
-    // Un motif dont un jour de travail est posé n'est pas écrit : le lundi
-    // posé n'interdit pas le mardi (comme le jour isolé).
+    // Le lundi posé seul fait déjà une faute (r T r) : le mardi n'en fait
+    // pas une de plus (r TT r), il vient.
     const q = probleme({
       salaries: [s],
       creneaux: [cr(0), cr(1)],
@@ -262,6 +262,28 @@ describe('le calcul', () => {
       graine: 1,
     })
     expect(tenus(generer(q, highs))).toEqual([0, 1])
+  })
+  it('un jour posé compte comme du travail : après une semaine d’école, un lundi validé ouvre le bloc de 5 (2026-11-09)', () => {
+    // Le cas de l'apprentie : EEEEE RR, puis le lundi validé. Avant, tout
+    // motif qui contenait le lundi posé était sauté : « TTT rr TT » ne
+    // coûtait rien, et les places du week-end le faisaient choisir (puis
+    // 4 repos la semaine d'après, avant la semaine d'école suivante).
+    const s = personne({ etatsAvant: 'TTTTTrr', joursSemainePrecedente: 5 })
+    const creneaux = SEMAINE.map((j) =>
+      cr(j, j === 3 || j === 4 ? { souhaite: true } : {}),
+    )
+    const p = probleme({
+      salaries: [s],
+      creneaux,
+      imposees: new Set(['a|j0']),
+      graine: 1,
+    })
+    const r = generer(p, highs)
+    expect(tenus(r)).toEqual([0, 1, 2, 3, 4])
+    expect(lue(p, r.affectations)).toEqual([])
+    // Accepté aussi : sans le lundi posé, le même choix.
+    const libre = probleme({ salaries: [s], creneaux, graine: 1 })
+    expect(tenus(generer(libre, highs))).toEqual([0, 1, 2, 3, 4])
   })
   it('toujours possible : une semaine d’avant qui impose l’impossible coûte, ne bloque pas', () => {
     // 2 jours à la fin de la semaine d'avant : le bloc doit aller au mardi,

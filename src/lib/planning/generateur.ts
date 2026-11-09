@@ -2793,11 +2793,15 @@ export function prixFauteRythme(couts: Iterable<number>): number {
  * contrainte « pas tous à la fois » sur la suite des jours, de la semaine
  * d'avant (`etatsAvant`) à la suivante (l'esquisse `sk`, sinon `etatsApres`).
  * Un jour neutre (hors contrat, absence longue) ou inconnu dans le motif :
- * rien. Un jour posé à la main sur une place de travail du motif : rien
- * (jamais sur un jour posé). L'école et une absence décomptée courte sont du
- * travail CONNU d'avance (constante 1, `joursRythmeDe`, révisé le
- * 2026-11-09) ; un JFR pris aussi : un jour vaut travaille + JFR pris, un
- * repos 1 - travaille - JFR pris. Les 6 jours de travail sont DURS (un
+ * rien. Un jour POSÉ (shift validé ou gardé) est du travail CONNU d'avance,
+ * comme l'école et une absence décomptée courte (constante 1,
+ * `joursRythmeDe`, révisé le 2026-11-09) ; un JFR pris aussi : un jour vaut
+ * travaille + JFR pris, un repos 1 - travaille - JFR pris. Jamais SUR un
+ * jour posé : il n'est jamais retiré, le motif se paie sur les autres jours
+ * (relecture du 2026-11-09 : un lundi validé SAUTAIT tous les motifs qui le
+ * contenaient, si bien que « 3 jours puis 2 repos » ne coûtait rien dès que
+ * la semaine commençait par un shift validé). Les 6 jours de travail sont
+ * DURS (un
  * plafond de travail, que ne pas travailler tient toujours : le modèle
  * reste possible). Les autres motifs coûtent `prixFauteRythme` par jour en
  * trop, plus que tout ce qu'une faute pourrait racheter : le calcul fait le
@@ -2817,7 +2821,7 @@ function rythmeStrictModele(
   /** Les fautes payées, leur prix posé à la fin (`prixFauteRythme`). */
   excesRythme: string[],
 ): void {
-  type Jour = null | { t: string | 0 | 1; n: string | null; pose: boolean }
+  type Jour = null | { t: string | 0 | 1; n: string | null }
   const N = p.nbJours
   const { neutres, travail } = joursRythmeDe(s, N)
   const voisines = voisinesRythme(s)
@@ -2828,44 +2832,44 @@ function rythmeStrictModele(
     if (d < 0) {
       const e = avant?.[d + 7]
       if (!e || e === 'n' || e === 'u') return null
-      return { t: e === 'T' ? 1 : 0, n: null, pose: false }
+      return { t: e === 'T' ? 1 : 0, n: null }
     }
     if (d < N) {
-      if (poses.has(d)) return { t: 1, n: null, pose: true }
+      if (poses.has(d)) return { t: 1, n: null }
       if (neutres.has(d)) return null
       // École, absence décomptée courte : du travail sans shift.
-      if (travail.has(d)) return { t: 1, n: null, pose: false }
+      if (travail.has(d)) return { t: 1, n: null }
       return {
         t: travaille.get(d) ?? 0,
         n: jfrDuJour.get(d) ?? null,
-        pose: false,
       }
     }
     if (sk) {
       if (d >= N + 7 || esquisse?.neutres?.has(d - N)) return null
-      if (esquisse?.travailRythme?.has(d - N))
-        return { t: 1, n: null, pose: false }
-      return { t: sk.get(d) ?? 0, n: null, pose: false }
+      if (esquisse?.travailRythme?.has(d - N)) return { t: 1, n: null }
+      return { t: sk.get(d) ?? 0, n: null }
     }
     const e = apres?.[d - N]
     if (!e || e === 'n' || e === 'u') return null
-    return { t: e === 'T' ? 1 : 0, n: null, pose: false }
+    return { t: e === 'T' ? 1 : 0, n: null }
   }
   const debut = -7
   const fin = N + 7
   const jours = new Map<number, Jour>()
   for (let d = debut; d < fin; d++) jours.set(d, jourDu(d))
-  // Les jours connus d'avance (`jourConnu`, `fauteScellee`) ; la semaine
-  // esquissée : ses jours fixés seulement.
+  // Les jours connus d'avance (`jourConnu`, `fauteScellee`), un jour posé
+  // compris (il n'est jamais retiré) ; la semaine esquissée : ses jours
+  // fixés seulement.
   const connu = (d: number) =>
     d < N
-      ? jourConnu(s, d, N)
+      ? jourConnu(s, d, N) || poses.has(d)
       : !sk ||
         !!esquisse?.fixes.has(d - N) ||
         !!esquisse?.travailRythme?.has(d - N)
   for (const motif of motifsInterdits(fin - debut)) {
-    // 6 jours de travail : un jour posé y compte (jamais plus de 5 autour
-    // de lui) ; les autres motifs ne s'écrivent pas sur un jour posé.
+    // 6 jours de travail : DURS, un jour posé y compte (jamais plus de 5
+    // autour de lui) ; les autres motifs se paient, un jour posé y compte
+    // aussi.
     const travailSeul = motif.every((e) => e === 'T')
     // Plus de 2 repos entre deux blocs déjà faits par les faits
     // (`fauteScellee`) : écrit, le motif interdirait toute reprise de ce
@@ -2890,7 +2894,7 @@ function rythmeStrictModele(
         if (!j) possible = false
         else if (motif[i] === 'T') {
           // Un JFR pris compte comme du travail (absence décomptée).
-          if ((j.t === 0 && !j.n) || (j.pose && !travailSeul)) possible = false
+          if (j.t === 0 && !j.n) possible = false
           else if (j.t === 1) constante++
           else {
             if (j.t !== 0) termes.push([1, j.t])
