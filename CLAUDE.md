@@ -2865,6 +2865,27 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   Postes ; fiche : choix du niveau par poste avec sa phrase dessous. Identique
   prouvé : empreinte 8874c146, banc décembre (5 semaines : modèle, analyse,
   solution à graine égale) 0 écart. Tests `niveauxFixes.test.ts`.
+- **RYTHME 5 JOURS PUIS 2 JOURS, STRICT (décision utilisateur du 2026-11-09 : « les repos,
+  il faut qu'ils soient absolument sur 2 jours d'affilée, donc c'est normal que pour la semaine
+  de travail ce soit le cas aussi » ; choix A strict, places à pourvoir acceptées)**. Réglage
+  `planning_reglages.rythme_strict` (migration `20261109100000`, ajout, défaut OUI), « Repos et
+  rythme » des règles des contrats, `repos.rythmeStrict`. Pour le rythme humain (35 h et plus,
+  `rythme_contrat_min`), sauf une semaine type à deux repos fixes ou plus : (a) jamais un repos
+  seul, (b) un bloc de travail fait EXACTEMENT 5 jours, au plus 5 contre un jour neutre ou un bord
+  inconnu, (c) 2 repos exactement entre deux blocs, sauf contre un jour neutre. NEUTRE : école,
+  absence décomptée (congé, maladie, férié chômé, JFR pris), hors contrat ; un repos posé est un
+  repos ; semaine voisine inconnue : rien. UNE définition, `lib/planning/rythmeStrict.ts`
+  (`fautesRythme`, `motifsInterdits`, propriété qui les compare) : générateur
+  (`rythmeStrictModele`, motifs interdits DURS sur la suite semaine d'avant `etatsAvant`, période,
+  esquisse k+1 ou `etatsApres` ; jamais sur un jour posé sauf les 6 jours ; un motif que seuls les
+  faits imposent coûte `POIDS_RYTHME_BORD`, le modèle reste possible), vérificateur RYTHME-5-2
+  (bloque une place, « règle de l'hôtel »), repos obligés, « À vérifier ». Il REMPLACE pour ces
+  personnes les fenêtres de jours d'affilée et JOURS-AFFILES (l'école coupe la série au lieu de
+  compter comme du travail : sinon un apprenti n'avait plus de bloc avant une semaine de CFA).
+  Réglage à non : modèle d'avant au caractère près (empreinte 8874c146), à oui 69e93268. Banc
+  décembre (copie locale, en mémoire, 3 graines) : places à pourvoir 9 → 13-14, repos seuls 5 → 0,
+  blocs hors 5 / 2 18-22 → 4 (3 contre des shifts validés ou la semaine d'avant), heures dues
+  manquantes 43 → 16 h, 0 infraction, 3,9 s au pire par semaine.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

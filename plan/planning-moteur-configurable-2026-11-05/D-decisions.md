@@ -107,3 +107,20 @@ le chevauchement. Donc retire le paramétrage de cela. »
 - Base inchangée : les colonnes restent, plus lues (pas de retrait).
 - Écran : réglages retirés de Besoins et des zones, une phrase les dit. Renverse D8 « réglable »
   (la continuité reste obligatoire) et les réglages de relève, passation, tolérance par zone (A5).
+
+**2026-11-09, rythme 5 jours puis 2 jours strict (décision utilisateur).** « Les repos, il faut
+qu'ils soient absolument sur 2 jours d'affilée, donc c'est normal que pour la semaine de travail
+ce soit le cas aussi. » Choix A strict : toujours 5 jours de travail d'affilée puis 2 jours de
+repos d'affilée pour les contrats de 35 h et plus (même périmètre que `rythmeHumain`) ; les repos
+retombent aux mêmes jours d'une semaine à l'autre, et une place reste à pourvoir plutôt que
+d'enfreindre la règle. Constat d'origine : décembre généré montrait des semaines « TTrrTTT » et un
+repos seul (stagiaire de 35 h, « r TT r TTT »).
+
+- Réglage « Rythme 5 jours puis 2 jours strict » dans « Repos et rythme », défaut oui (colonne
+  `rythme_strict`, migration d'ajout `20261109100000`). Seuil : `rythme_contrat_min`.
+- Jours neutres qui coupent le rythme : école, absence décomptée, hors contrat. Une semaine type à
+  deux repos fixes ou plus décide seule (comme les deux repos de suite).
+- Remplace, pour ces personnes, les fenêtres de jours d'affilée (l'école y comptait comme du
+  travail). Réglage à non : le calcul d'avant.
+- Banc de décembre (3 graines) : places à pourvoir 9 → 13-14 (moins du double, donc défaut oui),
+  repos seuls 5 → 0, heures dues manquantes 43 → 16 h, aucune infraction, 4 s au pire par semaine.
