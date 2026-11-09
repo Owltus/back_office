@@ -2772,7 +2772,12 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   720, `JOUR_MAX_LOI` 12 h) remplace la catégorie, qui n'est plus lue (colonne gardée) ; la nuit
   de l'accueil = `accueil_nuit` seul. Code : `listeContrats`, `nomContrat`, `modeleDe` ; un
   contrat placé à la main se comporte en extra (48 h, 0 h, interrupteur Actif). L'évolution d'un
-  apprenti garde son contrat (choix dans le dialogue). `contratsPostesReglables.test.ts` refuse
+  apprenti garde son contrat (choix dans le dialogue). Stagiaire SANS calendrier d'école
+  (décision utilisateur du 2026-11-09, migration `20261109120000`, `--avec-donnees`) ; le niveau
+  Soutien proposé à l'ajout d'un poste suit une case à part, « Proposé en soutien »
+  (`soutien_par_defaut`, stagiaire et apprenti), jamais l'alternance ; proposition seulement,
+  modifiable dans la fiche ; l'évolution de contrat promeut le soutien en titulaire d'après
+  cette case. `contratsPostesReglables.test.ts` refuse
   toute comparaison à un code de contrat et toute lecture de `categorie` dans les sources.
   Empreinte 8874c146 et banc de décembre identiques. Libellé « Hôtelier » de la Supervision
   réception devenu son nom (la catégorie n'est plus lue).

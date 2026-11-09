@@ -262,7 +262,23 @@ describe('alternance : le modèle du type de contrat décide (relecture du 2026-
     expect(niveauParDefaut('cdi')).toBe('titulaire')
   })
 
-  it('alternance cochée pour le CDD, décochée pour le stagiaire', async () => {
+  it('aux défauts : stagiaire sans école mais proposé en soutien', async () => {
+    const { enAlternance, soutienParDefaut, niveauParDefaut } =
+      await import('#/components/planning/parametres/equipe/brouillon.ts')
+    expect(enAlternance('stagiaire')).toBe(false)
+    expect(soutienParDefaut('stagiaire')).toBe(true)
+    expect(niveauParDefaut('stagiaire')).toBe('soutien')
+  })
+
+  it('aux défauts : apprenti avec l’école et le soutien proposé', async () => {
+    const { enAlternance, soutienParDefaut, niveauParDefaut } =
+      await import('#/components/planning/parametres/equipe/brouillon.ts')
+    expect(enAlternance('apprenti')).toBe(true)
+    expect(soutienParDefaut('apprenti')).toBe(true)
+    expect(niveauParDefaut('apprenti')).toBe('soutien')
+  })
+
+  it('la case « Proposé en soutien » décide du niveau, pas l’alternance', async () => {
     const { enAlternance, niveauParDefaut } =
       await import('#/components/planning/parametres/equipe/brouillon.ts')
     const { lireRegles, REGLES_PAR_DEFAUT } =
@@ -272,14 +288,43 @@ describe('alternance : le modèle du type de contrat décide (relecture du 2026-
       ...lireRegles(null),
       modeles: {
         ...m,
+        // Alternance sans la case : titulaire proposé.
         cdd: { ...m.cdd, alternance: true },
-        stagiaire: { ...m.stagiaire, alternance: false },
+        // Case décochée : titulaire proposé (même en alternance).
+        stagiaire: { ...m.stagiaire, soutienParDefaut: false },
+        apprenti: { ...m.apprenti, soutienParDefaut: false },
+        // Case cochée sans alternance : soutien proposé.
+        cdi: { ...m.cdi, soutienParDefaut: true },
       },
     }
     expect(enAlternance('cdd', regles)).toBe(true)
-    expect(enAlternance('stagiaire', regles)).toBe(false)
-    expect(niveauParDefaut('cdd', regles)).toBe('soutien')
+    expect(niveauParDefaut('cdd', regles)).toBe('titulaire')
     expect(niveauParDefaut('stagiaire', regles)).toBe('titulaire')
+    expect(enAlternance('apprenti', regles)).toBe(true)
+    expect(niveauParDefaut('apprenti', regles)).toBe('titulaire')
+    expect(niveauParDefaut('cdi', regles)).toBe('soutien')
+  })
+
+  it('lue en base : la colonne soutien_par_defaut', async () => {
+    const { niveauParDefaut } =
+      await import('#/components/planning/parametres/equipe/brouillon.ts')
+    const { lireRegles } = await import('#/lib/planning/reglesEtablissement.ts')
+    const ligne = (type_contrat: string, soutien: boolean) => ({
+      type_contrat,
+      journees_imposees: true,
+      journee_etoile: true,
+      placement_manuel: false,
+      contrat_indicatif: false,
+      ferie_rattrape: false,
+      feries_jour_meme: true,
+      alternance: false,
+      soutien_par_defaut: soutien,
+    })
+    const regles = lireRegles({
+      modelesContrat: [ligne('stagiaire', false), ligne('cdi', true)],
+    })
+    expect(niveauParDefaut('stagiaire', regles)).toBe('titulaire')
+    expect(niveauParDefaut('cdi', regles)).toBe('soutien')
   })
 })
 

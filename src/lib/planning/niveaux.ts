@@ -153,10 +153,11 @@ export function nomNiveau(niveaux: Niveaux, id: string): string {
 }
 
 /** Le niveau proposé à l'ajout d'un poste : le premier non autonome pour un
- * contrat en alternance (D9), sinon le préféré. */
-export function niveauPropose(niveaux: Niveaux, alternance: boolean): string {
+ * contrat « proposé en soutien » (D9, case du type de contrat depuis le
+ * 2026-11-09), sinon le préféré. Une proposition : la fiche la change. */
+export function niveauPropose(niveaux: Niveaux, enSoutien: boolean): string {
   const soutien = niveaux.liste.find((n) => !n.autonome)
-  return alternance && soutien ? soutien.id : (niveaux.autonomes[0]?.id ?? '')
+  return enSoutien && soutien ? soutien.id : (niveaux.autonomes[0]?.id ?? '')
 }
 
 /** Ce qu'un besoin demande, par niveau, tel que le calcul le lit.

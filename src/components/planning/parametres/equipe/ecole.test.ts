@@ -415,4 +415,37 @@ describe('absences jour par jour', () => {
       '2026-11-13',
     ])
   })
+
+  it('évolution vers stagiaire (2026-11-09) : le soutien reste, l école part', () => {
+    const { referentiel } = hotelDemo('2026-11-02')
+    const b = {
+      ...brouillonVierge(3),
+      id: 13,
+      prenom: 'Essai',
+      type_contrat: 'apprenti' as const,
+      heures_hebdo: 35,
+      competences: [{ poste_id: 3, niveau: 'soutien' as const }],
+      absences: [
+        { cle: 1, debut: '2026-11-16', fin: '2026-11-20', motif_id: ECOLE },
+      ],
+    }
+    const plan = planEvolution(
+      b,
+      {
+        date: '2026-11-10',
+        type_contrat: 'stagiaire',
+        groupe_id: 2,
+        heures_hebdo: 35,
+      },
+      referentiel.postes,
+      referentiel.groupes,
+      referentiel.motifs,
+    )
+    // Stagiaire : proposé en soutien, donc le soutien n'est pas promu ;
+    // sans alternance, ses jours d'école ne le suivent pas.
+    expect(plan.nouveau.competences).toEqual([
+      { poste_id: 3, niveau: 'soutien' },
+    ])
+    expect(plan.joursNouveau.size).toBe(0)
+  })
 })

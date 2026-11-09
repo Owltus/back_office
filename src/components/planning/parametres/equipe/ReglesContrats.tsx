@@ -665,6 +665,21 @@ export function ReglesContrats({
                 </Effet>
                 <Effet
                   texte={
+                    modele.soutien_par_defaut
+                      ? 'Proposé en soutien quand on ajoute un poste (modifiable dans la fiche).'
+                      : 'Proposé titulaire quand on ajoute un poste (modifiable dans la fiche).'
+                  }
+                >
+                  <Interrupteur
+                    coche={!!modele.soutien_par_defaut}
+                    disabled={off}
+                    onChange={(v) => changerModele({ soutien_par_defaut: v })}
+                  >
+                    Proposé en soutien
+                  </Interrupteur>
+                </Effet>
+                <Effet
+                  texte={
                     modele.mineur_possible
                       ? 'La fiche peut être déclarée mineure : la loi des mineurs s’applique alors.'
                       : 'Toujours majeur.'

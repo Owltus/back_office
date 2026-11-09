@@ -143,7 +143,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':J', (select j from t_ids)::text);
 $$;
 
-select plan(187);
+select plan(191);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -375,6 +375,19 @@ select is(pg_temp.essai('ecriture', array['update public.planning_modeles_contra
   '0', 'modèles de contrat : l''écriture ne les change pas');
 select is(pg_temp.essai('ecriture', array['delete from public.planning_modeles_contrat where type_contrat = ''cdi''']),
   '0', 'modèles de contrat : l''écriture n''en supprime aucun');
+-- Proposé en soutien, séparé de l'alternance (20261109120000).
+select col_not_null('public', 'planning_modeles_contrat', 'soutien_par_defaut',
+  'modèles de contrat : soutien_par_defaut jamais nul');
+select col_default_is('public', 'planning_modeles_contrat', 'soutien_par_defaut', 'false',
+  'modèles de contrat : soutien_par_defaut à non par défaut');
+select is((select string_agg(type_contrat || '=' || alternance || '/' || soutien_par_defaut, ',' order by type_contrat)
+             from public.planning_modeles_contrat where type_contrat in ('stagiaire', 'apprenti')),
+  'apprenti=true/true,stagiaire=false/true',
+  'modèles de contrat : stagiaire sans école mais en soutien, apprenti avec les deux');
+select is(pg_temp.essai('gestion', array[
+  'update public.planning_modeles_contrat set soutien_par_defaut = false where type_contrat = ''apprenti''',
+  'select soutien_par_defaut::text from public.planning_modeles_contrat where type_contrat = ''apprenti''']),
+  'false', 'modèles de contrat : la gestion décoche « Proposé en soutien »');
 select is(pg_temp.essai('gestion', array[
   'update public.planning_modeles_contrat set placement_manuel = true where type_contrat = ''cdd''',
   'select placement_manuel::text from public.planning_modeles_contrat where type_contrat = ''cdd''']),

@@ -176,7 +176,16 @@ describe('lireRegles', () => {
     }
     const ligne = (
       type_contrat: ModeleContrat['type_contrat'],
-      v: [boolean, boolean, boolean, boolean, boolean, boolean, boolean],
+      v: [
+        boolean,
+        boolean,
+        boolean,
+        boolean,
+        boolean,
+        boolean,
+        boolean,
+        boolean,
+      ],
     ): ModeleContrat => ({
       type_contrat,
       journees_imposees: v[0],
@@ -186,13 +195,15 @@ describe('lireRegles', () => {
       ferie_rattrape: v[4],
       feries_jour_meme: v[5],
       alternance: v[6],
+      soutien_par_defaut: v[7],
     })
+    // Stagiaire : plus d'alternance, proposé en soutien (20261109120000).
     const modelesContrat = [
-      ligne('cdi', [true, true, false, false, true, false, false]),
-      ligne('cdd', [true, true, false, false, true, false, false]),
-      ligne('extra', [false, false, true, true, false, false, false]),
-      ligne('stagiaire', [true, true, false, false, false, true, true]),
-      ligne('apprenti', [true, true, false, false, true, false, true]),
+      ligne('cdi', [true, true, false, false, true, false, false, false]),
+      ligne('cdd', [true, true, false, false, true, false, false, false]),
+      ligne('extra', [false, false, true, true, false, false, false, false]),
+      ligne('stagiaire', [true, true, false, false, false, true, false, true]),
+      ligne('apprenti', [true, true, false, false, true, false, true, true]),
     ]
     expect(lireRegles({ reglages, modelesContrat })).toEqual(REGLES_PAR_DEFAUT)
   })
@@ -231,7 +242,18 @@ describe('lireRegles', () => {
     expect(m.extra.ferieRattrape).toBe(false)
     expect(m.stagiaire.ferieRattrape).toBe(false)
     expect(m.stagiaire.feriesJourMeme).toBe(true)
-    expect(m.apprenti.alternance && m.stagiaire.alternance).toBe(true)
+    // 2026-11-09 : l'école pour l'apprenti seul, le soutien proposé aux
+    // deux, jamais aux autres.
+    expect(m.apprenti.alternance).toBe(true)
+    expect(m.stagiaire.alternance).toBe(false)
+    expect(m.apprenti.soutienParDefaut && m.stagiaire.soutienParDefaut).toBe(
+      true,
+    )
+    expect(
+      m.cdi.soutienParDefaut ||
+        m.cdd.soutienParDefaut ||
+        m.extra.soutienParDefaut,
+    ).toBe(false)
     expect(m.cdi.ferieRattrape && m.cdd.ferieRattrape).toBe(true)
   })
 

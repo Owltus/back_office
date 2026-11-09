@@ -65,6 +65,15 @@ export const enAlternance = (
   regles: RegleEtablissement = REGLES_PAR_DEFAUT,
 ) => modeleDe(regles, contrat).alternance
 
+/** Le type de contrat est proposé en soutien à l'ajout d'un poste : la case
+ * « Proposé en soutien » de son modèle (séparée de l'alternance depuis le
+ * 2026-11-09 : un stagiaire n'a plus d'école mais reste proposé en
+ * soutien). Une proposition seulement, modifiable dans la fiche. */
+export const soutienParDefaut = (
+  contrat: TypeContrat,
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
+) => modeleDe(regles, contrat).soutienParDefaut
+
 /** Un jour de semaine type neutre. */
 export const JOUR_LIBRE: JourType = {
   mode: 'auto',
@@ -316,11 +325,12 @@ export function filtrerJours(
 // ------------------------------------------------------- règles d'édition
 
 /** Niveau proposé à l'ajout d'un poste : le premier niveau qui ne tient
- * pas une place seul pour un contrat en alternance (D9), sinon le préféré. */
+ * pas une place seul pour un contrat « proposé en soutien » (D9), sinon le
+ * préféré. */
 export const niveauParDefaut = (
   contrat: TypeContrat,
   regles: RegleEtablissement = REGLES_PAR_DEFAUT,
-): Niveau => niveauPropose(regles.niveaux, enAlternance(contrat, regles))
+): Niveau => niveauPropose(regles.niveaux, soutienParDefaut(contrat, regles))
 
 /** Journée étoile possible : au-delà de 35 h payé à l'heure, pour un
  * contrat dont le modèle a une journée étoile (`contratEtoile`, la même
@@ -647,8 +657,8 @@ export interface PlanEvolution {
 /**
  * Évolution du contrat (prototype `evoluer`) : l'ancien se ferme la veille
  * (sauf s'il était déjà fini avant), le nouveau s'ouvre à la date choisie,
- * relié par `suite_de`, avec ses postes (soutien → titulaire hors
- * alternance), ses congés à venir (sans l'école hors alternance) et sa
+ * relié par `suite_de`, avec ses postes (soutien → titulaire quand le
+ * nouveau contrat n'est pas « proposé en soutien »), ses congés à venir (sans l'école hors alternance) et sa
  * semaine type (jours d'école remis en Libre hors alternance). `jours` :
  * les jours d'absence à répartir (par défaut ceux du brouillon ; la fiche
  * passe ceux de la base relue, avec ses propres changements).
@@ -666,6 +676,7 @@ export function planEvolution(
   const finAncien =
     b.date_sortie && b.date_sortie < e.date ? b.date_sortie : veille
   const alternance = enAlternance(e.type_contrat, regles)
+  const enSoutien = soutienParDefaut(e.type_contrat, regles)
   const manuel = contratManuel(e.type_contrat, regles)
   const possibles = postesDuGroupe(
     postes,
@@ -689,7 +700,7 @@ export function planEvolution(
     competences: (e.competences ?? b.competences)
       .filter((c) => possibles.some((p) => p.id === c.poste_id))
       .map((c) =>
-        !alternance && estSoutien(regles.niveaux, c.niveau)
+        !enSoutien && estSoutien(regles.niveaux, c.niveau)
           ? { ...c, niveau: niveauPropose(regles.niveaux, false) }
           : c,
       ),

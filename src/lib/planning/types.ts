@@ -249,6 +249,9 @@ export interface ModeleContrat {
   feries_jour_meme: boolean
   /** Alternance (école, CFA). */
   alternance: boolean
+  /** Niveau Soutien proposé à l'ajout d'un poste dans la fiche (une
+   * proposition, modifiable). Absent (données de test) : le défaut. */
+  soutien_par_defaut?: boolean
 }
 
 export interface Groupe {

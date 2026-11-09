@@ -473,8 +473,10 @@ function phraseContrat(m: ModeleContratRegle): string {
     )
   if (m.contratIndicatif) p.push('Pas d’heures dues.')
   if (m.alternance)
+    p.push('Ses jours d’école viennent du calendrier de sa fiche.')
+  if (m.soutienParDefaut)
     p.push(
-      'Ses jours d’école viennent du calendrier de sa fiche. Il commence en soutien : jamais seul.',
+      'Proposé en soutien quand on ajoute un poste (jamais seul), modifiable dans la fiche.',
     )
   if (m.jourMaxMinutes !== null)
     p.push(

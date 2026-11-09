@@ -331,8 +331,8 @@ function BlocEvolution({
       <p className="text-xs text-muted-foreground">
         Jusqu'à la veille, rien ne change. À partir de la date, ses nouveaux
         postes et son nouveau contrat s'appliquent, avec ses congés à venir et
-        sa semaine type (le soutien devient titulaire hors alternance).
-        L'historique reste.
+        sa semaine type (le soutien devient titulaire si le nouveau contrat
+        n'est pas proposé en soutien). L'historique reste.
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">

@@ -78,6 +78,9 @@ export interface ModeleContratRegle {
   feriesJourMeme: boolean
   /** Alternance (école, CFA). */
   alternance: boolean
+  /** Niveau Soutien proposé quand on ajoute un poste dans la fiche (une
+   * proposition, modifiable ; séparé de l'alternance, 2026-11-09). */
+  soutienParDefaut: boolean
 }
 
 export interface RegleEtablissement {
@@ -200,6 +203,7 @@ const MODELE_ORDINAIRE: Omit<ModeleContratRegle, 'code' | 'nom' | 'ordre'> = {
   ferieRattrape: true,
   feriesJourMeme: false,
   alternance: false,
+  soutienParDefaut: false,
 }
 
 /** L'hôtel d'aujourd'hui, chiffre pour chiffre (B3). */
@@ -275,7 +279,10 @@ export const REGLES_PAR_DEFAUT: RegleEtablissement = {
       finObligatoire: true,
       ferieRattrape: false,
       feriesJourMeme: true,
-      alternance: true,
+      // Pas de calendrier d'école, mais proposé en soutien (décision
+      // utilisateur du 2026-11-09, migration 20261109120000).
+      alternance: false,
+      soutienParDefaut: true,
     },
     apprenti: {
       ...MODELE_ORDINAIRE,
@@ -286,6 +293,7 @@ export const REGLES_PAR_DEFAUT: RegleEtablissement = {
       forfaitPossible: false,
       finObligatoire: true,
       alternance: true,
+      soutienParDefaut: true,
     },
   },
 }
@@ -401,6 +409,7 @@ function lireModeles(
       ferieRattrape: m.ferie_rattrape,
       feriesJourMeme: m.feries_jour_meme,
       alternance: m.alternance,
+      soutienParDefaut: m.soutien_par_defaut ?? d.soutienParDefaut,
     }
   }
   return r

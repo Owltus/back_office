@@ -171,3 +171,20 @@ jours. Révise le « choix de l'agent » ci-dessus pour la formation.
   vérificateur et les repos obligés ; « À vérifier » lit le motif d'une absence de la semaine
   type par la même fonction. Repos proposés sur un congé et prix de la règle inchangés.
   Empreintes 8874c146 et fb6eed48 inchangées (aucune formation dans les données de test).
+
+**2026-11-09, stagiaires sans école, soutien proposé à part (décision utilisateur).** Plus de
+calendrier d'école pour les stagiaires ; les apprentis le gardent. « Par défaut, un stagiaire ou
+un apprenti est en soutien, mais cela peut vite changer, et même un stagiaire peut être en
+autonomie s'il a les compétences. »
+
+- Migration `20261109120000` (ajout de colonne + contenu, livraison `--avec-donnees`) :
+  `alternance = false` pour Stagiaire ; colonne `planning_modeles_contrat.soutien_par_defaut`
+  (défaut non), oui pour Stagiaire et Apprenti.
+- Écran : case « Proposé en soutien » à côté de l'Alternance (Équipe, Règles des contrats),
+  « Proposé en soutien quand on ajoute un poste (modifiable dans la fiche). »
+- `niveauParDefaut` lit cette case (`soutienParDefaut`), plus l'alternance. L'alternance garde
+  le reste : calendrier d'école de la fiche, repos déduits, école dans l'évolution, `regles.ts`.
+- Évolution de contrat (choix de l'agent) : le soutien devient titulaire quand le NOUVEAU
+  contrat n'est pas « proposé en soutien » (avant : hors alternance). Sinon un apprenti devenu
+  stagiaire aurait été promu titulaire, à l'inverse de la proposition faite à l'ajout d'un poste.
+  Les jours d'école à venir suivent toujours l'alternance.
