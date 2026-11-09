@@ -57,24 +57,27 @@ pourtant mauvais pour ceux qui les vivent.
 
 ## 2. Ordre des priorités
 
-**ORDRE DU 2026-11-09 (décisions de l'utilisateur : « oui, mais vraiment si utile ; tu as beaucoup
-de règles de fonctionnement qui peuvent rentrer en conflit ; tous les membres du personnel doivent
-pouvoir faire toutes leurs heures quoi qu'il arrive ; les repos de quatre jours, c'est non ; les
-moments où tu places quatre personnes le soir alors que personne le matin, c'est non »).** Il passe
-devant l'ordre plus bas là où ils diffèrent :
+**ORDRE DU 2026-11-09 (décisions de l'utilisateur : « oui, mais vraiment si utile » ; « tous les
+membres du personnel doivent pouvoir faire toutes leurs heures quoi qu'il arrive » ; « ne place
+jamais plus de deux jours de repos à la suite, c'est pas possible » ; le repos seul « possible,
+mais dans un cas vraiment d'urgence si manque de personnel » ; « quatre personnes le soir alors
+que personne le matin, c'est non » ; « je ne peux pas laisser tourner un hôtel avec juste des
+stagiaires et apprentis »).** Il passe devant l'ordre plus bas là où ils diffèrent :
 
 1. **La loi**, dure.
-2. **Le rythme 5 et 2** (règle 20) : jamais 6 jours de travail d'affilée (dur), jamais 4 repos ou
-   plus entre deux blocs (au-dessus de tout ; quand des absences, l'école, des shifts validés ou la
-   semaine voisine l'imposent, le calcul reste possible et la page le dit) ; un repos seul ou un
-   bloc de 1 à 3 jours garde le prix fort (au-dessus de la semaine d'heures dues).
-3. **Les heures dues du contrat, quoi qu'il arrive** : une heure due vaut plus qu'un changement de
-   jours de repos et une place ensemble.
-4. **Les places des postes indispensables**, salarié confirmé dur (règle 21).
-5. **Le changement de jours de repos** (règle 22) : seulement s'il remplit plus d'une place et
-   demie qui resterait vide autrement, une fois par personne sur 4 semaines.
+2. **Le rythme 5 et 2** (règle 20) : jamais 6 jours de travail d'affilée (dur), jamais 3 repos
+   ou plus entre deux blocs (au-dessus de tout ; quand des absences, l'école, des shifts validés
+   ou la semaine voisine l'imposent, le calcul reste possible et la page le dit) ; un bloc de 1 à
+   3 jours garde le prix fort (au-dessus de la semaine d'heures dues).
+3. **Les heures dues du contrat, quoi qu'il arrive** : une heure due vaut plus qu'un repos seul et
+   une place ensemble.
+4. **Les places des postes indispensables**, salarié confirmé dur sur l'ensemble des postes
+   indispensables (règle 21).
+5. **Le repos seul** (urgence, 3 places, un sur 4 semaines) puis **le changement de jours de
+   repos** (règle 22, un bloc de 4 jours, 1,5 place, sans plafond de nombre).
 6. **L'équilibre entre les moments d'une zone** (règle 23), au prix d'une place.
-7. Le reste, dans l'ordre plus bas.
+7. **Éparpiller les apprentis et stagiaires** sur les postes indispensables (règle 24).
+8. Le reste, dans l'ordre plus bas.
 
 Les prix se lisent sur la place la plus chère de la semaine (`prixOrdre`) : l'ordre tient quels
 que soient les réglages d'importance. Limite assumée : sous une heure, un horaire plus court de 15
@@ -768,37 +771,42 @@ sur le mois (deux personnes, une journée chacune).
   dues manquantes 29 → 29, aucune infraction, 38,7 s au pire par semaine. Par zone : rien ne
   bouge (28 places, 29 h, 4 quarts d'heure) ; ces matins-là, aucun salarié confirmé de la zone
   n'est libre, sur aucun poste.
+- **Révisé le même jour (« tu peux avoir un stagiaire seul en réception et un employé non
+  stagiaire au club »).** Sur un poste INDISPENSABLE (réglage du poste), le salarié confirmé peut
+  être sur n'importe quel poste indispensable ; sur un autre poste, la zone, sinon le poste. Le
+  soutien jamais seul suit le même groupe. Banc de décembre : aucun moment sans salarié confirmé
+  en décembre (le seul, le 30/11 de 15:00 à 16:00, est un shift validé).
 - **Statut.** EN PLACE (local, non livré) le 2026-11-09, par zone le même jour.
 
-#### 22. Changer ses jours de repos, une fois, si c'est vraiment utile
+#### 22. Changer ses jours de repos ; le repos seul en urgence
 
-- **Pourquoi.** Décision de l'utilisateur, 2026-11-09 : « oui, mais vraiment si utile ». Au
-  rythme 5 et 2, 5 + 2 = 7 : des repos posés le mercredi le restent toute l'année. Sur la copie
-  de décembre, trois salariés confirmés du matin avaient leur repos le mercredi : aucun mercredi
-  matin tenable, les apprentis et stagiaires (règle 21) renvoyés le soir (0 le matin, 4 ou 5 le
-  soir), 28 places à pourvoir.
-- **Comment.** Une TRANSITION décale les repos d'un jour : 3 repos de suite une fois (ils
-  reculent) ou un bloc de 4 jours une fois (ils avancent) (`estTransition`, `rythmeStrict.ts`).
-  Elle coûte 1,5 place du palier le plus haut (`PLACES_PAR_TRANSITION`, `prixOrdre`) : elle ne se
-  fait que si elle remplit plus d'une place et demie qui resterait vide. Sous les heures dues :
-  celle qui garde 5 jours dans la semaine (le bloc de 4) passe devant celle qui en retire un. Une
-  seule par personne sur 4 semaines (`FENETRE_TRANSITION`, `transitionsRecentes` lu sur les
-  semaines d'avant), la suivante au prix fort. Dite « changement de jours de repos »
-  (RYTHME-TRANSITION), jamais bloquante ; un repos obligé ne naît jamais d'une transition.
+- **Pourquoi.** Décisions de l'utilisateur, 2026-11-09 : « oui, mais vraiment si utile », puis
+  « ne place jamais plus de deux jours de repos à la suite » et, pour le repos seul, « possible,
+  mais dans un cas vraiment d'urgence si manque de personnel ». Au rythme 5 et 2, 5 + 2 = 7 : des
+  repos posés le mercredi le restent toute l'année. Sur la copie de décembre, trois salariés
+  confirmés du matin avaient leur repos le mercredi : aucun mercredi matin tenable, 28 places à
+  pourvoir.
+- **Comment.** La TRANSITION est un bloc de 4 jours entre deux repos (les repos avancent d'un
+  jour) ; 3 repos de suite sont interdits comme 4 (`estReposTropLong`). Elle coûte 1,5 place du
+  palier le plus haut, la suivante de la même personne sur 4 semaines 0,5 de plus, au plus 2,5
+  (`prixTransition`), sans plafond de nombre, toujours sous une heure due. Le REPOS SEUL coûte 3
+  places (`PLACES_REPOS_SEUL`) : au-dessus de toute transition et de toute place d'un poste non
+  indispensable, sous une heure due ; un par personne sur 4 semaines (`reposSeulsRecents`), le
+  second au prix des 3 repos. Dits « changement de jours de repos » (RYTHME-TRANSITION, jamais
+  bloquant) et « repos seul (manque de personnel) » (RYTHME-REPOS-SEUL, bloque une place seule).
 - **Mesuré.** Banc de décembre (copie locale, en mémoire, « Compléter le mois », horizon, 3
-  graines, mêmes résultats aux trois) : places à pourvoir 28 → 12 (les 12 restantes : plus
-  personne n'a d'heures, raison HEURES-FAITES), mercredis matin 0 sur 3 → 3 sur 3 et jeudis 1 sur
-  3 → 3 sur 3, soirs de ces jours 3 à 5 pour 2 → 2 pour 2. Deux transitions : le salarié confirmé
-  aux repos mardi-mercredi passe au lundi-mardi par un bloc de 4 jours (du jeudi 3 au dimanche
-  6 décembre), sans perdre une heure ; une apprentie, avant sa semaine de CFA. Repos de 4 jours
-  ou plus 1 → 0, aucune infraction, 28,6 → 8,4 s au pire par semaine.
-- **Heures dues qui manquent encore (22 h, contre 29).** (1) Un CDI dont le contrat finit le
-  lundi 30/11 : ce lundi est un repos VALIDÉ, ses 8 h dues ne peuvent pas être faites (un repos
-  sans décompte ne les retire pas). (2) Une apprentie, 14 h la semaine du 7/12 (21 avant) : sa
-  semaine du 23/11, validée, met ses repos au mercredi-jeudi, et sa semaine de CFA du 14/12 (du
-  lundi au vendredi) exige les repos au samedi-dimanche d'avant ; passer de l'un à l'autre en
-  deux semaines demanderait trois transitions. Avec une seule, le calcul fait un bloc de 4 jours
-  et un bloc de 2 (une faute au prix fort) plutôt que 4 repos ou un repos seul de plus.
+  graines identiques) : places à pourvoir 28 → 10 (les 10 : plus personne n'a d'heures), 0 repos
+  de 3 jours, 0 repos seul, 2 transitions (le salarié confirmé aux repos mardi-mercredi passe au
+  lundi-mardi, une apprentie avant sa semaine de CFA), mercredis et jeudis matin 3 sur 3 (sauf le
+  17 : 2 sur 3), aucune infraction, 5,1 s au pire par semaine.
+- **Heures dues qui manquent encore (22 h).** (1) Un CDI dont le contrat finit le lundi 30/11 :
+  ce lundi est un repos VALIDÉ, ses 8 h dues ne peuvent pas être faites. (2) Une apprentie, 14 h
+  la semaine du 7/12 : ses repos validés au mercredi-jeudi, son CFA du 14/12 exige les repos au
+  samedi-dimanche d'avant. Toutes les suites possibles ont été vérifiées : sans repos seul, aucune
+  ne tient sans faute ; avec un, 7 h se perdent ; avec deux, aucune. Elle a déjà un repos seul
+  validé le 6/11 : le second coûte comme 3 repos, donc le calcul fait un bloc de 2 jours (prix
+  fort) et perd 14 h. Cas fictif `apprentieCfa.ts` (sans repos seul d'avant) : 7 h perdues, un
+  repos seul, aucun 3 repos.
 - **Statut.** EN PLACE (local, non livré) le 2026-11-09.
 
 #### 23. Jamais du monde en trop sur un moment pendant qu'un autre manque
@@ -813,6 +821,18 @@ sur le mois (deux personnes, une journée chacune).
   0 le matin, 4 le soir à l'Accueil », `desequilibres`, `phraseDesequilibre`).
 - **Mesuré.** Banc de décembre (3 graines) : jours où un moment manque pendant qu'un autre est
   en trop, 4 → 0 (tous des mercredis : 0 le matin, 3 à 5 le soir).
+- **Statut.** EN PLACE (local, non livré) le 2026-11-09.
+
+#### 24. Éparpiller les apprentis et stagiaires
+
+- **Pourquoi.** Décision de l'utilisateur, 2026-11-09 : « tu dois les éparpiller au mieux pour
+  qu'un matin ou un soir je ne me retrouve pas avec seulement des stagiaires ou apprentis ».
+- **Comment.** Sur les postes indispensables, un même jour et un même moment, chaque apprenti ou
+  stagiaire au-delà du premier coûte `POIDS_EPARPILLER` (15 000) : au-dessus du confort, sous la
+  fatigue, les heures dues et les places (le pire coût d'une place le compte).
+- **Mesuré.** Banc de décembre : 9 matins sur 31 ont deux apprentis ou stagiaires (avec un
+  salarié confirmé), jamais trois ; les déplacer au soir mettrait le soir en trop et le matin sous
+  son chiffre, plus cher que l'éparpillement.
 - **Statut.** EN PLACE (local, non livré) le 2026-11-09.
 
 ### Tableau récapitulatif
