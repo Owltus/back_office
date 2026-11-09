@@ -124,3 +124,31 @@ repos seul (stagiaire de 35 h, « r TT r TTT »).
   travail). Réglage à non : le calcul d'avant.
 - Banc de décembre (3 graines) : places à pourvoir 9 → 13-14 (moins du double, donc défaut oui),
   repos seuls 5 → 0, heures dues manquantes 43 → 16 h, aucune infraction, 4 s au pire par semaine.
+
+**2026-11-09 (soir), rythme 5 et 2 : l'école et les absences comptent (décision utilisateur).**
+« Les jours d'école au CFA, considère-les comme des jours de travail. Là, tu fais enchaîner 4 jours
+de travail et 5 jours de CFA, 2 jours de travail et 5 jours de CFA. C'est pas cool. Prends en
+compte tous les autres statuts… pour que tout soit cohérent. » Révise le point « jours neutres »
+ci-dessus.
+
+- TRAVAIL : shift ; école ; absence décomptée (congé, maladie, formation, sans solde, férié chômé,
+  JFR pris ou proposé, jours fériés ajoutés pour stagiaires et encadrement, absence de la semaine
+  type) de 5 jours d'affilée au plus. REPOS : repos fixe, posé ou proposé, absence sans décompte,
+  jour sans rien. NEUTRE : hors contrat et absence LONGUE (plus de 5 jours d'affilée, semaines
+  voisines comprises). INCONNU : semaine voisine non lue. Une source : `rythmeStrict.ts`.
+- Choix de l'agent, à valider : la formation n'a pas de nature à part en base (et le moteur ne
+  lit aucun code) : c'est une absence décomptée, du travail jusqu'à 5 jours, neutre au-delà ; le
+  JFR proposé par le calcul compte toujours comme du travail (même collé à un congé de 5 jours) ;
+  un repos sur un congé en trop n'est un repos qu'une fois validé (avant, il est dans une absence
+  longue, neutre) ; un jour passé vide est un repos.
+- Les fenêtres de jours d'affilée restent remplacées : la règle les contient (l'école y compte
+  comme du travail des deux côtés). Le plus simple.
+- Moteur : les 6 jours restent durs ; les autres motifs sont payés, 8 fois le plus gros coût du
+  modèle (`prixFauteRythme`) : durs, ils laissaient une semaine vide quand des faits (une semaine
+  validée hors du rythme, puis une semaine de CFA) rendaient la règle impossible. Une faute déjà
+  faite par les faits (3 repos connus après un bloc connu) n'est plus écrite : elle interdisait
+  toute reprise.
+- Banc de décembre (3 graines), matin puis soir : places à pourvoir 13-14 → 12, repos seuls 0 → 0,
+  blocs hors 5 et 2 10 → 8 (tous dus à des faits), plus de bloc de 7 ou 9 jours avant une
+  semaine de CFA, heures dues manquantes 8 → 29-36 h (deux apprentis hors du rythme après une
+  semaine validée), aucune infraction, 12,2 s au pire par semaine.

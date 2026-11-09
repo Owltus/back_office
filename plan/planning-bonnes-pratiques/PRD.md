@@ -685,15 +685,25 @@ sur le mois (deux personnes, une journée chacune).
   le lundi faisant la paire avec le dimanche d'avant, le jeudi seul).
 - **Comment.** Pour un contrat de 35 h et plus (le rythme humain), semaines voisines comprises :
   jamais un repos seul ; un bloc de travail fait exactement 5 jours, au plus 5 contre un jour
-  neutre (école, congé, absence décomptée, début ou fin de contrat) ou une semaine inconnue ;
-  exactement 2 repos entre deux blocs, sauf contre un jour neutre. DUR pour le calcul (une place
-  reste vide plutôt), y compris sur la semaine suivante esquissée ; jamais sur un jour posé ;
+  neutre ou une semaine inconnue ; exactement 2 repos entre deux blocs, sauf contre un jour
+  neutre. Révisé le même jour (« les jours d'école au CFA, considère-les comme des jours de
+  travail… que tout soit cohérent ») : l'école et une absence décomptée de 5 jours au plus
+  (congé, maladie, formation, férié chômé, JFR) comptent comme du TRAVAIL (un apprenti fait
+  « 5 jours, 2 repos, 5 jours d'école, 2 repos ») ; le repos posé, fixe ou sans décompte compte
+  comme du REPOS ; seuls le hors contrat et une absence de plus de 5 jours d'affilée sont
+  NEUTRES. Avant tout le reste pour le calcul (une place reste vide plutôt ; quand des faits la
+  rendent impossible, le moins de fautes possible, jamais une semaine vide), y compris sur la
+  semaine suivante esquissée ; jamais sur un jour posé ;
   une semaine type à deux repos fixes ou plus décide seule. Alerte RYTHME-5-2 (« règle de
   l'hôtel »), qui bloque une place comme les deux repos de suite. Réglable : « Rythme 5 jours puis
   2 jours strict » (oui par défaut). Une seule définition, `rythmeStrict.ts`.
 - **Mesuré.** Banc de décembre (copie locale, en mémoire, 3 graines) : places à pourvoir 9 →
   13-14, repos seuls 5 → 0, blocs hors 5 et 2 de 18-22 à 4 (3 contre des shifts validés ou la
   semaine d'avant), heures dues manquantes 43 → 16 h, aucune infraction, au plus 4 s par semaine.
+  Après la révision (même banc) : places à pourvoir 13-14 → 12, plus aucun bloc de 7 ou 9 jours
+  avant une semaine de CFA, blocs hors 5 et 2 10 → 8 (tous dus à des faits), heures dues
+  manquantes 8 → 29-36 h (deux apprentis hors du rythme après une semaine validée), aucune
+  infraction, 12,2 s au pire par semaine.
 - **Statut.** EN PLACE (local, non livré) le 2026-11-09.
 
 ### Tableau récapitulatif
@@ -719,7 +729,7 @@ sur le mois (deux personnes, une journée chacune).
 | 17  | Équipe ensemble (soir, relève)      | en place (local, non livré)  | `equipesSynchro`, `EQUIPE_TOLERANCE`, `POIDS_RELEVE_CHACUN`, `equipesDesynchro`      |
 | 18  | Journées de 7 h / 8 h (35 h, 39 h)  | DUR (35 h et 39 h)           | `journeesDuCalcul`, `etoileSacrifiee`, `journeeDe`, JOURNEE-TYPE, HEURES-FAITES      |
 | 19  | Middle coup de main, matin ensemble | en place (local, non livré)  | `moment.ts`, `momentsAccueil`, `momentLibre`, `coutArriveeMatin`, `POIDS_SEUL_QUART` |
-| 20  | 5 jours puis 2 repos, strict        | DUR (35 h et plus, réglable) | `rythmeStrict.ts`, `rythmeStrictModele`, `POIDS_RYTHME_BORD`, alerte RYTHME-5-2      |
+| 20  | 5 jours puis 2 repos, strict        | DUR (35 h et plus, réglable) | `rythmeStrict.ts`, `rythmeStrictModele`, `prixFauteRythme`, alerte RYTHME-5-2        |
 
 Le code des règles 1, 3, 4, 6, 7, 8, 12, 13 et 14 date du 2026-11-02 : en place en local, pas
 encore livré. Relecture du 2026-11-03 (banc de 7 scénarios réels, en mémoire) : règles 1, 4, 8, 9,

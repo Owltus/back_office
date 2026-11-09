@@ -2867,25 +2867,40 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   solution à graine égale) 0 écart. Tests `niveauxFixes.test.ts`.
 - **RYTHME 5 JOURS PUIS 2 JOURS, STRICT (décision utilisateur du 2026-11-09 : « les repos,
   il faut qu'ils soient absolument sur 2 jours d'affilée, donc c'est normal que pour la semaine
-  de travail ce soit le cas aussi » ; choix A strict, places à pourvoir acceptées)**. Réglage
-  `planning_reglages.rythme_strict` (migration `20261109100000`, ajout, défaut OUI), « Repos et
-  rythme » des règles des contrats, `repos.rythmeStrict`. Pour le rythme humain (35 h et plus,
-  `rythme_contrat_min`), sauf une semaine type à deux repos fixes ou plus : (a) jamais un repos
-  seul, (b) un bloc de travail fait EXACTEMENT 5 jours, au plus 5 contre un jour neutre ou un bord
-  inconnu, (c) 2 repos exactement entre deux blocs, sauf contre un jour neutre. NEUTRE : école,
-  absence décomptée (congé, maladie, férié chômé, JFR pris), hors contrat ; un repos posé est un
-  repos ; semaine voisine inconnue : rien. UNE définition, `lib/planning/rythmeStrict.ts`
-  (`fautesRythme`, `motifsInterdits`, propriété qui les compare) : générateur
-  (`rythmeStrictModele`, motifs interdits DURS sur la suite semaine d'avant `etatsAvant`, période,
-  esquisse k+1 ou `etatsApres` ; jamais sur un jour posé sauf les 6 jours ; un motif que seuls les
-  faits imposent coûte `POIDS_RYTHME_BORD`, le modèle reste possible), vérificateur RYTHME-5-2
-  (bloque une place, « règle de l'hôtel »), repos obligés, « À vérifier ». Il REMPLACE pour ces
-  personnes les fenêtres de jours d'affilée et JOURS-AFFILES (l'école coupe la série au lieu de
-  compter comme du travail : sinon un apprenti n'avait plus de bloc avant une semaine de CFA).
-  Réglage à non : modèle d'avant au caractère près (empreinte 8874c146), à oui 69e93268. Banc
-  décembre (copie locale, en mémoire, 3 graines) : places à pourvoir 9 → 13-14, repos seuls 5 → 0,
-  blocs hors 5 / 2 18-22 → 4 (3 contre des shifts validés ou la semaine d'avant), heures dues
-  manquantes 43 → 16 h, 0 infraction, 3,9 s au pire par semaine.
+  de travail ce soit le cas aussi » ; choix A strict, places à pourvoir acceptées ; RÉVISÉ le même
+  jour : « les jours d'école au CFA, considère-les comme des jours de travail… prends bien tout en
+  compte pour que tout soit cohérent »)**. Réglage `planning_reglages.rythme_strict` (migration
+  `20261109100000`, ajout, défaut OUI), « Repos et rythme », `repos.rythmeStrict`. Pour le rythme
+  humain (35 h et plus, `rythme_contrat_min`), sauf une semaine type à deux repos fixes ou plus :
+  (a) jamais un repos seul, (b) un bloc de travail fait EXACTEMENT 5 jours, au plus 5 contre un
+  jour neutre ou un bord inconnu, (c) 2 repos exactement entre deux blocs, sauf contre un jour
+  neutre. CE QUE VAUT UN JOUR (une source, en tête de `lib/planning/rythmeStrict.ts`,
+  `statutAbsence`, `resoudreAbsences` ; lu sur les absences par `rythmeAutour`, semaine.ts) :
+  TRAVAIL = shift (proposé, validé, verrouillé), école (CFA : `TTTTTrr EEEEErr`, une école de 3
+  jours se complète de 2 shifts), absence au décompte (congé, maladie, formation, sans solde, férié
+  chômé, JFR pris ou proposé, jours fériés ajoutés pour stagiaires et encadrement, absence de la
+  semaine type) quand elle dure 5 jours au plus ; REPOS = repos fixe, repos posé ou proposé, absence
+  sans décompte (repos exceptionnel, récupération, repos forfait), jour sans rien (jour passé
+  vide compris), repos sur congé une fois validé ; NEUTRE = hors contrat et ABSENCE LONGUE (plus
+  de 5 absences décomptées d'affilée, semaines voisines comprises, `ABSENCE_LONGUE` : elle
+  contient ses repos) ; INCONNU = semaine voisine non lue. `libre_weekend`, `reserve_forfait`,
+  `repos_defaut` ne comptent pas ici. UNE définition (`fautesRythme` = `motifsInterdits`,
+  propriété fast-check sur les statuts) : générateur (`rythmeStrictModele` : 6 jours DURS ; les
+  autres motifs PAYÉS `prixFauteRythme` = 8 fois le plus gros coût du modèle, au moins
+  `POIDS_RYTHME_BORD`, donc d'abord le moins de fautes, puis les places ; durs, ils laissaient
+  une semaine VIDE quand des faits rendaient la règle impossible), vérificateur RYTHME-5-2
+  (bloque une place, « règle de l'hôtel », un 2e repos seul compte comme une faute de plus,
+  `nouvelles`), repos obligés, « À vérifier ». FAUTE SCELLÉE (`fauteScellee`, `jourConnu`) :
+  plus de 2 repos entre deux blocs dont le bloc et 3 repos d'un côté sont connus d'avance
+  (semaine voisine, absence, école, repos posé ou fixe, hors contrat) n'est ni écrite ni dite,
+  sinon toute reprise était interdite. Il REMPLACE pour ces personnes les fenêtres de jours
+  d'affilée et JOURS-AFFILES, qu'il contient (l'école y compte comme du travail des deux côtés).
+  Réglage à non : modèle d'avant au caractère près (8874c146) ; à oui fb6eed48. Banc décembre
+  (copie locale, en mémoire, horizon, 3 graines), matin → soir : places à pourvoir 13-14 → 12,
+  repos seuls 0 → 0, blocs hors 5 / 2 10 → 8 (tous dus à des faits : semaines validées, semaine
+  type), les blocs de 7 et 9 jours avant une semaine de CFA disparus, heures dues manquantes
+  8 → 29-36 h (deux apprentis hors du rythme après une semaine validée : la règle a ce prix),
+  0 infraction, 12,2 s au pire par semaine (2,9 s le matin).
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 
