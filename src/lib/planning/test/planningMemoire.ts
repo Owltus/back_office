@@ -38,6 +38,10 @@ export interface Pose {
 export class PlanningMemoire {
   semaines = new Map<string, Affectation[]>()
   private suivant = 1
+  /** Les 4 semaines d'avant lues comme pour une génération de l'app
+   * (`historique` : équité, transitions déjà faites). Non par défaut : le
+   * jeu d'avant. */
+  avecHistorique = false
 
   constructor(
     public referentiel: Referentiel,
@@ -60,6 +64,13 @@ export class PlanningMemoire {
       avant: this.shifts(ajouterJours(l, -7)),
       apres: this.shifts(ajouterJours(l, 7)),
       avantAvant: this.shifts(ajouterJours(l, -14)),
+      ...(this.avecHistorique
+        ? {
+            historique: [1, 2, 3, 4].flatMap((k) =>
+              this.shifts(ajouterJours(l, -7 * k)),
+            ),
+          }
+        : {}),
     }
   }
 

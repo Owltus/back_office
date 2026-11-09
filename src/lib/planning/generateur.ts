@@ -84,6 +84,7 @@ import {
 } from '#/lib/planning/zones.ts'
 import {
   fauteScellee,
+  genreMotif,
   jourConnu,
   joursRythmeDe,
   motifsInterdits,
@@ -147,6 +148,37 @@ import type {
  *     signalé (le compte du moment dépasse le chiffre). Un extra (contrat
  *     indicatif : 1 par minute) ne vient jamais en plus.
  *
+ * ORDRE DE DÉCISION DU 2026-11-09 (décisions de l'utilisateur : « oui, mais
+ * vraiment si utile ; tu as beaucoup de règles qui peuvent rentrer en
+ * conflit ; tous les membres du personnel doivent pouvoir faire toutes
+ * leurs heures quoi qu'il arrive ; les repos de quatre jours, c'est non ;
+ * quatre personnes le soir alors que personne le matin, c'est non »). Il
+ * PASSE DEVANT l'ordre d'avant (plus bas) là où ils diffèrent :
+ *   1. la loi, DURE (inchangée) ;
+ *   2. le rythme 5 et 2 de qui y est (`rythmeStrict.ts`) : jamais 6 jours
+ *      de travail (DUR) ; jamais 4 repos ou plus entre deux blocs (`dur` de
+ *      `prixOrdre` : au-dessus de tout, un coût de bord quand les faits
+ *      l'imposent, le modèle reste possible) ; un repos seul ou un bloc de
+ *      1 à 3 jours (`fort`) : au-dessus des heures dues de la semaine ;
+ *   3. les heures dues du contrat, « quoi qu'il arrive » : une heure due
+ *      vaut plus qu'une transition et une place ensemble (`minuteDue`) ;
+ *   4. les places (P1 plus bas, paliers d'importance), salarié confirmé
+ *      DUR (`ACCOMPAGNE-SEUL`) ;
+ *   5. la TRANSITION (changement de jours de repos : 3 repos de suite, ou
+ *      un bloc de 4 jours, `estTransition`) : `PLACES_PAR_TRANSITION`
+ *      (1,5) places du palier le plus haut, donc seulement si elle remplit
+ *      plus d'une place et demie ; une seule par personne sur 4 semaines
+ *      (`FENETRE_TRANSITION`, `transitionsRecentes`), la suivante au prix
+ *      `fort` ;
+ *   6. l'ÉQUILIBRE entre les moments d'une zone (`equilibreMoments`) : du
+ *      monde en trop sur un moment pendant qu'un autre manque, au prix d'une
+ *      place par personne ;
+ *   7. le reste, dans l'ordre d'avant.
+ * Les prix des points 2, 3 et 5 se lisent sur la place la plus chère du
+ * modèle (`prixOrdre`), posés quand tout le reste est écrit : l'ordre tient
+ * quels que soient les paliers. Limite assumée : sous une heure, 15 ou 30
+ * minutes dues d'un horaire plus court peuvent encore tenir une place.
+ *
  * ORDRE DE DÉCISION (étape 10 du plan « réglages cohérents », D3 = A,
  * D1 = A, D13, D14, D15). La phrase de la page Besoins le dit : la loi
  * d'abord, puis les personnes nécessaires, puis le matin et le soir et les
@@ -164,7 +196,9 @@ import type {
  *       poste non indispensable < poste indispensable.
  *   P2  un trou (entre deux équipes d'un poste à part compté, ou sur
  *       l'accueil entier, D15) : `POIDS_TROU_QUART` par quart d'heure (D10).
- *   P3  les contrats : heures dues (`POIDS_SOUS_CONTRAT`) > une personne en
+ *   P3  (les heures dues sont passées AU-DESSUS de P1 le 2026-11-09, voir
+ *       plus haut ; le reste de P3 garde sa place)
+ *       les contrats : heures dues (`POIDS_SOUS_CONTRAT`) > une personne en
  *       plus du chiffre d'un moment (`coutSurplus`, D8, plafonné sous les
  *       heures dues) > jour manquant au rythme de 5 jours > jour férié
  *       rattrapé en attente (`POIDS_JFR_EN_ATTENTE`, R-FERIE-RATTRAPE) >
@@ -1519,9 +1553,11 @@ export function construire(
       n: number
     }
   >()
-  const sommer = (termes: Terme[]): Terme[] => {
+  /** Une somme nommée ; `borne` : sa plus grande valeur (une personne par
+   * terme, sauf quand les termes sont eux-mêmes des sommes). */
+  const sommer = (termes: Terme[], borne = termes.length): Terme[] => {
     if (termes.length <= 1) return termes
-    const v = m.continu(0, termes.length)
+    const v = m.continu(0, borne)
     m.ajoute([...termes, [-1, v]], '=', 0)
     return [[1, v]]
   }
@@ -1579,6 +1615,12 @@ export function construire(
     return r
   }
 
+  /** Le plus de personnes possible sur un créneau. */
+  const borneDe = (c: Creneau) =>
+    c.accueil
+      ? (sommesAccueil.get(c.id)?.n ?? 0)
+      : p.salaries.filter((s) => x.has(cle(s.id, c.id))).length
+
   // Candidats de l'accueil : le prix du dépannage ou de l'extra (D7).
   for (const c of p.creneaux) {
     if (!c.accueil || c.ferme) continue
@@ -1627,7 +1669,15 @@ export function construire(
     const k = `${quoi}|${par.map((d) => d.id).join(',')}`
     let t = sommesAvec.get(k)
     if (!t) {
-      t = sommer(par.flatMap((d) => termesDe(d, quoi)))
+      // Les termes d'un candidat de l'accueil sont des SOMMES (jusqu'à `n`
+      // personnes chacun) : la borne les compte toutes. Avant (relecture du
+      // 2026-11-09, cas du mercredi), elle comptait un par créneau : trois
+      // salariés confirmés du matin sur deux horaires rendaient le modèle
+      // impossible, le calcul en laissait un sans shift.
+      t = sommer(
+        par.flatMap((d) => termesDe(d, quoi)),
+        par.reduce((n, d) => n + borneDe(d), 0),
+      )
       sommesAvec.set(k, t)
     }
     return t
@@ -1666,15 +1716,21 @@ export function construire(
   // réalisable) : un manque (P1) ou un surplus (D8) se paie. Le chiffre est
   // `minimum` (minimum = maximum après la migration ; s'il diffère, le
   // minimum fait foi).
+  // Manque et surplus de chaque moment (ÉQUILIBRE, plus bas).
+  const manqueDe = new Map<number, string>()
+  const surplusDe = new Map<number, SurplusMoment>()
   p.consignes.forEach((k, i) => {
     const n = Math.max(0, k.minimum)
     // Au plus (2026-11-06) : le maximum ; un chiffre exact par défaut.
     const haut = Math.max(n, k.maximum ?? n)
     const termes: Terme[] = []
+    const parCreneau: Array<[string, Terme[]]> = []
     // Le plus grand compte possible : une personne par variable.
     let possibles = 0
     for (const c of comptent[i]) {
-      termes.push(...termesDe(c, 'tous'))
+      const t = termesDe(c, 'tous')
+      termes.push(...t)
+      parCreneau.push([c.id, t])
       if (c.accueil) possibles += sommesAccueil.get(c.id)?.n ?? 0
       else possibles += p.salaries.filter((s) => x.has(cle(s.id, c.id))).length
     }
@@ -1685,6 +1741,7 @@ export function construire(
       m.ajoute([...termes, [1, vm]], '>=', n)
       m.cout(coutsMinimum[i], vm)
       minimums.push({ v: vm, consigne: i })
+      manqueDe.set(i, vm)
     }
     // La NUIT n'a jamais personne en plus (décision utilisateur du
     // 2026-11-03 : « toujours un seul night ») : plafond DUR au chiffre de
@@ -1705,8 +1762,10 @@ export function construire(
       const vp = m.continu(0, possibles)
       m.ajoute([...termes, [-1, vp]], '<=', haut)
       m.cout(coutsSurplus[i], vp)
+      surplusDe.set(i, { v: vp, borne: possibles, haut, parCreneau })
     }
   })
+  equilibreMoments(m, p, manqueDe, surplusDe, coutsMinimum, comptent)
 
   // CONTINUITÉ ENTRE ÉQUIPES (D8 du 2026-11-05, FIXE depuis le 2026-11-06) :
   // un trou entre la fin d'une équipe et l'arrivée de la suivante (passation
@@ -1744,10 +1803,6 @@ export function construire(
       ),
   )
   const releves = relevesAccueil(m, p, termesDe)
-  const borneDe = (c: Creneau) =>
-    c.accueil
-      ? (sommesAccueil.get(c.id)?.n ?? 0)
-      : p.salaries.filter((s) => x.has(cle(s.id, c.id))).length
   const passations = passationsVeilleur(
     m,
     p,
@@ -1763,8 +1818,11 @@ export function construire(
   const figes = new Map<string, number>()
   const travailleDe = new Map<string, Map<number, string>>()
   const jfrs: Array<{ salarieId: string; jour: number; v: string }> = []
-  // Rythme 5 et 2 strict : les fautes payées, leur prix posé à la fin.
-  const excesRythme: string[] = []
+  // Rythme 5 et 2 strict : les fautes payées, leur prix posé à la fin
+  // (ORDRE DE DÉCISION du 2026-11-09, `prixOrdre`).
+  const excesRythme: ExcesRythme = { fort: [], dur: [], transition: [] }
+  // Heures dues manquantes (P3 du 2026-11-09), leur prix posé à la fin.
+  const moinsDus: string[] = []
   const coefsPlus = coefsHeuresPlus(p)
   // Horizon glissant : jour de l'esquisse (nbJours + 0..6) → 1 (travaillé
   // d'office) ou la variable « travaille ». Un jour impossible est absent.
@@ -2475,7 +2533,7 @@ export function construire(
         m.cout(1, moins)
         m.cout(1, plus)
       } else {
-        m.cout(POIDS_SOUS_CONTRAT, moins)
+        moinsDus.push(moins)
         m.cout(POIDS_SUR_CONTRAT, plus)
         // Règle 12 : les heures en plus vont d'abord à qui en a fait le moins.
         if (k === 0) m.cout(coefsPlus.get(s.id) ?? 0, plus)
@@ -2617,12 +2675,22 @@ export function construire(
       if (cout > 0) m.cout(cout, v)
     }
   }
-  // Rythme 5 et 2 strict : le prix d'une faute, posé quand tout le reste
-  // est écrit (`prixFauteRythme`).
-  if (excesRythme.length) {
-    const prix = prixFauteRythme(m.objectif.values())
-    for (const v of excesRythme) m.cout(prix, v)
-  }
+  // ORDRE DE DÉCISION (2026-11-09) : les heures dues, les transitions et
+  // les fautes au rythme 5 et 2, posées quand tout le reste est écrit
+  // (`prixOrdre` : leur prix se lit sur la place la plus chère).
+  const prix = prixOrdre(
+    m.objectif.values(),
+    Math.max(
+      0,
+      ...p.salaries
+        .filter((s) => !s.contratIndicatif)
+        .map((s) => s.minutesHebdoContrat),
+    ),
+  )
+  for (const v of moinsDus) m.cout(prix.minuteDue, v)
+  for (const v of excesRythme.transition) m.cout(prix.transition, v)
+  for (const v of excesRythme.fort) m.cout(prix.fort, v)
+  for (const v of excesRythme.dur) m.cout(prix.dur, v)
   // Petit bruit : à qualité égale, chaque graine donne une autre simulation.
   // Pas à l'affinage : l'objectif d'origine y est borné par celui du calcul,
   // qui contient déjà son bruit (positif) ; sans bruit, le planning du
@@ -2842,6 +2910,160 @@ export function prixFauteRythme(couts: Iterable<number>): number {
   return Math.max(POIDS_RYTHME_BORD, FOIS_FAUTE_RYTHME * plusGros + 1)
 }
 
+/** Les fautes au rythme 5 et 2 payées, par prix (`prixOrdre`) : `fort`
+ * (repos seul, bloc de 1 à 3 jours, transition au-delà d'une), `dur`
+ * (4 repos ou plus), `transition` (la transition permise). */
+export interface ExcesRythme {
+  fort: string[]
+  dur: string[]
+  transition: string[]
+}
+
+/** Une transition (changement de jours de repos) vaut tant de places du
+ * palier le plus haut : au-dessus d'une place seule, sous deux
+ * (« vraiment si utile »). Elle ne se fait que si elle remplit plus d'une
+ * place et demie, ce qui veut dire deux places en pratique. */
+export const PLACES_PAR_TRANSITION = 1.5
+
+/** Les prix de l'ORDRE DE DÉCISION du 2026-11-09 (voir en tête), lus sur
+ * la place la plus chère du modèle. */
+export interface PrixOrdre {
+  /** Le plus gros coût posé avant eux : une place du palier le plus haut. */
+  place: number
+  /** Une transition permise. */
+  transition: number
+  /** Une minute d'heures dues manquante. */
+  minuteDue: number
+  /** Une faute au rythme : repos seul, bloc de 1 à 3 jours, transition de
+   * trop. */
+  fort: number
+  /** 4 repos ou plus entre deux blocs. */
+  dur: number
+}
+
+/**
+ * Les prix de l'ordre de décision (décisions de l'utilisateur du
+ * 2026-11-09), posés quand tout le reste est écrit, sur `couts` (le reste
+ * de l'objectif) et `minutesSemaine` (le plus gros contrat de la semaine) :
+ *   - une TRANSITION vaut `PLACES_PAR_TRANSITION` places (P = le plus gros
+ *     coût posé, une place du palier le plus haut) ;
+ *   - une HEURE due vaut plus qu'une transition et une place ensemble :
+ *     `minuteDue` = (transition + P + 1) / 60, au moins
+ *     `POIDS_SOUS_CONTRAT` ; le calcul ne retire jamais une heure due pour
+ *     une place, l'équilibre ou un changement de jours de repos (limite
+ *     assumée : en dessous de l'heure, 15 ou 30 minutes d'un horaire plus
+ *     court peuvent encore tenir une place) ;
+ *   - une FAUTE au rythme vaut plus que la semaine entière du plus gros
+ *     contrat en heures dues, et au moins `prixFauteRythme` ;
+ *   - 4 REPOS OU PLUS valent deux fautes : au-dessus de tout, jamais par le
+ *     calcul, le modèle restant possible quand les faits l'imposent.
+ */
+export function prixOrdre(
+  couts: Iterable<number>,
+  minutesSemaine: number,
+): PrixOrdre {
+  let place = 1
+  for (const c of couts) place = Math.max(place, Math.abs(c))
+  const transition = Math.ceil(PLACES_PAR_TRANSITION * place)
+  const minuteDue = Math.max(
+    POIDS_SOUS_CONTRAT,
+    Math.ceil((transition + place + 1) / 60),
+  )
+  const fort = Math.max(
+    prixFauteRythme([place]),
+    minuteDue * Math.max(60, minutesSemaine) + 1,
+  )
+  return { place, transition, minuteDue, fort, dur: 2 * fort + 1 }
+}
+
+/**
+ * ÉQUILIBRE ENTRE LES MOMENTS (décision de l'utilisateur du 2026-11-09 :
+ * « les moments où tu places quatre personnes le soir alors que personne
+ * le matin, c'est non »). Dans une zone, un jour : du monde EN TROP sur un
+ * moment (au-dessus de son chiffre du tableau) pendant qu'un autre moment
+ * est SOUS son minimum. Pour chaque paire (en trop `a`, sous `b`) :
+ * w >= min(surplus de a, manque de b), une variable 0/1 choisissant lequel
+ * borne, au prix d'une place de `b` par personne (son manque,
+ * `coutsMinimum`) : sous une transition, sous une heure due. Aucun nom de
+ * moment ni de zone : les chiffres du tableau (`Probleme.consignes`). La
+ * nuit n'a jamais de surplus (plafond dur). Même définition que
+ * `desequilibres` (presence.ts).
+ */
+/** Le monde en trop d'un moment (`equilibreMoments`) : sa variable, ses
+ * bornes, et les termes de chacun de ses créneaux. */
+interface SurplusMoment {
+  v: string
+  borne: number
+  haut: number
+  parCreneau: ReadonlyArray<readonly [string, Terme[]]>
+}
+
+function equilibreMoments(
+  m: Modele,
+  p: Probleme,
+  manqueDe: ReadonlyMap<number, string>,
+  surplusDe: ReadonlyMap<number, SurplusMoment>,
+  coutsMinimum: readonly number[],
+  comptent: ReadonlyArray<readonly Creneau[]>,
+): void {
+  if (!manqueDe.size || !surplusDe.size) return
+  const premiere = (p.regles ?? REGLES_PAR_DEFAUT).zones[0].id
+  const parJour = new Map<string, number[]>()
+  p.consignes.forEach((k, i) => {
+    const cle = `${k.zone ?? premiere}|${k.jour}`
+    parJour.set(cle, [...(parJour.get(cle) ?? []), i])
+  })
+  for (const indices of parJour.values()) {
+    for (const a of indices) {
+      const sp = surplusDe.get(a)
+      if (!sp) continue
+      for (const b of indices) {
+        const vm = manqueDe.get(b)
+        if (b === a || !vm) continue
+        // Le monde en trop de `a` se compte sans les créneaux qui comptent
+        // AUSSI dans `b` (un horaire de deux moments) : une personne qui
+        // vient sur l'un d'eux ôte un manque à `b`, elle n'est pas « en trop
+        // pendant qu'il manque ».
+        const dansB = new Set(comptent[b].map((c) => c.id))
+        const seuls = sp.parCreneau.filter(([id]) => !dansB.has(id))
+        if (!seuls.length) continue
+        let enTrop = sp.v
+        if (seuls.length < sp.parCreneau.length) {
+          enTrop = m.continu(0, sp.borne)
+          m.ajoute(
+            [...seuls.flatMap(([, t]) => t), [-1, enTrop]],
+            '<=',
+            sp.haut,
+          )
+        }
+        const n = Math.max(0, p.consignes[b].minimum)
+        const z = m.bool()
+        const w = m.continu(0, n)
+        // z = 1 : w >= surplus ; z = 0 : w >= manque.
+        m.ajoute(
+          [
+            [1, w],
+            [-1, enTrop],
+            [-sp.borne, z],
+          ],
+          '>=',
+          -sp.borne,
+        )
+        m.ajoute(
+          [
+            [1, w],
+            [-1, vm],
+            [n, z],
+          ],
+          '>=',
+          0,
+        )
+        m.cout(coutsMinimum[b], w)
+      }
+    }
+  }
+}
+
 /**
  * Rythme 5 jours puis 2 jours, strict (`rythmeStrict.ts`) : chaque motif
  * interdit (6 jours de travail, un bloc de 1 à 4 jours entre deux repos, un
@@ -2859,11 +3081,16 @@ export function prixFauteRythme(couts: Iterable<number>): number {
  * la semaine commençait par un shift validé). Les 6 jours de travail sont
  * DURS (un
  * plafond de travail, que ne pas travailler tient toujours : le modèle
- * reste possible). Les autres motifs coûtent `prixFauteRythme` par jour en
- * trop, plus que tout ce qu'une faute pourrait racheter : le calcul fait le
- * moins de fautes possible (aucune quand c'est possible), puis remplit les
- * places. Une faute déjà faite par les faits (`fauteScellee`) n'est pas
- * écrite : elle interdirait toute reprise.
+ * reste possible). Les autres motifs se paient par jour en trop, selon leur
+ * genre (`genreMotif`, ORDRE DE DÉCISION du 2026-11-09, `prixOrdre`) :
+ * 4 repos ou plus au prix `dur`, un repos seul ou un bloc de 1 à 3 jours au
+ * prix `fort` (au-dessus des heures dues de la semaine), une TRANSITION
+ * (3 repos, bloc de 4) au prix `transition`, une seule sur la fenêtre (la
+ * suivante au prix `fort`), aucune si une est déjà faite sur les 4
+ * semaines d'avant (`transitionsRecentes`). Une faute déjà faite par les
+ * faits (`fauteScellee`) n'est pas écrite : elle interdirait toute reprise.
+ * La semaine d'après l'esquisse entre dans la suite par ses faits (école,
+ * absence courte, `SuivantePersonne.apres`).
  */
 function rythmeStrictModele(
   m: Modele,
@@ -2874,8 +3101,8 @@ function rythmeStrictModele(
   jfrDuJour: ReadonlyMap<number, string>,
   sk: ReadonlyMap<number, string | 1> | null,
   esquisse: SuivantePersonne | undefined,
-  /** Les fautes payées, leur prix posé à la fin (`prixFauteRythme`). */
-  excesRythme: string[],
+  /** Les fautes payées, leur prix posé à la fin (`prixOrdre`). */
+  excesRythme: ExcesRythme,
 ): void {
   type Jour = null | { t: string | 0 | 1; n: string | null }
   const N = p.nbJours
@@ -2901,7 +3128,10 @@ function rythmeStrictModele(
       }
     }
     if (sk) {
-      if (d >= N + 7 || esquisse?.neutres?.has(d - N)) return null
+      // La semaine d'après l'esquisse : ses faits (école, absence courte).
+      if (d >= N + 7)
+        return esquisse?.apres?.[d - N - 7] === 'T' ? { t: 1, n: null } : null
+      if (esquisse?.neutres?.has(d - N)) return null
       if (esquisse?.travailRythme?.has(d - N)) return { t: 1, n: null }
       return { t: sk.get(d) ?? 0, n: null }
     }
@@ -2910,7 +3140,7 @@ function rythmeStrictModele(
     return { t: e === 'T' ? 1 : 0, n: null }
   }
   const debut = -7
-  const fin = N + 7
+  const fin = N + (sk && esquisse?.apres?.includes('T') ? 14 : 7)
   const jours = new Map<number, Jour>()
   for (let d = debut; d < fin; d++) jours.set(d, jourDu(d))
   // Les jours connus d'avance (`jourConnu`, `fauteScellee`), un jour posé
@@ -2919,14 +3149,21 @@ function rythmeStrictModele(
   const connu = (d: number) =>
     d < N
       ? jourConnu(s, d, N) || poses.has(d)
-      : !sk ||
-        !!esquisse?.fixes.has(d - N) ||
-        !!esquisse?.travailRythme?.has(d - N)
+      : d >= N + 7
+        ? !sk || esquisse?.apres?.[d - N - 7] === 'T'
+        : !sk ||
+          !!esquisse?.fixes.has(d - N) ||
+          !!esquisse?.travailRythme?.has(d - N)
+  // Les transitions au prix d'une transition : au plus une sur la
+  // fenêtre (`FENETRE_TRANSITION`), aucune si une est déjà faite.
+  const transitions: Terme[] = []
+  const permises = (s.transitionsRecentes ?? 0) > 0 ? 0 : 1
   for (const motif of motifsInterdits(fin - debut)) {
     // 6 jours de travail : DURS, un jour posé y compte (jamais plus de 5
     // autour de lui) ; les autres motifs se paient, un jour posé y compte
     // aussi.
-    const travailSeul = motif.every((e) => e === 'T')
+    const genre = genreMotif(motif)
+    const travailSeul = genre === 'six'
     // Plus de 2 repos entre deux blocs déjà faits par les faits
     // (`fauteScellee`) : écrit, le motif interdirait toute reprise de ce
     // côté pour toute la période (chaque longueur de repos est un motif) ;
@@ -2979,10 +3216,21 @@ function rythmeStrictModele(
       // Jamais en faute (trop peu de jours à décider) : rien à écrire.
       if (termes.filter(([c]) => c > 0).length <= plafond) continue
       const exces = m.continu(0, motif.length)
+      if (genre === 'transition' && permises > 0) {
+        // Une transition au prix d'une transition, la suivante au prix
+        // fort.
+        const une = m.continu(0, 1)
+        m.ajoute([...termes, [-1, exces], [-1, une]], '<=', plafond)
+        transitions.push([1, une])
+        excesRythme.transition.push(une)
+        excesRythme.fort.push(exces)
+        continue
+      }
       m.ajoute([...termes, [-1, exces]], '<=', plafond)
-      excesRythme.push(exces)
+      excesRythme[genre === 'dur' ? 'dur' : 'fort'].push(exces)
     }
   }
+  if (transitions.length > permises) m.ajoute(transitions, '<=', permises)
 }
 
 /** Les morceaux d'un créneau qui comptent pour le calcul (salarié

@@ -74,11 +74,14 @@ import {
 } from '#/lib/planning/reglesEtablissement.ts'
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import {
+  estReposTropLong,
+  estTransition,
   fauteScellee,
   fautesRythme,
   jourConnu,
   joursRythmeDe,
   messageFaute,
+  messageTransition,
   rythmeStrictDe,
   suiteRythme,
 } from '#/lib/planning/rythmeStrict.ts'
@@ -501,6 +504,10 @@ export const REPOS_SEPARES_SOUHAITE = ' (souhaité)'
  * shift posé à la main ne cache pas la raison de la place). */
 const PAR_CRENEAUX = new Set(['JOUR-ISOLE', 'JOURNEE-TYPE', 'HEURES-FAITES'])
 
+/** Une transition au rythme 5 et 2 (changement de jours de repos,
+ * `estTransition`) : dite, jamais bloquante. */
+export const REGLE_TRANSITION = 'RYTHME-TRANSITION'
+
 /** Les violations de `apres` qui ne sont pas dans `avant`. Le rythme 5
  * et 2 (messages courts, par genre) compte ses fautes : un deuxième repos
  * seul est nouveau même si le premier existait (relecture du 2026-11-09 :
@@ -516,7 +523,8 @@ function nouvelles(apres: Violation[], avant: Violation[]): Violation[] {
     const k = cleViolation(v)
     const n = reste.get(k) ?? 0
     if (n === 0) return true
-    if (v.regle === 'RYTHME-5-2') reste.set(k, n - 1)
+    if (v.regle === 'RYTHME-5-2' || v.regle === REGLE_TRANSITION)
+      reste.set(k, n - 1)
     return false
   })
 }
@@ -547,6 +555,7 @@ export const REGLES_MORALES: ReadonlySet<string> = new Set([
   'REPOS-SEPARES',
   'JOUR-ISOLE',
   'RYTHME-5-2',
+  'RYTHME-TRANSITION',
   'REPOS-COURT',
   'WEEKEND-LIBRE',
   'MOMENTS',
@@ -734,7 +743,9 @@ function alertesMorales(
     // Les jours connus d'avance (`fauteScellee`), sur le repère de la suite.
     const connu = (i: number) => jourConnu(s, i - 7, nbJours)
     for (const f of fautesRythme(etats)) {
-      if (fauteScellee(f, connu)) continue
+      // 4 repos ou plus : dit même quand les faits l'imposent
+      // (décision de l'utilisateur du 2026-11-09).
+      if (!estReposTropLong(f) && fauteScellee(f, connu)) continue
       const debut = f.debut - 7
       const fin = f.fin - 7
       const touches =
@@ -744,6 +755,19 @@ function alertesMorales(
       const ici = liste.filter((c) => touches.includes(jourDe(c)))
       if (!ici.length) continue
       if (!pourUnePlace && jours(jourDe(ici[0])) < 3) continue
+      // Une TRANSITION (3 repos, ou un bloc de 4 jours) décale les repos
+      // d'un jour : un changement de jours de repos, dit, jamais bloquant
+      // (`estTransition`, 2026-11-09).
+      if (estTransition(f)) {
+        ajoute(
+          'RYTHME-TRANSITION',
+          pourUnePlace
+            ? messageTransition(f)
+            : messageTransition({ genre: f.genre, debut, fin }, nbJours),
+          ici,
+        )
+        continue
+      }
       ajoute(
         'RYTHME-5-2',
         pourUnePlace

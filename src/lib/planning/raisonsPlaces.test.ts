@@ -96,6 +96,7 @@ const MESSAGES: Record<(typeof REGLES_BLOCAGE)[number], string[]> = {
   'R-REPOS-HEBDO-MINEUR': ['mineur : pas deux jours de repos consécutifs'],
   'REPOS-SEPARES': ['ses jours de repos de la semaine ne se suivent pas'],
   'JOUR-ISOLE': ['un jour de travail seul entre deux jours sans travail'],
+  'RYTHME-TRANSITION': ['changement de jours de repos : 3 jours de repos'],
   'RYTHME-5-2': [
     'rythme 5 et 2 non tenu : repos seul',
     'rythme 5 et 2 non tenu : moins de 5 jours de travail (5 attendus)',
@@ -595,6 +596,8 @@ describe('place que rien ne remplit : la raison commune en clair', () => {
     'WEEKEND-LIBRE',
     'MOMENTS',
     'NUITS',
+    // Changement de jours de repos (2026-11-09) : dit, jamais bloquant.
+    'RYTHME-TRANSITION',
     'MEMES-REPOS',
     'HEURES-PLUS',
     'RETOUR-CONGE',

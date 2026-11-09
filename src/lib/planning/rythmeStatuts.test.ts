@@ -453,10 +453,17 @@ describe('le calcul et le vérificateur', () => {
       "rythme 5 et 2 non tenu : 7 jours de travail d'affilée du samedi au vendredi d'après (5 au plus)",
     )
     // Hors du rythme (un seul repos le dimanche d'avant) : aucune semaine
-    // sans faute ; le calcul en fait UNE, jamais une semaine vide.
+    // sans faute. Depuis le 2026-11-09, une TRANSITION (un bloc de 4 jours,
+    // le lundi en repos avec le dimanche) plutôt qu'un repos seul : la
+    // faute au rythme passe avant les 7 h dues de la semaine.
     const { r } = resoudre(s)
-    expect(tenus(r)).toHaveLength(5)
-    expect(rythmeDit(p, r.affectations)).toHaveLength(1)
+    expect(tenus(r)).toEqual([1, 2, 3, 4])
+    expect(rythmeDit(p, r.affectations)).toEqual([])
+    expect(
+      violations(p, r.affectations).filter(
+        (v) => v.regle === 'RYTHME-TRANSITION',
+      ),
+    ).toHaveLength(1)
     // Dans le rythme : 5 jours puis les 2 repos avant le CFA, sans faute.
     const dans = resoudre(personne({ ...AVANT, etatsApres: 'TTTTTrr' }))
     expect(tenus(dans.r)).toEqual([0, 1, 2, 3, 4])
@@ -474,7 +481,12 @@ describe('le calcul et le vérificateur', () => {
     })
     const { p, r } = resoudre(s)
     expect(tenus(r).length).toBeGreaterThanOrEqual(3)
-    expect(rythmeDit(p, r.affectations)).toHaveLength(1)
+    // Jamais 4 repos (2026-11-09) : un repos seul et un bloc court, et la
+    // transition du bloc de 4 qui finit la semaine d'avant, plutôt.
+    const dits = rythmeDit(p, r.affectations)
+    expect(dits.some((m) => /jours de repos/.test(m))).toBe(false)
+    expect(dits.length).toBeGreaterThanOrEqual(1)
+    expect(dits.length).toBeLessThanOrEqual(2)
   })
   it('CFA du lundi au vendredi : le week-end en repos ; refusé : le samedi travaillé', () => {
     const s = personne({ ...AVANT, ...travailSansShift([0, 1, 2, 3, 4], true) })
@@ -489,8 +501,16 @@ describe('le calcul et le vérificateur', () => {
     const { p, r } = resoudre(s)
     expect(tenus(r)).toEqual([3, 4])
     expect(rythmeDit(p, r.affectations)).toEqual([])
-    expect(rythmeDit(p, [{ salarieId: 'a', creneauId: 'j3' }])).toEqual([
-      'rythme 5 et 2 non tenu : 4 jours de travail du lundi au jeudi (5 attendus)',
+    // Un bloc de 4 (CFA et un shift) : un changement de jours de repos
+    // (transition, 2026-11-09), dit sans bloquer.
+    const un = [{ salarieId: 'a', creneauId: 'j3' }]
+    expect(rythmeDit(p, un)).toEqual([])
+    expect(
+      violations(p, un)
+        .filter((v) => v.regle === 'RYTHME-TRANSITION')
+        .map((v) => v.message),
+    ).toEqual([
+      'changement de jours de repos : 4 jours de travail du lundi au jeudi',
     ])
   })
   it('CFA de 6 jours : une faute des faits, le modèle reste possible, rien le dimanche', () => {

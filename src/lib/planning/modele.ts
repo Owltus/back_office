@@ -245,6 +245,10 @@ export interface SalarieSolveur {
    * inconnue, rien n'est demandé. */
   etatsAvant?: string | null
   etatsApres?: string | null
+  /** Rythme 5 et 2 strict : transitions (changements de jours de repos,
+   * `estTransition`) déjà faites sur les `FENETRE_TRANSITION` jours avant
+   * la semaine, lues pour une génération (`historique`). Absent : aucune. */
+  transitionsRecentes?: number
   reposHebdoMin: number
   jourMaxPoste: boolean
   contratDebut: number | null
@@ -626,6 +630,10 @@ export interface SuivantePersonne {
   /** Rythme 5 et 2 strict : jours de travail sans shift (0 à 6 ; école,
    * absence décomptée de 5 jours au plus). Absent : aucun. */
   travailRythme?: ReadonlySet<number>
+  /** Rythme 5 et 2 strict : la semaine d'APRÈS l'esquisse, ses faits
+   * seulement (7 lettres : T école ou absence courte, n neutre, u
+   * inconnu). Absent : inconnue. */
+  apres?: string
   /** Jours de travail attendus (rythme de 5 jours) ; 0 : aucun. */
   attendus: number
   /** Jours d'école (travaillés d'office, mais pas à l'hôtel : ils ne

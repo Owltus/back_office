@@ -192,6 +192,46 @@ export function bilanPresence(
   })
 }
 
+/** Un jour où une zone a du monde EN TROP sur un moment pendant qu'un
+ * autre est SOUS son minimum (`desequilibres`). */
+export interface DesequilibreOut {
+  zone: string
+  jour: number
+  /** Les moments du tableau de la zone ce jour-là, dans l'ordre du
+   * tableau : le compte de chacun. */
+  moments: Array<{ periode: PeriodePresence; compte: number }>
+}
+
+/**
+ * ÉQUILIBRE ENTRE LES MOMENTS (décision de l'utilisateur du 2026-11-09 :
+ * « les moments où tu places quatre personnes le soir alors que personne
+ * le matin, c'est non ») : les jours d'une zone où un moment a plus que son
+ * chiffre (`maximum`, sinon `minimum`) pendant qu'un autre en a moins que
+ * son minimum. Même définition que le calcul (`equilibreMoments`,
+ * generateur.ts) ; `presence` dans l'ordre du tableau (`bilanPresence`).
+ */
+export function desequilibres(
+  presence: readonly PresenceOut[],
+): DesequilibreOut[] {
+  const parJour = new Map<string, PresenceOut[]>()
+  for (const x of presence) {
+    const cle = `${x.zone ?? ''}|${x.jour}`
+    parJour.set(cle, [...(parJour.get(cle) ?? []), x])
+  }
+  const r: DesequilibreOut[] = []
+  for (const xs of parJour.values()) {
+    const enTrop = xs.some((x) => x.compte > (x.maximum ?? x.minimum))
+    const sous = xs.some((x) => x.compte < x.minimum)
+    if (!enTrop || !sous) continue
+    r.push({
+      zone: xs[0].zone ?? '',
+      jour: xs[0].jour,
+      moments: xs.map((x) => ({ periode: x.periode, compte: x.compte })),
+    })
+  }
+  return r.sort((a, b) => a.jour - b.jour || a.zone.localeCompare(b.zone))
+}
+
 /** « 3 », « 3 ou 4 », « 3 à 5 », « au moins 3 ». */
 export function libelleConsigne(
   minimum: number,

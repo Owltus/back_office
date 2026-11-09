@@ -999,12 +999,22 @@ export function AidePlanningContenu({
                 ? ['jamais un jour seul entre deux repos']
                 : []),
               ...(Rp.rythmeStrict
-                ? ['toujours 5 jours de travail puis 2 jours de repos']
+                ? [
+                    'toujours 5 jours de travail puis 2 jours de repos',
+                    'jamais 4 jours de repos ou plus entre deux blocs de travail',
+                  ]
                 : []),
             ])}
             . Une place reste vide plutôt que de les casser, et la page le dit :
             à vous de compenser. Seuls des shifts déjà posés ou validés peuvent
             l’empêcher.
+          </li>
+          <li>
+            <span className="font-medium text-foreground">Les heures dues</span>{' '}
+            : chacun fait toutes les heures de son contrat, quoi qu’il arrive.
+            Une heure due passe avant une place, un changement de jours de repos
+            et le partage entre le matin et le soir. Quand une heure manque
+            encore, la page dit pourquoi.
           </li>
           <li>
             <span className="font-medium text-foreground">
@@ -1025,10 +1035,29 @@ export function AidePlanningContenu({
             soir reste jusqu’à son arrivée, à la minute près (fin à 23:00 pour
             une nuit à 23:00), et le matin arrive avant son départ.
           </li>
+          {Rp.rythmeStrict && (
+            <li>
+              <span className="font-medium text-foreground">
+                Le changement de jours de repos
+              </span>{' '}
+              : pour déplacer les repos de quelqu’un d’un jour, une semaine fait
+              3 repos de suite ou un bloc de 4 jours, une fois. Seulement s’il
+              remplit plus d’une place qui resterait vide autrement, une fois
+              par personne sur 4 semaines, et la page le dit. Sans lui, trois
+              personnes aux mêmes repos les gardent toute l’année.
+            </li>
+          )}
+          <li>
+            <span className="font-medium text-foreground">
+              Le matin et le soir ensemble
+            </span>{' '}
+            : jamais du monde en trop sur un moment pendant qu’un autre manque
+            de monde le même jour (4 personnes le soir, personne le matin). La
+            page le dit quand rien d’autre n’est possible.
+          </li>
           <li>
             <span className="font-medium text-foreground">Les contrats</span> :
-            d’abord les heures dues, sur une semaine complète de 5 jours. Des
-            heures payées doivent être faites. Puis éviter une personne en plus.
+            une semaine complète de 5 jours. Puis éviter une personne en plus.
           </li>
           <li>
             <span className="font-medium text-foreground">La fatigue</span> :{' '}
@@ -1183,7 +1212,7 @@ export function AidePlanningContenu({
               'Les mêmes jours de repos que la semaine d’avant, quand c’est possible. Après un week-end travaillé, passer ses repos au samedi et au dimanche est toujours permis : les week-ends tournent.',
               ...(Rp.rythmeStrict
                 ? [
-                    `Pour un contrat de ${rythme} et plus, toujours 5 jours de travail puis 2 jours de repos, d’une semaine à l’autre comprise : jamais un repos seul, jamais un bloc plus court. L’école, une formation (quelle que soit sa durée) et une absence de 5 jours au plus (congé, maladie, jour férié) comptent comme des jours de travail : 5 jours d’école, puis 2 repos. Seuls le début et la fin du contrat, et une absence de plus de 5 jours, coupent ce rythme. Une place reste vide plutôt, et la page le dit. Une semaine type qui fixe deux repos décide seule.`,
+                    `Pour un contrat de ${rythme} et plus, toujours 5 jours de travail puis 2 jours de repos, d’une semaine à l’autre comprise : jamais un repos seul, jamais un bloc plus court. L’école, une formation (quelle que soit sa durée) et une absence de 5 jours au plus (congé, maladie, jour férié) comptent comme des jours de travail : 5 jours d’école, puis 2 repos. Seuls le début et la fin du contrat, et une absence de plus de 5 jours, coupent ce rythme. Une place reste vide plutôt, et la page le dit. Une semaine type qui fixe deux repos décide seule. Jamais 4 jours de repos ou plus entre deux blocs, sauf si des absences ou des shifts validés les imposent. Pour déplacer ses repos d’un jour, une semaine peut faire 3 repos de suite ou un bloc de 4 jours, une fois sur 4 semaines, seulement si cela remplit des places qui resteraient vides : la page le dit comme un changement de jours de repos.`,
                   ]
                 : []),
               ...(Rp.jourIsole === 'interdit'

@@ -227,11 +227,20 @@ describe('le calcul', () => {
     })
     expect(tenus(resoudre(debut, [4, 5, 6]).r)).toEqual([4, 5, 6])
   })
-  it('refusé : 3 repos entre deux blocs ; accepté si le 3e est un congé (du travail)', () => {
+  it('3 repos entre deux blocs : une transition, une seule sur 4 semaines ; accepté si le 3e est un congé (du travail)', () => {
     // La semaine d'avant finit par 5 jours : lundi et mardi en repos. Rien
-    // le mercredi : jeudi reprendrait après 3 repos.
+    // le mercredi : jeudi reprend après 3 repos, un changement de jours de
+    // repos (2026-11-09). Refusé s'il y en a déjà eu un.
     const avant = { etatsAvant: 'rrTTTTT', joursSemainePrecedente: 5 }
-    expect(tenus(resoudre(personne(avant), [3, 4, 5, 6]).r)).toEqual([])
+    expect(tenus(resoudre(personne(avant), [3, 4, 5, 6]).r)).toEqual([
+      3, 4, 5, 6,
+    ])
+    expect(
+      tenus(
+        resoudre(personne({ ...avant, transitionsRecentes: 1 }), [3, 4, 5, 6])
+          .r,
+      ),
+    ).toEqual([])
     // Un jour de congé le mercredi compte comme du travail : mercredi et
     // jeudi au dimanche font le bloc de 5 après les 2 repos.
     const conge = personne({

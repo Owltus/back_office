@@ -643,7 +643,7 @@ describe('générateur', () => {
  * donne la même solution : rien ne bouge pour une semaine sans cycles.
  */
 /** Empreinte du modèle avec le rythme 5 et 2 strict (le défaut). */
-const EMPREINTE_STRICT = 'ed536f1a'
+const EMPREINTE_STRICT = '8818eea4'
 
 describe('sans remplaçant, consigne ni présence : le modèle d’avant', () => {
   /** FNV-1a 32 bits, assez pour reconnaître un texte. */
@@ -782,7 +782,14 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
     // même place » devient une ligne par morceau du shift (`morceaux`), avec
     // les référents des créneaux du même poste qui couvrent ce morceau (ces
     // créneaux n'ont pas de zone : le poste). Le reste du modèle est le même.
-    expect(empreinte(textesLp(false))).toBe('99598680')
+    // d5e6159c (2026-11-09, ORDRE DE DÉCISION, `prixOrdre`) : le manque
+    // d'heures dues n'est plus payé 400 par minute mais `minuteDue` (une
+    // heure due vaut plus qu'une transition et une place ensemble), et ce
+    // prix est posé à la fin, quand la place la plus chère est connue : le
+    // coefficient de chaque variable de manque et sa place dans l'objectif
+    // changent. Ces semaines n'ont ni chiffre de l'accueil (pas
+    // d'équilibre) ni rythme strict : rien d'autre ne bouge.
+    expect(empreinte(textesLp(false))).toBe('d5e6159c')
   })
 
   it('rythme 5 et 2 strict : une empreinte à part', () => {
@@ -800,6 +807,10 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
     // un motif qui ne peut jamais être en faute n'est pas écrit.
     // ed536f1a (2026-11-09, soutien jamais seul pendant tout le shift) :
     // même changement que l'empreinte sans le rythme strict (99598680).
+    // 8818eea4 (2026-11-09, ORDRE DE DÉCISION) : le prix des heures dues
+    // (comme d5e6159c), et les motifs rangés par genre (`genreMotif`) : une
+    // transition (3 repos, bloc de 4) a une variable de plus à son prix,
+    // au plus une par personne ; 4 repos ou plus au prix `dur`.
     expect(empreinte(textesLp(true))).toBe(EMPREINTE_STRICT)
   })
 })

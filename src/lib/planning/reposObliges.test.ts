@@ -298,4 +298,30 @@ describe('repos obligés au rythme 5 et 2 strict', () => {
   it('sans école autour : rien d’obligé', () => {
     expect(strict({})).toEqual([])
   })
+  it('une transition n’oblige à rien (2026-11-09) ; refusé : un bloc de 3', () => {
+    // Lundi au mercredi posés, repos fixe le vendredi, 2 repos avant : le
+    // jeudi ferait un bloc de 4 (un changement de jours de repos, que le
+    // calcul peut faire), pas une faute.
+    const avec = (posés: number[]) =>
+      reposObliges(
+        x,
+        sol({
+          minutesHebdoContrat: 35 * H,
+          etatsAvant: 'TTTTTrr',
+          joursSemainePrecedente: 5,
+          reposFixes: new Set([4]),
+        }),
+        posés.map((j) => service(j)),
+        LUNDI,
+        new Map(),
+        new Set([EC]),
+        new Set(),
+        0,
+        SEPT_HEURES,
+      ).map((o) => o.jour)
+    expect(avec([0, 1, 2])).not.toContain(3)
+    // Lundi et mardi posés : le mercredi ferait un bloc de 3, le jeudi seul
+    // reste possible (un bloc de 4 avec le mercredi).
+    expect(avec([0, 1])).not.toContain(2)
+  })
 })

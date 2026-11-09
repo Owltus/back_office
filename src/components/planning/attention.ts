@@ -19,6 +19,7 @@ import {
 } from '#/lib/planning/raisonsPlaces.ts'
 import type { RaisonClaire } from '#/lib/planning/raisonsPlaces.ts'
 import type { EquipeOut, SemaineOut } from '#/lib/planning/semaine.ts'
+import type { DesequilibreOut } from '#/lib/planning/presence.ts'
 import {
   seulementLaNuit,
   tientLaNuit,
@@ -137,6 +138,9 @@ export interface TrouAttention {
   releve?: boolean
   /** Équipe de l'accueil désynchronisée (règle 17, 2026-11-03). */
   equipe?: EquipeOut
+  /** Du monde en trop sur un moment pendant qu'un autre en manque, dans
+   * la même zone (2026-11-09). */
+  desequilibre?: DesequilibreOut
   /** Nom de la zone d'un trou d'une zone entière (2026-11-06). */
   zone?: string
 }
@@ -419,6 +423,21 @@ export function pointsAttention(
         equipe: e,
       })
     }
+    // Équilibre entre les moments (2026-11-09) : 0 le matin, 4 le soir.
+    for (const e of s.desequilibres ?? []) {
+      const date = ajouterJours(s.lundi, e.jour)
+      if (!garder(date)) continue
+      trous.push({
+        cle: `${date}-desequilibre-${e.zone}`,
+        date,
+        posteId: 0,
+        poste: undefined,
+        debut: '',
+        fin: '',
+        desequilibre: e,
+        zone: regles.zones.find((z) => String(z.id) === e.zone)?.nom,
+      })
+    }
   }
   shifts.sort(
     (a, b) => a.date.localeCompare(b.date) || a.debut.localeCompare(b.debut),
@@ -627,6 +646,26 @@ export function phraseEquipe(
   return `${moment} ${jour} : ${parties.join(', ')}`
 }
 
+/** « Mercredi 9 : 0 le matin, 4 le soir à l'Accueil » : du monde en trop
+ * sur un moment pendant qu'un autre en manque (équilibre entre les
+ * moments, 2026-11-09). `zone` : le nom de la zone (absent : rien). */
+export function phraseDesequilibre(
+  e: DesequilibreOut,
+  jour: string,
+  zone: string | undefined,
+  l: Moments = MOMENTS_HOTEL,
+): string {
+  const comptes = e.moments
+    .map((x) => `${x.compte} ${leMoment(l, x.periode)}`)
+    .join(', ')
+  const ou = zone
+    ? /^[aeiouyhâàéèêëîïôûAEIOUYHÂÀÉÈÊËÎÏÔÛ]/.test(zone)
+      ? ` à l'${zone}`
+      : ` en zone ${zone}`
+    : ''
+  return `${jour.charAt(0).toUpperCase()}${jour.slice(1)} : ${comptes}${ou}`
+}
+
 /** « 15 h », « 15 h 30 » ; minuit en fin de plage : « 0 h ». */
 export function heureParlee(h: string): string {
   const [hh, mm] = h.split(':').map(Number)
@@ -641,6 +680,7 @@ export function phraseTrou(
   l: Moments = MOMENTS_HOTEL,
 ): string {
   if (t.equipe) return phraseEquipe(t.equipe, jour, l)
+  if (t.desequilibre) return phraseDesequilibre(t.desequilibre, jour, t.zone, l)
   if (t.releve)
     return `Relève ${jour} : l'équipe du matin et celle de l'après-midi ne se croisent pas`
   // `poste_id` 0 : trou de l'accueil entier, Réception et Club ensemble

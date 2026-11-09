@@ -1024,9 +1024,12 @@ describe('cycles : le minimum d’une consigne est une place nécessaire (D7)', 
     }
   })
 
-  it('le minimum du matin passe avant des heures dues un autre jour', () => {
+  it('les heures dues passent avant le minimum du matin un autre jour (2026-11-09)', () => {
     // a doit 8 h 50 et ne travaille qu'un jour : le mardi de 8 h 50 les
-    // donne toutes, le matin du lundi (7 h) en laisse 110 min dues.
+    // donne toutes, le matin du lundi (7 h) en laisse 110 min dues. Avant
+    // le 2026-11-09, le minimum (une place) passait devant ; depuis
+    // (décision de l'utilisateur : « toutes leurs heures quoi qu'il
+    // arrive »), une heure due vaut plus qu'une place (`prixOrdre`).
     const a = personne('a', 0, {
       minutesHebdoContrat: 530,
       joursTravaillesMaxSemaine: 1,
@@ -1061,7 +1064,8 @@ describe('cycles : le minimum d’une consigne est une place nécessaire (D7)', 
           graine,
         }),
       )
-      expect(qui(r, 'lun')).toEqual(['a'])
+      expect(qui(r, 'mar')).toEqual(['a'])
+      expect(qui(r, 'lun')).toEqual([])
     }
   })
 

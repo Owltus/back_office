@@ -753,3 +753,31 @@ describe('jours passés : jamais remplis, dits à part (décision du 2026-11-03)
     )
   })
 })
+
+describe('équilibre entre les moments (2026-11-09)', () => {
+  it('le jour d’une zone avec du monde en trop pendant qu’un moment manque : un point, en clair', () => {
+    const s = semaine('2026-12-07', {
+      desequilibres: [
+        {
+          zone: '1',
+          jour: 2,
+          moments: [
+            { periode: 'matin', compte: 0 },
+            { periode: 'soir', compte: 4 },
+          ],
+        },
+      ],
+    })
+    const p = pointsAttention([s], SALARIES, POSTES)
+    const t = p.trous.filter((x) => x.desequilibre)
+    expect(t).toHaveLength(1)
+    expect(phraseTrou(t[0], 'mercredi 9')).toBe(
+      "Mercredi 9 : 0 le matin, 4 le soir à l'Accueil",
+    )
+    expect(p.total).toBeGreaterThanOrEqual(1)
+    // Hors de la portée : rien.
+    expect(
+      pointsAttention([s], SALARIES, POSTES, porteeMois('2026-11')).trous,
+    ).toEqual([])
+  })
+})

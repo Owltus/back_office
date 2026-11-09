@@ -200,6 +200,92 @@ export function fautesRythme(etats: readonly EtatRythme[]): FauteRythme[] {
   return r
 }
 
+/*
+ * TRANSITION (décision de l'utilisateur du 2026-11-09 : « oui, mais
+ * vraiment si utile »). Décaler les jours de repos de quelqu'un demande UNE
+ * semaine hors du rythme : 3 repos de suite une fois (les repos reculent
+ * d'un jour), ou un bloc de 4 jours une fois (ils avancent d'un jour).
+ * Sans cela, une équipe dont trois personnes ont les mêmes repos les garde
+ * toute l'année (5 + 2 = 7), et le matin de ce jour-là reste sans personne
+ * confirmée. Une transition reste une faute au sens de `fautesRythme` ;
+ * `estTransition` la reconnaît, le calcul la paie moins cher (au-dessus
+ * d'une place, sous les heures dues : `prixTransition`, generateur.ts), au
+ * plus une par personne sur `FENETRE_TRANSITION` jours, et le vérificateur
+ * la dit comme un changement de jours de repos, sans bloquer.
+ *
+ * REPOS TROP LONG : 4 repos ou plus entre deux blocs de travail
+ * (`estReposTropLong`), jamais par le calcul (« les repos de quatre jours,
+ * c'est non ») ; quand les faits l'imposent, il est dit quand même.
+ */
+
+/** Repos entre deux blocs au-delà duquel c'est « trop long » : jamais. */
+export const REPOS_TROP_LONG = RYTHME_REPOS + 2
+
+/** Une personne ne fait au plus qu'une transition sur ces jours (4
+ * semaines, la fenêtre du partage des week-ends). */
+export const FENETRE_TRANSITION = 28
+
+/** Une faute qui décale les repos d'un jour : 3 repos de suite entre deux
+ * blocs, ou un bloc de 4 jours entre deux repos. */
+export function estTransition(
+  f: Pick<FauteRythme, 'genre' | 'debut' | 'fin'>,
+): boolean {
+  const n = f.fin - f.debut + 1
+  return (
+    (f.genre === 'repos-long' && n === RYTHME_REPOS + 1) ||
+    (f.genre === 'travail-court' && n === RYTHME_TRAVAIL - 1)
+  )
+}
+
+/** 4 repos ou plus entre deux blocs de travail. */
+export function estReposTropLong(
+  f: Pick<FauteRythme, 'genre' | 'debut' | 'fin'>,
+): boolean {
+  return f.genre === 'repos-long' && f.fin - f.debut + 1 >= REPOS_TROP_LONG
+}
+
+/** Ce que coûte un motif interdit au calcul (`motifsInterdits`) :
+ *   - `six` : 6 jours de travail, DUR ;
+ *   - `dur` : 4 repos ou plus entre deux blocs, au-dessus des heures dues
+ *     (le modèle reste possible quand les faits l'imposent) ;
+ *   - `transition` : 3 repos, ou un bloc de 4 jours ;
+ *   - `fort` : un repos seul, un bloc de 1 à 3 jours. */
+export type GenreMotif = 'six' | 'dur' | 'transition' | 'fort'
+
+export function genreMotif(motif: readonly ('T' | 'r')[]): GenreMotif {
+  if (motif.every((e) => e === 'T')) return 'six'
+  const n = motif.length - 2
+  if (motif[0] === 'T') {
+    if (n >= REPOS_TROP_LONG) return 'dur'
+    return n === RYTHME_REPOS + 1 ? 'transition' : 'fort'
+  }
+  return n === RYTHME_TRAVAIL - 1 ? 'transition' : 'fort'
+}
+
+/** Les transitions faites sur une suite de jours connus (le passé d'une
+ * personne) : seules celles dont les deux bords sont dans la suite. */
+export function transitionsDans(etats: readonly EtatRythme[]): number {
+  return fautesRythme(etats).filter(estTransition).length
+}
+
+/** Le message d'une transition faite : un changement de jours de repos,
+ * pas une faute. Sans `nbJours` : sans les jours. */
+export function messageTransition(
+  f: Pick<FauteRythme, 'genre' | 'debut' | 'fin'>,
+  nbJours?: number,
+): string {
+  const jours =
+    nbJours === undefined
+      ? ''
+      : ` du ${nomJourRythme(f.debut, nbJours)} au ${nomJourRythme(f.fin, nbJours)}`
+  return f.genre === 'repos-long'
+    ? `${CHANGEMENT_REPOS} : 3 jours de repos${jours}`
+    : `${CHANGEMENT_REPOS} : 4 jours de travail${jours}`
+}
+
+/** Début commun des messages d'une transition. */
+export const CHANGEMENT_REPOS = 'changement de jours de repos'
+
 /** Un jour connu d'avance, que le planning ne décide pas : hors de la
  * période (semaine voisine), ou une indisponibilité (absence, école, repos
  * posé, jour passé au calcul), un repos fixe, un jour hors contrat. */
@@ -233,7 +319,10 @@ export function fauteScellee(
   connu: (i: number) => boolean,
 ): boolean {
   if (f.genre !== 'repos-long') return false
-  const k = RYTHME_REPOS + 2
+  // Le bloc et 3 repos connus scellent 3 repos ou plus (une transition) ;
+  // 4 repos ou plus ne sont scellés que si le bloc et 4 repos sont connus
+  // (« jamais 4 repos », sauf si les faits les imposent, 2026-11-09).
+  const k = Math.min(f.fin - f.debut + 1, REPOS_TROP_LONG) + 1
   const tous = (de: number, pas: number) => {
     for (let i = 0; i < k; i++) if (!connu(de + pas * i)) return false
     return true

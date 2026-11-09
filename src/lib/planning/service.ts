@@ -401,7 +401,9 @@ export function fetchSemainePourGeneration(
   const lundis: string[] = []
   for (let l = premier; l <= ajouterJours(lundi, 7); l = ajouterJours(l, 7))
     lundis.push(l)
-  return fetchShifts(lundis, premier, ajouterJours(lundi, 13))
+  // Absences jusqu'à la fin de la semaine d'après l'esquisse (son école,
+  // `SuivantePersonne.apres`, 2026-11-09).
+  return fetchShifts(lundis, premier, ajouterJours(lundi, 20))
 }
 
 export async function fetchAbsencesSalarie(

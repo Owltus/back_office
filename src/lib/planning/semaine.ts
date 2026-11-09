@@ -110,13 +110,17 @@ import {
   apresContrat,
 } from '#/lib/planning/regles.ts'
 import {
+  estTransition,
   fauteScellee,
   fautesRythme,
+  FENETRE_TRANSITION,
   jourConnu,
+  lireSemaineVoisine,
   resoudreAbsences,
   rythmeStrictDe,
   statutAbsence,
   suiteRythme,
+  transitionsDans,
 } from '#/lib/planning/rythmeStrict.ts'
 import type { EtatRythme, StatutRythme } from '#/lib/planning/rythmeStrict.ts'
 
@@ -124,13 +128,14 @@ import {
   accueilActif,
   bilanPresence,
   chiffreAccueil,
+  desequilibres,
   plafondAccueil,
   estPosteAccueil,
   momentsAccueil,
   momentLibre,
   periodeShift,
 } from '#/lib/planning/presence.ts'
-import type { PresenceOut } from '#/lib/planning/presence.ts'
+import type { DesequilibreOut, PresenceOut } from '#/lib/planning/presence.ts'
 // Cycle d'import voulu (semaine → raisonsPlaces → coherence → semaine) :
 // `phraseCommune` n'est appelée qu'à l'exécution, jamais au chargement.
 import { phraseCommune } from '#/lib/planning/raisonsPlaces.ts'
@@ -371,6 +376,10 @@ export interface SemaineOut {
   /** Transmissions de l'accueil d'une équipe à l'autre, jour par jour
    * (`transmissions`). Absent : données d'avant. */
   transmissions?: Transmissions[]
+  /** Jours d'une zone avec du monde en trop sur un moment pendant qu'un
+   * autre manque de monde (`desequilibres`, 2026-11-09). Absent : données
+   * d'avant. */
+  desequilibres?: DesequilibreOut[]
   stats: {
     places: number
     pourvues: number
@@ -926,10 +935,15 @@ export function rythmeAutour(
   x: Salarie,
   lundi: string,
   ctx: Pick<Contexte, 'sansDecompte' | 'ecole' | 'absences' | 'rythmeTravail'>,
+  /** Premier jour lu (un multiple de 7, avant le lundi) : -14, ou plus tôt
+   * pour les transitions déjà faites (`transitionsRecentes`). */
+  DEBUT = -14,
+  /** Jour qui suit le dernier lu : 14, ou 21 pour la semaine d'après
+   * l'esquisse (`SuivantePersonne.apres`). */
+  FIN = 14,
 ): Map<number, EtatRythme> {
-  const DEBUT = -14
   const statuts: StatutRythme[] = []
-  for (let w = DEBUT; w < 14; w += 7) {
+  for (let w = DEBUT; w < FIN; w += 7) {
     const l = ajouterJours(lundi, w)
     const hors = joursHorsContrat(x, l)
     const absents = joursAbsents(x, l, ctx.absences)
@@ -2092,7 +2106,9 @@ export function avecSemainesVoisines(
     const fiches = fichesDe.get(key) ?? []
     const lundiVoisin = ajouterJours(ctx.lundi, decalage)
     const hors = fiches.map((x) => joursHorsContrat(x, lundiVoisin))
-    const autour = fiches.map((x) => rythmeAutour(x, ctx.lundi, ctx))
+    const autour = fiches.map((x) =>
+      rythmeAutour(x, ctx.lundi, ctx, Math.min(-14, decalage - 7)),
+    )
     let etats = ''
     for (let j = 0; j < 7; j++) {
       // Les fiches en contrat ce jour-là (une personne qui change de
@@ -2108,11 +2124,36 @@ export function avecSemainesVoisines(
     }
     return etats
   }
+  // Transitions déjà faites (changements de jours de repos, 2026-11-09) :
+  // les `FENETRE_TRANSITION` jours avant le lundi, lus seulement pour une
+  // génération (`historique` : les shifts des semaines d'avant). Mêmes
+  // lettres que la semaine d'avant (`etatsVoisins`) ; une semaine sans
+  // aucun shift lu est inconnue.
+  const travailPasse = new Map<number, Map<number | string, Set<number>>>()
+  for (const a of d.historique ?? []) {
+    const decalage = ecartJours(ctx.lundi, a.lundi)
+    if (decalage >= 0 || decalage < -FENETRE_TRANSITION) continue
+    const m = travailPasse.get(decalage) ?? new Map()
+    travailPasse.set(decalage, m)
+    ajoute(m, k(a.salarie_id), a.jour)
+  }
+  const transitionsRecentes = (key: number | string): number => {
+    if (!d.historique) return 0
+    const etats: EtatRythme[] = []
+    for (let w = -FENETRE_TRANSITION; w < 0; w += 7) {
+      const lue =
+        w === -7 ? (d.avant.length ? travailAvant : null) : travailPasse.get(w)
+      const semaine = lue ? etatsVoisins(key, w, lue) : null
+      etats.push(...(lireSemaineVoisine(semaine) ?? Array(7).fill('u')))
+    }
+    return transitionsDans(etats)
+  }
   const r = new Map<number, SalarieSolveur>()
   for (const [i, x] of salaries) {
     const key = k(i)
     r.set(i, {
       ...x,
+      transitionsRecentes: transitionsRecentes(key),
       etatsAvant: d.avant.length ? etatsVoisins(key, -7, travailAvant) : null,
       etatsApres: d.apres.length ? etatsVoisins(key, 7, travailApres) : null,
       finServicePrecedent: fins.get(key) ?? null,
@@ -2865,12 +2906,14 @@ export function reposObliges(
           },
         )
         // Une faute déjà faite par les faits (`fauteScellee`, le jour essayé
-        // n'en est pas un) n'oblige à rien.
+        // n'en est pas un) n'oblige à rien ; une transition (changement de
+        // jours de repos, `estTransition`) non plus : le calcul peut la faire.
         const connu = (i: number) =>
           i !== j + 7 &&
           (i - 7 < passes || obliges.has(i - 7) || jourConnu(sol, i - 7, 7))
         const faute = fautesRythme(etats).some(
           (f) =>
+            !estTransition(f) &&
             !fauteScellee(f, connu) &&
             (f.genre === 'travail-court' || f.genre === 'travail-long'
               ? f.debut <= j + 7 && j + 7 <= f.fin
@@ -3452,6 +3495,7 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
     releves_manquantes: sansReleve,
     equipes,
     transmissions: passations,
+    desequilibres: desequilibres(presence),
     stats: {
       places:
         necessaires.reduce((t, b) => t + b.effectif, 0) +
@@ -4097,7 +4141,18 @@ export function esquisseSuivante(
     // travail sans shift (école, absence décomptée courte).
     const neutres = new Set<number>()
     const travailRythme = new Set<number>()
-    const autour = rythmeAutour(x, lundi, ctx)
+    const autour = rythmeAutour(x, lundi, ctx, -14, 21)
+    // La semaine d'après l'esquisse : ses seuls FAITS (école et absence
+    // courte = T, hors contrat et absence longue = n, le reste inconnu).
+    // Une semaine d'école deux semaines plus loin décide déjà des repos de
+    // l'esquisse (2026-11-09, banc de décembre : une apprentie perdait 14 h
+    // la semaine d'avant son CFA, que le calcul ne voyait pas venir).
+    const horsApres = joursHorsContrat(x, ajouterJours(lundi, 14))
+    let apres = ''
+    for (let j = 0; j < 7; j++) {
+      const e = autour.get(j + 14)
+      apres += horsApres.has(j) || e === 'n' ? 'n' : e === 'T' ? 'T' : 'u'
+    }
     for (let j = 0; j < 7; j++) {
       const garde = gardes.find((a) => a.salarie_id === x.id && a.jour === j)
       if (hors.has(j)) {
@@ -4134,6 +4189,7 @@ export function esquisseSuivante(
       fixes,
       neutres,
       travailRythme,
+      apres,
       horsSite,
       postesGardes,
       nonLibres,

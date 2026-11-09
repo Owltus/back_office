@@ -73,6 +73,7 @@ export const REGLES_BLOCAGE = [
   'REPOS-SEPARES',
   'JOUR-ISOLE',
   'RYTHME-5-2',
+  'RYTHME-TRANSITION',
   'REPOS-COURT',
   'WEEKEND-LIBRE',
   'MOMENTS',
@@ -99,6 +100,7 @@ const PHRASES_MORALES: Record<string, string> = {
   'HEURES-PLUS': 'A déjà fait beaucoup d’heures en plus',
   'RETOUR-CONGE': 'Rentre de congé cette semaine',
   'ECOLE-ABORDS': 'Trop près d’un jour d’école',
+  'RYTHME-TRANSITION': 'Changerait ses jours de repos',
 }
 
 /** Sans aucune règle enfreinte : la personne peut prendre la place. On ne
@@ -309,6 +311,7 @@ export function raisonClaire(
         'Son rythme de 5 jours puis 2 repos ne tiendrait plus',
         mention('règle de l’hôtel'),
       )
+    case 'RYTHME-TRANSITION':
     case 'REPOS-COURT':
     case 'WEEKEND-LIBRE':
     case 'MOMENTS':
@@ -419,6 +422,7 @@ const PHRASES_COMMUNES: Record<(typeof REGLES_BLOCAGE)[number], string> = {
     'Ce serait pour chacun un jour de travail seul entre deux repos.',
   // Bloque comme les deux repos de suite (2026-11-09).
   'RYTHME-5-2': 'Le rythme de 5 jours puis 2 repos ne tiendrait pour personne.',
+  'RYTHME-TRANSITION': 'Chacun changerait ses jours de repos.',
   'REPOS-COURT': 'Tout le monde aurait moins de 12 h de repos.',
   'WEEKEND-LIBRE': 'Tout le monde attend son week-end libre.',
   MOMENTS: 'Tout le monde changerait trop d’horaires.',
