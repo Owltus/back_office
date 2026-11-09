@@ -66,7 +66,10 @@ import {
 } from '#/lib/planning/reglesEtablissement.ts'
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import {
+  fauteScellee,
   fautesRythme,
+  jourConnu,
+  joursRythmeDe,
   messageFaute,
   rythmeStrictDe,
   suiteRythme,
@@ -236,7 +239,7 @@ export function violationsSalarie(
   // JOURS-AFFILES (2026-11-02) : plus de 6 jours de travail d'affilée,
   // semaines voisines comprises. Permis par la loi : une alerte. Au rythme 5
   // et 2 strict (2026-11-09), RYTHME-5-2 le dit à sa place (plus de 5 jours,
-  // l'école coupe la série), comme le calcul.
+  // école et absences courtes comprises), comme le calcul.
   if (!rythmeStrictDe(s, R)) {
     const travaille = (d: number) =>
       d < 0
@@ -490,6 +493,26 @@ export const REPOS_SEPARES_SOUHAITE = ' (souhaité)'
  * shift posé à la main ne cache pas la raison de la place). */
 const PAR_CRENEAUX = new Set(['JOUR-ISOLE', 'JOURNEE-TYPE', 'HEURES-FAITES'])
 
+/** Les violations de `apres` qui ne sont pas dans `avant`. Le rythme 5
+ * et 2 (messages courts, par genre) compte ses fautes : un deuxième repos
+ * seul est nouveau même si le premier existait (relecture du 2026-11-09 :
+ * avec des faits qui imposent une faute, la place laissée vide pour ne pas
+ * en faire une seconde n'avait plus de raison). */
+function nouvelles(apres: Violation[], avant: Violation[]): Violation[] {
+  const reste = new Map<string, number>()
+  for (const v of avant) {
+    const k = cleViolation(v)
+    reste.set(k, (reste.get(k) ?? 0) + 1)
+  }
+  return apres.filter((v) => {
+    const k = cleViolation(v)
+    const n = reste.get(k) ?? 0
+    if (n === 0) return true
+    if (v.regle === 'RYTHME-5-2') reste.set(k, n - 1)
+    return false
+  })
+}
+
 function cleViolation(v: Violation): string {
   return PAR_CRENEAUX.has(v.regle)
     ? `${v.regle}|${v.message}|${[...v.creneaux].sort().join(',')}`
@@ -693,11 +716,17 @@ function alertesMorales(
   // compte.
   if (rythmeStrictDe(s, R)) {
     const etats = suiteRythme(s, nbJours, (d) => parJour.has(d))
+    // Jours de travail de la semaine : shifts, école et absences courtes
+    // (`joursRythmeDe`) — une semaine de CFA et un shift en font 6.
+    const { travail } = joursRythmeDe(s, nbJours)
     const jours = (d: number) =>
       intervalle(7 * Math.floor(d / 7), 7 * Math.floor(d / 7) + 7).filter(
-        (j) => j < nbJours && parJour.has(j),
+        (j) => j < nbJours && (parJour.has(j) || travail.has(j)),
       ).length
+    // Les jours connus d'avance (`fauteScellee`), sur le repère de la suite.
+    const connu = (i: number) => jourConnu(s, i - 7, nbJours)
     for (const f of fautesRythme(etats)) {
+      if (fauteScellee(f, connu)) continue
       const debut = f.debut - 7
       const fin = f.fin - 7
       const touches =
@@ -1397,23 +1426,16 @@ export function raisonsBlocageAccueil(
       .filter((a) => a.salarieId === s.id)
       .map((a) => creneaux.get(a.creneauId))
       .filter((c): c is Creneau => c !== undefined)
-    const avant = new Set(
-      violationsSalarie(s, siens, p.nbJours, true, p.regles).map((v) =>
-        cleViolation(v),
-      ),
-    )
+    const avant = violationsSalarie(s, siens, p.nbJours, true, p.regles)
     // Déjà compté dans ce moment : ce n'est pas lui qui manque.
     if (cibles.some((c) => siens.includes(c))) continue
     let meilleure: Violation[] | null = null
     for (const cible of cibles) {
       if (!autonomeSur(s, cible.poste)) continue
-      const liste = violationsSalarie(
-        s,
-        [...siens, cible],
-        p.nbJours,
-        true,
-        p.regles,
-      ).filter((v) => !avant.has(cleViolation(v)))
+      const liste = nouvelles(
+        violationsSalarie(s, [...siens, cible], p.nbJours, true, p.regles),
+        avant,
+      )
       if (meilleure === null || liste.length < meilleure.length)
         meilleure = liste
       if (!liste.length) break
@@ -1469,11 +1491,7 @@ export function raisonsBlocage(
       ])
       continue
     }
-    const avant = new Set(
-      violationsSalarie(s, siens, p.nbJours, true, p.regles).map((v) =>
-        cleViolation(v),
-      ),
-    )
+    const avant = violationsSalarie(s, siens, p.nbJours, true, p.regles)
     const apres = violationsSalarie(
       s,
       [...siens, cible],
@@ -1481,7 +1499,7 @@ export function raisonsBlocage(
       true,
       p.regles,
     )
-    let liste = apres.filter((v) => !avant.has(cleViolation(v)))
+    let liste = nouvelles(apres, avant)
     if (s.placementManuel && liste.length === 0) {
       liste = [
         {

@@ -211,23 +211,8 @@ describe('le calcul', () => {
     const sans = resoudre(s, [0, 1, 2], { regles: SANS_RYTHME_STRICT })
     expect(tenus(sans.r)).toEqual([0, 1, 2])
   })
-  it('accepté : un bloc de 3 contre l’école, un congé, un début ou une fin de contrat', () => {
+  it('accepté : un bloc de 3 contre un début ou une fin de contrat', () => {
     const avant = { etatsAvant: 'TTTTTrr', joursSemainePrecedente: 5 }
-    // École le jeudi et le vendredi.
-    const ecole = personne({
-      ...avant,
-      joursHorsSite: new Set([3, 4]),
-      indisponibilites: new Set([3, 4]),
-      joursNeutres: new Set([3, 4]),
-    })
-    expect(tenus(resoudre(ecole, [0, 1, 2]).r)).toEqual([0, 1, 2])
-    // Congé du jeudi au dimanche.
-    const conge = personne({
-      ...avant,
-      indisponibilites: new Set([3, 4, 5, 6]),
-      joursNeutres: new Set([3, 4, 5, 6]),
-    })
-    expect(tenus(resoudre(conge, [0, 1, 2]).r)).toEqual([0, 1, 2])
     // Fin de contrat le mercredi soir.
     const fin = personne({
       ...avant,
@@ -242,15 +227,18 @@ describe('le calcul', () => {
     })
     expect(tenus(resoudre(debut, [4, 5, 6]).r)).toEqual([4, 5, 6])
   })
-  it('refusé : 3 repos entre deux blocs ; accepté si l’un est un congé', () => {
+  it('refusé : 3 repos entre deux blocs ; accepté si le 3e est un congé (du travail)', () => {
     // La semaine d'avant finit par 5 jours : lundi et mardi en repos. Rien
     // le mercredi : jeudi reprendrait après 3 repos.
     const avant = { etatsAvant: 'rrTTTTT', joursSemainePrecedente: 5 }
     expect(tenus(resoudre(personne(avant), [3, 4, 5, 6]).r)).toEqual([])
+    // Un jour de congé le mercredi compte comme du travail : mercredi et
+    // jeudi au dimanche font le bloc de 5 après les 2 repos.
     const conge = personne({
       ...avant,
       indisponibilites: new Set([2]),
-      joursNeutres: new Set([2]),
+      joursNeutres: new Set(),
+      joursTravailRythme: new Set([2]),
     })
     expect(tenus(resoudre(conge, [3, 4, 5, 6]).r)).toEqual([3, 4, 5, 6])
   })

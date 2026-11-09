@@ -10,15 +10,48 @@
  *       neutre ou un bord inconnu (alors au plus 5) ;
  *   (c) un bloc de repos entre deux blocs de travail fait EXACTEMENT 2 jours,
  *       sauf s'il touche un jour neutre.
- * Un jour NEUTRE coupe le rythme sans compter ni comme travail ni comme
- * repos : école, absence décomptée (congé, maladie, formation, jour férié
- * chômé, jour férié rattrapé), jour hors contrat (avant l'arrivée, après la
- * fin). Un repos posé (motif sans décompte) est un repos. Une semaine voisine
- * inconnue : rien n'est demandé.
+ *
+ * CE QUE VAUT CHAQUE JOUR (révisé le même jour, décision de l'utilisateur :
+ * « les jours d'école au CFA, considère-les comme des jours de travail…
+ * prends bien tout en compte pour que tout soit cohérent ») — UNE source,
+ * lue par le calcul, le vérificateur, les repos obligés et « À vérifier » :
+ *   TRAVAIL (T, compte dans le bloc de 5) :
+ *     - un shift, proposé, validé ou d'une semaine verrouillée ;
+ *     - un jour d'école (motif de nature école, CFA) : un apprenti fait 5
+ *       jours d'école puis 2 repos comme 5 jours à l'hôtel
+ *       (`TTTTTrr EEEEErr`) ; une école de 3 jours se complète de 2 shifts ;
+ *     - un jour d'ABSENCE DÉCOMPTÉE (motif au décompte : congé payé,
+ *       maladie, formation, sans solde, jour férié chômé, jour férié
+ *       rattrapé pris, absence autorisée, congé décès, absence de la semaine
+ *       type, et les jours fériés ajoutés au calcul pour les stagiaires et
+ *       l'encadrement, `avecFeriesDuJour`) : il remplace un jour de travail
+ *       (congé du lundi au vendredi = un bloc entouré de deux repos ; 3 jours
+ *       de congé et 2 shifts = un bloc) — SAUF une absence longue ;
+ *     - un jour férié rattrapé que le calcul propose (variable du modèle).
+ *   REPOS (r, compte dans les 2) :
+ *     - un repos de la semaine type ;
+ *     - un repos posé ou proposé (motif de nature repos) ;
+ *     - une absence SANS décompte (repos exceptionnel, récupération, repos
+ *       forfait) : elle ne remplace aucun jour de travail ;
+ *     - un jour sans rien, y compris un jour passé resté vide ;
+ *     - un repos sur un congé en trop une fois validé (c'est alors un repos
+ *       posé ; avant, il est montré dans une absence longue, neutre).
+ *   NEUTRE (n, coupe le rythme sans compter) :
+ *     - un jour hors contrat (avant l'arrivée, après la fin) ;
+ *     - une ABSENCE LONGUE : une suite de plus de 5 jours d'absences
+ *       décomptées (`ABSENCE_LONGUE` : congé de deux semaines, arrêt maladie
+ *       long), semaines voisines comprises. Elle contient déjà ses repos : on
+ *       n'exige pas deux repos juste après. L'école, un repos, un shift ou un
+ *       jour hors contrat coupe la suite.
+ *   INCONNU (u) : une semaine voisine non lue, rien n'est demandé.
+ * Les autres marques d'un motif ne comptent pas ici : `libre_weekend`
+ * (partage des week-ends), `reserve_forfait` (cadres au forfait, jamais au
+ * rythme humain), le rôle `repos_defaut` (un motif de nature repos).
  *
  * UNE définition : `fautesRythme` (vérificateur, repos obligés, « À
- * vérifier ») et `MOTIFS_INTERDITS` (générateur) disent la même chose, ce que
- * prouve `rythmeStrict.test.ts` sur des suites tirées au hasard.
+ * vérifier ») et `motifsInterdits` (générateur) disent la même chose, ce que
+ * prouve `rythmeStrict.test.ts` sur des suites tirées au hasard ;
+ * `statutAbsence` et `resoudreAbsences` rangent les jours pour tous.
  */
 
 import { rythmeHumain } from '#/lib/planning/regles.ts'
@@ -28,6 +61,14 @@ import { REGLES_PAR_DEFAUT } from '#/lib/planning/reglesEtablissement.ts'
 
 /** Un jour : T travaillé, r repos, n neutre, u inconnu. */
 export type EtatRythme = 'T' | 'r' | 'n' | 'u'
+
+/** Un jour avant la règle de l'absence longue : `a` une absence décomptée
+ * (hors école), le reste comme `EtatRythme`. */
+export type StatutRythme = EtatRythme | 'a'
+
+/** Une suite d'absences décomptées de PLUS de 5 jours est neutre ; de 1 à 5
+ * jours, elle compte comme du travail. */
+export const ABSENCE_LONGUE = 5
 
 /** Jours de travail d'un bloc. */
 export const RYTHME_TRAVAIL = 5
@@ -61,6 +102,47 @@ export function rythmeStrictDe(
   )
 }
 
+/** Les absences décomptées d'une suite, rangées : une suite de plus de
+ * `ABSENCE_LONGUE` jours devient neutre, une plus courte du travail. Le
+ * reste est rendu tel quel. Une suite qui touche le bord est lue sur ce qui
+ * en est connu. */
+export function resoudreAbsences(
+  statuts: readonly StatutRythme[],
+): EtatRythme[] {
+  const r: EtatRythme[] = []
+  let i = 0
+  while (i < statuts.length) {
+    const e = statuts[i]
+    if (e !== 'a') {
+      r.push(e)
+      i++
+      continue
+    }
+    let f = i
+    while (f + 1 < statuts.length && statuts[f + 1] === 'a') f++
+    const longue = f - i + 1 > ABSENCE_LONGUE
+    for (let k = i; k <= f; k++) r.push(longue ? 'n' : 'T')
+    i = f + 1
+  }
+  return r
+}
+
+/** Le statut d'un jour d'absence d'après son motif : école = travail ;
+ * motif sans décompte (repos, repos exceptionnel, récupération, repos
+ * forfait) = repos ; motif au décompte, ou absence sans motif (semaine
+ * type) = absence décomptée, rangée ensuite par `resoudreAbsences`. */
+export function statutAbsence(
+  motif: number | null | undefined,
+  ecole: ReadonlySet<number>,
+  sansDecompte: ReadonlySet<number>,
+): StatutRythme {
+  if (motif !== null && motif !== undefined) {
+    if (ecole.has(motif)) return 'T'
+    if (sansDecompte.has(motif)) return 'r'
+  }
+  return 'a'
+}
+
 /** Les blocs fautifs d'une suite de jours. Hors de la suite : inconnu. */
 export function fautesRythme(etats: readonly EtatRythme[]): FauteRythme[] {
   const r: FauteRythme[] = []
@@ -89,6 +171,47 @@ export function fautesRythme(etats: readonly EtatRythme[]): FauteRythme[] {
     i = f + 1
   }
   return r
+}
+
+/** Un jour connu d'avance, que le planning ne décide pas : hors de la
+ * période (semaine voisine), ou une indisponibilité (absence, école, repos
+ * posé, jour passé au calcul), un repos fixe, un jour hors contrat. */
+export function jourConnu(
+  s: Pick<
+    SalarieSolveur,
+    'indisponibilites' | 'reposFixes' | 'horsContrat' | 'joursHorsSite'
+  >,
+  d: number,
+  nbJours: number,
+): boolean {
+  return (
+    d < 0 ||
+    d >= nbJours ||
+    s.indisponibilites.has(d) ||
+    s.reposFixes.has(d) ||
+    s.horsContrat.has(d) ||
+    s.joursHorsSite.has(d)
+  )
+}
+
+/** Une faute que les FAITS ont déjà faite : plus de 2 repos entre deux
+ * blocs, quand le bloc d'un côté et les 3 repos qui le touchent sont connus
+ * d'avance (`connu`, même repère que la faute, `jourConnu`). La reprise de l'autre côté ne peut
+ * plus l'éviter qu'en ne reprenant jamais : le calcul ne l'interdit pas, le
+ * vérificateur et les repos obligés ne la disent pas (relecture du
+ * 2026-11-09 : une semaine d'avant finie par 3 repos bloquait toute la
+ * semaine suivante). Même définition que `rythmeStrictModele`. */
+export function fauteScellee(
+  f: Pick<FauteRythme, 'genre' | 'debut' | 'fin'>,
+  connu: (i: number) => boolean,
+): boolean {
+  if (f.genre !== 'repos-long') return false
+  const k = RYTHME_REPOS + 2
+  const tous = (de: number, pas: number) => {
+    for (let i = 0; i < k; i++) if (!connu(de + pas * i)) return false
+    return true
+  }
+  return tous(f.debut - 1, 1) || tous(f.fin + 1, -1)
 }
 
 /** Les motifs que le calcul interdit, chacun une suite de jours T ou r qui
@@ -202,35 +325,56 @@ export function voisinesRythme(
   }
 }
 
-/** Les jours neutres de la période d'une personne (`joursNeutres`), ou, sans
- * eux (données de test), hors contrat, école et indisponibilités qui ne sont
- * pas des repos fixes. */
-export function neutresDe(
+/** Les jours de la période d'une personne qui ne dépendent pas du calcul :
+ * NEUTRES (hors contrat, absence longue) et TRAVAIL sans shift (école,
+ * absence décomptée courte), lus par la semaine (`joursNeutres`,
+ * `joursTravailRythme`, semaines voisines comprises). Sans eux (données de
+ * test) : hors contrat neutre, école travail, et les indisponibilités qui
+ * ne sont ni un repos fixe ni hors contrat comptées comme des absences
+ * décomptées de la semaine seule. */
+export function joursRythmeDe(
   s: Pick<
     SalarieSolveur,
     | 'joursNeutres'
+    | 'joursTravailRythme'
     | 'horsContrat'
     | 'joursHorsSite'
     | 'indisponibilites'
     | 'reposFixes'
   >,
-): ReadonlySet<number> {
-  if (s.joursNeutres) return s.joursNeutres
-  return new Set([
-    ...s.horsContrat,
-    ...s.joursHorsSite,
-    ...[...s.indisponibilites].filter((j) => !s.reposFixes.has(j)),
-  ])
+  nbJours = 7,
+): { neutres: ReadonlySet<number>; travail: ReadonlySet<number> } {
+  if (s.joursNeutres)
+    return {
+      neutres: s.joursNeutres,
+      travail: s.joursTravailRythme ?? new Set(),
+    }
+  const jours = Array.from({ length: nbJours }, (_, d): StatutRythme => {
+    if (s.horsContrat.has(d)) return 'n'
+    if (s.joursHorsSite.has(d)) return 'T'
+    if (s.indisponibilites.has(d) && !s.reposFixes.has(d)) return 'a'
+    return 'r'
+  })
+  const etats = resoudreAbsences(jours)
+  const neutres = new Set<number>()
+  const travail = new Set<number>()
+  etats.forEach((e, d) => {
+    if (e === 'n') neutres.add(d)
+    else if (e === 'T') travail.add(d)
+  })
+  return { neutres, travail }
 }
 
 /** La suite des jours d'une personne, de 7 jours avant la période à 7 jours
  * après : `etats[d + 7]` est le jour `d`. Dans la période, un jour travaillé
- * (`travaille`) est T, un jour neutre n, le reste r ; hors de la période, les
- * semaines voisines (`etatsAvant`, `etatsApres`), inconnues : u. */
+ * (`travaille`) ou de travail sans shift (école, absence courte,
+ * `joursRythmeDe`) est T, un jour neutre n, le reste r ; hors de la période,
+ * les semaines voisines (`etatsAvant`, `etatsApres`), inconnues : u. */
 export function suiteRythme(
   s: Pick<
     SalarieSolveur,
     | 'joursNeutres'
+    | 'joursTravailRythme'
     | 'horsContrat'
     | 'joursHorsSite'
     | 'indisponibilites'
@@ -245,12 +389,12 @@ export function suiteRythme(
   nbJours: number,
   travaille: (d: number) => boolean,
 ): EtatRythme[] {
-  const neutres = neutresDe(s)
+  const { neutres, travail } = joursRythmeDe(s, nbJours)
   const v = voisinesRythme(s)
   const avant = v.avant ?? (Array(7).fill('u') as EtatRythme[])
   const apres = v.apres ?? (Array(7).fill('u') as EtatRythme[])
   const ici: EtatRythme[] = []
   for (let d = 0; d < nbJours; d++)
-    ici.push(travaille(d) ? 'T' : neutres.has(d) ? 'n' : 'r')
+    ici.push(travaille(d) || travail.has(d) ? 'T' : neutres.has(d) ? 'n' : 'r')
   return [...avant, ...ici, ...apres]
 }

@@ -643,7 +643,7 @@ describe('générateur', () => {
  * donne la même solution : rien ne bouge pour une semaine sans cycles.
  */
 /** Empreinte du modèle avec le rythme 5 et 2 strict (le défaut). */
-const EMPREINTE_STRICT = '69e93268'
+const EMPREINTE_STRICT = 'fb6eed48'
 
 describe('sans remplaçant, consigne ni présence : le modèle d’avant', () => {
   /** FNV-1a 32 bits, assez pour reconnaître un texte. */
@@ -784,6 +784,14 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
     // semaines, plus les motifs interdits du rythme 5 et 2
     // (`rythmeStrictModele`) pour les contrats de 35 h et plus ; ces
     // semaines n'ont pas de semaine voisine, donc aucun coût de bord.
+    // Relevée de nouveau le même jour (69e93268 → ce15d100, l'école et les
+    // absences comptent comme du travail) : les jours d'absence tirés
+    // (`indisponibilites`, hors repos fixe) sont des absences décomptées,
+    // du TRAVAIL connu d'avance dans les motifs quand ils sont 5 au plus
+    // d'affilée, neutres au-delà (`joursRythmeDe`) ; avant, tous neutres.
+    // Et (même jour, fb6eed48) : les motifs autres que les 6 jours ne sont
+    // plus durs mais payés (`prixFauteRythme`, plus que tout le reste) ;
+    // un motif qui ne peut jamais être en faute n'est pas écrit.
     expect(empreinte(textesLp(true))).toBe(EMPREINTE_STRICT)
   })
 })

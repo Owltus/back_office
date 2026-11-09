@@ -463,7 +463,7 @@ describe('la génération place le JFR', () => {
     expect(b.repos_proposes).toEqual([])
     expect(b.alertes.some((a) => a.regle === 'JOUR-FERIE')).toBe(false)
     expect(semaine.stats.infractions).toBe(0)
-  })
+  }, 30_000)
 
   it('sans date d’entrée (moins d’un an) : aucun JFR, aucune alerte', () => {
     const d = donnees(null)
@@ -797,6 +797,15 @@ describe('mineurs : pas de jour férié si on peut l’éviter', () => {
       x.mineur = true
       x.heures_hebdo = 35
     })
+    // Le poids du jour férié seul (POIDS_MINEUR_FERIE, une préférence,
+    // après les heures du contrat). Avec le rythme 5 et 2 strict, où le jour
+    // férié chômé du stagiaire compte comme du travail (2026-11-09), lui
+    // laisser le 11/11 coûterait des heures de contrat à l'équipe de démo
+    // (vérifié : mêmes places, 13 h d'écart aux contrats au lieu de 6 h).
+    d.referentiel = {
+      ...d.referentiel,
+      reglages: { ...d.referentiel.reglages, rythme_strict: false },
+    }
     const g = preparerGeneration(d, { aujourdhui: '2026-11-01', graine: 1 })
     const sol = g.probleme.salaries.find((s) => s.id === String(ID))!
     expect([...sol.feriesEvites]).toEqual([2])

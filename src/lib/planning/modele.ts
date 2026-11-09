@@ -228,12 +228,17 @@ export interface SalarieSolveur {
   serieAvant: number
   serieApres: number
   /** Rythme 5 et 2 strict (`rythmeStrict.ts`, 2026-11-09) : jours NEUTRES
-   * de la période (école, absence décomptée, hors contrat), qui coupent le
-   * rythme. Absent (données de test) : hors contrat, école et
-   * indisponibilités hors repos fixes (`neutresDe`). */
+   * de la période (hors contrat, absence longue de plus de 5 jours), qui
+   * coupent le rythme. Absent (données de test) : lu sur les autres champs
+   * (`joursRythmeDe`). */
   joursNeutres?: ReadonlySet<number>
+  /** Rythme 5 et 2 strict : jours de TRAVAIL sans shift de la période
+   * (école, absence décomptée de 5 jours au plus), comptés dans le bloc de
+   * 5. Lu avec `joursNeutres`. */
+  joursTravailRythme?: ReadonlySet<number>
   /** Rythme 5 et 2 strict : la semaine d'avant et celle d'après, jour par
-   * jour (7 lettres : T travaillé, r repos, n neutre) ; null ou absent :
+   * jour (7 lettres : T travaillé, école ou absence courte, r repos, n
+   * neutre) ; null ou absent :
    * inconnue, rien n'est demandé. */
   etatsAvant?: string | null
   etatsApres?: string | null
@@ -542,9 +547,12 @@ export interface SuivantePersonne {
   /** Jour (0 à 6) → 1 : travaillé d'office (shift gardé, école) ; 0 :
    * impossible (absence, hors contrat, repos fixe). Absent : à choisir. */
   fixes: ReadonlyMap<number, 0 | 1>
-  /** Rythme 5 et 2 strict : jours neutres (0 à 6 ; école, absence
-   * décomptée, hors contrat). Absent : aucun. */
+  /** Rythme 5 et 2 strict : jours neutres (0 à 6 ; hors contrat, absence
+   * longue). Absent : aucun. */
   neutres?: ReadonlySet<number>
+  /** Rythme 5 et 2 strict : jours de travail sans shift (0 à 6 ; école,
+   * absence décomptée de 5 jours au plus). Absent : aucun. */
+  travailRythme?: ReadonlySet<number>
   /** Jours de travail attendus (rythme de 5 jours) ; 0 : aucun. */
   attendus: number
   /** Jours d'école (travaillés d'office, mais pas à l'hôtel : ils ne

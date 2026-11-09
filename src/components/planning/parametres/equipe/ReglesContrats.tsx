@@ -831,7 +831,7 @@ export function ReglesContrats({
               titre="Rythme 5 jours puis 2 jours strict"
               effet={
                 b.rythme_strict
-                  ? `Pour les contrats de ${h(b.rythme_contrat_min)} et plus : toujours 5 jours de travail, puis 2 jours de repos. Seuls l'école, un congé ou le début et la fin du contrat coupent ce rythme. Une place peut rester vide pour lui.`
+                  ? `Pour les contrats de ${h(b.rythme_contrat_min)} et plus : toujours 5 jours de travail, puis 2 jours de repos. L'école et une absence de 5 jours au plus comptent comme du travail ; seuls le début et la fin du contrat, et une absence de plus de 5 jours, coupent ce rythme. Une place peut rester vide pour lui.`
                   : 'Le planning ne suit pas ce rythme. Les règles ci-dessus suffisent.'
               }
             >

@@ -83,10 +83,11 @@ import { RELEVE_MINUTES } from '#/lib/planning/regles.ts'
 import {
   fautesRythme,
   messageFaute,
+  resoudreAbsences,
   RYTHME_TRAVAIL,
   rythmeStrictDe,
 } from '#/lib/planning/rythmeStrict.ts'
-import type { EtatRythme } from '#/lib/planning/rythmeStrict.ts'
+import type { StatutRythme } from '#/lib/planning/rythmeStrict.ts'
 import { seulementLaNuit, zoneDuPoste } from '#/lib/planning/zones.ts'
 import {
   dureesImposees,
@@ -1311,11 +1312,21 @@ function pointsDesRegles(
         ),
       }
       if (!rythmeStrictDe(sol, regles)) continue
-      const etat = (j: number): EtatRythme => {
+      // Une absence de la semaine type est une absence décomptée : du
+      // travail, ou neutre si elle dure plus de 5 jours (`resoudreAbsences`).
+      const etat = (j: number): StatutRythme => {
         const mode = semaine.at(j % 7)?.mode
-        return mode === 'travail' ? 'T' : mode === 'repos' ? 'r' : 'u'
+        return mode === 'travail'
+          ? 'T'
+          : mode === 'repos'
+            ? 'r'
+            : mode === 'absence'
+              ? 'a'
+              : 'u'
       }
-      const suite = Array.from({ length: 21 }, (_, i) => etat(i))
+      const suite = resoudreAbsences(
+        Array.from({ length: 21 }, (_, i) => etat(i)),
+      )
       const faute = fautesRythme(suite).find((f) => f.fin >= 7 && f.debut <= 13)
       if (!faute) continue
       ajouter(

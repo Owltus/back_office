@@ -77,8 +77,11 @@ import {
 import type { Moments } from '#/lib/planning/moment.ts'
 import { vuesZones, zonesDesPostes } from '#/lib/planning/zones.ts'
 import {
+  fauteScellee,
+  jourConnu,
+  joursRythmeDe,
   motifsInterdits,
-  neutresDe,
+  RYTHME_REPOS,
   rythmeStrictDe,
   voisinesRythme,
 } from '#/lib/planning/rythmeStrict.ts'
@@ -1704,6 +1707,8 @@ export function construire(
   const figes = new Map<string, number>()
   const travailleDe = new Map<string, Map<number, string>>()
   const jfrs: Array<{ salarieId: string; jour: number; v: string }> = []
+  // Rythme 5 et 2 strict : les fautes payées, leur prix posé à la fin.
+  const excesRythme: string[] = []
   const coefsPlus = coefsHeuresPlus(p)
   // Horizon glissant : jour de l'esquisse (nbJours + 0..6) → 1 (travaillé
   // d'office) ou la variable « travaille ». Un jour impossible est absent.
@@ -1925,7 +1930,17 @@ export function construire(
     // Rythme 5 et 2 strict (décision de l'utilisateur du 2026-11-09,
     // `rythmeStrict.ts`) : semaines voisines et esquisse comprises.
     if (rythmeStrictDe(s, R))
-      rythmeStrictModele(m, p, s, travaille, fixes, jfrDuJour, sk, esquisse)
+      rythmeStrictModele(
+        m,
+        p,
+        s,
+        travaille,
+        fixes,
+        jfrDuJour,
+        sk,
+        esquisse,
+        excesRythme,
+      )
 
     const arrivee = premierJourSurPlace(s, p.nbJours)
     for (let k = 0; k < nbSemaines; k++) {
@@ -2129,10 +2144,11 @@ export function construire(
         // jours sont des variables (ou des faits), plus une série figée.
         const fin = p.nbJours + (sk ? 7 : s.serieApres)
         // Rythme 5 et 2 strict (2026-11-09) : ses 6 jours de travail
-        // interdits (`rythmeStrictModele`) remplacent ces fenêtres, avec sa
-        // lecture des jours (l'école COUPE la série au lieu de compter comme
-        // du travail : sinon un apprenti n'a plus de bloc possible avant une
-        // semaine de CFA).
+        // interdits (`rythmeStrictModele`, durs) remplacent ces fenêtres et
+        // les contiennent : l'école y compte comme du travail, comme ici, et
+        // une absence courte aussi (ici elle coupe la série) ; seuls un jour
+        // hors contrat et une absence longue la coupent, comme ici (révisé
+        // le même jour : l'école n'est plus neutre).
         const fenetres = rythmeStrictDe(s, R)
           ? []
           : ([
@@ -2545,6 +2561,12 @@ export function construire(
       if (cout > 0) m.cout(cout, v)
     }
   }
+  // Rythme 5 et 2 strict : le prix d'une faute, posé quand tout le reste
+  // est écrit (`prixFauteRythme`).
+  if (excesRythme.length) {
+    const prix = prixFauteRythme(m.objectif.values())
+    for (const v of excesRythme) m.cout(prix, v)
+  }
   // Petit bruit : à qualité égale, chaque graine donne une autre simulation.
   // Pas à l'affinage : l'objectif d'origine y est borné par celui du calcul,
   // qui contient déjà son bruit (positif) ; sans bruit, le planning du
@@ -2741,12 +2763,28 @@ function weekendsEquitables(
   })
 }
 
-/** Rythme 5 et 2 strict : un motif interdit (`motifsInterdits`) que seuls
- * des jours CONNUS d'avance imposent (semaine d'avant, shifts gardés de
- * l'esquisse) se paie par jour en trop au lieu d'être dur : le modèle reste
- * toujours possible. Au-dessus de toute place vide : le calcul laisse une
- * place plutôt que d'enfreindre la règle (décision de l'utilisateur). */
+/** Rythme 5 et 2 strict : le prix le plus bas d'une faute (un motif
+ * interdit, `motifsInterdits`, payé par jour en trop), relevé au besoin par
+ * `prixFauteRythme`. */
 export const POIDS_RYTHME_BORD = 10_000_000
+
+/** Combien de fois le plus gros coût du modèle coûte une faute au rythme
+ * 5 et 2 : plus que les 7 places d'une personne sur une semaine, même au
+ * palier le plus haut. */
+export const FOIS_FAUTE_RYTHME = 8
+
+/** Le prix d'une faute au rythme 5 et 2 (relecture du 2026-11-09, banc de
+ * décembre) : au moins `POIDS_RYTHME_BORD`, et plus que tout ce qu'une faute
+ * pourrait racheter (`FOIS_FAUTE_RYTHME` fois le plus gros coût posé). À
+ * 10 000 000 fixe, une place du palier le plus haut (20 736 967 au banc)
+ * valait plus qu'une faute : le calcul en faisait pour remplir des places.
+ * Dérivé, le calcul fait d'abord le moins de fautes possible, puis remplit
+ * les places — jamais l'inverse. */
+export function prixFauteRythme(couts: Iterable<number>): number {
+  let plusGros = 0
+  for (const c of couts) plusGros = Math.max(plusGros, Math.abs(c))
+  return Math.max(POIDS_RYTHME_BORD, FOIS_FAUTE_RYTHME * plusGros + 1)
+}
 
 /**
  * Rythme 5 jours puis 2 jours, strict (`rythmeStrict.ts`) : chaque motif
@@ -2754,12 +2792,18 @@ export const POIDS_RYTHME_BORD = 10_000_000
  * repos seul, 3 repos ou plus entre deux jours de travail) est une
  * contrainte « pas tous à la fois » sur la suite des jours, de la semaine
  * d'avant (`etatsAvant`) à la suivante (l'esquisse `sk`, sinon `etatsApres`).
- * Un jour neutre ou inconnu dans le motif : rien. Un jour posé à la main sur
- * une place de travail du motif : rien (jamais sur un jour posé). Un repos
- * vaut 1 - travaille - JFR pris. Toute contrainte que le planning vide
- * (seuls les jours posés travaillés) tient reste DURE ; leur ensemble tient
- * donc toujours. Une contrainte que les seuls faits enfreignent (la semaine
- * d'avant) coûte `POIDS_RYTHME_BORD` par jour en trop.
+ * Un jour neutre (hors contrat, absence longue) ou inconnu dans le motif :
+ * rien. Un jour posé à la main sur une place de travail du motif : rien
+ * (jamais sur un jour posé). L'école et une absence décomptée courte sont du
+ * travail CONNU d'avance (constante 1, `joursRythmeDe`, révisé le
+ * 2026-11-09) ; un JFR pris aussi : un jour vaut travaille + JFR pris, un
+ * repos 1 - travaille - JFR pris. Les 6 jours de travail sont DURS (un
+ * plafond de travail, que ne pas travailler tient toujours : le modèle
+ * reste possible). Les autres motifs coûtent `prixFauteRythme` par jour en
+ * trop, plus que tout ce qu'une faute pourrait racheter : le calcul fait le
+ * moins de fautes possible (aucune quand c'est possible), puis remplit les
+ * places. Une faute déjà faite par les faits (`fauteScellee`) n'est pas
+ * écrite : elle interdirait toute reprise.
  */
 function rythmeStrictModele(
   m: Modele,
@@ -2770,10 +2814,12 @@ function rythmeStrictModele(
   jfrDuJour: ReadonlyMap<number, string>,
   sk: ReadonlyMap<number, string | 1> | null,
   esquisse: SuivantePersonne | undefined,
+  /** Les fautes payées, leur prix posé à la fin (`prixFauteRythme`). */
+  excesRythme: string[],
 ): void {
   type Jour = null | { t: string | 0 | 1; n: string | null; pose: boolean }
   const N = p.nbJours
-  const neutres = neutresDe(s)
+  const { neutres, travail } = joursRythmeDe(s, N)
   const voisines = voisinesRythme(s)
   const avant = voisines.avant
   const apres = sk ? null : voisines.apres
@@ -2787,6 +2833,8 @@ function rythmeStrictModele(
     if (d < N) {
       if (poses.has(d)) return { t: 1, n: null, pose: true }
       if (neutres.has(d)) return null
+      // École, absence décomptée courte : du travail sans shift.
+      if (travail.has(d)) return { t: 1, n: null, pose: false }
       return {
         t: travaille.get(d) ?? 0,
         n: jfrDuJour.get(d) ?? null,
@@ -2795,6 +2843,8 @@ function rythmeStrictModele(
     }
     if (sk) {
       if (d >= N + 7 || esquisse?.neutres?.has(d - N)) return null
+      if (esquisse?.travailRythme?.has(d - N))
+        return { t: 1, n: null, pose: false }
       return { t: sk.get(d) ?? 0, n: null, pose: false }
     }
     const e = apres?.[d - N]
@@ -2805,11 +2855,33 @@ function rythmeStrictModele(
   const fin = N + 7
   const jours = new Map<number, Jour>()
   for (let d = debut; d < fin; d++) jours.set(d, jourDu(d))
+  // Les jours connus d'avance (`jourConnu`, `fauteScellee`) ; la semaine
+  // esquissée : ses jours fixés seulement.
+  const connu = (d: number) =>
+    d < N
+      ? jourConnu(s, d, N)
+      : !sk ||
+        !!esquisse?.fixes.has(d - N) ||
+        !!esquisse?.travailRythme?.has(d - N)
   for (const motif of motifsInterdits(fin - debut)) {
     // 6 jours de travail : un jour posé y compte (jamais plus de 5 autour
     // de lui) ; les autres motifs ne s'écrivent pas sur un jour posé.
     const travailSeul = motif.every((e) => e === 'T')
+    // Plus de 2 repos entre deux blocs déjà faits par les faits
+    // (`fauteScellee`) : écrit, le motif interdirait toute reprise de ce
+    // côté pour toute la période (chaque longueur de repos est un motif) ;
+    // il ne l'est pas, la personne reprend son rythme.
+    const reposLong =
+      motif[0] === 'T' && motif[1] === 'r' && motif.length - 2 > RYTHME_REPOS
     for (let a = debut; a + motif.length <= fin; a++) {
+      if (
+        reposLong &&
+        fauteScellee(
+          { genre: 'repos-long', debut: a + 1, fin: a + motif.length - 2 },
+          connu,
+        )
+      )
+        continue
       const termes: Terme[] = []
       let constante = 0
       let possible = true
@@ -2817,9 +2889,13 @@ function rythmeStrictModele(
         const j = jours.get(a + i) ?? null
         if (!j) possible = false
         else if (motif[i] === 'T') {
-          if (j.t === 0 || (j.pose && !travailSeul)) possible = false
+          // Un JFR pris compte comme du travail (absence décomptée).
+          if ((j.t === 0 && !j.n) || (j.pose && !travailSeul)) possible = false
           else if (j.t === 1) constante++
-          else termes.push([1, j.t])
+          else {
+            if (j.t !== 0) termes.push([1, j.t])
+            if (j.n) termes.push([1, j.n])
+          }
         } else if (j.t === 1) possible = false
         else {
           constante++
@@ -2835,14 +2911,16 @@ function rythmeStrictModele(
         m.ajoute(termes, '<=', Math.max(plafond, 0))
         continue
       }
-      // Le planning vide (aucune variable à 1) la tient : dure.
-      if (plafond >= 0) {
-        m.ajoute(termes, '<=', plafond)
-        continue
-      }
+      // Les autres motifs se paient (`prixFauteRythme`) : des faits peuvent
+      // rendre la règle impossible à tenir (une semaine d'avant hors du
+      // rythme, puis une semaine de CFA du lundi au vendredi). Durs, ils
+      // laissaient alors la semaine VIDE, en faute quand même, au lieu de la
+      // plus petite faute (relecture du 2026-11-09, banc de décembre).
+      // Jamais en faute (trop peu de jours à décider) : rien à écrire.
+      if (termes.filter(([c]) => c > 0).length <= plafond) continue
       const exces = m.continu(0, motif.length)
       m.ajoute([...termes, [-1, exces]], '<=', plafond)
-      m.cout(POIDS_RYTHME_BORD, exces)
+      excesRythme.push(exces)
     }
   }
 }

@@ -1172,7 +1172,7 @@ export function AidePlanningContenu({
               'Les mêmes jours de repos que la semaine d’avant, quand c’est possible. Après un week-end travaillé, passer ses repos au samedi et au dimanche est toujours permis : les week-ends tournent.',
               ...(Rp.rythmeStrict
                 ? [
-                    `Pour un contrat de ${rythme} et plus, toujours 5 jours de travail puis 2 jours de repos, d’une semaine à l’autre comprise : jamais un repos seul, jamais un bloc plus court. Seuls l’école, un congé ou le début et la fin du contrat coupent ce rythme. Une place reste vide plutôt, et la page le dit. Une semaine type qui fixe deux repos décide seule.`,
+                    `Pour un contrat de ${rythme} et plus, toujours 5 jours de travail puis 2 jours de repos, d’une semaine à l’autre comprise : jamais un repos seul, jamais un bloc plus court. L’école et une absence de 5 jours au plus (congé, maladie, jour férié) comptent comme des jours de travail : 5 jours d’école, puis 2 repos. Seuls le début et la fin du contrat, et une absence de plus de 5 jours, coupent ce rythme. Une place reste vide plutôt, et la page le dit. Une semaine type qui fixe deux repos décide seule.`,
                   ]
                 : []),
               ...(Rp.jourIsole === 'interdit'
