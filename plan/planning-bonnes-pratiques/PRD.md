@@ -813,10 +813,13 @@ sur le mois (deux personnes, une journée chacune).
   aller-retour ; des heures perdues seulement quand un calcul « heures d'abord » les perd aussi ;
   chaque bloc court contre une école, un congé ou une semaine validée irrégulière ; chaque
   déséquilibre imposé ; 18,3 s au pire.
-- **Reste.** 8 déplacements sur 252 sans gain visible en places, trous ou heures : un déplacement
-  coûte moins qu'une place, la somme du confort d'une semaine peut donc le racheter. La correction
-  propre est un calcul en deux temps (le planning d'abord, le confort ensuite), environ deux fois
-  plus long : à décider.
+- **Calcul en deux temps (décision de l'utilisateur, 2026-11-10).** Le planning d'abord (loi,
+  rythme, heures dues, places, repos seul, bloc de 4, équilibre), le confort ensuite, sans
+  pouvoir dégrader le premier : un déplacement ne se fait plus jamais pour du confort. Seule
+  égalité laissée au confort : une place contre le repos seul qui la remplirait. Banc de 80
+  scénarios générés : déplacements sans gain 2 → 0, places à pourvoir
+  486 → 481, heures dues identiques, 7,6 s au pire. Banc de décembre :
+  identique, 9,7 s au pire par semaine.
 - **Statut.** EN PLACE (local, non livré) le 2026-11-10.
 
 #### 23. Jamais du monde en trop sur un moment pendant qu'un autre manque

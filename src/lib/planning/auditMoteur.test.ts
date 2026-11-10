@@ -235,7 +235,9 @@ describe('1. changement d’heure', () => {
       )
       expect(sem.stats.infractions).toBe(0)
     }
-  })
+    // Deux semaines en deux temps chacune (CALCUL PAR PRIORITÉS) : plus de
+    // 5 s quand toute la suite tourne en même temps.
+  }, 30_000)
 
   it('repos de 11 h la nuit du passage à l’heure d’été', () => {
     const p = hotel()

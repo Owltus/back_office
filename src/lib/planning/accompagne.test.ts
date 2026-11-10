@@ -244,7 +244,11 @@ describe('le calcul : une place à part', () => {
       ],
       nbJours: 1,
     })
-    expect(qui(gen(p))).toEqual(['a@x', 't1@m', 't2@s'])
+    // t1 et t2 sont identiques : l'un ou l'autre ouvre (égalité).
+    expect([
+      ['a@x', 't1@m', 't2@s'],
+      ['a@x', 't1@s', 't2@m'],
+    ]).toContainEqual(qui(gen(p)))
   })
   it('refusé : croisé une partie seulement, l’apprenti finirait seul', () => {
     // Le salarié confirmé part à 15 h, l'apprenti finirait à 19 h : il ne

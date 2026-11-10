@@ -263,7 +263,9 @@ describe('le cas réel : veilleur 39 h, repos fixes vendredi et samedi', () => {
     p.fixes('2026-11-23')
     const suite = p.generer('2026-11-23')
     expect(joursDe(suite, x.id)).toEqual(new Set([0, 1, 2, 3, 6]))
-  })
+    // Deux générations en deux temps (CALCUL PAR PRIORITÉS) : plus de 5 s
+    // quand toute la suite tourne en même temps.
+  }, 30_000)
 
   it('rythme : vendredi et samedi sont des repos, le congé du dimanche au jeudi un bloc de 5', () => {
     const { p, x } = cas()

@@ -177,6 +177,10 @@ import type {
  *   7. ÉPARPILLER les apprentis et stagiaires sur les postes indispensables
  *      (`POIDS_EPARPILLER`, au-dessus du confort) ;
  *   8. le reste, dans l'ordre d'avant.
+ * Les points 1 à 6 sont les PRIORITÉS, résolues d'abord seules ; le reste
+ * (7, 8 : le confort) ne vient qu'ensuite, sans pouvoir en dégrader aucune
+ * (CALCUL PAR PRIORITÉS, `resoudreModele`, décision du 2026-11-10) : aucun
+ * déplacement de repos n'est acheté par du confort.
  * Au rythme 5 et 2, la règle « deux repos de suite dans la semaine » est la
  * même que « pas de repos seul » : elle n'est pas écrite une seconde fois.
  * Limite assumée : sous une heure, 15 ou 30 minutes dues d'un horaire plus
@@ -992,6 +996,12 @@ export const rangDe = (cs: readonly Creneau[]) =>
     ? Math.max(...cs.map((c) => rangImportance(c.indispensable)))
     : RANG_AUTRE
 
+/** Le prix d'une place : sa base et le reste (`Modele.coutPlace`). */
+interface PrixPlace {
+  base: number
+  reste: number
+}
+
 /** Une passation avec le veilleur, pour les paliers : sa clé, son prix
  * dérivé (au-delà de `POIDS_PASSATION`) et son palier. */
 export interface ZonePrix {
@@ -1104,6 +1114,31 @@ export interface Highs {
     ObjectiveValue?: number
     Columns: Record<string, { Primal?: number }>
   }
+  /** API persistante de `highs` (1.15) : un modèle qu'on résout, modifie et
+   * résout encore, en partant d'une solution connue (CALCUL PAR
+   * PRIORITÉS). Absente : un seul calcul, comme avant. */
+  createModel?: (source: { format: 'lp'; data: string }) => ModeleHighs
+}
+
+/** Ce que `resoudreModele` utilise d'un modèle persistant de `highs`. */
+export interface ModeleHighs {
+  options: { set: (valeurs: Record<string, string | number | boolean>) => void }
+  info: { get: (nom: string) => number | bigint }
+  getDimensions: () => { numCols: number }
+  getColName: (i: number) => string
+  changeColsCost: (
+    selection: { kind: 'range'; from: number; to: number },
+    couts: Float64Array,
+  ) => void
+  addRow: (
+    bas: number,
+    haut: number,
+    termes: { indices: Int32Array; values: Float64Array },
+  ) => void
+  setSolution: (s: { colValue: Float64Array }) => void
+  run: () => { modelStatus: number }
+  getSolution: () => { colValue: Float64Array }
+  dispose: () => void
 }
 
 export function reposAvecVoisins(s: SalarieSolveur, c: Creneau): boolean {
@@ -1194,6 +1229,11 @@ class Modele {
   readonly continues: Array<[string, number, number]> = []
   readonly contraintes: string[] = []
   readonly objectif = new Map<string, number>()
+  /** La part de `objectif` qui fait les PRIORITÉS (CALCUL PAR PRIORITÉS,
+   * `resoudreModele`) : le rythme 5 et 2, les heures dues,
+   * les places, les déplacements de repos, l'équilibre. Le reste de
+   * `objectif` est le confort. */
+  readonly ordre = new Map<string, number>()
   impossible = false
 
   bool(): string {
@@ -1232,6 +1272,51 @@ class Modele {
   cout(coef: number, v: string): void {
     if (coef === 0) return
     this.objectif.set(v, (this.objectif.get(v) ?? 0) + coef)
+  }
+
+  /** Un coût des PRIORITÉS : dans `objectif` ET dans `ordre`. */
+  coutOrdre(coef: number, v: string): void {
+    if (coef === 0) return
+    this.cout(coef, v)
+    this.ordre.set(v, (this.ordre.get(v) ?? 0) + coef)
+  }
+
+  private places: Array<{ v: string; reste: number }> = []
+  private base = 0
+
+  /**
+   * Une PLACE des priorités (place vide, personne de moins à un moment,
+   * trou entre deux équipes, passation) : `base` + `reste` dans l'objectif.
+   * `base` est le prix dérivé de la place (`coutPlaceVide` : plus que tout
+   * le CONFORT qu'il faudrait payer pour la remplir, `pireCoutRemplir`) ;
+   * `reste` ce qui s'y ajoute (palier, nuit, passation, minutes d'un trou).
+   * Aux priorités (`ordre`), `base` est remplacée par la plus grande base
+   * posée (`ordrePlaces`, `fermerPlaces`) : au temps 1, le confort ne
+   * départage pas deux places (une base plus haute d'une heure de confort
+   * aurait suffi à choisir la place laissée vide) ; c'est le temps 2,
+   * confort compris, qui choisit. Une base nulle (personne ne peut tenir la
+   * place) n'est pas une place : son prix reste tel quel.
+   */
+  coutPlace(v: string, base: number, reste = 0): void {
+    if (base <= 0) {
+      this.coutOrdre(base + reste, v)
+      return
+    }
+    this.cout(base + reste, v)
+    this.places.push({ v, reste })
+    this.base = Math.max(this.base, base)
+  }
+
+  /** Le prix aux priorités de chaque place posée (`coutPlace`). */
+  ordrePlaces(): number[] {
+    return this.places.map(({ reste }) => this.base + reste)
+  }
+
+  /** Pose le prix des places aux priorités (`coutPlace`). */
+  fermerPlaces(): void {
+    for (const { v, reste } of this.places)
+      this.ordre.set(v, (this.ordre.get(v) ?? 0) + this.base + reste)
+    this.places = []
   }
 
   lp(): string {
@@ -1331,6 +1416,8 @@ export interface OptionsConstruction {
   affiner?: {
     permis: (salarieId: string, c: Creneau) => boolean
     borne: number
+    /** La borne des PRIORITÉS (`Modele.ordre`) : celle du calcul. */
+    borneOrdre?: number
   }
 }
 
@@ -1431,22 +1518,29 @@ export function construire(
       R,
     ),
   )
-  const coutPassation = new Map(
-    zones.map((z) => [z.cle, POIDS_PASSATION + z.plus + pl.passation(z.rang)]),
+  // Une passation : une place (`coutPlace`, la base de ses relais), plus
+  // `POIDS_PASSATION` et son palier.
+  const placePassation = new Map(
+    zones.map((z) => [
+      z.cle,
+      { base: z.plus, reste: POIDS_PASSATION + pl.passation(z.rang) },
+    ]),
   )
   /** Le surplus de nuit d'un manque ou d'un trou de ce palier (D8). */
   const nuitDe = (cs: Creneau[], rang: number) =>
     cs.some((c) => !c.ferme && c.presence.some((q) => estNuit(R.moments, q)))
       ? 2 * pl.extraNuit(rang)
       : 0
-  const coutsMinimum = comptent.map((cs) => {
+  // Le prix d'une personne de moins à un moment : sa base (`coutPlace`) et
+  // le reste (nuit, palier).
+  const basesMinimum = comptent.map((cs) =>
+    coutManqueMinimum(cs, presenceLaPlusChere, besoinDe, R),
+  )
+  const restesMinimum = comptent.map((cs) => {
     const rang = rangDe(cs.filter((c) => !c.ferme))
-    return (
-      coutManqueMinimum(cs, presenceLaPlusChere, besoinDe, R) +
-      nuitDe(cs, rang) +
-      pl.decalage(rang)
-    )
+    return nuitDe(cs, rang) + pl.decalage(rang)
   })
+  const coutsMinimum = basesMinimum.map((b, i) => b + restesMinimum[i])
   // La place la moins chère du palier le plus haut (`seuilPlaces`) : ce
   // que vaut UNE place qu'un repos seul ou un bloc de 4 peut remplir.
   const hautes = placesHautes(
@@ -1516,10 +1610,10 @@ export function construire(
       '<=',
       tete.effectif + tete.facultatif,
     )
-    m.cout(
-      coutPlaceVideGroupe(membres, presenceLaPlusChere, besoinDe, R) +
-        pl.decalage(rangPlace(tete)),
+    m.coutPlace(
       vm,
+      coutPlaceVideGroupe(membres, presenceLaPlusChere, besoinDe, R),
+      pl.decalage(rangPlace(tete)),
     )
     // Nombre par niveau (2026-11-06) : « 1 Responsable + 2 Équipiers ».
     // Jusqu'à chaque rang demandé, les personnes de ce rang ou mieux, plus
@@ -1800,7 +1894,7 @@ export function construire(
     if (n > 0) {
       const vm = m.continu(0, n)
       m.ajoute([...termes, [1, vm]], '>=', n)
-      m.cout(coutsMinimum[i], vm)
+      m.coutPlace(vm, basesMinimum[i], restesMinimum[i])
       minimums.push({ v: vm, consigne: i })
       manqueDe.set(i, vm)
     }
@@ -1842,14 +1936,15 @@ export function construire(
   // faudrait payer pour ajouter une personne sur l'un des créneaux qui le
   // couvriraient. Jamais dur : si personne ne peut le tenir, il reste (D3).
   // Le chevauchement (relève) reste une préférence.
-  const continuite = (couvrants: Creneau[]) => {
+  const continuite = (couvrants: Creneau[]): PrixPlace => {
     const ouverts = couvrants.filter((c) => !c.ferme)
     const rang = rangDe(couvrants)
     return ouverts.length
-      ? coutPlaceVideGroupe(ouverts, presenceLaPlusChere, besoinDe, R) +
-          nuitDe(ouverts, rang) +
-          pl.decalage(rang)
-      : 0
+      ? {
+          base: coutPlaceVideGroupe(ouverts, presenceLaPlusChere, besoinDe, R),
+          reste: nuitDe(ouverts, rang) + pl.decalage(rang),
+        }
+      : { base: 0, reste: 0 }
   }
   const trous = trousEntreEquipes(m, p, x, termesDe, continuite)
   // Ouverture (2026-11-01) : la première heure de chaque poste de l'accueil
@@ -1876,7 +1971,12 @@ export function construire(
     p,
     termesDe,
     borneDe,
-    (z) => coutPassation.get(`${z.jour}|${z.cote}`) ?? POIDS_PASSATION,
+    // Même clé que `zones` (relecture du 2026-11-10 : une zone autre que la
+    // première n'était jamais trouvée, sa passation tombait à 300 000).
+    (z) =>
+      placePassation.get(
+        `${z.zone === premiereZone ? '' : `${z.zone}|`}${z.jour}|${z.cote}`,
+      ),
   )
   equipesSynchro(m, p, termesDe, borneDe)
 
@@ -2683,7 +2783,7 @@ export function construire(
       if (g.besoins[j] <= constante) continue
       const manqueJ = m.continu(0, g.besoins[j] - constante)
       m.ajoute([[1, manqueJ], ...termes], '>=', g.besoins[j] - constante)
-      m.cout(POIDS_PREVISION_MANQUE, manqueJ)
+      m.coutOrdre(POIDS_PREVISION_MANQUE, manqueJ)
     }
   })
 
@@ -2755,7 +2855,7 @@ export function construire(
   // les fautes au rythme 5 et 2, posées quand tout le reste est écrit
   // (`prixOrdre` : leur prix se lit sur la place la plus chère).
   const prix = prixOrdre(
-    m.objectif.values(),
+    [...m.objectif.values(), ...m.ordrePlaces()],
     Math.max(
       0,
       ...p.salaries
@@ -2764,7 +2864,7 @@ export function construire(
     ),
     seuil,
   )
-  for (const v of moinsDus) m.cout(prix.minuteDue, v)
+  for (const v of moinsDus) m.coutOrdre(prix.minuteDue, v)
   // Le seuil de CHAQUE personne : la moins chère des places du palier le
   // plus haut qu'elle peut tenir (revue adverse du 2026-11-10 : le seuil de
   // tout le problème prenait une place d'une heure que personne ne tient,
@@ -2786,12 +2886,12 @@ export function construire(
   // Contrôles de mesure (`Probleme.controle`) : jamais posés par l'app.
   const sansDeplacement = !!p.controle?.sansDeplacement
   for (const { v, salarie } of excesRythme.reposSeul)
-    m.cout(sansDeplacement ? prix.dur : prixDe(salarie).reposSeul, v)
+    m.coutOrdre(sansDeplacement ? prix.dur : prixDe(salarie).reposSeul, v)
   for (const { v, salarie } of excesRythme.bloc)
-    m.cout(sansDeplacement ? prix.dur : prixDe(salarie).bloc, v)
-  for (const v of excesRythme.fort) m.cout(prix.fort, v)
+    m.coutOrdre(sansDeplacement ? prix.dur : prixDe(salarie).bloc, v)
+  for (const v of excesRythme.fort) m.coutOrdre(prix.fort, v)
   for (const v of excesRythme.dur)
-    m.cout(p.controle?.heuresDabord ? prix.bloc : prix.dur, v)
+    m.coutOrdre(p.controle?.heuresDabord ? prix.bloc : prix.dur, v)
   // Petit bruit : à qualité égale, chaque graine donne une autre simulation.
   // Pas à l'affinage : l'objectif d'origine y est borné par celui du calcul,
   // qui contient déjà son bruit (positif) ; sans bruit, le planning du
@@ -2799,6 +2899,7 @@ export function construire(
   if (p.graine && !options.affiner) {
     for (const v of x.values()) m.cout(Math.floor(hasard() * 4), v)
   }
+  m.fermerPlaces()
   if (options.affiner) {
     // L'objectif d'origine ne dépasse pas la borne…
     m.ajoute(
@@ -2806,6 +2907,14 @@ export function construire(
       '<=',
       options.affiner.borne,
     )
+    // … les PRIORITÉS non plus (CALCUL PAR PRIORITÉS) : l'affinage ne
+    // rachète jamais une priorité par des horaires gardés…
+    if (options.affiner.borneOrdre !== undefined && m.ordre.size)
+      m.ajoute(
+        [...m.ordre].map(([v, c]) => [c, v] as Terme),
+        '<=',
+        options.affiner.borneOrdre,
+      )
     // … et chaque horaire de plus qu'une personne fait à l'accueil coûte.
     for (const s of p.salaries) {
       const parHoraire = new Map<string, Map<number, Terme[]>>()
@@ -3242,7 +3351,7 @@ function equilibreMoments(
           '>=',
           0,
         )
-        m.cout(coutsMinimum[b], w)
+        m.coutOrdre(coutsMinimum[b], w)
       }
     }
   }
@@ -4116,7 +4225,7 @@ function trousEntreEquipes(
   p: Probleme,
   x: Map<string, string>,
   termesDe: (c: Creneau, quoi: 'autonomes') => Terme[],
-  continuite?: (couvrants: Creneau[]) => number,
+  continuite?: (couvrants: Creneau[]) => PrixPlace,
 ): Array<Trou & { v: string }> {
   // Postes à part comptés (un besoin `b…` au matin ou au soir) ; un
   // candidat de l'accueil n'en fait pas un (ses trous sont plus bas).
@@ -4181,7 +4290,7 @@ function trousDeZone(
   x: Map<string, string>,
   termesDe: (c: Creneau, quoi: 'autonomes') => Terme[],
   zone: string,
-  continuite?: (couvrants: Creneau[]) => number,
+  continuite?: (couvrants: Creneau[]) => PrixPlace,
 ): Array<Trou & { v: string }> {
   const r: Array<Trou & { v: string }> = []
   const L = momentsDe(p)
@@ -4332,7 +4441,9 @@ function passationsVeilleur(
   p: Probleme,
   termesDe: (c: Creneau, quoi: 'autonomes') => Terme[],
   borne: (c: Creneau) => number,
-  coutDe: (z: ZonePassation) => number = () => POIDS_PASSATION,
+  placeDe: (
+    z: ZonePassation,
+  ) => { base: number; reste: number } | undefined = () => undefined,
 ): Array<Passation & { v: string }> {
   const r: Array<Passation & { v: string }> = []
   const tenu = new Map<string, Terme[]>()
@@ -4376,7 +4487,10 @@ function passationsVeilleur(
         '>=',
         tenue,
       )
-    m.cout(coutDe(z), v)
+    // Une passation manquée coûte une place (D8) : une PRIORITÉ.
+    const place = placeDe(z)
+    if (place) m.coutPlace(v, place.base, place.reste)
+    else m.coutOrdre(POIDS_PASSATION, v)
 
     r.push({ jour: z.jour, cote: z.cote, v })
   }
@@ -4774,7 +4888,7 @@ function variablesTrous(
   finSeul = Infinity,
   /** Continuité obligatoire (D8) : le prix d'une place nécessaire pour un
    * trou que ces créneaux couvriraient, en plus du prix au quart d'heure. */
-  continuite?: (couvrants: Creneau[]) => number,
+  continuite?: (couvrants: Creneau[]) => PrixPlace,
 ): Array<Trou & { v: string }> {
   const r: Array<Trou & { v: string }> = []
   const presents = tenus.filter((c) => c.debut < fin && c.fin > debut)
@@ -4812,11 +4926,16 @@ function variablesTrous(
     }
     const v = m.continu(0, 1)
     m.ajoute([...termes, [1, v]], '>=', 1)
-    m.cout(
-      Math.round((poidsQuart * (suite.fin - suite.debut)) / QUART) +
-        (continuite && termes.length ? continuite(couvrants) : 0),
-      v,
-    )
+    // Un trou entre deux équipes coûte une place (continuité obligatoire,
+    // D8) : une PRIORITÉ ; une ouverture ou une fermeture manquée (sans
+    // `continuite`) reste du confort.
+    const minutes = Math.round((poidsQuart * (suite.fin - suite.debut)) / QUART)
+    if (!continuite) m.cout(minutes, v)
+    else if (!termes.length) m.coutOrdre(minutes, v)
+    else {
+      const { base, reste } = continuite(couvrants)
+      m.coutPlace(v, base, reste + minutes)
+    }
 
     r.push({ poste, jour, debut: suite.debut, fin: suite.fin, v })
     // Personne seule (`POIDS_SEUL_QUART`) : au moins deux, ou payer ; pas
@@ -4849,6 +4968,8 @@ type Resolution = Omit<ResultatGeneration, 'etapes'> & {
   auDessusContrat: Set<string>
   /** Valeur de l'objectif (HiGHS) ; absente sans solution. */
   objectif?: number
+  /** Valeur des PRIORITÉS (`Modele.ordre`) ; absente sans solution. */
+  ordre?: number
 }
 
 const echec = (): Resolution => ({
@@ -4867,6 +4988,249 @@ const echec = (): Resolution => ({
 
 /** Plus petit temps laissé à HiGHS (secondes). */
 const TEMPS_MIN = 0.05
+
+/*
+ * CALCUL PAR PRIORITÉS (décision de l'utilisateur du 2026-11-10 : « aucun
+ * déplacement de repos ne doit être acheté par du confort »). Un repos seul
+ * ou un bloc de 4 coûte un peu moins qu'une place ; une somme de confort de
+ * la semaine (relève de chacun, personne seule, équité, horaires…) pouvait
+ * dépasser ce prix : au banc de 80 scénarios, 8 déplacements sur 252 ne
+ * gagnaient ni place, ni trou, ni heure. Aucun prix unique ne l'empêche
+ * (le confort cumulé n'a pas de plafond). Le calcul se fait donc en DEUX
+ * TEMPS, sur le même modèle :
+ *   1. les PRIORITÉS seules (`Modele.ordre`) : le rythme 5 et
+ *      2 (3 repos, bloc de 1 à 3 jours, repos seul, bloc de 4), les heures
+ *      dues, les places (paliers, minimums de l'accueil, trous entre deux
+ *      équipes et passations, au prix d'une place), l'équilibre entre les
+ *      moments. Le confort ne compte pas : il ne peut rien acheter ;
+ *   2. tout l'objectif (priorités + confort), les priorités BORNÉES à la
+ *      valeur trouvée au temps 1 (`bornePriorites`), en partant de la
+ *      solution du temps 1 (elle tient la borne : le temps 2 a toujours une
+ *      solution, jamais moins bonne).
+ * L'ÉQUILIBRE est au temps 1 (demande de l'utilisateur, et mesuré : voir
+ * plan/planning-bonnes-pratiques/PRD.md) : il défait « 4 le soir, 0 le
+ * matin », que le confort ne voit pas. L'ÉPARPILLEMENT des apprentis est au
+ * temps 2 : il se range sous les déplacements de repos dans l'ordre de
+ * décision, et au temps 1 une somme d'éparpillements pourrait encore
+ * acheter un déplacement — ce que la règle interdit.
+ * Temps 1 sans optimum prouvé (temps limite) : le calcul d'avant, en un
+ * seul temps sur tout l'objectif, avec le temps qui reste et en partant de
+ * la meilleure solution du temps 1 (relecture adverse du 2026-11-10 : une
+ * borne non prouvée figerait des priorités peut-être mauvaises et, si le
+ * temps 2 ne trouvait pas mieux, rendrait un confort tiré au hasard).
+ * Temps 2 sans solution (il part de celle du temps 1, donc jamais en
+ * pratique) : la solution du temps 1. Le statut « optimal » ne dit que le
+ * temps 2 : il est borné par un temps 1 prouvé.
+ * Budget : `PART_PRIORITES` du temps de l'appel au temps 1, le reste au
+ * temps 2.
+ */
+export const PART_PRIORITES = 0.5
+
+/**
+ * La borne des priorités au temps 2, sur leur valeur `v` au temps 1. Les
+ * prix des priorités sont des entiers, et leurs écarts voulus valent au
+ * moins 1 :
+ *   - 1 entre une place et le repos seul qui la remplirait
+ *     (`prixSousPlace`, « un peu sous la place ») : c'est une ÉGALITÉ à
+ *     départager, pas une priorité. La marge de 1,5 la laisse au confort,
+ *     comme avant (une place contre un repos seul : le shift qui la tient
+ *     coûte des heures en plus, un 6e jour… ; le repos seul ne se fait que
+ *     si rien ne s'y oppose). Le confort ne peut pas, lui, FAIRE un
+ *     déplacement : un déplacement de plus coûte presque une place ;
+ *   - 99 entre un repos seul et un bloc de 4, 100 et 200 sous une place pour
+ *     le bloc et l'équilibre, au moins `POIDS_SOUS_CONTRAT` par minute due,
+ *     une place et plus pour le reste : aucun n'entre dans la marge.
+ * Un prix non entier (aucun aujourd'hui) : la même marge, plus un
+ * milliardième de `v` (l'arrondi d'un objectif de 10^10).
+ */
+export const MARGE_PRIORITES = 1.5
+export const bornePriorites = (v: number, entiers: boolean) =>
+  v + MARGE_PRIORITES + (entiers ? 0 : 1e-9 * Math.abs(v))
+
+/** Les statuts « optimal » et « impossible » du modèle persistant de
+ * `highs`. */
+const STATUT_OPTIMAL = 7
+const STATUT_IMPOSSIBLE = 8
+
+/** Une solution de `resoudreModele`. */
+interface SolutionModele {
+  statut: 'optimal' | 'realisable' | 'inconnu'
+  /** La valeur d'une variable, arrondie (0 si absente). */
+  valeur: (v: string) => number
+  objectif?: number
+  ordre?: number
+}
+
+/** Résout `m` avec HiGHS en au plus `tempsMax` secondes : par PRIORITÉS
+ * (voir plus haut) quand `parPriorites` et l'API persistante le
+ * permettent, sinon en un seul calcul (l'affinage, un modèle sans
+ * priorité). */
+function resoudreModele(
+  highs: Highs,
+  m: Modele,
+  {
+    tempsMax,
+    graine,
+    parPriorites,
+  }: {
+    tempsMax: number
+    graine: number
+    parPriorites: boolean
+  },
+): SolutionModele {
+  const reglages = {
+    mip_rel_gap: 0,
+    mip_abs_gap: 0.5,
+    random_seed: Math.abs(graine) % 2_147_483_647,
+    output_flag: false,
+  }
+  const inconnu: SolutionModele = { statut: 'inconnu', valeur: () => 0 }
+  if (!parPriorites || !m.ordre.size || !highs.createModel) {
+    const solution = highs.solve(m.lp(), {
+      ...reglages,
+      time_limit: Math.max(TEMPS_MIN, tempsMax),
+    })
+    // Au temps limite SANS solution, HiGHS rend des colonnes à zéro et un
+    // objectif infini : ce n'est pas une solution (un planning vide
+    // passerait pour réalisable, sans manque).
+    const aSolution =
+      Object.keys(solution.Columns).length > 0 &&
+      Number.isFinite(solution.ObjectiveValue)
+    const statut = !aSolution
+      ? 'inconnu'
+      : solution.Status === 'Optimal'
+        ? 'optimal'
+        : /time limit|iteration limit|interrupt/i.test(solution.Status)
+          ? 'realisable'
+          : 'inconnu'
+    if (statut === 'inconnu') return inconnu
+    const ordre = [...m.ordre].reduce(
+      (t, [v, c]) => t + c * (solution.Columns[v]?.Primal ?? 0),
+      0,
+    )
+    return {
+      statut,
+      valeur: (v) => Math.round(solution.Columns[v]?.Primal ?? 0),
+      objectif: solution.ObjectiveValue,
+      ordre,
+    }
+  }
+  const debut = Date.now()
+  const reste = () =>
+    Math.max(TEMPS_MIN, tempsMax - (Date.now() - debut) / 1000)
+  const texte = m.lp()
+  const creer = (source: { format: 'lp'; data: string }) =>
+    (highs.createModel as NonNullable<Highs['createModel']>).call(highs, source)
+  let h = creer({ format: 'lp', data: texte })
+  try {
+    const n = h.getDimensions().numCols
+    const index = new Map<string, number>()
+    for (let i = 0; i < n; i++) index.set(h.getColName(i), i)
+    const couts = (source: ReadonlyMap<string, number>) => {
+      const c = new Float64Array(n)
+      for (const [v, k] of source) {
+        const i = index.get(v)
+        if (i !== undefined) c[i] += k
+      }
+      return c
+    }
+    const total = couts(m.objectif)
+    const ordre = couts(m.ordre)
+    const produit = (c: Float64Array, x: Float64Array) => {
+      let t = 0
+      for (let i = 0; i < n; i++) if (c[i]) t += c[i] * x[i]
+      return t
+    }
+    const toutes = { kind: 'range' as const, from: 0, to: n - 1 }
+    // Une solution connue (« feasible ») : sa copie, sinon null.
+    const lire = () =>
+      Number(h.info.get('primal_solution_status')) === 2
+        ? Float64Array.from(h.getSolution().colValue)
+        : null
+    const rendre = (
+      x: Float64Array,
+      statut: 'optimal' | 'realisable',
+    ): SolutionModele => ({
+      statut,
+      valeur: (v) => {
+        const i = index.get(v)
+        return i === undefined ? 0 : Math.round(x[i])
+      },
+      objectif: produit(total, x),
+      ordre: produit(ordre, x),
+    })
+    // Temps 1 : les priorités seules.
+    h.changeColsCost(toutes, ordre)
+    h.options.set({
+      ...reglages,
+      time_limit: Math.max(TEMPS_MIN, tempsMax * PART_PRIORITES),
+    })
+    const s1 = h.run().modelStatus
+    if (s1 === STATUT_IMPOSSIBLE) return inconnu
+    const x1 = lire()
+    // Le temps 2 sur un modèle NEUF, lu du même texte (mêmes colonnes, dans
+    // le même ordre ; son objectif est tout l'objectif) : rien de l'état du
+    // temps 1 (coupes, bornes) ne le suit.
+    h.dispose()
+    h = creer({ format: 'lp', data: texte })
+    h.options.set(reglages)
+    if (
+      h.getDimensions().numCols !== n ||
+      h.getColName(n - 1) !== [...index.keys()][n - 1]
+    )
+      throw new Error('modèle du temps 2 différent du temps 1')
+    if (!x1 || s1 !== STATUT_OPTIMAL) {
+      // Temps 1 sans optimum prouvé (temps limite) : un seul calcul sur
+      // tout l'objectif, comme avant, depuis sa meilleure solution s'il en
+      // a une. Sans optimum, aucune borne ne serait sûre : elle figerait des
+      // priorités encore mauvaises, avec un confort calculé au hasard.
+      if (x1) h.setSolution({ colValue: x1 })
+      h.options.set({ time_limit: reste() })
+      const s = h.run().modelStatus
+      const x = lire()
+      if (x) return rendre(x, s === STATUT_OPTIMAL ? 'optimal' : 'realisable')
+      return x1 ? rendre(x1, 'realisable') : inconnu
+    }
+    // Temps 2 : tout l'objectif, priorités bornées, depuis la solution du
+    // temps 1.
+    const indices: number[] = []
+    const valeurs: number[] = []
+    let entiers = true
+    ordre.forEach((c, i) => {
+      if (c) {
+        indices.push(i)
+        valeurs.push(c)
+        if (!Number.isInteger(c)) entiers = false
+      }
+    })
+    // Départ : la solution du temps 1 ARRONDIE (ses variables valent des
+    // entiers à la précision du solveur près). Mesuré : partir de la
+    // solution brute, HiGHS a rendu « optimal » un temps 2 qui ne l'était
+    // pas (banc de décembre, une graine sur trois, 4,7 × 10^8 de confort en
+    // trop sous les mêmes priorités). La borne prend la plus haute des deux
+    // valeurs : jamais plus serrée que la solution réelle.
+    const x1r = x1.map(Math.round)
+    h.addRow(
+      -Infinity,
+      bornePriorites(
+        Math.max(produit(ordre, x1), produit(ordre, x1r)),
+        entiers,
+      ),
+      {
+        indices: Int32Array.from(indices),
+        values: Float64Array.from(valeurs),
+      },
+    )
+    h.setSolution({ colValue: x1r })
+    h.options.set({ time_limit: reste() })
+    const s2 = h.run().modelStatus
+    const x2 = lire()
+    if (!x2) return rendre(x1, 'realisable')
+    return rendre(x2, s2 === STATUT_OPTIMAL ? 'optimal' : 'realisable')
+  } finally {
+    h.dispose()
+  }
+}
 
 /** Résout UNE fois le problème `p` avec HiGHS, jusqu'à `echeance` (en ms,
  * horloge `Date.now`) : le temps laissé à HiGHS est compté APRÈS la
@@ -4939,30 +5303,14 @@ function resoudreUneFois(
     TEMPS_MIN,
     Math.min(plafond, (echeance - Date.now()) / 1000),
   )
-  const solution = highs.solve(modele.lp(), {
-    time_limit: tempsMax,
-    mip_rel_gap: 0,
-    mip_abs_gap: 0.5,
-    random_seed: Math.abs(p.graine) % 2_147_483_647,
-    output_flag: false,
+  // CALCUL PAR PRIORITÉS (plus haut) ; l'affinage, lui, en un seul calcul :
+  // ses priorités sont déjà bornées (`borneOrdre`).
+  const solution = resoudreModele(highs, modele, {
+    tempsMax,
+    graine: p.graine,
+    parPriorites: !affiner,
   })
-  const valeur = (v: string) =>
-    Math.round(
-      (solution.Columns[v] as { Primal?: number } | undefined)?.Primal ?? 0,
-    )
-  // Au temps limite SANS solution, HiGHS rend des colonnes à zéro et un
-  // objectif infini : ce n'est pas une solution (un planning vide passerait
-  // pour réalisable, sans manque).
-  const aSolution =
-    Object.keys(solution.Columns).length > 0 &&
-    Number.isFinite(solution.ObjectiveValue)
-  const statut = !aSolution
-    ? 'inconnu'
-    : solution.Status === 'Optimal'
-      ? 'optimal'
-      : /time limit|iteration limit|interrupt/i.test(solution.Status)
-        ? 'realisable'
-        : 'inconnu'
+  const { statut, valeur } = solution
   if (statut === 'inconnu') return echec()
   const affectations: AffectationSolveur[] = []
   for (const [k, v] of x) {
@@ -4995,7 +5343,8 @@ function resoudreUneFois(
   const restes = reunir(trous)
   return {
     statut,
-    objectif: solution.ObjectiveValue,
+    objectif: solution.objectif,
+    ordre: solution.ordre,
     affectations,
     manques,
     ecartTotalMinutes: ecarts.reduce(
@@ -5085,11 +5434,20 @@ function affiner(
     echeance,
     Math.min(AFFINAGE_PLAFOND_S, p.tempsMaxSecondes / 4),
     p,
-    { permis, borne: r.objectif + AFFINAGE_TOLERANCE },
+    {
+      permis,
+      borne: r.objectif + AFFINAGE_TOLERANCE,
+      // Les priorités du calcul, jamais dégradées (CALCUL PAR PRIORITÉS).
+      ...(r.ordre !== undefined
+        ? { borneOrdre: bornePriorites(r.ordre, true) }
+        : {}),
+    },
   )
   // Seulement un affinage PROUVÉ (relecture du 2026-11-05) : arrêté au temps
   // limite, il pourrait coûter la marge sans rien gagner.
-  return r2.statut === 'optimal' ? { ...r2, objectif: r.objectif } : r
+  return r2.statut === 'optimal'
+    ? { ...r2, objectif: r.objectif, ordre: r.ordre }
+    : r
 }
 
 /** Ce qui reste à tenir et qu'un remplaçant pourrait tenir : places
@@ -5111,6 +5469,7 @@ const rendre = (
     sousContrat: _s,
     auDessusContrat: _a,
     objectif: _o,
+    ordre: _p,
     ...r
   }: Resolution,
   etapes: 1 | 2,

@@ -3035,6 +3035,34 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   moins : le prix d'un déplacement est sous UNE place, il peut donc être racheté par la somme du
   confort d'une semaine (relève, personne seule, équité) ; le corriger exige un calcul
   lexicographique en deux temps (environ deux fois le temps).
+- **CALCUL PAR PRIORITÉS (décision de l'utilisateur du 2026-11-10 : « qu'aucun déplacement de
+  repos ne soit acheté par du confort », environ deux fois le temps accepté)** : `resoudreModele`
+  (generateur.ts) résout en DEUX TEMPS sur le même modèle. Temps 1 : les PRIORITÉS seules
+  (`Modele.ordre`, `coutOrdre`, `coutPlace`) — rythme 5 et 2 (3 repos, bloc court, repos seul,
+  bloc de 4), heures dues, places (besoins, minimums de l'accueil, trous entre équipes et
+  passations au prix d'une place, places de la semaine d'après esquissée), équilibre entre les
+  moments. Temps 2 : tout l'objectif, priorités bornées à la valeur du temps 1
+  (`bornePriorites`, marge 1,5 : la seule égalité laissée au confort est « une place contre le
+  repos seul qui la remplirait », un écart de 1 voulu par `prixSousPlace`), sur un modèle NEUF
+  (même texte LP) qui part de la solution du temps 1 ARRONDIE (partir de la brute : HiGHS a rendu
+  « optimal » un temps 2 qui ne l'était pas). Au temps 1, la base dérivée d'une place (faite du
+  confort qu'elle doit dépasser) est la même pour toutes (la plus grande posée,
+  `ordrePlaces`) : le confort ne départage pas deux places au temps 1. Éparpillement des apprentis
+  au temps 2 (sous les déplacements dans l'ordre). Temps 1 sans optimum prouvé : un seul calcul
+  sur tout l'objectif, comme avant, depuis sa meilleure solution. API persistante de `highs`
+  (`createModel`, `addRow`, `setSolution`) ; sans elle (faux solveur des tests), un seul calcul.
+  L'affinage borne aussi les priorités (`borneOrdre`). Correctif au passage : la passation d'une
+  zone autre que la première trouve son prix de place (clé de zone). Empreintes de
+  `generateur.test.ts` inchangées (même texte LP). Banc de décembre (copie locale, en mémoire,
+  horizon, 3 graines) : identique à avant (heures dues manquantes 8 h, places 10, 0 repos de 3
+  jours, 0 infraction), 9,7 s au pire par semaine (avant 17,4 s). Banc de 80
+  scénarios générés (`test/hotelGenere.ts`, une semaine chacun, contrôles `sansDeplacement` et
+  `heuresDabord`) : heures dues manquantes identiques, places à pourvoir 486 →
+  481, minutes de trou 9165 → 8490, 0 infraction, 0 repos de 3 jours,
+  déplacements sans gain 2 → 0, déplacements 146 → 158 (tous pour un
+  gain de priorité), 7,6 s au pire (avant 16,2 s). Test
+  `prioritesConfort.test.ts` (hôtel n° 41 : un déplacement payé en partie par le confort avant,
+  disparu après ; deux mutations tuées).
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 
