@@ -196,23 +196,29 @@ describe('le calcul', () => {
       'rythme 5 et 2 non tenu : 2 jours de travail du mardi au mercredi (5 attendus)',
     ])
     expect(dits.every(moraleQuiBloque)).toBe(true)
-    // Le repos seul (2026-11-09) : permis en urgence seulement ; pour une
-    // place, il bloque.
+    // Le repos seul : un déplacement de repos que le calcul fait pour une
+    // place (2026-11-10) : dit, il ne bloque pas.
     const seul = violations(p, affs).filter(
       (v) => v.regle === 'RYTHME-REPOS-SEUL',
     )
     expect(seul.map((v) => v.message)).toEqual([
-      'repos seul (manque de personnel) le jeudi',
+      'changement de jours de repos : repos seul le jeudi',
     ])
-    expect(seul.every(moraleQuiBloque)).toBe(true)
+    expect(seul.some(moraleQuiBloque)).toBe(false)
     expect(dits.every((v) => v.nature === 'organisation')).toBe(true)
   })
-  it('refusé : un bloc de 3 entre deux repos, la place reste vide et le dit', () => {
-    // Lundi au mercredi seulement, après deux repos : rien.
+  it('un bloc de 3 plutôt qu’une semaine entière de repos ; dit', () => {
+    // Lundi au mercredi seulement, après deux repos : rester chez soi ferait
+    // 9 repos de suite (3 repos ou plus, la pire faute, 2026-11-10) ; un
+    // bloc de 3 coûte moins. Il est dit.
     const s = personne({ etatsAvant: 'TTTTTrr', joursSemainePrecedente: 5 })
     const { p, r } = resoudre(s, [0, 1, 2])
-    expect(tenus(r)).toEqual([])
-    const raisons = raisonsBlocage(p, r.affectations, 'j0').get('a')!
+    expect(tenus(r)).toEqual([0, 1, 2])
+    expect(violations(p, r.affectations).map((v) => v.regle)).toContain(
+      'RYTHME-5-2',
+    )
+    // Pour la seule place du lundi, il bloque (un bloc d'un jour).
+    const raisons = raisonsBlocage(p, [], 'j0').get('a')!
     expect(raisons.map((v) => v.regle)).toContain('RYTHME-5-2')
     // Le même sans le réglage : il vient (le jour seul et les jours
     // d'affilée ne l'empêchent pas).

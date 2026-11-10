@@ -32,6 +32,8 @@ import type {
   SalarieSolveur,
 } from '#/lib/planning/modele.ts'
 import { MINUTES_PAR_JOUR } from '#/lib/planning/temps.ts'
+import { REGLES_PAR_DEFAUT } from '#/lib/planning/reglesEtablissement.ts'
+import { SANS_RYTHME_STRICT } from '#/lib/planning/test/reglesTest.ts'
 import { REGLES_MORALES, violations } from '#/lib/planning/verificateur.ts'
 
 /*
@@ -830,18 +832,38 @@ describe('règle 1 : deux repos qui se suivent dans la semaine', () => {
     [0, 1, 2, 3, 4, 5, 6]
       .filter((j) => !libres.includes(j))
       .map((j) => cr(`j${j}`, j, 9, 17))
-  const controle = (libres: number[], kw: Partial<SalarieSolveur> = {}) => {
+  // Hors du rythme 5 et 2 (réglage retiré) ; au rythme 5 et 2, la même
+  // règle est le repos seul (une seule définition, 2026-11-10).
+  const controle = (
+    libres: number[],
+    kw: Partial<SalarieSolveur> = {},
+    regle = 'REPOS-SEPARES',
+    regles = SANS_RYTHME_STRICT,
+  ) => {
     const c = semaine(libres)
-    const p = probleme({ salaries: [personne('a', 40, kw)], creneaux: c })
+    const p = probleme({
+      salaries: [personne('a', 40, kw)],
+      creneaux: c,
+      regles,
+    })
     return alertes(
       p,
       { ...rien, affectations: aff('a', ...c.map((x) => x.id)) },
-      'REPOS-SEPARES',
+      regle,
     )
   }
   it('séparés : une alerte ; collés : rien', () => {
     expect(controle([1, 3])).toHaveLength(1)
     expect(controle([1, 2])).toEqual([])
+  })
+  it('au rythme 5 et 2 : jamais dite deux fois, c’est le repos seul', () => {
+    const strict = { joursSemainePrecedente: 5, serieAvant: 0 }
+    expect(
+      controle([1, 3], strict, 'REPOS-SEPARES', REGLES_PAR_DEFAUT),
+    ).toEqual([])
+    expect(
+      controle([1, 3], strict, 'RYTHME-REPOS-SEUL', REGLES_PAR_DEFAUT).length,
+    ).toBeGreaterThan(0)
   })
   it('dimanche libre la semaine d’avant puis lundi : la paire (2026-11-04)', () => {
     // Deux jours de repos de suite, à cheval sur deux semaines : ils se

@@ -318,7 +318,13 @@ describe('R-ECOLE-HEURES dans le générateur', () => {
     const avec = probleme({ salaries: [s], creneaux })
     const r = generer(avec, highs)
     expect(r.affectations).toHaveLength(2)
-    expect(violations(avec, r.affectations)).toEqual([])
+    // Aucune infraction ; le rythme 5 et 2 (organisation) ne peut pas tenir
+    // avec 2 jours d'école et 2 services : il est dit à part.
+    expect(
+      violations(avec, r.affectations).filter(
+        (v) => v.nature !== 'organisation',
+      ),
+    ).toEqual([])
     // Sans les heures d'école (prototype), il les prenait toutes les trois.
     const sans = probleme({
       salaries: [{ ...s, minutesEcoleJour: 0 }],
@@ -338,7 +344,9 @@ describe('R-ECOLE-HEURES dans le générateur', () => {
     const p = probleme({ salaries: [s], creneaux })
     const r = generer(p, highs)
     expect(r.affectations).toHaveLength(2)
-    expect(violations(p, r.affectations)).toEqual([])
+    expect(
+      violations(p, r.affectations).filter((v) => v.nature !== 'organisation'),
+    ).toEqual([])
     expect(
       minutesDe(
         p,

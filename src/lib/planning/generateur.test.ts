@@ -235,16 +235,21 @@ describe('générateur', () => {
     expect(regles.has('R-REPOS-HEBDO-MINEUR')).toBe(true)
   })
 
-  it('deux graines peuvent donner deux plannings aussi bons', () => {
-    const p = probleme({
-      salaries: range(4).map((i) => receptionniste(`r${i}`)),
-      creneaux: semaineReception(),
-    })
-    const a = gen(p)
-    const b = gen({ ...p, graine: 7 })
-    expect(complet(a) && complet(b)).toBe(true)
-    expect(horsMorales(p, b.affectations)).toEqual([])
-  })
+  // Deux calculs (environ 5 s, plus en parallèle).
+  it(
+    'deux graines peuvent donner deux plannings aussi bons',
+    { timeout: 60_000 },
+    () => {
+      const p = probleme({
+        salaries: range(4).map((i) => receptionniste(`r${i}`)),
+        creneaux: semaineReception(),
+      })
+      const a = gen(p)
+      const b = gen({ ...p, graine: 7 })
+      expect(complet(a) && complet(b)).toBe(true)
+      expect(horsMorales(p, b.affectations)).toEqual([])
+    },
+  )
 
   it('39 heures : quatre jours de 8 h et un jour court, pause déduite', () => {
     // Journée étoile sur un horaire qui existe (2026-11-02) : chaque matin de
@@ -560,19 +565,23 @@ describe('générateur', () => {
     })
     const r = gen(p)
     const tenus = pris(r)
-    // Depuis le 2026-11-04, le lundi et le mardi restent libres : deux repos
-    // de suite, qui couvrent le repos de 35 h. Ni le soir qui l'aurait
-    // coupé, ni le matin.
-    expect(tenus.has('matin-0')).toBe(false)
+    // Le soir du lundi couperait le repos de 35 h (la loi) : jamais. Le
+    // matin du lundi, si (ordre du 2026-11-10 : une place passe avant un
+    // repos seul, un 6e jour et des heures en plus) : le mardi seul fait
+    // encore le repos de 35 h.
+    expect(tenus.has('matin-0')).toBe(true)
     expect(tenus.has('soir-0')).toBe(false)
-    expect(violations(p, r.affectations)).toEqual([])
+    expect(
+      violations(p, r.affectations)
+        .filter((v) => v.nature !== 'organisation')
+        .map((v) => v.regle),
+    ).toEqual([])
 
     const fixes = matins.map((c) => aff('r0', c.id))
-    // Six jours : sans deux repos de suite non plus (2026-11-04), ni le
-    // rythme 5 et 2 (2026-11-09 : un repos seul, dit « manque de
-    // personnel » depuis le même jour).
+    // Six jours : un repos seul, dit une fois (au rythme 5 et 2, la paire de
+    // la semaine et le repos seul sont la même règle, 2026-11-10).
     expect(reglesDe(p, [...fixes, aff('r0', 'soir-0')])).toEqual(
-      new Set(['R-REPOS-HEBDO-35H', 'REPOS-SEPARES', 'RYTHME-REPOS-SEUL']),
+      new Set(['R-REPOS-HEBDO-35H', 'RYTHME-REPOS-SEUL']),
     )
     expect(violations(p, fixes)).toEqual([])
     const sans = probleme({
@@ -646,7 +655,7 @@ describe('générateur', () => {
  * donne la même solution : rien ne bouge pour une semaine sans cycles.
  */
 /** Empreinte du modèle avec le rythme 5 et 2 strict (le défaut). */
-const EMPREINTE_STRICT = '15e530ae'
+const EMPREINTE_STRICT = 'c6c795d8'
 
 describe('sans remplaçant, consigne ni présence : le modèle d’avant', () => {
   /** FNV-1a 32 bits, assez pour reconnaître un texte. */
@@ -797,7 +806,12 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
     // (`urgence`, 3 places), et le pire coût d'une place compte un
     // apprenti ou un stagiaire de plus au même moment (`POIDS_EPARPILLER`) :
     // tous les prix de place et d'heure changent, rien d'autre.
-    expect(empreinte(textesLp(false))).toBe('5f88f9d7')
+    // f31fcde5 (2026-11-10, ORDRE DE DÉCISION par principe) : l'heure due
+    // se lit au-dessus d'une place et d'un repos seul (`minuteDue`, sur la
+    // place la plus chère), et le pas entre deux paliers dépasse ce qu'UN
+    // shift peut gagner d'un palier plus bas (`TERMES_PAR_SHIFT`) : les prix
+    // des places et des heures changent, rien d'autre.
+    expect(empreinte(textesLp(false))).toBe('f31fcde5')
   })
 
   it('rythme 5 et 2 strict : une empreinte à part', () => {
@@ -823,8 +837,15 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
     // rangés autrement : 3 repos au prix `dur`, le repos seul au prix
     // `urgence` (un sur 4 semaines), les transitions (bloc de 4) sans
     // plafond, à prix croissant (`prixTransition`).
-    // Inchangée le 2026-11-10 : la paire de repos de la semaine ne devient
-    // souhaitée qu'avant une semaine d'école (aucune ici).
+    // c6c795d8 (2026-11-10, ORDRE DE DÉCISION par principe) : plus de
+    // plafond ni de fenêtre ; un repos seul et un bloc de 4 un peu sous la
+    // place la moins chère du palier le plus haut que la
+    // personne peut tenir (`placesHautes`) ; au rythme 5 et 2, la paire de
+    // repos de la semaine n'est plus écrite (c'est le repos seul) ; une
+    // suite de 3 repos ouverte par un travail connu se ferme sur le jour
+    // inconnu d'après l'horizon ; au rythme 5 et 2, ni la paire de la
+    // semaine ni le jour isolé ne sont écrits une seconde fois ; le reste
+    // comme f31fcde5.
     expect(empreinte(textesLp(true))).toBe(EMPREINTE_STRICT)
   })
 })

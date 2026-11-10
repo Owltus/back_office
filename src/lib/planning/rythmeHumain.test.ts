@@ -144,7 +144,11 @@ describe('jamais un jour de travail seul entre deux repos', () => {
     const aff = jours.map((c) => ({ salarieId: 'a', creneauId: c.id }))
     const message = (h: number) =>
       violations(
-        probleme({ salaries: [personne(h, dimancheLibre)], creneaux: jours }),
+        probleme({
+          salaries: [personne(h, dimancheLibre)],
+          creneaux: jours,
+          regles: SANS_RYTHME_STRICT,
+        }),
         aff,
       )
         .filter((v) => v.regle === 'JOUR-ISOLE')

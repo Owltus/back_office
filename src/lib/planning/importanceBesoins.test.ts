@@ -5,6 +5,7 @@ import { verifierReglages } from '#/lib/planning/coherence.ts'
 import {
   generer,
   paliersPlaces,
+  TERMES_PAR_SHIFT,
   RANG_AUTRE,
   rangPlace,
 } from '#/lib/planning/generateur.ts'
@@ -150,7 +151,9 @@ describe('importance des postes : oui / non (D11, 2026-11-05)', () => {
       (c) => (c.id === 'a' ? 100 : 50),
     )
     expect(deux.presents).toEqual([1, 2])
-    expect(deux.pas).toBe(100 + 2 * 10 + 1)
+    // Au-dessus de tout ce qu’un shift peut gagner d’un palier plus bas
+    // (`TERMES_PAR_SHIFT` places, 2026-11-10).
+    expect(deux.pas).toBe(TERMES_PAR_SHIFT * (100 + 2 * 10) + 1)
     expect(deux.decalage(1)).toBe(0)
     expect(deux.decalage(2)).toBe(deux.pas)
     // Passation au palier le plus haut : décalée, et la nuit la paie deux fois.

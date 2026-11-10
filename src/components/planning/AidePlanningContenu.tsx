@@ -1040,20 +1040,13 @@ export function AidePlanningContenu({
               <span className="font-medium text-foreground">
                 Le changement de jours de repos
               </span>{' '}
-              : pour avancer les repos de quelqu’un d’un jour, une semaine fait
-              un bloc de 4 jours (jamais 3 repos de suite). Seulement s’il
-              remplit plus d’une place qui resterait vide autrement, ou pour ses
-              heures, et la page le dit. Sans lui, trois personnes aux mêmes
-              repos les gardent toute l’année.
-            </li>
-          )}
-          {Rp.rythmeStrict && (
-            <li>
-              <span className="font-medium text-foreground">Le repos seul</span>{' '}
-              : un seul jour de repos entre deux blocs, seulement en cas de
-              manque de personnel (plus de 3 places qui resteraient vides) ou
-              pour les heures de quelqu’un, une fois par personne sur 4
-              semaines. La page le dit : repos seul, manque de personnel.
+              : 5 jours puis 2 repos, les repos restent les mêmes d’une semaine
+              à l’autre. Pour les avancer d’un jour, deux outils : un repos seul
+              (la semaine garde ses 5 jours) ou un bloc de 4 jours (un jour de
+              moins). Jamais 3 repos de suite. Le planning ne le fait que pour
+              les heures de quelqu’un ou pour une place d’un poste indispensable
+              qui resterait vide, le moins de fois possible : le bloc de 4 quand
+              personne n’y perd d’heures, sinon le repos seul. La page le dit.
             </li>
           )}
           <li>

@@ -97,7 +97,7 @@ const MESSAGES: Record<(typeof REGLES_BLOCAGE)[number], string[]> = {
   'REPOS-SEPARES': ['ses jours de repos de la semaine ne se suivent pas'],
   'JOUR-ISOLE': ['un jour de travail seul entre deux jours sans travail'],
   'RYTHME-TRANSITION': ['changement de jours de repos : 4 jours de travail'],
-  'RYTHME-REPOS-SEUL': ['repos seul (manque de personnel)'],
+  'RYTHME-REPOS-SEUL': ['changement de jours de repos : repos seul'],
   'RYTHME-5-2': [
     'rythme 5 et 2 non tenu : repos seul',
     'rythme 5 et 2 non tenu : moins de 5 jours de travail (5 attendus)',

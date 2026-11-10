@@ -22,6 +22,7 @@
  * `max(plafond, fige)` qui évitent un modèle impossible.
  */
 
+import { MINUTES_PAR_JOUR } from '#/lib/planning/temps.ts'
 import {
   nuitDeLaVeille,
   plageAccueil,
@@ -89,7 +90,6 @@ import {
   joursRythmeDe,
   motifsInterdits,
   RYTHME_REPOS,
-  reposSeulsPermis,
   rythmeStrictDe,
   voisinesRythme,
 } from '#/lib/planning/rythmeStrict.ts'
@@ -149,43 +149,38 @@ import type {
  *     signalé (le compte du moment dépasse le chiffre). Un extra (contrat
  *     indicatif : 1 par minute) ne vient jamais en plus.
  *
- * ORDRE DE DÉCISION DU 2026-11-09 (décisions de l'utilisateur : « oui, mais
- * vraiment si utile ; tu as beaucoup de règles qui peuvent rentrer en
- * conflit ; tous les membres du personnel doivent pouvoir faire toutes
- * leurs heures quoi qu'il arrive ; les repos de quatre jours, c'est non ;
- * quatre personnes le soir alors que personne le matin, c'est non »). Il
- * PASSE DEVANT l'ordre d'avant (plus bas) là où ils diffèrent :
- *   1. la loi, DURE (inchangée) ;
- *   2. le rythme 5 et 2 de qui y est (`rythmeStrict.ts`) : jamais 6 jours
- *      de travail (DUR) ; jamais 3 repos ou plus entre deux blocs (« ne
- *      place jamais plus de deux jours de repos à la suite », prix `dur` de
- *      `prixOrdre` : au-dessus de tout, le modèle reste possible quand les
- *      faits l'imposent, `fauteScellee`) ; un bloc de 1 à 3 jours (`fort`) :
- *      au-dessus des heures dues de la semaine ;
- *   3. les heures dues du contrat, « quoi qu'il arrive » : une heure due
- *      vaut plus qu'un repos seul et une place ensemble (`minuteDue`), donc
- *      plus que toute transition ;
+ * ORDRE DE DÉCISION DU 2026-11-10 (principe de l'utilisateur : « un
+ * moteur de logique qui attribue les shifts avec les meilleures pratiques,
+ * sans comportement étrange émergent… pas du cas par cas »). Il PASSE
+ * DEVANT l'ordre d'avant (plus bas) là où ils diffèrent, sans exception ni
+ * plafond :
+ *   1. la loi, DURE ;
+ *   2. au rythme 5 et 2 (`rythmeStrict.ts`) : jamais 6 jours de travail
+ *      (DUR), jamais 3 repos ou plus entre deux blocs (prix `dur`, au-dessus
+ *      de tout ; le modèle reste possible quand les faits l'imposent,
+ *      `fauteScellee`), jamais un bloc de 1 à 3 jours (prix `fort`, plus
+ *      qu'une semaine d'heures dues ; il contient le jour isolé) ;
+ *   3. les heures dues du contrat, « quoi qu'il arrive » (`minuteDue` :
+ *      une heure vaut plus qu'une place et un repos seul ensemble) ;
  *   4. les places (P1 plus bas, paliers d'importance) ; « jamais sans un
- *      salarié confirmé » DUR, sur l'ensemble des postes indispensables
+ *      salarié confirmé » DUR sur l'ensemble des postes indispensables
  *      (`accompagnement`, zones.ts) ;
- *   5. le REPOS SEUL, urgence seulement (`PLACES_REPOS_SEUL` = 3 places :
- *      au-dessus de toute transition et de toute place d'un poste non
- *      indispensable ; il faut plus de 3 places pour le faire), un par
- *      personne sur 4 semaines (`reposSeulsRecents`), le second au prix
- *      `dur` ; puis la TRANSITION (un bloc de 4 jours, `estTransition`) :
- *      `PLACES_PAR_TRANSITION` (1,5) places, la suivante de la même
- *      personne sur 4 semaines 0,5 de plus, au plus 2,5 (`prixTransition`) ;
- *      aucun plafond de nombre ;
- *   6. l'ÉQUILIBRE entre les moments d'une zone (`equilibreMoments`) : du
- *      monde en trop sur un moment pendant qu'un autre manque, au prix d'une
- *      place par personne ;
+ *   5. au rythme 5 et 2, DÉPLACER DES REPOS (`rythmeStrict.ts`) : chaque
+ *      repos seul (`reposSeul`) et chaque bloc de 4 (`bloc`) coûte un peu
+ *      MOINS que la place la moins chère du palier le plus haut que la
+ *      personne peut tenir (`placesHautes`) : il se fait pour UNE place de
+ *      ce palier ou pour des heures, jamais pour moins ; le repos seul coûte
+ *      un peu plus que le bloc (il est évité d'abord), mais le bloc perd un
+ *      jour : quand des heures sont en jeu, c'est le repos seul ;
+ *   6. l'ÉQUILIBRE entre les moments d'une zone (`equilibreMoments`), sous
+ *      un bloc ;
  *   7. ÉPARPILLER les apprentis et stagiaires sur les postes indispensables
  *      (`POIDS_EPARPILLER`, au-dessus du confort) ;
  *   8. le reste, dans l'ordre d'avant.
- * Les prix des points 2, 3 et 5 se lisent sur la place la plus chère du
- * modèle (`prixOrdre`), posés quand tout le reste est écrit : l'ordre tient
- * quels que soient les paliers. Limite assumée : sous une heure, 15 ou 30
- * minutes dues d'un horaire plus court peuvent encore tenir une place.
+ * Au rythme 5 et 2, la règle « deux repos de suite dans la semaine » est la
+ * même que « pas de repos seul » : elle n'est pas écrite une seconde fois.
+ * Limite assumée : sous une heure, 15 ou 30 minutes dues d'un horaire plus
+ * court peuvent encore tenir une place.
  *
  * ORDRE DE DÉCISION (étape 10 du plan « réglages cohérents », D3 = A,
  * D1 = A, D13, D14, D15). La phrase de la page Besoins le dit : la loi
@@ -1019,6 +1014,13 @@ export interface Paliers {
   extraNuit: (rang: number) => number
 }
 
+/** Ce qu'UN shift peut gagner de places d'un même palier, au plus : sa
+ * place, les minimums des deux moments d'un middle, un trou entre deux
+ * équipes ou une ouverture (revue adverse du 2026-11-10 : un pas d'une
+ * seule place laissait deux manques d'un palier bas valoir plus qu'une
+ * place du palier haut, donc qu'un repos seul). */
+export const TERMES_PAR_SHIFT = 4
+
 /** Les paliers d'une semaine (voir plus haut). `prix(c)` : le prix dérivé
  * d'une place vide sur `c` (`coutPlaceVide`), lu seulement s'il y a plus
  * d'un palier. */
@@ -1039,7 +1041,8 @@ export function paliersPlaces(
   const extraBas = Math.max(0, ...zones.map((z) => z.plus))
   let pas = 0
   if (presents.length > 1)
-    pas = Math.max(0, ...ouverts.map(prix)) + 2 * extraBas + 1
+    pas =
+      TERMES_PAR_SHIFT * (Math.max(0, ...ouverts.map(prix)) + 2 * extraBas) + 1
   const decalage = (rang: number) => {
     const i = presents.findIndex((r) => r >= rang)
     return (i < 0 ? presents.length - 1 : i) * pas
@@ -1444,6 +1447,23 @@ export function construire(
       pl.decalage(rang)
     )
   })
+  // La place la moins chère du palier le plus haut (`seuilPlaces`) : ce
+  // que vaut UNE place qu'un repos seul ou un bloc de 4 peut remplir.
+  const hautes = placesHautes(
+    p.creneaux,
+    pl,
+    (c) =>
+      coutPlaceVide(
+        c,
+        presenceLaPlusChere,
+        c.place !== null ? besoinDe(c.place) : undefined,
+        R,
+      ),
+    comptent,
+    comptent.map((cs) => rangDe(cs.filter((c) => !c.ferme))),
+    coutsMinimum,
+  )
+  const seuil = hautes.size ? Math.min(...hautes.values()) : 0
 
   // Couverture, par PLACE : un besoin `b…` et ses remplaçants `r…`
   // (`place` = id du besoin, même cycle, autre horaire permis) forment un
@@ -1806,7 +1826,14 @@ export function construire(
       surplusDe.set(i, { v: vp, borne: possibles, haut, parCreneau })
     }
   })
-  equilibreMoments(m, p, manqueDe, surplusDe, coutsMinimum, comptent)
+  equilibreMoments(
+    m,
+    p,
+    manqueDe,
+    surplusDe,
+    coutsMinimum.map((c) => Math.min(c, prixSousPlace(seuil, 'equilibre'))),
+    comptent,
+  )
 
   // CONTINUITÉ ENTRE ÉQUIPES (D8 du 2026-11-05, FIXE depuis le 2026-11-06) :
   // un trou entre la fin d'une équipe et l'arrivée de la suivante (passation
@@ -1862,10 +1889,10 @@ export function construire(
   // Rythme 5 et 2 strict : les fautes payées, leur prix posé à la fin
   // (ORDRE DE DÉCISION du 2026-11-09, `prixOrdre`).
   const excesRythme: ExcesRythme = {
-    fort: [],
     dur: [],
-    transition: [],
-    urgence: [],
+    fort: [],
+    bloc: [],
+    reposSeul: [],
   }
   // Heures dues manquantes (P3 du 2026-11-09), leur prix posé à la fin.
   const moinsDus: string[] = []
@@ -2235,7 +2262,10 @@ export function construire(
         forceDeux !== 'aucune' &&
         !s.reposConsecutifs &&
         !s.placementManuel &&
-        s.reposFixes.size < 2
+        s.reposFixes.size < 2 &&
+        // Au rythme 5 et 2, deux repos de suite = pas de repos seul : le
+        // rythme le dit, à son prix (une seule définition, 2026-11-10).
+        !rythmeStrictDe(s, R)
       if (s.reposConsecutifs || (regleHotel && jours.length === 7)) {
         const pris = (d: number) =>
           fixes.some((c) => jourDe(c) === d) || s.joursHorsSite.has(d)
@@ -2270,17 +2300,7 @@ export function construire(
           paires.push(libre)
         }
         if (paires.length) {
-          // Avant une semaine d'école, au rythme 5 et 2 strict, ce rythme dit
-          // déjà les deux repos de suite et son urgence (le repos seul, payé
-          // à son prix, deux permis) : la paire de la semaine devient
-          // souhaitée (2026-11-10 ; dure, elle interdisait tout repos seul).
-          // Ailleurs elle reste dure : souple partout, une semaine de l'hôtel
-          // d'essai passait de quelques secondes au plafond de 60 s.
-          if (
-            !s.reposConsecutifs &&
-            (forceDeux === 'souhaite' ||
-              (!!s.ecoleProche && rythmeStrictDe(s, R)))
-          ) {
+          if (!s.reposConsecutifs && forceDeux === 'souhaite') {
             const perdue = m.continu(0, 1)
             m.ajoute(
               [...paires.map((v) => [1, v] as Terme), [1, perdue]],
@@ -2742,13 +2762,36 @@ export function construire(
         .filter((s) => !s.contratIndicatif)
         .map((s) => s.minutesHebdoContrat),
     ),
+    seuil,
   )
   for (const v of moinsDus) m.cout(prix.minuteDue, v)
-  for (const { v, rang } of excesRythme.transition)
-    m.cout(prixTransition(prix, rang), v)
-  for (const v of excesRythme.urgence) m.cout(prix.urgence, v)
+  // Le seuil de CHAQUE personne : la moins chère des places du palier le
+  // plus haut qu'elle peut tenir (revue adverse du 2026-11-10 : le seuil de
+  // tout le problème prenait une place d'une heure que personne ne tient,
+  // et un déplacement se faisait pour bien moins qu'une place). Sans place
+  // du palier haut à sa portée : le seuil de tout le problème.
+  const seuilDe = new Map<string, number>()
+  for (const k of x.keys()) {
+    const [sid, cid] = scinder(k)
+    const v = hautes.get(cid)
+    if (v !== undefined) seuilDe.set(sid, Math.min(seuilDe.get(sid) ?? v, v))
+  }
+  const prixDe = (sid: string) => {
+    const a = seuilDe.get(sid) ?? prix.seuil
+    return {
+      reposSeul: prixSousPlace(Math.min(a, prix.place), 'reposSeul'),
+      bloc: prixSousPlace(Math.min(a, prix.place), 'bloc'),
+    }
+  }
+  // Contrôles de mesure (`Probleme.controle`) : jamais posés par l'app.
+  const sansDeplacement = !!p.controle?.sansDeplacement
+  for (const { v, salarie } of excesRythme.reposSeul)
+    m.cout(sansDeplacement ? prix.dur : prixDe(salarie).reposSeul, v)
+  for (const { v, salarie } of excesRythme.bloc)
+    m.cout(sansDeplacement ? prix.dur : prixDe(salarie).bloc, v)
   for (const v of excesRythme.fort) m.cout(prix.fort, v)
-  for (const v of excesRythme.dur) m.cout(prix.dur, v)
+  for (const v of excesRythme.dur)
+    m.cout(p.controle?.heuresDabord ? prix.bloc : prix.dur, v)
   // Petit bruit : à qualité égale, chaque graine donne une autre simulation.
   // Pas à l'affinage : l'objectif d'origine y est borné par celui du calcul,
   // qui contient déjà son bruit (positif) ; sans bruit, le planning du
@@ -2968,103 +3011,153 @@ export function prixFauteRythme(couts: Iterable<number>): number {
   return Math.max(POIDS_RYTHME_BORD, FOIS_FAUTE_RYTHME * plusGros + 1)
 }
 
-/** Les fautes au rythme 5 et 2 payées, par prix (`prixOrdre`) : `fort`
- * (repos seul, bloc de 1 à 3 jours, transition au-delà d'une), `dur`
- * (4 repos ou plus), `transition` (la transition permise). */
+/** Les fautes au rythme 5 et 2 payées, par prix (`prixOrdre`). */
 export interface ExcesRythme {
-  fort: string[]
+  /** 3 repos ou plus entre deux blocs. */
   dur: string[]
-  /** Une variable par rang de transition (0 : la première de la personne
-   * sur 4 semaines). */
-  transition: Array<{ v: string; rang: number }>
-  /** Le repos seul permis (urgence). */
-  urgence: string[]
+  /** Un bloc de 1 à 3 jours. */
+  fort: string[]
+  /** Un bloc de 4 jours (un décalage). */
+  bloc: Array<{ v: string; salarie: string }>
+  /** Un repos seul. */
+  reposSeul: Array<{ v: string; salarie: string }>
 }
 
-/** Rangs de transition distincts écrits pour une personne ; au-delà, le
- * prix du dernier rang. */
-export const RANGS_TRANSITION = 3
-
-/** Une transition (changement de jours de repos, bloc de 4 jours) vaut
- * tant de places du palier le plus haut : au-dessus d'une place seule, sous
- * deux (« vraiment si utile »). Elle ne se fait que si elle remplit plus
- * d'une place et demie, ce qui veut dire deux places en pratique. */
-export const PLACES_PAR_TRANSITION = 1.5
-/** Ce que chaque transition de plus de la personne sur 4 semaines coûte de
- * plus (« une deuxième peut monter un peu ») : pas de va-et-vient pour
- * rien, jamais au-dessus de `PLACES_TRANSITION_MAX`. */
-export const PLACES_TRANSITION_EN_PLUS = 0.5
-export const PLACES_TRANSITION_MAX = 2.5
-/** Un repos seul (urgence, « si manque de personnel ») vaut tant de places :
- * au-dessus de toute transition et de toute place d'un poste non
- * indispensable (un palier sous P), sous une heure due. Il ne se fait que
- * pour plus de 3 places, soit un moment entier de l'accueil vide. */
-export const PLACES_REPOS_SEUL = 3
-
-/** Les prix de l'ORDRE DE DÉCISION du 2026-11-09 (voir en tête), lus sur
- * la place la plus chère du modèle. */
+/** Les prix de l'ORDRE DE DÉCISION du 2026-11-10 (voir en tête). */
 export interface PrixOrdre {
-  /** Le plus gros coût posé avant eux : une place du palier le plus haut. */
+  /** Le plus gros coût posé avant eux. */
   place: number
-  /** La première transition de la personne sur 4 semaines. */
-  transition: number
-  /** Un repos seul (urgence), le premier sur 4 semaines. */
-  urgence: number
+  /** La place la moins chère du palier le plus haut (`seuilPlaces`). */
+  seuil: number
+  /** Un repos seul : un peu moins que `seuil`. */
+  reposSeul: number
+  /** Un bloc de 4 : un peu moins qu'un repos seul. */
+  bloc: number
   /** Une minute d'heures dues manquante. */
   minuteDue: number
-  /** Une faute au rythme : bloc de 1 à 3 jours. */
+  /** Un bloc de 1 à 3 jours : plus que la semaine d'heures dues. */
   fort: number
-  /** 3 repos ou plus entre deux blocs, un second repos seul. */
+  /** 3 repos ou plus entre deux blocs : deux fois `fort`. */
   dur: number
 }
 
-/** Le prix de la transition de ce rang (0 : la première de la personne
- * sur 4 semaines). */
-export function prixTransition(p: PrixOrdre, rang: number): number {
-  const places = Math.min(
-    PLACES_TRANSITION_MAX,
-    PLACES_PAR_TRANSITION + PLACES_TRANSITION_EN_PLUS * Math.max(0, rang),
+/** L'écart entre le repos seul et un bloc de 4, et la moitié de l'écart
+ * avec l'équilibre : plus que le petit bruit de la graine sur une semaine
+ * (3 par shift), pour que l'ordre ne dépende jamais de la graine. */
+export const ECART_BLOC = 100
+
+/** Sous `seuil`, dans l'ordre : le repos seul (1 de moins), un décalage
+ * par un bloc de 4 (`ECART_BLOC` de moins), l'équilibre entre les moments
+ * (deux fois). Toujours au moins 1. */
+export function prixSousPlace(
+  seuil: number,
+  quoi: 'reposSeul' | 'bloc' | 'equilibre',
+): number {
+  const ecart =
+    quoi === 'reposSeul' ? 1 : quoi === 'bloc' ? ECART_BLOC : 2 * ECART_BLOC
+  return Math.max(1, seuil - ecart)
+}
+
+/** La place la moins chère du palier le plus haut présent : une place
+ * vide d'un besoin (`prix`, plus le décalage du palier) ou une personne de
+ * moins qu'un minimum de ce palier (`coutsMinimum`, déjà décalé). Le
+ * décalage entre paliers (`paliersPlaces`) dépasse toute place d'un palier
+ * plus bas : ce qui coûte un peu moins que ce seuil passe donc devant toute
+ * place d'un palier plus bas et derrière toute place du palier le plus
+ * haut. Sans place : 0 (`prixOrdre` prend alors le plus gros coût). */
+export function seuilPlaces(
+  creneaux: readonly Creneau[],
+  pl: Paliers,
+  prix: (c: Creneau) => number,
+  rangsMinimum: readonly number[],
+  coutsMinimum: readonly number[],
+  comptent: ReadonlyArray<readonly Creneau[]> = [],
+): number {
+  const h = placesHautes(
+    creneaux,
+    pl,
+    prix,
+    comptent,
+    rangsMinimum,
+    coutsMinimum,
   )
-  return Math.ceil(places * p.place)
+  return h.size ? Math.min(...h.values()) : 0
+}
+
+/** Pour chaque créneau qui tient une place du palier le plus haut (sa
+ * place, ou un minimum de ce palier où il compte) : le prix de la moins
+ * chère de ces places. `seuilPlaces` en est le minimum ; le calcul en tire
+ * le seuil de chaque personne (les créneaux qu'elle peut tenir). */
+export function placesHautes(
+  creneaux: readonly Creneau[],
+  pl: Paliers,
+  prix: (c: Creneau) => number,
+  comptent: ReadonlyArray<readonly Creneau[]>,
+  rangsMinimum: readonly number[],
+  coutsMinimum: readonly number[],
+): Map<string, number> {
+  const r = new Map<string, number>()
+  const haut = pl.presents.at(-1)
+  if (haut === undefined) return r
+  const pose = (id: string, v: number) => r.set(id, Math.min(r.get(id) ?? v, v))
+  for (const c of creneaux)
+    if (!c.ferme && !c.accueil && rangPlace(c) === haut)
+      pose(c.id, prix(c) + pl.decalage(haut))
+  rangsMinimum.forEach((rang, i) => {
+    if (rang !== haut || !(coutsMinimum[i] > 0)) return
+    for (const c of comptent[i] ?? []) if (!c.ferme) pose(c.id, coutsMinimum[i])
+    // Sans créneau listé (tests de prix) : un minimum sans porteur.
+    if (!(comptent[i] ?? []).length) pose(`minimum-${i}`, coutsMinimum[i])
+  })
+  return r
 }
 
 /**
- * Les prix de l'ordre de décision (décisions de l'utilisateur du
- * 2026-11-09), posés quand tout le reste est écrit, sur `couts` (le reste
- * de l'objectif) et `minutesSemaine` (le plus gros contrat de la semaine) :
- *   - une TRANSITION vaut `PLACES_PAR_TRANSITION` places (P = le plus gros
- *     coût posé, une place du palier le plus haut), la suivante de la même
- *     personne un peu plus (`prixTransition`) ;
- *   - un REPOS SEUL vaut `PLACES_REPOS_SEUL` places ;
- *   - une HEURE due vaut plus qu'un repos seul et une place ensemble, donc
- *     plus que toute transition : `minuteDue` = (urgence + P + 1) / 60, au
- *     moins `POIDS_SOUS_CONTRAT` (limite assumée : en dessous de l'heure,
- *     15 ou 30 minutes d'un horaire plus court peuvent encore tenir une
- *     place) ;
- *   - une FAUTE au rythme (bloc de 1 à 3 jours) vaut plus que la semaine
- *     entière du plus gros contrat en heures dues, et au moins
- *     `prixFauteRythme` ;
- *   - 3 REPOS OU PLUS, ou un second repos seul, valent deux fautes :
- *     au-dessus de tout, jamais par le calcul, le modèle restant possible
- *     quand les faits l'imposent.
+ * Les prix de l'ordre de décision (principe de l'utilisateur du
+ * 2026-11-10), posés quand tout le reste est écrit, sur `couts` (le reste
+ * de l'objectif), `minutesSemaine` (le plus gros contrat de la semaine) et
+ * `seuil` (`seuilPlaces`) :
+ *   - un REPOS SEUL vaut un peu moins qu'une place du palier le plus haut,
+ *     un BLOC DE 4 un peu moins encore (`prixSousPlace`) :
+ *     l'un ou l'autre se fait pour une place de ce palier, jamais pour
+ *     moins, et le repos seul (aucun jour perdu) passe devant le bloc ;
+ *   - une HEURE due vaut plus qu'une place et un repos seul ensemble :
+ *     `minuteDue` = (repos seul + P + 1) / 60, au moins
+ *     `POIDS_SOUS_CONTRAT` (P = le plus gros coût posé) ;
+ *   - un BLOC DE 1 À 3 JOURS (`fort`) vaut plus que la semaine entière du
+ *     plus gros contrat en heures dues, et au moins `prixFauteRythme` ;
+ *   - 3 REPOS OU PLUS valent deux `fort` : au-dessus de tout, le modèle
+ *     restant possible quand les faits l'imposent.
  */
 export function prixOrdre(
   couts: Iterable<number>,
   minutesSemaine: number,
+  seuil = 0,
 ): PrixOrdre {
   let place = 1
   for (const c of couts) place = Math.max(place, Math.abs(c))
-  const transition = Math.ceil(PLACES_PAR_TRANSITION * place)
-  const urgence = Math.ceil(PLACES_REPOS_SEUL * place) + 1
+  const s = seuil > 0 ? Math.min(seuil, place) : place
+  const reposSeul = prixSousPlace(s, 'reposSeul')
+  const bloc = prixSousPlace(s, 'bloc')
+  // Le seuil d'une personne ne dépasse jamais `place` : son repos seul non
+  // plus (`prixSousPlace(place)`).
   const minuteDue = Math.max(
     POIDS_SOUS_CONTRAT,
-    Math.ceil((urgence + place + 1) / 60),
+    Math.ceil((prixSousPlace(place, 'reposSeul') + place + 1) / 60),
   )
   const fort = Math.max(
     prixFauteRythme([place]),
     minuteDue * Math.max(60, minutesSemaine) + 1,
   )
-  return { place, transition, urgence, minuteDue, fort, dur: 2 * fort + 1 }
+  return {
+    place,
+    seuil: s,
+    reposSeul,
+    bloc,
+    minuteDue,
+    fort,
+    dur: 2 * fort + 1,
+  }
 }
 
 /**
@@ -3172,13 +3265,11 @@ function equilibreMoments(
  * la semaine commençait par un shift validé). Les 6 jours de travail sont
  * DURS (un
  * plafond de travail, que ne pas travailler tient toujours : le modèle
- * reste possible). Les autres motifs se paient par jour en trop, selon leur
- * genre (`genreMotif`, ORDRE DE DÉCISION du 2026-11-09, `prixOrdre`) :
- * 4 repos ou plus au prix `dur`, un repos seul ou un bloc de 1 à 3 jours au
- * prix `fort` (au-dessus des heures dues de la semaine), une TRANSITION
- * (3 repos, bloc de 4) au prix `transition`, une seule sur la fenêtre (la
- * suivante au prix `fort`), aucune si une est déjà faite sur les 4
- * semaines d'avant (`transitionsRecentes`). Une faute déjà faite par les
+ * reste possible). Les autres motifs se paient, selon leur genre
+ * (`genreMotif`, ORDRE DE DÉCISION du 2026-11-10, `prixOrdre`) : 3 repos
+ * ou plus au prix `dur`, un bloc de 1 à 3 jours au prix `fort`, un repos
+ * seul au prix `reposSeul`, un bloc de 4 au prix `bloc`. Aucun plafond,
+ * aucune fenêtre : chaque outil a son prix. Une faute déjà faite par les
  * faits (`fauteScellee`) n'est pas écrite : elle interdirait toute reprise.
  * La semaine d'après l'esquisse entre dans la suite par ses faits (école,
  * absence courte, `SuivantePersonne.apres`).
@@ -3195,9 +3286,21 @@ function rythmeStrictModele(
   /** Les fautes payées, leur prix posé à la fin (`prixOrdre`). */
   excesRythme: ExcesRythme,
 ): void {
-  type Jour = null | { t: string | 0 | 1; n: string | null }
+  // `INCONNU` : un jour de l'avenir que rien ne dit (semaine d'après non
+  // lue, au-delà de l'horizon, contrat qui continue). Il ferme une suite de
+  // 3 repos ouverte par un travail connu comme un jour de travail : quoi
+  // qu'il soit, la suite est déjà de 3 repos ou plus (revue adverse du
+  // 2026-11-10 : une suite de repos ouverte sur le bord ne coûtait rien, et
+  // une semaine entière restait VIDE).
+  type Jour = null | typeof INCONNU | { t: string | 0 | 1; n: string | null }
   const N = p.nbJours
   const { neutres, travail } = joursRythmeDe(s, N)
+  /** Un jour inconnu après la semaine : inconnu si le contrat court encore,
+   * neutre sinon (la fin du contrat coupe le rythme). */
+  const continue_ = (d: number): Jour =>
+    s.contratFin === null || s.contratFin > d * MINUTES_PAR_JOUR
+      ? INCONNU
+      : null
   const voisines = voisinesRythme(s)
   const avant = voisines.avant
   const apres = sk ? null : voisines.apres
@@ -3205,6 +3308,7 @@ function rythmeStrictModele(
   const jourDu = (d: number): Jour => {
     if (d < 0) {
       const e = avant?.[d + 7]
+      // La semaine d'avant inconnue (aucune donnée) : rien n'est demandé.
       if (!e || e === 'n' || e === 'u') return null
       return { t: e === 'T' ? 1 : 0, n: null }
     }
@@ -3221,19 +3325,24 @@ function rythmeStrictModele(
     if (sk) {
       // La semaine d'après l'esquisse : ses faits (école, absence courte).
       if (d >= N + 7)
-        return esquisse?.apres?.[d - N - 7] === 'T' ? { t: 1, n: null } : null
+        return esquisse?.apres?.[d - N - 7] === 'T'
+          ? { t: 1, n: null }
+          : continue_(d)
       if (esquisse?.neutres?.has(d - N)) return null
       if (esquisse?.travailRythme?.has(d - N)) return { t: 1, n: null }
       return { t: sk.get(d) ?? 0, n: null }
     }
     const e = apres?.[d - N]
-    if (!e || e === 'n' || e === 'u') return null
+    if (e === 'n') return null
+    if (!e || e === 'u') return continue_(d)
     return { t: e === 'T' ? 1 : 0, n: null }
   }
   const debut = -7
   const fin = N + (sk && esquisse?.apres?.includes('T') ? 14 : 7)
   const jours = new Map<number, Jour>()
   for (let d = debut; d < fin; d++) jours.set(d, jourDu(d))
+  // Au-delà de l'horizon : inconnu tant que le contrat continue.
+  jours.set(fin, continue_(fin))
   // Les jours connus d'avance (`jourConnu`, `fauteScellee`), un jour posé
   // compris (il n'est jamais retiré) ; la semaine esquissée : ses jours
   // fixés seulement.
@@ -3252,13 +3361,6 @@ function rythmeStrictModele(
         : !sk ||
           !!esquisse?.fixes.has(d - N) ||
           !!esquisse?.travailRythme?.has(d - N)
-  // Les transitions (blocs de 4 jours) : chacune à son prix, qui monte un
-  // peu avec leur nombre sur 4 semaines (`prixTransition`). Les repos
-  // seuls (urgence) : un au prix `urgence` sur 4 semaines, les autres au
-  // prix `dur`.
-  const transitions: Terme[] = []
-  const reposSeuls: Terme[] = []
-  const urgencesPermises = reposSeulsPermis(s)
   for (const motif of motifsInterdits(fin - debut)) {
     // 6 jours de travail : DURS, un jour posé y compte (jamais plus de 5
     // autour de lui) ; les autres motifs se paient, un jour posé y compte
@@ -3271,7 +3373,9 @@ function rythmeStrictModele(
     // il ne l'est pas, la personne reprend son rythme.
     const reposLong =
       motif[0] === 'T' && motif[1] === 'r' && motif.length - 2 > RYTHME_REPOS
-    for (let a = debut; a + motif.length <= fin; a++) {
+    // Une suite de 3 repos ou plus peut se fermer sur le jour inconnu qui
+    // suit l'horizon.
+    for (let a = debut; a + motif.length <= fin + (reposLong ? 1 : 0); a++) {
       if (
         reposLong &&
         fauteScellee(
@@ -3285,7 +3389,25 @@ function rythmeStrictModele(
       let possible = true
       for (let i = 0; i < motif.length && possible; i++) {
         const j = jours.get(a + i) ?? null
-        if (!j) possible = false
+        if (j === INCONNU) {
+          // Le bord inconnu de l'avenir ne ferme qu'une suite de 3 repos ou
+          // plus OUVERTE PAR UN TRAVAIL CONNU (shift posé, école, semaine
+          // d'avant) : alors la suite est certaine et le calcul ne peut que
+          // l'allonger (une semaine VIDE ne coûtait rien). Ouverte par un
+          // jour que le calcul décide, elle n'est pas écrite : ne pas
+          // travailler du tout ne coûterait rien non plus, et le calcul
+          // préférerait une semaine vide à un seul shift.
+          const ouverture = jours.get(a)
+          if (
+            reposLong &&
+            i === motif.length - 1 &&
+            typeof ouverture === 'object' &&
+            ouverture !== null &&
+            ouverture.t === 1
+          )
+            constante++
+          else possible = false
+        } else if (!j) possible = false
         else if (motif[i] === 'T') {
           // Un JFR pris compte comme du travail (absence décomptée).
           if (j.t === 0 && !j.n) possible = false
@@ -3318,41 +3440,17 @@ function rythmeStrictModele(
       if (termes.filter(([c]) => c > 0).length <= plafond) continue
       const exces = m.continu(0, motif.length)
       m.ajoute([...termes, [-1, exces]], '<=', plafond)
-      if (genre === 'transition') transitions.push([1, exces])
-      else if (genre === 'urgence') reposSeuls.push([1, exces])
-      else excesRythme[genre === 'dur' ? 'dur' : 'fort'].push(exces)
+      if (genre === 'bloc') excesRythme.bloc.push({ v: exces, salarie: s.id })
+      else if (genre === 'fort') excesRythme.fort.push(exces)
+      else if (genre === 'reposSeul')
+        excesRythme.reposSeul.push({ v: exces, salarie: s.id })
+      else excesRythme.dur.push(exces)
     }
-  }
-  // Transitions : Σ excès <= Σ u_k, u_k de prix croissant (le k-ième de la
-  // personne sur 4 semaines, en comptant celles déjà faites).
-  if (transitions.length) {
-    const deja = s.transitionsRecentes ?? 0
-    const u: Terme[] = []
-    for (let k = 0; k < Math.min(transitions.length, RANGS_TRANSITION); k++) {
-      const v = m.continu(0, 1)
-      u.push([-1, v])
-      excesRythme.transition.push({ v, rang: deja + k })
-    }
-    if (transitions.length > RANGS_TRANSITION) {
-      const v = m.continu(0, transitions.length)
-      u.push([-1, v])
-      excesRythme.transition.push({ v, rang: deja + RANGS_TRANSITION })
-    }
-    m.ajoute([...transitions, ...u], '<=', 0)
-  }
-  // Repos seuls : un au prix de l'urgence, le reste au prix dur.
-  if (reposSeuls.length) {
-    const reste = m.continu(0, reposSeuls.length)
-    const termes: Terme[] = [...reposSeuls, [-1, reste]]
-    if (urgencesPermises) {
-      const une = m.continu(0, urgencesPermises)
-      termes.push([-1, une])
-      excesRythme.urgence.push(une)
-    }
-    m.ajoute(termes, '<=', 0)
-    excesRythme.dur.push(reste)
   }
 }
+
+/** Un jour que rien ne dit, pour le rythme 5 et 2 (`rythmeStrictModele`). */
+const INCONNU = 'inconnu' as const
 
 /** Les morceaux d'un créneau qui comptent pour le calcul (salarié
  * confirmé) : un morceau dont les créneaux qui le couvrent CONTIENNENT ceux

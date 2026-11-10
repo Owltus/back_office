@@ -57,25 +57,36 @@ pourtant mauvais pour ceux qui les vivent.
 
 ## 2. Ordre des priorités
 
-**ORDRE DU 2026-11-09 (décisions de l'utilisateur : « oui, mais vraiment si utile » ; « tous les
-membres du personnel doivent pouvoir faire toutes leurs heures quoi qu'il arrive » ; « ne place
-jamais plus de deux jours de repos à la suite, c'est pas possible » ; le repos seul « possible,
-mais dans un cas vraiment d'urgence si manque de personnel » ; « quatre personnes le soir alors
-que personne le matin, c'est non » ; « je ne peux pas laisser tourner un hôtel avec juste des
-stagiaires et apprentis »).** Il passe devant l'ordre plus bas là où ils diffèrent :
+**LE PRINCIPE (décision de l'utilisateur du 2026-11-10 : « un moteur de logique qui attribue
+les shifts avec les meilleures pratiques, sans comportement étrange émergent… pas du cas par
+cas »).** Au rythme 5 et 2, les repos restent les mêmes d'une semaine à l'autre. Les changer coûte
+toujours, et il n'y a que trois outils, qui avancent ou reculent les repos d'un jour :
+
+- un **repos seul** entre deux blocs de 5 : la semaine garde ses 5 jours ;
+- un **bloc de 4 jours** : un jour de travail en moins ;
+- **3 repos** de suite : interdit.
+
+Un bloc de 1 à 3 jours n'est pas un outil (il défait plusieurs jours d'un coup). L'ordre ci-dessous
+tranche seul, sans exception ni plafond : chaque outil a son prix, le calcul en met le moins
+possible, et seulement pour des heures dues ou une place. Les ramener en arrière demanderait
+3 repos : il n'y a donc jamais d'aller-retour.
+
+**ORDRE DU 2026-11-10** (il remplace celui du 2026-11-09 ; il passe devant l'ordre plus bas là où
+ils diffèrent) :
 
 1. **La loi**, dure.
 2. **Le rythme 5 et 2** (règle 20) : jamais 6 jours de travail d'affilée (dur), jamais 3 repos
-   ou plus entre deux blocs (au-dessus de tout ; quand des absences, l'école, des shifts validés
-   ou la semaine voisine l'imposent, le calcul reste possible et la page le dit) ; un bloc de 1 à
-   3 jours garde le prix fort (au-dessus de la semaine d'heures dues).
-3. **Les heures dues du contrat, quoi qu'il arrive** : une heure due vaut plus qu'un repos seul et
-   une place ensemble.
+   ou plus entre deux blocs, jamais un bloc de 1 à 3 jours (au-dessus des heures ; quand des
+   absences, l'école, des shifts validés ou la semaine voisine l'imposent, le calcul reste possible
+   et la page le dit).
+3. **Les heures dues du contrat, quoi qu'il arrive** : une heure due vaut plus qu'une place et un
+   repos seul ensemble.
 4. **Les places des postes indispensables**, salarié confirmé dur sur l'ensemble des postes
    indispensables (règle 21).
-5. **Le repos seul** (urgence, 3 places, un sur 4 semaines) puis **le changement de jours de
-   repos** (règle 22, un bloc de 4 jours, 1,5 place, sans plafond de nombre).
-6. **L'équilibre entre les moments d'une zone** (règle 23), au prix d'une place.
+5. **Le repos seul, puis le bloc de 4** (règle 22) : chacun coûte un peu moins qu'une place du
+   palier le plus haut que la personne peut tenir. Le bloc de 4 coûte un peu moins que le repos
+   seul, mais perd un jour : quand des heures sont en jeu, c'est le repos seul.
+6. **L'équilibre entre les moments d'une zone** (règle 23), sous un bloc de 4.
 7. **Éparpiller les apprentis et stagiaires** sur les postes indispensables (règle 24).
 8. Le reste, dans l'ordre plus bas.
 
@@ -778,40 +789,35 @@ sur le mois (deux personnes, une journée chacune).
   en décembre (le seul, le 30/11 de 15:00 à 16:00, est un shift validé).
 - **Statut.** EN PLACE (local, non livré) le 2026-11-09, par zone le même jour.
 
-#### 22. Changer ses jours de repos ; le repos seul en urgence
+#### 22. Changer ses jours de repos : repos seul ou bloc de 4
 
-- **Pourquoi.** Décisions de l'utilisateur, 2026-11-09 : « oui, mais vraiment si utile », puis
-  « ne place jamais plus de deux jours de repos à la suite » et, pour le repos seul, « possible,
-  mais dans un cas vraiment d'urgence si manque de personnel ». Au rythme 5 et 2, 5 + 2 = 7 : des
-  repos posés le mercredi le restent toute l'année. Sur la copie de décembre, trois salariés
-  confirmés du matin avaient leur repos le mercredi : aucun mercredi matin tenable, 28 places à
-  pourvoir.
-- **Comment.** La TRANSITION est un bloc de 4 jours entre deux repos (les repos avancent d'un
-  jour) ; 3 repos de suite sont interdits comme 4 (`estReposTropLong`). Elle coûte 1,5 place du
-  palier le plus haut, la suivante de la même personne sur 4 semaines 0,5 de plus, au plus 2,5
-  (`prixTransition`), sans plafond de nombre, toujours sous une heure due. Le REPOS SEUL coûte 3
-  places (`PLACES_REPOS_SEUL`) : au-dessus de toute transition et de toute place d'un poste non
-  indispensable, sous une heure due ; un par personne sur 4 semaines (`reposSeulsRecents`), le
-  second au prix des 3 repos ; DEUX avant une semaine d'école (la semaine d'avant et celle
-  d'encore avant, motif de nature école, décision de l'utilisateur du 2026-11-10 : « pour faire
-  toutes les heures »). Ces semaines-là, au rythme strict, la paire de repos de la semaine
-  n'est plus dure (elle interdisait le second repos seul) ; ailleurs elle le reste (souple
-  partout, une semaine de l'hôtel d'essai atteignait le plafond de 60 s). Dits « changement de jours de repos » (RYTHME-TRANSITION, jamais
-  bloquant) et « repos seul (manque de personnel) » (RYTHME-REPOS-SEUL, bloque une place seule).
-- **Mesuré.** Banc de décembre (copie locale, en mémoire, « Compléter le mois », horizon, 3
-  graines identiques) : places à pourvoir 28 → 10 (les 10 : plus personne n'a d'heures), 0 repos
-  de 3 jours, 1 repos seul (une apprentie avant sa semaine de CFA), 1 transition (le salarié
-  confirmé aux repos mardi-mercredi passe au lundi-mardi), mercredis et jeudis matin 3 sur 3 (sauf
-  le 17 : 2 sur 3), aucune infraction, 11,3 s au pire par semaine.
-- **Heures dues qui manquent encore (15 h ; 22 h avant l'exception de l'école).** (1) Un CDI dont le contrat finit le lundi 30/11 :
-  ce lundi est un repos VALIDÉ, ses 8 h dues ne peuvent pas être faites. (2) Une apprentie, 14 h
-  la semaine du 7/12 : ses repos validés au mercredi-jeudi, son CFA du 14/12 exige les repos au
-  samedi-dimanche d'avant. Toutes les suites possibles ont été vérifiées : sans repos seul, aucune
-  ne tient sans faute ; avec un, 7 h se perdent ; avec deux, aucune. Avant l'école, deux repos
-  seuls sont permis sur 4 semaines, mais elle en a déjà un validé le 15/11 (le dimanche avant son
-  CFA de novembre) : un seul de plus, 7 h perdues (avant l'exception : 14 h). Cas fictif
-  `apprentieCfa.ts` (sans repos seul d'avant) : 0 h perdue, aucun 3 repos.
-- **Statut.** EN PLACE (local, non livré) le 2026-11-09.
+- **Pourquoi.** Décisions de l'utilisateur, 2026-11-09 puis 2026-11-10 (le principe en tête de la
+  partie 2). Au rythme 5 et 2, 5 + 2 = 7 : des repos posés le mercredi le restent toute l'année.
+  Sur la copie de décembre, trois salariés confirmés du matin avaient leur repos le mercredi :
+  aucun mercredi matin tenable, 28 places à pourvoir.
+- **Comment.** Le repos seul et le bloc de 4 coûtent chacun un peu moins que la place la moins
+  chère du palier le plus haut que la personne peut tenir (`placesHautes`) : ils se font pour une
+  place indispensable ou pour des heures, jamais pour moins. Aucun plafond par fenêtre de
+  semaines, aucune exception (les « un repos seul sur 4 semaines », « deux avant une école » et la
+  paire souhaitée avant l'école sont RETIRÉS). Au rythme 5 et 2, la paire de repos de la semaine
+  et le jour isolé ne sont plus des règles à part : ce sont le repos seul et le bloc d'un jour,
+  une seule définition. Dits « changement de jours de repos : repos seul le … » et « changement de
+  jours de repos : 4 jours de travail … », jamais bloquants.
+- **Mesuré.** Banc de décembre (copie locale, « Compléter le mois », horizon, 3 graines
+  identiques) : heures dues manquantes 15 → 8 h (un CDI dont le dernier jour de contrat est un
+  repos validé : aucune autre solution), places à pourvoir 10 → 8, 0 repos de 3 jours, l'apprentie
+  avant son CFA avec trois décalages (un bloc de 4, deux repos seuls) et toutes ses heures, deux
+  autres blocs de 4 pour des places, mercredis et jeudis matin 3 sur 3 (sauf le 23 : 2 sur 3),
+  aucune infraction, 10,2 s au pire par semaine. Banc de 80 scénarios générés (240 semaines) :
+  aucune infraction, aucun 6 jours, aucun 3 repos, aucun alternant sans salarié confirmé, aucun
+  aller-retour ; des heures perdues seulement quand un calcul « heures d'abord » les perd aussi ;
+  chaque bloc court contre une école, un congé ou une semaine validée irrégulière ; chaque
+  déséquilibre imposé ; 18,3 s au pire.
+- **Reste.** 8 déplacements sur 252 sans gain visible en places, trous ou heures : un déplacement
+  coûte moins qu'une place, la somme du confort d'une semaine peut donc le racheter. La correction
+  propre est un calcul en deux temps (le planning d'abord, le confort ensuite), environ deux fois
+  plus long : à décider.
+- **Statut.** EN PLACE (local, non livré) le 2026-11-10.
 
 #### 23. Jamais du monde en trop sur un moment pendant qu'un autre manque
 

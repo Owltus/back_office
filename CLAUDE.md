@@ -2988,48 +2988,53 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   les raisons d'une place et « À vérifier » ; `contratsPostesReglables.test.ts` refuse tout nom
   ou id de zone écrit. Banc : rien ne bouge (28 places : le mercredi et le jeudi matin, AUCUN
   salarié confirmé de la zone n'est libre, la zone n'y peut rien ; sans la règle, 11).
-- **ORDRE DE DÉCISION DU 2026-11-09 (décisions utilisateur : « oui, mais vraiment si utile » ;
-  « tous les membres du personnel doivent pouvoir faire toutes leurs heures quoi qu'il arrive » ;
-  « ne place jamais plus de deux jours de repos à la suite, c'est pas possible » ; repos seul
-  « possible, mais dans un cas vraiment d'urgence si manque de personnel » ; « quatre personnes le
-  soir alors que personne le matin, c'est non »)**. En tête de `generateur.ts`, il passe devant
-  l'ordre d'avant : (1) la loi ; (2) le rythme 5 et 2 : 6 jours DURS, 3 REPOS OU PLUS au prix `dur`
-  (au-dessus de tout, jamais par le calcul ; seulement quand les faits les imposent : le bloc et
-  TOUS ces repos connus d'avance, un jour sans aucun créneau possible compris, `fauteScellee`, et
-  le vérificateur le dit quand même), bloc de 1 à 3 jours au prix `fort` (au-dessus d'une semaine
-  d'heures dues) ; (3) les HEURES DUES : une heure vaut plus qu'un repos seul et une place
-  ensemble (`minuteDue`) ; (4) les places (paliers) ; (5) le REPOS SEUL, urgence
-  (`PLACES_REPOS_SEUL` = 3 places : il faut plus de 3 places, ou des heures, pour le faire), un par
-  personne sur 4 semaines (`reposSeulsRecents`), le second au prix `dur`, SAUF avant une semaine
-  d'école (motif de nature école la semaine d'après ou celle d'encore après, `ecoleProche`,
-  décision utilisateur du 2026-11-10) : deux sur 4 semaines (`reposSeulsPermis`) ; dit « repos seul
-  (manque de personnel) » (RYTHME-REPOS-SEUL, bloque UNE place). Avant une semaine d'école, au
-  rythme strict, la paire de repos de la SEMAINE devient souhaitée (dure, elle interdisait le
-  second repos seul ; souple partout, une semaine de l'hôtel d'essai atteignait 60 s) ; puis la TRANSITION = un bloc de 4 jours
-  (`estTransition` ; 3 repos ne sont plus une transition) à 1,5 place, la suivante de la même
-  personne sur 4 semaines + 0,5, au plus 2,5 (`prixTransition`), SANS plafond de nombre, toujours
-  sous une heure due ; dite RYTHME-TRANSITION, jamais bloquante ; (6) l'ÉQUILIBRE entre les moments
-  d'une zone (`equilibreMoments`, oracle `desequilibres`, « Mercredi 9 : 0 le matin, 4 le soir à
-  l'Accueil ») ; (7) ÉPARPILLER les apprentis et stagiaires (`POIDS_EPARPILLER` 15 000, au-dessus
-  du confort, sous la fatigue, les heures et les places : au-delà d'un par jour et par moment sur
-  les postes indispensables) ; (8) le reste. Prix posés À LA FIN sur la place la plus chère
-  (`prixOrdre`). JAMAIS SANS UN SALARIÉ CONFIRMÉ, révisé le même jour (« tu peux avoir un stagiaire
-  seul en réception et un employé non stagiaire au club ») : sur un poste INDISPENSABLE, le groupe
-  est l'ensemble des postes indispensables (`accompagnement`, zones.ts, `LIEU_INDISPENSABLES`) ;
-  sinon la zone, sinon le poste ; le soutien jamais seul suit le même groupe ; « À vérifier »
-  `sans-confirme` lit le même groupe. Horizon : la semaine d'après l'esquisse entre par ses faits
-  (`SuivantePersonne.apres`, absences lues jusqu'à lundi + 20). CORRECTIF : la somme des salariés
-  confirmés d'un groupe de candidats de l'accueil était bornée au nombre de créneaux (`sommer`,
-  borne = `borneDe`). Tests `transitionRythme.test.ts` (dont le cas fictif « repos
-  mercredi-jeudi, CFA le lundi 14 », `test/apprentieCfa.ts`), `accompagne.test.ts` (postes
-  indispensables, éparpiller), cas du mercredi `test/hotelMercredi.ts`. Empreintes 5f88f9d7 et
-  15e530ae. Banc décembre (copie locale, en mémoire, horizon, 3 graines identiques) : places à
-  pourvoir 10 (toutes HEURES-FAITES), 0 repos de 3 jours, 1 repos seul (l'apprentie, avant son
-  CFA), 1 transition, mercredis et jeudis matin 3 / 3 (sauf le 17 : 2 / 3), soirs 2 / 2, 0
-  déséquilibre, 0 infraction, heures dues manquantes 15 h : 8 h d'un CDI dont le dernier jour de
-  contrat est un repos validé, 7 h d'une apprentie entre sa semaine validée (repos
-  mercredi-jeudi) et son CFA du 14/12 (zéro demanderait deux repos seuls cette semaine-là, or
-  elle en a déjà un validé le 15/11, dans les 4 semaines), 11,3 s au pire par semaine.
+- **ORDRE DE DÉCISION PAR PRINCIPE (2026-11-10, remplace celui du 2026-11-09 ; décision
+  utilisateur : « un moteur de logique qui attribue les shifts avec les meilleures pratiques,
+  sans comportement étrange émergent… pas du cas par cas »)**. LE PRINCIPE : au rythme 5 et 2,
+  les repos sont figés d'une semaine à l'autre ; les déplacer coûte toujours, avec trois outils
+  qui décalent d'UN jour : le repos seul (aucun jour perdu), le bloc de 4 (un jour perdu), 3 repos
+  (interdit). L'ordre tranche seul, sans exception ni plafond : loi > jamais 6 jours, jamais
+  3 repos, jamais un bloc de 1 à 3 jours (sauf faits) > heures dues > places du palier le plus
+  haut > repos seul > bloc de 4 > équilibre des moments > le reste. Code : en tête de
+  `generateur.ts` et de `rythmeStrict.ts` (« DÉPLACER DES REPOS »). Prix (`prixOrdre`) : repos
+  seul et bloc de 4 un peu sous la place la moins chère du palier le plus haut QUE LA PERSONNE
+  PEUT TENIR (`placesHautes`, `prixSousPlace`, `ECART_BLOC` 100 au-dessus du bruit de la
+  graine) ; équilibre encore dessous ; heure due au-dessus d'une place et d'un repos seul
+  (`minuteDue`) ; bloc de 1 à 3 jours `fort` (plus qu'une semaine d'heures, il contient le jour
+  isolé) ; 3 repos `dur` (deux `fort`). Pas d'aller-retour par construction : un outil permis
+  avance les repos, les ramener demande 3 repos ou six outils. Une seule définition par règle :
+  au rythme 5 et 2, ni la paire de repos de la semaine (c'est le repos seul) ni le jour isolé
+  (`jourIsoleDe` rend `aucune` : il lisait un congé comme un jour sans travail, le rythme comme
+  du travail, et interdisait le seul jour dû d'une semaine de congé) ne sont écrits ; une suite
+  de 3 repos ouverte par un TRAVAIL CONNU se ferme sur le jour inconnu d'après l'horizon
+  (`INCONNU`, sinon une semaine VIDE ne coûtait rien) ; le pas entre paliers dépasse ce qu'UN
+  shift gagne d'un palier plus bas (`TERMES_PAR_SHIFT` 4). Vérificateur : RYTHME-REPOS-SEUL
+  (« changement de jours de repos : repos seul le … ») et RYTHME-TRANSITION ne bloquent pas une
+  place ; RYTHME-5-2 (6 jours, bloc court, 3 repos) bloque. Repos obligés : un repos seul compte
+  encore comme une faute (« samedi ET dimanche » autour d'une semaine d'école). RETIRÉS :
+  `reposSeulsRecents`, `transitionsRecentes`, `ecoleProche`, `reposSeulsPermis`, `prixTransition`,
+  `PLACES_*`, `FENETRE_RYTHME`, la paire « souhaitée avant l'école ». Mesure seulement :
+  `Probleme.controle` (`sansDeplacement`, `heuresDabord`). JAMAIS SANS UN SALARIÉ CONFIRMÉ et
+  ÉPARPILLER restent tels quels (groupe des postes indispensables). Empreintes f31fcde5 et
+  c6c795d8. Tests `transitionRythme.test.ts` (prix, seuil, relecture adverse : semaine vide,
+  repos seul pour un palier bas, bloc de 3 contre deux blocs de 4, cas fictifs du CFA et du
+  mercredi). Banc décembre (copie locale, horizon, 3 graines identiques) : heures dues manquantes
+  15 → 8 h (seulement un CDI dont le dernier jour de contrat est un repos validé), places à
+  pourvoir 10 → 8, 0 repos de 3 jours, 2 repos seuls et 1 bloc de 4 (l'apprentie avant son CFA :
+  trois décalages nécessaires), 2 autres blocs de 4 (des places), 0 infraction, mercredis et
+  jeudis matin 3 / 3 (sauf le 23 : 2 / 3), 10,2 s au pire par semaine. Banc de 80 scénarios
+  GÉNÉRÉS (hôtel fictif, 240 semaines : semaines validées aux repos variés ou irréguliers, écoles,
+  congés de 1 à 10 jours, départs et arrivées, sous-effectif ; contrôles `sansDeplacement` et
+  `heuresDabord` à chaque semaine) : 0 infraction, 0 six jours, 0 repos de 3 jours, 0 alternant
+  sans salarié confirmé, 0 aller-retour ; heures perdues seulement quand le contrôle « heures
+  d'abord » les perd aussi (départs et congés contre 6 jours) ; 19 blocs courts, tous contre une
+  école, un congé ou une semaine validée irrégulière ; 166 déséquilibres, tous imposés (personne
+  du moment en trop ne peut tenir l'autre, ou seulement un apprenti ou un stagiaire) ; 18,3 s au
+  pire. RESTE (dit à l'utilisateur) : 8 déplacements sur 252 sans gain mesuré en places, trous ou
+  heures sur deux semaines, et 3 semaines où le contrôle sans déplacement laisse une place de
+  moins : le prix d'un déplacement est sous UNE place, il peut donc être racheté par la somme du
+  confort d'une semaine (relève, personne seule, équité) ; le corriger exige un calcul
+  lexicographique en deux temps (environ deux fois le temps).
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

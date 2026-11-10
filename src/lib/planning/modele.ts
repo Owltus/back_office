@@ -245,17 +245,6 @@ export interface SalarieSolveur {
    * inconnue, rien n'est demandé. */
   etatsAvant?: string | null
   etatsApres?: string | null
-  /** Rythme 5 et 2 strict : transitions (changements de jours de repos,
-   * `estTransition`) déjà faites sur les `FENETRE_TRANSITION` jours avant
-   * la semaine, lues pour une génération (`historique`). Absent : aucune. */
-  transitionsRecentes?: number
-  /** Rythme 5 et 2 strict : repos seuls (urgence, `estReposSeul`) déjà
-   * faits sur les mêmes jours. Absent : aucun. */
-  reposSeulsRecents?: number
-  /** Une semaine d'école (motif de nature école) la semaine d'après ou
-   * celle d'encore après : un second repos seul sur 4 semaines est permis
-   * (`reposSeulsPermis`). Absent : non. */
-  ecoleProche?: boolean
   reposHebdoMin: number
   jourMaxPoste: boolean
   contratDebut: number | null
@@ -606,6 +595,13 @@ export interface Probleme {
    * écrit : seule la semaine du calcul l'est. Absent : le modèle d'avant,
    * au caractère près. */
   suivante?: Suivante
+  /** MESURE seulement (bancs, tests de l'ordre de décision, 2026-11-10),
+   * jamais posé par l'app : `sansDeplacement` met le repos seul et le bloc
+   * court au prix de 3 repos (le calcul ne déplace plus de repos, sauf
+   * faits) ; `heuresDabord` met 3 repos au prix d'un bloc (les heures dues
+   * passent avant tout le rythme, 6 jours mis à part). Absent : le modèle
+   * de l'app, au caractère près. */
+  controle?: { sansDeplacement?: boolean; heuresDabord?: boolean }
 }
 
 /** L'esquisse de la semaine suivante : un jour travaillé ou non par

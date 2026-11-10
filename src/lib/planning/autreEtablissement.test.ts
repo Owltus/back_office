@@ -373,8 +373,15 @@ describe('les règles de l’hôtel ne s’appliquent pas quand elles sont régl
 
   it('repos séparés et jour isolé : interdits à l’hôtel, rien quand la règle est retirée', () => {
     const hotel = poser(undefined)
-    expect(alertesDeQui(hotel, 2, 'REPOS-SEPARES')).not.toEqual([])
-    expect(alertesDeQui(hotel, 2, 'JOUR-ISOLE')).not.toEqual([])
+    // Au rythme 5 et 2 de l'hôtel, deux repos de suite = pas de repos seul
+    // (une seule définition, 2026-11-10).
+    expect(alertesDeQui(hotel, 2, 'REPOS-SEPARES')).toEqual([])
+    expect([
+      ...alertesDeQui(hotel, 2, 'RYTHME-REPOS-SEUL'),
+      ...alertesDeQui(hotel, 2, 'RYTHME-5-2'),
+    ]).not.toEqual([])
+    // Le jour isolé aussi : un bloc d'un jour, dit par le rythme.
+    expect(alertesDeQui(hotel, 2, 'JOUR-ISOLE')).toEqual([])
     const sans = poser({
       ...REGLAGES,
       deux_repos_de_suite: 'aucune',

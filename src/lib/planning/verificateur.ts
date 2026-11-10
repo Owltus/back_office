@@ -551,10 +551,7 @@ export function moraleQuiBloque(v: {
     (v.regle === 'REPOS-SEPARES' &&
       !v.message.endsWith(REPOS_SEPARES_SOUHAITE)) ||
     (v.regle === 'JOUR-ISOLE' && v.message === JOUR_ISOLE_INTERDIT) ||
-    v.regle === 'RYTHME-5-2' ||
-    // Un repos seul coûte plus de 3 places (urgence) : pour UNE place, il
-    // bloque (2026-11-09).
-    v.regle === 'RYTHME-REPOS-SEUL'
+    v.regle === 'RYTHME-5-2'
   )
 }
 
@@ -778,8 +775,8 @@ function alertesMorales(
         )
         continue
       }
-      // Un REPOS SEUL : permis en urgence (manque de personnel), dit, jamais
-      // bloquant (décision de l'utilisateur du 2026-11-09).
+      // Un REPOS SEUL : un déplacement de repos sans jour perdu, que le
+      // calcul fait pour une place (2026-11-10) : dit, jamais bloquant.
       if (estReposSeul(f)) {
         ajoute(
           'RYTHME-REPOS-SEUL',
@@ -820,6 +817,9 @@ function alertesMorales(
       !s.placementManuel &&
       !s.reposConsecutifs &&
       s.reposFixes.size < 2 &&
+      // Au rythme 5 et 2, c'est le repos seul (RYTHME-REPOS-SEUL) : une
+      // seule définition (2026-11-10).
+      !rythmeStrictDe(s, R) &&
       complete
     ) {
       const libres = jours.filter((j) => !travaille(j))

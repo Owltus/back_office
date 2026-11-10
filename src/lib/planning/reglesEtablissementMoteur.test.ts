@@ -187,7 +187,9 @@ describe('jour isolé (repos.jourIsole) et rythme humain (repos.rythmeContratMin
       ),
     )
   it('interdit : un 35 h ne vient pas un lundi et un mercredi seuls', () => {
-    expect(resoudre(35, REGLES_PAR_DEFAUT)).toEqual([])
+    // Hors du rythme 5 et 2 : au rythme 5 et 2, un jour seul est un bloc
+    // d'un jour, dit par le rythme (`jourIsoleDe`, 2026-11-10).
+    expect(resoudre(35, regles({}))).toEqual([])
   })
   it('à éviter ou aucune règle : il vient', () => {
     expect(resoudre(35, regles({ repos: { jourIsole: 'a_eviter' } }))).toEqual([
@@ -219,7 +221,9 @@ describe('jour isolé (repos.jourIsole) et rythme humain (repos.rythmeContratMin
         cs,
         'JOUR-ISOLE',
       ).map((v) => v.message)
-    expect(message(REGLES_PAR_DEFAUT)).toEqual([JOUR_ISOLE_INTERDIT])
+    expect(message(regles({}))).toEqual([JOUR_ISOLE_INTERDIT])
+    // Au rythme 5 et 2 : jamais dit deux fois (c'est un bloc d'un jour).
+    expect(message(REGLES_PAR_DEFAUT)).toEqual([])
     expect(message(regles({ repos: { jourIsole: 'a_eviter' } }))).toEqual([
       JOUR_ISOLE_A_EVITER,
     ])

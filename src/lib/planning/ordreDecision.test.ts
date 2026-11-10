@@ -198,7 +198,7 @@ describe('P1 : une place nécessaire passe avant le 6e jour et les heures en plu
       raisonsBlocage(p, r.affectations, 'sam')
         .get('a')!
         .map((v) => v.regle),
-    ).toContain('REPOS-SEPARES')
+    ).toContain('RYTHME-5-2')
     expect(violations(p, r.affectations)).toEqual([])
   })
 
@@ -228,7 +228,7 @@ describe('P1 : une place nécessaire passe avant le 6e jour et les heures en plu
         raisonsBlocage(p, r.affectations, vide)
           .get('a')!
           .map((v) => v.regle),
-      ).toContain('REPOS-SEPARES')
+      ).toContain('RYTHME-REPOS-SEUL')
     // Sept jours : la loi.
     expect(
       violations(

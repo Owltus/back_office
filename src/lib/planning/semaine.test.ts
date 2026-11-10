@@ -736,7 +736,12 @@ describe('garde-fous (test_garde_fous.py)', () => {
     expect(bilanDe(sem, x.id).minutes_contrat).toBe(0)
   })
 
-  it('congé du lundi au jeudi : le jour travaillé n’est pas le vendredi isolé', () => {
+  it('congé du lundi au jeudi : le vendredi finit le bloc de 5 (rythme 5 et 2)', () => {
+    // Au rythme 5 et 2, un congé court est du travail (décision de
+    // l'utilisateur du 2026-11-09) : congé du lundi au jeudi puis vendredi =
+    // un bloc de 5, puis les deux repos. Avant le 2026-11-10, la règle du
+    // jour isolé lisait le congé comme un jour sans travail et interdisait
+    // ce vendredi (deux définitions d'un même jour).
     const lundi = '2026-11-09'
     const p = demo()
     const [x] = libres(p)
@@ -744,7 +749,7 @@ describe('garde-fous (test_garde_fous.py)', () => {
     const sem = p.generer(lundi)
     const jours = joursDe(sem, x.id)
     expect(jours.size).toBe(1)
-    expect(jours.has(4)).toBe(false)
+    expect(jours.has(4)).toBe(true)
     expect(bilanDe(sem, x.id).repos_deduits).toHaveLength(2)
   })
 
@@ -878,34 +883,39 @@ describe('planning de la semaine (test_api.py)', () => {
     expect(lea.every((a) => a.role === 'soutien')).toBe(true)
   })
 
-  it('un shift déplacé est épinglé et la régénération le garde', () => {
-    const p = demo()
-    let sem = p.generer(LUNDI)
-    const karim = p.salarie('Karim').id
-    const nuit = siens(sem, karim)[0]
-    const lucas = p.salarie('Lucas').id
-    // Retouche (RPC planning_modifier_shift) : toute retouche épingle.
-    p.semaines.set(
-      LUNDI,
-      p
-        .shifts(LUNDI)
-        .map((a) =>
-          a.id === nuit.id ? { ...a, salarie_id: lucas, epinglee: true } : a,
+  // Trois calculs de la semaine de démo (environ 4 s, plus en parallèle).
+  it(
+    'un shift déplacé est épinglé et la régénération le garde',
+    { timeout: 60_000 },
+    () => {
+      const p = demo()
+      let sem = p.generer(LUNDI)
+      const karim = p.salarie('Karim').id
+      const nuit = siens(sem, karim)[0]
+      const lucas = p.salarie('Lucas').id
+      // Retouche (RPC planning_modifier_shift) : toute retouche épingle.
+      p.semaines.set(
+        LUNDI,
+        p
+          .shifts(LUNDI)
+          .map((a) =>
+            a.id === nuit.id ? { ...a, salarie_id: lucas, epinglee: true } : a,
+          ),
+      )
+      sem = p.analyser(LUNDI)
+      const deplace = sem.affectations.find((a) => a.id === nuit.id)!
+      expect(deplace.epinglee && deplace.salarie_id === lucas).toBe(true)
+      expect(deplace.alertes.map((x) => x.regle)).toContain('POSTE')
+      sem = p.generer(LUNDI, { graine: 2 })
+      expect(sem.affectations.some((a) => a.id === nuit.id)).toBe(true)
+      sem = p.generer(LUNDI, { tout: true })
+      expect(
+        sem.affectations.some(
+          (a) => a.salarie_id === lucas && a.poste_id === nuit.poste_id,
         ),
-    )
-    sem = p.analyser(LUNDI)
-    const deplace = sem.affectations.find((a) => a.id === nuit.id)!
-    expect(deplace.epinglee && deplace.salarie_id === lucas).toBe(true)
-    expect(deplace.alertes.map((x) => x.regle)).toContain('POSTE')
-    sem = p.generer(LUNDI, { graine: 2 })
-    expect(sem.affectations.some((a) => a.id === nuit.id)).toBe(true)
-    sem = p.generer(LUNDI, { tout: true })
-    expect(
-      sem.affectations.some(
-        (a) => a.salarie_id === lucas && a.poste_id === nuit.poste_id,
-      ),
-    ).toBe(false)
-  })
+      ).toBe(false)
+    },
+  )
 
   it('scénario sans les apprentis et stagiaires', () => {
     const p = demo()

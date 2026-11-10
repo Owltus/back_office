@@ -113,15 +113,11 @@ import {
   estTransition,
   fauteScellee,
   fautesRythme,
-  FENETRE_TRANSITION,
   jourConnu,
-  lireSemaineVoisine,
   resoudreAbsences,
   rythmeStrictDe,
   statutAbsence,
   suiteRythme,
-  reposSeulsDans,
-  transitionsDans,
 } from '#/lib/planning/rythmeStrict.ts'
 import type { EtatRythme, StatutRythme } from '#/lib/planning/rythmeStrict.ts'
 
@@ -937,7 +933,7 @@ export function rythmeAutour(
   lundi: string,
   ctx: Pick<Contexte, 'sansDecompte' | 'ecole' | 'absences' | 'rythmeTravail'>,
   /** Premier jour lu (un multiple de 7, avant le lundi) : -14, ou plus tôt
-   * pour les transitions déjà faites (`transitionsRecentes`). */
+   * au besoin. */
   DEBUT = -14,
   /** Jour qui suit le dernier lu : 14, ou 21 pour la semaine d'après
    * l'esquisse (`SuivantePersonne.apres`). */
@@ -2125,56 +2121,11 @@ export function avecSemainesVoisines(
     }
     return etats
   }
-  // Transitions déjà faites (changements de jours de repos, 2026-11-09) :
-  // les `FENETRE_TRANSITION` jours avant le lundi, lus seulement pour une
-  // génération (`historique` : les shifts des semaines d'avant). Mêmes
-  // lettres que la semaine d'avant (`etatsVoisins`) ; une semaine sans
-  // aucun shift lu est inconnue.
-  const travailPasse = new Map<number, Map<number | string, Set<number>>>()
-  for (const a of d.historique ?? []) {
-    const decalage = ecartJours(ctx.lundi, a.lundi)
-    if (decalage >= 0 || decalage < -FENETRE_TRANSITION) continue
-    const m = travailPasse.get(decalage) ?? new Map()
-    travailPasse.set(decalage, m)
-    ajoute(m, k(a.salarie_id), a.jour)
-  }
-  const passeRythme = (key: number | string): EtatRythme[] | null => {
-    if (!d.historique) return null
-    const etats: EtatRythme[] = []
-    for (let w = -FENETRE_TRANSITION; w < 0; w += 7) {
-      const lue =
-        w === -7 ? (d.avant.length ? travailAvant : null) : travailPasse.get(w)
-      const semaine = lue ? etatsVoisins(key, w, lue) : null
-      etats.push(...(lireSemaineVoisine(semaine) ?? Array(7).fill('u')))
-    }
-    return etats
-  }
   const r = new Map<number, SalarieSolveur>()
   for (const [i, x] of salaries) {
     const key = k(i)
     r.set(i, {
       ...x,
-      ...(() => {
-        const passe = passeRythme(key)
-        return {
-          transitionsRecentes: passe ? transitionsDans(passe) : 0,
-          reposSeulsRecents: passe ? reposSeulsDans(passe) : 0,
-          // Une semaine d'école la semaine d'après ou celle d'encore après
-          // (motif de nature école, `ctx.ecole`) : un second repos seul est
-          // permis (`reposSeulsPermis`, 2026-11-09).
-          ecoleProche: [7, 14].some((dec) =>
-            (fichesDe.get(key) ?? []).some((f) =>
-              [
-                ...joursAbsents(
-                  f,
-                  ajouterJours(ctx.lundi, dec),
-                  ctx.absences,
-                ).values(),
-              ].some((m) => m !== null && m !== undefined && ctx.ecole.has(m)),
-            ),
-          ),
-        }
-      })(),
       etatsAvant: d.avant.length ? etatsVoisins(key, -7, travailAvant) : null,
       etatsApres: d.apres.length ? etatsVoisins(key, 7, travailApres) : null,
       finServicePrecedent: fins.get(key) ?? null,
@@ -2927,8 +2878,10 @@ export function reposObliges(
           },
         )
         // Une faute déjà faite par les faits (`fauteScellee`, le jour essayé
-        // n'en est pas un) n'oblige à rien ; une transition (changement de
-        // jours de repos, `estTransition`) non plus : le calcul peut la faire.
+        // n'en est pas un) n'oblige à rien ; un bloc de 4 non plus. Le repos
+        // seul, si : le calcul peut le faire pour une place, mais le rythme
+        // normal laisse ce jour en repos (« samedi ET dimanche » autour d'une
+        // semaine d'école, 2026-11-09).
         const connu = (i: number) =>
           i !== j + 7 &&
           (i - 7 < passes || obliges.has(i - 7) || jourConnu(sol, i - 7, 7))

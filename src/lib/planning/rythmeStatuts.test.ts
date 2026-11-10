@@ -455,7 +455,7 @@ describe('le calcul et le vérificateur', () => {
     // Hors du rythme (un seul repos le dimanche d'avant) : aucune semaine
     // sans faute. Les heures dues passent avant un repos seul (décision de
     // l'utilisateur du 2026-11-09) : 5 jours, et UN repos seul le dimanche
-    // avant le CFA, dit « manque de personnel », plutôt que 7 h perdues.
+    // avant le CFA, dit « changement de jours de repos », plutôt que 7 h perdues.
     const { r } = resoudre(s)
     expect(tenus(r)).toEqual([1, 2, 3, 4, 5])
     expect(rythmeDit(p, r.affectations)).toEqual([])
@@ -463,11 +463,7 @@ describe('le calcul et le vérificateur', () => {
       violations(p, r.affectations)
         .filter((v) => v.regle === 'RYTHME-REPOS-SEUL')
         .map((v) => v.message),
-    ).toEqual(['repos seul (manque de personnel) le dimanche'])
-    // Un repos seul déjà fait sur 4 semaines : le second coûte comme 3
-    // repos ; le bloc de 4 jours (transition) et 7 h de moins, plutôt.
-    const deja = resoudre(personne({ ...s, reposSeulsRecents: 1 }))
-    expect(tenus(deja.r)).toEqual([1, 2, 3, 4])
+    ).toEqual(['changement de jours de repos : repos seul le dimanche'])
     // Dans le rythme : 5 jours puis les 2 repos avant le CFA, sans faute.
     const dans = resoudre(personne({ ...AVANT, etatsApres: 'TTTTTrr' }))
     expect(tenus(dans.r)).toEqual([0, 1, 2, 3, 4])
@@ -619,7 +615,7 @@ describe('le calcul et le vérificateur', () => {
       violations(q, affs)
         .filter((v) => v.regle === 'RYTHME-REPOS-SEUL')
         .map((v) => v.message),
-    ).toEqual(['repos seul (manque de personnel) le lundi'])
+    ).toEqual(['changement de jours de repos : repos seul le lundi'])
   })
   it('jour férié chômé : un jour de travail ; refusé : 5 shifts autour', () => {
     const s = personne({
@@ -684,7 +680,7 @@ describe('le calcul et le vérificateur', () => {
     expect(tenus(r)).toEqual([0, 1, 2, 3])
     expect(rythmeDit(p, r.affectations)).toEqual([])
   })
-  it('semaine voisine inconnue : 3 jours en début de semaine acceptés ; connue : refusés', () => {
+  it('semaine voisine inconnue ou connue : 3 jours en début de semaine', () => {
     const creneaux = [0, 1, 2].map(cr)
     const inconnue = generer(
       probleme({ salaries: [personne()], creneaux, graine: 1 }),
@@ -695,7 +691,9 @@ describe('le calcul et le vérificateur', () => {
       probleme({ salaries: [personne(AVANT)], creneaux, graine: 1 }),
       highs,
     )
-    expect(tenus(connue)).toEqual([])
+    // Connue (deux repos avant) : un bloc de 3 plutôt que 9 repos de suite
+    // (3 repos ou plus, la pire faute, 2026-11-10).
+    expect(tenus(connue)).toEqual([0, 1, 2])
   })
   it('horizon glissant : un congé de 2 jours la semaine d’après compte dans le bloc', () => {
     // Lundi et mardi d'après en congé (du travail) : jeudi au dimanche

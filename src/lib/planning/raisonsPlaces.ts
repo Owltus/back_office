@@ -314,11 +314,11 @@ export function raisonClaire(
         'Son rythme de 5 jours puis 2 repos ne tiendrait plus',
         mention('règle de l’hôtel'),
       )
-    // Un repos seul : seulement quand il manque beaucoup de monde
-    // (2026-11-09), jamais pour une place.
+    // Un repos seul : un changement de jours de repos, que le calcul fait
+    // pour une place d'un poste indispensable (2026-11-10).
     case 'RYTHME-REPOS-SEUL':
       return r(
-        'N’aurait qu’un jour de repos (manque de personnel seulement)',
+        'N’aurait qu’un jour de repos (ses repos changeraient de jour)',
         mention('règle de l’hôtel'),
       )
     case 'RYTHME-TRANSITION':

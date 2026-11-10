@@ -201,40 +201,46 @@ export function fautesRythme(etats: readonly EtatRythme[]): FauteRythme[] {
 }
 
 /*
- * TRANSITION (décisions de l'utilisateur du 2026-11-09 : « oui, mais
- * vraiment si utile », puis « ne place jamais plus de deux jours de repos à
- * la suite, c'est pas possible »). Décaler les jours de repos de quelqu'un
- * demande UN bloc de 4 jours entre deux repos (les repos avancent d'un
- * jour) : c'est la seule transition. Sans elle, une équipe dont trois
- * personnes ont les mêmes repos les garde toute l'année (5 + 2 = 7), et le
- * matin de ce jour-là reste sans personne confirmée. Une transition reste
- * une faute au sens de `fautesRythme` ; `estTransition` la reconnaît, le
- * calcul la paie moins cher (au-dessus d'une place, sous une heure due,
- * `prixOrdre`, generateur.ts) et le vérificateur la dit comme un changement
- * de jours de repos, sans bloquer.
- *
- * REPOS TROP LONG : 3 repos ou plus entre deux blocs de travail
- * (`estReposTropLong`), jamais par le calcul ; quand les faits l'imposent
- * (le bloc et tous ces repos connus d'avance, `fauteScellee`), le calcul ne
- * l'écrit pas, et le vérificateur le dit quand même.
- *
- * REPOS SEUL (« possible, mais dans un cas vraiment d'urgence si manque de
- * personnel ») : un repos entre deux blocs, au plus un par personne sur
- * `FENETRE_RYTHME` jours (`estReposSeul`, `reposSeulsRecents`) ; dit
- * « repos seul (manque de personnel) », sans bloquer.
+ * DÉPLACER DES REPOS (principe du 2026-11-10, décision de l'utilisateur :
+ * « un moteur de logique qui attribue les shifts avec les meilleures
+ * pratiques, sans comportement étrange émergent… pas du cas par cas »).
+ * Au rythme 5 et 2, les repos sont FIGÉS d'une semaine à l'autre (5 + 2 =
+ * 7). Les déplacer coûte toujours quelque chose, et il n'y a que trois
+ * outils, chacun décale les repos d'UN jour :
+ *   - un REPOS SEUL entre deux blocs de 5 (`TTTTTrTTTTT`) : les repos
+ *     avancent d'un jour, aucune heure perdue (la semaine garde ses 5
+ *     jours) ;
+ *   - un BLOC DE 4 jours (`rrTTTTrr`) : les repos avancent d'un jour, un
+ *     jour de travail perdu (des heures) ;
+ *   - 3 REPOS (`TrrrT`) : les repos reculent d'un jour ; interdit par
+ *     l'utilisateur (« ne place jamais plus de deux jours de repos à la
+ *     suite »), sauf quand les faits l'imposent (`fauteScellee`).
+ * Un bloc de 1 à 3 jours n'est PAS un outil : il défait plusieurs jours
+ * d'un coup (« donner des jours et en redonner ensuite ») ; comme 3 repos,
+ * il passe avant les heures (prix `fort`). Il contient le jour isolé, dit
+ * une seule fois (`jourIsoleDe` ne s'applique pas au rythme 5 et 2).
+ * L'ordre de l'utilisateur tranche seul, sans exception ni plafond : la loi,
+ * puis jamais 6 jours, jamais 3 repos ni un bloc de moins de 4 jours, puis
+ * les heures dues, puis les
+ * places indispensables, puis le repos seul, puis le bloc de 4, puis
+ * l'équilibre, puis le reste (`prixOrdre`, generateur.ts). Chaque outil a
+ * SON prix, le calcul en met le moins possible, et seulement quand des
+ * heures dues ou des places l'exigent (faits connus d'avance dans
+ * l'horizon : école, absences, semaines validées).
+ * PAS D'ALLER-RETOUR, par construction : chaque outil permis avance les
+ * repos d'un jour ; les ramener demande 3 repos (interdit) ou six outils de
+ * plus, toujours plus cher que de ne pas les avoir déplacés. Aucun plafond
+ * par fenêtre de semaines n'est donc nécessaire.
+ * Le vérificateur dit le repos seul et le bloc de 4 sans bloquer (le calcul
+ * les fait quand l'ordre le demande) ; 3 repos, 6 jours et un bloc de 1 à
+ * 3 jours, oui.
  */
 
 /** Repos entre deux blocs à partir duquel c'est « trop long » : jamais. */
 export const REPOS_TROP_LONG = RYTHME_REPOS + 1
 
-/** La fenêtre où se comptent les transitions et les repos seuls déjà faits
- * (4 semaines, celle du partage des week-ends). */
-export const FENETRE_RYTHME = 28
-/** Ancien nom (transitions comptées sur 4 semaines). */
-export const FENETRE_TRANSITION = FENETRE_RYTHME
-
-/** Une faute qui décale les repos d'un jour : un bloc de 4 jours entre deux
- * repos. */
+/** Un bloc de 4 jours entre deux repos : les repos avancent d'un jour, un
+ * jour perdu. */
 export function estTransition(
   f: Pick<FauteRythme, 'genre' | 'debut' | 'fin'>,
 ): boolean {
@@ -243,7 +249,8 @@ export function estTransition(
   )
 }
 
-/** Un repos seul entre deux blocs (urgence). */
+/** Un repos seul entre deux blocs : les repos avancent d'un jour, aucun
+ * jour perdu. */
 export function estReposSeul(f: Pick<FauteRythme, 'genre'>): boolean {
   return f.genre === 'repos-seul'
 }
@@ -259,20 +266,19 @@ export function estReposTropLong(
  *   - `six` : 6 jours de travail, DUR ;
  *   - `dur` : 3 repos ou plus entre deux blocs, au-dessus de tout (le
  *     modèle reste possible quand les faits l'imposent) ;
- *   - `transition` : un bloc de 4 jours ;
- *   - `urgence` : un repos seul ;
- *   - `fort` : un bloc de 1 à 3 jours. */
-export type GenreMotif = 'six' | 'dur' | 'transition' | 'urgence' | 'fort'
+ *   - `reposSeul` : un repos seul (un décalage, aucun jour perdu) ;
+ *   - `bloc` : un bloc de 4 jours (un décalage, un jour perdu) ;
+ *   - `fort` : un bloc de 1 à 3 jours, au-dessus des heures dues. */
+export type GenreMotif = 'six' | 'dur' | 'reposSeul' | 'bloc' | 'fort'
 
 export function genreMotif(motif: readonly ('T' | 'r')[]): GenreMotif {
   if (motif.every((e) => e === 'T')) return 'six'
   const n = motif.length - 2
-  if (motif[0] === 'T') return n >= REPOS_TROP_LONG ? 'dur' : 'urgence'
-  return n === RYTHME_TRAVAIL - 1 ? 'transition' : 'fort'
+  if (motif[0] === 'T') return n >= REPOS_TROP_LONG ? 'dur' : 'reposSeul'
+  return n === RYTHME_TRAVAIL - 1 ? 'bloc' : 'fort'
 }
 
-/** Les transitions faites sur une suite de jours connus (le passé d'une
- * personne) : seules celles dont les deux bords sont dans la suite. */
+/** Les blocs de 4 jours faits sur une suite de jours connus. */
 export function transitionsDans(etats: readonly EtatRythme[]): number {
   return fautesRythme(etats).filter(estTransition).length
 }
@@ -280,23 +286,6 @@ export function transitionsDans(etats: readonly EtatRythme[]): number {
 /** Les repos seuls faits sur une suite de jours connus. */
 export function reposSeulsDans(etats: readonly EtatRythme[]): number {
   return fautesRythme(etats).filter(estReposSeul).length
-}
-
-/** Repos seuls permis sur 4 semaines : un ; deux avant une semaine
- * d'école (la semaine d'avant, et celle d'encore avant si la même
- * transition l'exige), pour faire toutes les heures (décision de
- * l'utilisateur du 2026-11-09). */
-export const REPOS_SEULS_MAX = 1
-export const REPOS_SEULS_MAX_AVANT_ECOLE = 2
-
-/** Les repos seuls que le calcul peut encore faire, à leur prix d'urgence,
- * d'après ceux déjà faits sur 4 semaines. */
-export function reposSeulsPermis(s: {
-  reposSeulsRecents?: number
-  ecoleProche?: boolean
-}): number {
-  const max = s.ecoleProche ? REPOS_SEULS_MAX_AVANT_ECOLE : REPOS_SEULS_MAX
-  return Math.max(0, max - (s.reposSeulsRecents ?? 0))
 }
 
 /** Le message d'une transition faite : un changement de jours de repos,
@@ -315,7 +304,9 @@ export function messageTransition(
 /** Début commun des messages d'une transition. */
 export const CHANGEMENT_REPOS = 'changement de jours de repos'
 
-/** Le message d'un repos seul. Sans `nbJours` : sans le jour. */
+/** Le message d'un repos seul : un changement de jours de repos, comme
+ * le bloc de 4 (`rythmeStrict.ts`, 2026-11-10). Sans `nbJours` : sans le
+ * jour. */
 export function messageReposSeul(
   f: Pick<FauteRythme, 'debut'>,
   nbJours?: number,
@@ -324,7 +315,7 @@ export function messageReposSeul(
 }
 
 /** Début commun des messages d'un repos seul. */
-export const REPOS_SEUL_URGENCE = 'repos seul (manque de personnel)'
+export const REPOS_SEUL_URGENCE = `${CHANGEMENT_REPOS} : repos seul`
 
 /** Un jour connu d'avance, que le planning ne décide pas : hors de la
  * période (semaine voisine), ou une indisponibilité (absence, école, repos

@@ -77,11 +77,23 @@ export function rythmeHumain(
  * au rythme humain (`rythmeHumain`) : les autres contrats ont des jours
  * seuls par nature, au plus un conseil. */
 export function jourIsoleDe(
-  s: Parameters<typeof rythmeHumain>[0],
+  s: Parameters<typeof rythmeHumain>[0] & { reposFixes?: ReadonlySet<number> },
   regles: RegleEtablissement = REGLES_PAR_DEFAUT,
 ): 'interdit' | 'a_eviter' | 'aucune' {
   const r = regles.repos.jourIsole
   if (r === 'aucune') return 'aucune'
+  // Au rythme 5 et 2 (`rythmeStrictDe`, même condition), un jour seul est un
+  // bloc d'un jour : le rythme le dit et le paie, avec SES jours (un congé
+  // court y est du travail). La règle du jour isolé, qui lit un congé comme
+  // un jour sans travail, n'est pas écrite une seconde fois (relecture du
+  // 2026-11-10 : elle interdisait le seul jour dû d'une semaine de congé,
+  // et forçait 3 repos et des heures perdues).
+  if (
+    regles.repos.rythmeStrict &&
+    (s.reposFixes?.size ?? 0) < 2 &&
+    rythmeHumain(s, regles)
+  )
+    return 'aucune'
   return r === 'interdit' && rythmeHumain(s, regles) ? 'interdit' : 'a_eviter'
 }
 
