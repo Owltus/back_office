@@ -60,7 +60,6 @@ import type {
 import { heuresLisibles as h } from '#/lib/planning/temps.ts'
 import type { Horaire, Poste } from '#/lib/planning/types.ts'
 import { listeEt } from '#/lib/planning/affichage.ts'
-import { conditionsEnClair } from '#/lib/planning/moment.ts'
 
 /** Les parties de la page, dans l'ordre du sommaire. */
 export const SECTIONS_FONCTIONNEMENT = [
@@ -538,7 +537,6 @@ export function AidePlanningContenu({
       repartit(R, 'nuits') && 'des nuits',
     ].filter((x): x is string => !!x),
   )
-  const M = R.moments
   const P = R.passations
   const Rp = R.repos
   const deux = Rp.deuxReposDeSuite
@@ -700,20 +698,23 @@ export function AidePlanningContenu({
         <Sous titre="Le moment de l’horaire">
           <p className="text-muted-foreground">
             Chaque horaire a un moment, calculé d’après ses heures. Il ne se
-            choisit pas : le calcul ne regarde que les heures, jamais le nom.
-            Les limites ci-dessous se règlent dans Besoins, partie Moments.
+            règle pas (règles fixes depuis le 11/11/2026).
           </p>
+          {/* Miroir de `momentFixe` (moment.ts). */}
           <Tableau
             entetes={['Moment', 'Quand']}
-            lignes={[...M.liste]
-              .sort((a, b) => a.priorite - b.priorite)
-              .map((m) => [
-                m.nom,
-                `${conditionsEnClair(m)}${m.compte_dans_tableau ? '' : '. Hors du tableau : un coup de main, posé s’il reste des heures'}${m.est_nuit ? '. C’est la nuit' : ''}`,
-              ])}
+            lignes={[
+              ['Nuit', 'L’horaire contient 2 h du matin'],
+              ['Soir', 'Il finit après 21 h, ou après minuit'],
+              ['Matin', 'Il commence à 8 h ou avant'],
+              [
+                'Middle',
+                'Le reste. Hors du tableau : un coup de main, posé s’il reste des heures',
+              ],
+            ]}
           />
           <p className="text-muted-foreground">
-            Les moments sont essayés dans cet ordre : le premier qui convient
+            Les règles sont essayées dans cet ordre : la première qui convient
             décide.
           </p>
         </Sous>
@@ -1285,10 +1286,6 @@ export function AidePlanningContenu({
             [
               'Besoins',
               'Le tableau de l’accueil, chaque besoin obligatoire ou souhaité et son niveau, l’ouverture et la fermeture, la relève, la passation avec la nuit, l’équipe du soir ensemble.',
-            ],
-            [
-              'Besoins, partie Moments',
-              'Les limites du matin, du soir et de la nuit, qui rangent chaque horaire.',
             ],
             [
               'Fiche d’une personne',

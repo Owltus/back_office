@@ -46,7 +46,6 @@ vi.mock(
 const { AidePlanningContenu, SECTIONS_FONCTIONNEMENT } =
   await import('#/components/planning/AidePlanningContenu.tsx')
 const { lireRegles } = await import('#/lib/planning/reglesEtablissement.ts')
-const { momentsAvec } = await import('#/lib/planning/test/momentsTest.ts')
 
 afterEach(cleanup)
 
@@ -184,64 +183,11 @@ describe('AidePlanningContenu (aide du bouton ?)', () => {
       '5 jours : 4 journées de 8 h et une journée étoile de 7 h',
     )
     expect(texteDe('contrats')).toContain('5 jours de 7 h')
-    expect(texteDe('horaires')).toContain('il commence à 21 h ou plus tard')
+    expect(texteDe('horaires')).toContain('L’horaire contient 2 h du matin')
     expect(texteDe('postes')).toContain('ensemble 30 minutes chaque jour')
     expect(texteDe('generation')).toContain('Deux repos de suite')
     expect(texteDe('generation')).toContain('au plus 5 jours de travail')
     expect(texteDe('generation')).toContain('La passation avec la nuit aussi')
-  })
-
-  it('le texte suit un réglage changé', () => {
-    rendre(
-      lireRegles({
-        reglages: {
-          deux_repos_de_suite: 'souhaite',
-          jours_affiles_conseilles: 4,
-          jour_isole: 'a_eviter',
-          repos_confort: 13 * 60,
-          journees_contrats: [
-            { minutes_hebdo: 35 * 60, durees: [7 * 60], courtes_max: 0 },
-            {
-              minutes_hebdo: 39 * 60,
-              durees: [9 * 60, 7 * 60 + 30],
-              courtes_max: 1,
-            },
-          ],
-          conge_long: 7,
-        },
-        modelesContrat: [],
-        moments: momentsAvec({
-          nuit: { debut_de: 22 * 60 },
-          matin: { fin_a: 16 * 60 },
-        }),
-      }),
-    )
-    const contrats = texteDe('contrats')
-    expect(contrats).toContain(
-      '5 jours : 4 journées de 9 h et une journée étoile de 7 h 30',
-    )
-    expect(contrats).not.toContain('journées de 8 h et une journée étoile')
-    expect(texteDe('horaires')).toContain('il commence à 22 h ou plus tard')
-    expect(texteDe('horaires')).toContain('finit à 16 h au plus tard')
-    // La passation entre les équipes est fixe (2026-11-06) : aucun réglage
-    // ne la change, l'aide la dit toujours.
-    const postes = texteDe('postes')
-    expect(postes).toContain('ensemble 30 minutes chaque jour')
-    expect(postes).toContain('sans réglage')
-    expect(postes).not.toContain('pas demandée')
-    const ordre = texteDe('generation')
-    expect(ordre).toContain('Le rythme')
-    expect(ordre).not.toContain('Deux repos de suite pour chacun')
-    expect(ordre).toContain('au plus 4 jours de travail')
-    expect(ordre).toContain('ensemble 30 minutes')
-    expect(ordre).toContain('La passation avec la nuit aussi')
-    expect(ordre).toContain('13 h entre deux services')
-    const bien = texteDe('bien-etre')
-    expect(bien).toContain('Deux repos qui se suivent quand c’est possible')
-    expect(bien).toContain('Au moins 13 h entre la fin')
-    expect(bien).not.toContain('Jamais un jour de travail seul')
-    expect(bien).toContain('est évité quand c’est possible')
-    expect(bien).toContain('au moins 7 jours')
   })
 
   it('dit où se règle chaque règle, et que la loi ne se règle pas', () => {
@@ -249,7 +195,6 @@ describe('AidePlanningContenu (aide du bouton ?)', () => {
     const t = texteDe('reglages')
     for (const ou of [
       'Équipe, bouton Règles',
-      'Besoins, partie Moments',
       'Postes',
       'Besoins',
       'Fiche d’une personne',

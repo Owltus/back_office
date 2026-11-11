@@ -15,7 +15,7 @@
  * (`JOURS_AFFILES_MAX`…) ne sont plus que les défauts, pour l'aide.
  */
 
-import { lireMoments, MOMENTS_HOTEL } from '#/lib/planning/moment.ts'
+import { MOMENTS_HOTEL } from '#/lib/planning/moment.ts'
 import type { Moments } from '#/lib/planning/moment.ts'
 import { lireZones, zoneParDefaut } from '#/lib/planning/zones.ts'
 import { NIVEAUX } from '#/lib/planning/niveaux.ts'
@@ -357,7 +357,8 @@ export function lireRegles(
       reposApresNuits: r.repos_apres_nuits ?? d.repos.reposApresNuits,
     },
     passations,
-    moments: lireMoments(referentiel?.moments),
+    // Moments EN DUR (2026-11-11, `momentFixe`) : la table n'est plus lue.
+    moments: MOMENTS_HOTEL,
     zones: lireZones(referentiel?.zones, zoneParDefaut()),
     niveaux: NIVEAUX,
     accueil: {

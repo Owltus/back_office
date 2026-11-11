@@ -44,8 +44,6 @@ vi.mock('#/components/planning/hooks/usePlanning.ts', async () => {
 
 const { ReglesContrats } =
   await import('#/components/planning/parametres/equipe/ReglesContrats.tsx')
-const { SectionMoments } =
-  await import('#/components/planning/parametres/reglages/SectionMoments.tsx')
 const { monter, referentielDemo } =
   await import('#/components/planning/parametres/reglages/test/monter.tsx')
 
@@ -243,57 +241,5 @@ describe('Règles des contrats : relecture adverse du 2026-11-05', () => {
         .getByRole('button', { name: 'Enregistrer' })
         .hasAttribute('disabled'),
     ).toBe(false)
-  })
-})
-
-describe('Moments', () => {
-  it('aperçu avant l’envoi, puis moments et moments des horaires', async () => {
-    monter(<SectionMoments referentiel={ref} modifiable />)
-    const champ = screen.getByRole('textbox', { name: 'Nuit commence de' })
-    fireEvent.change(champ, { target: { value: '23:30' } })
-    fireEvent.blur(champ)
-    const liste = await screen.findByRole('list', {
-      name: 'Horaires qui changeraient de moment',
-    })
-    expect(liste.textContent).toMatch(/Nuit/)
-    expect(service.enregistrerMoments).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
-    await waitFor(() =>
-      expect(service.enregistrerMomentsHoraires).toHaveBeenCalledTimes(1),
-    )
-    expect(service.enregistrerMoments.mock.calls[0][0]).toEqual([
-      expect.objectContaining({ id: 'nuit', debut_de: 23 * 60 + 30 }),
-    ])
-    expect(service.enregistrerReglages).not.toHaveBeenCalled()
-    expect(
-      service.enregistrerMomentsHoraires.mock.calls[0][0].length,
-    ).toBeGreaterThan(0)
-  })
-
-  it('créer un moment, puis l’enregistrer', async () => {
-    monter(<SectionMoments referentiel={ref} modifiable />)
-    fireEvent.change(
-      screen.getByRole('textbox', { name: 'Nom du nouveau moment' }),
-      { target: { value: 'Midi' } },
-    )
-    fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }))
-    expect(screen.getByRole('listitem', { name: 'Midi' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
-    await waitFor(() =>
-      expect(service.enregistrerMoments).toHaveBeenCalledTimes(1),
-    )
-    expect(service.enregistrerMoments.mock.calls[0][0]).toEqual([
-      expect.objectContaining({ id: 'midi', nom: 'Midi' }),
-    ])
-  })
-
-  it('lecture seule : pas de bouton, champs grisés', () => {
-    monter(<SectionMoments referentiel={ref} modifiable={false} />)
-    expect(screen.queryByRole('button', { name: 'Enregistrer' })).toBeNull()
-    expect(
-      screen
-        .getByRole('textbox', { name: 'Nuit commence de' })
-        .hasAttribute('disabled'),
-    ).toBe(true)
   })
 })

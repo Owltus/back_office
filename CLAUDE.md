@@ -3173,6 +3173,19 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   Postes retirés ; la page = tableau Personnel, Moments, ordre de décision.
   Mesuré sur la copie locale (semaine du 04/01/2027, « Tout recalculer ») :
   50 shifts, 4 places à pourvoir, Supervision à ses 39 h, ~10 s.
+  Module 5, MOMENTS EN DUR (décision utilisateur : « en dur dans le code,
+  mais déterminé par les horaires, assez simplement ») : `momentFixe`
+  (moment.ts), dans cet ordre — nuit si l'horaire CONTIENT 2 h du matin,
+  soir s'il finit APRÈS 21 h (ou après minuit), matin s'il commence à 8 h
+  ou avant, middle sinon. `lireRegles` et `codesCase` lisent
+  `MOMENTS_HOTEL` (la table `planning_moments` n'est plus lue, gardée en
+  base) ; `momentPropose` passe par `momentFixe` pour la liste de l'hôtel
+  (une liste de test garde le calcul par conditions). Sur les 37 horaires,
+  seul 08:00-18:00 change (middle → matin, Direction, hors tableau).
+  Retirés : section Moments de Besoins (`SectionMoments.tsx`,
+  `reglages/moments.ts`), lien de Horaires, point « moment inatteignable »
+  de « À vérifier » ; l'aide écrit les quatre règles. Ne pas remettre de
+  réglage des moments.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

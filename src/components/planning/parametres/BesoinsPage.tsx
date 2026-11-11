@@ -45,7 +45,6 @@ import { phrasesOrdreDecision } from '#/components/planning/parametres/besoins/o
 import { useOuvrirCible } from '#/components/planning/parametres/reglages/ouvrirCible.ts'
 import type { PropsOuvrir } from '#/components/planning/parametres/reglages/ouvrirCible.ts'
 import { CadreReglages } from '#/components/planning/parametres/reglages/cadre.tsx'
-import { SectionMoments } from '#/components/planning/parametres/reglages/SectionMoments.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { planningKeys } from '#/lib/planning/keys.ts'
@@ -97,10 +96,6 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
     lien,
     !!data,
     (cible) => {
-      if (cible === 'moments') {
-        window.setTimeout(() => allerA('titre-moments'), 0)
-        return true
-      }
       if (
         cible === 'presence' ||
         cible.startsWith('poste-') ||
@@ -317,10 +312,6 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
               croisent un moment.
             </p>
           </section>
-
-          <div className="border-t pt-8">
-            <SectionMoments referentiel={data} modifiable={modifiable} />
-          </div>
 
           <details className="group border-t pt-4 text-sm text-muted-foreground">
             <summary className="flex cursor-pointer items-center gap-1.5 font-medium text-foreground select-none">

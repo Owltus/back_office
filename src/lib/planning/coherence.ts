@@ -1454,19 +1454,6 @@ function pointsDesRegles(
         )
     }
   }
-
-  // --------------------------------------------------------------- moments
-  // Un moment qu'aucun horaire ne peut atteindre (ses conditions sont
-  // couvertes par un moment essayé avant lui) : ses réglages ne servent à
-  // rien. Essayé sur tous les horaires possibles au quart d'heure.
-  for (const id of momentsInatteignables(L))
-    ajouter(
-      `moments:${id}`,
-      'a-voir',
-      'besoins',
-      `Avec ces réglages, aucun horaire ne peut être ${duMoment(id, L)}. Revoyez ses heures, ou l'ordre de classement des moments.`,
-      'moments',
-    )
 }
 
 /** Les moments qu'aucun horaire (début et fin au quart d'heure) ne peut

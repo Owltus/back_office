@@ -10,7 +10,6 @@ import {
   verifierReglages as verifierTout,
 } from '#/lib/planning/coherence.ts'
 import type { PointReglage } from '#/lib/planning/coherence.ts'
-import { momentsAvec } from '#/lib/planning/test/momentsTest.ts'
 import { avecCode } from '#/lib/planning/test/codesTest.ts'
 import { hotelAccueil } from '#/lib/planning/test/hotelAccueil.ts'
 import { hotelReel } from '#/lib/planning/test/hotelReel.ts'
@@ -1796,33 +1795,5 @@ describe("règles de l'établissement impossibles (étape 8, 2026-11-05)", () =>
     r.horaires.push(horaire(8, 'S2', '14:30', '23:00', 'soir'))
     r.postes[0].horaires_autorises = [M, S, 8]
     expect(releve(r)).toEqual([])
-  })
-
-  const moments = (r: Referentiel) =>
-    verifierReglages(r)
-      .filter((x) => x.id.startsWith('moments:'))
-      .map((x) => x.id)
-  const avecMoments = (
-    changes: Parameters<typeof momentsAvec>[0],
-  ): Referentiel => ({ ...propre(), moments: momentsAvec(changes) })
-
-  it('un moment qu’aucun horaire ne peut atteindre : un point vers Moments', () => {
-    expect(moments(propre())).toEqual([])
-    // Le soir dès 05:00 avale le matin et le middle.
-    const r = avecMoments({ soir: { debut_de: 5 * 60 } })
-    expect(moments(r)).toEqual(['moments:matin', 'moments:middle'])
-    expect(
-      verifierReglages(r).find((x) => x.id === 'moments:matin'),
-    ).toMatchObject({
-      ecran: 'besoins',
-      lien: { page: '/planning/besoins', cible: 'moments' },
-      texte: expect.stringContaining('aucun horaire ne peut être du matin'),
-    })
-    // La nuit qui commence à 00:00 et finit à 24:00 prend tout.
-    expect(
-      moments(avecMoments({ nuit: { debut_de: 0, debut_a: 1440 } })),
-    ).toEqual(['moments:matin', 'moments:middle', 'moments:soir'])
-    // Corrigé : les moments par défaut.
-    expect(moments(avecMoments({}))).toEqual([])
   })
 })

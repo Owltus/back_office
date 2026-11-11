@@ -30,16 +30,6 @@ import type { Moment } from '#/lib/planning/types.ts'
 
 const H = 60
 
-/** L'arbre de décision d'avant le 2026-11-06 (moment.ts), recopié tel quel
- * comme oracle. */
-function ancienMoment(debut: string, fin: string): string {
-  const d = minutes(debut)
-  const f = minutes(fin)
-  if (d >= 21 * H || d < 5 * H) return 'nuit'
-  if (f <= d || f >= 21 * H || d >= 15 * H) return 'soir'
-  if (d < 9 * H && f <= 17 * H + 45) return 'matin'
-  return 'middle'
-}
 function ancienLibre(debut: string): string {
   const m = minutes(debut)
   if (m >= 21 * H || m < 5 * H) return 'nuit'
@@ -62,29 +52,19 @@ const HORAIRES_BASE =
     .map((l) => l.split(','))
 
 describe('les moments de l’hôtel : exactement ceux d’avant', () => {
-  it('toute heure de début et de fin, aux cinq minutes : le même moment', () => {
-    let essais = 0
-    for (let d = 0; d <= 1440; d += 5)
-      for (let f = 0; f <= 1440; f += 5) {
-        const debut = hhmm(d % 1440)
-        const fin = f === 1440 ? '24:00' : hhmm(f)
-        expect(momentPropose({ debut, fin, pause: 0 })).toBe(
-          ancienMoment(debut, fin),
-        )
-        essais++
-      }
-    expect(essais).toBeGreaterThan(80_000)
+  it('les 37 horaires de la base : la règle en dur ne change que 08:00-18:00', () => {
+    // Oracle : décision utilisateur du 2026-11-11 (`momentFixe`) ; le seul
+    // horaire qui change, celui de la Direction, passe du middle au matin.
+    const changes = HORAIRES_BASE.filter(
+      ([debut, fin, pause, moment]) =>
+        momentPropose({ debut, fin, pause: Number(pause) }) !== moment,
+    ).map(([debut, fin]) => `${debut}-${fin}`)
+    expect(changes).toEqual(['08:00-18:00'])
   })
 
   it('un horaire libre sans fin : le même moment', () => {
     for (let d = 0; d < 1440; d += 5)
       expect(momentDuDebut(hhmm(d))).toBe(ancienLibre(hhmm(d)))
-  })
-
-  it('les 37 horaires de la base gardent leur moment', () => {
-    expect(HORAIRES_BASE).toHaveLength(37)
-    for (const [debut, fin, pause, periode] of HORAIRES_BASE)
-      expect(momentPropose({ debut, fin, pause: Number(pause) })).toBe(periode)
   })
 
   it('le tableau : matin, soir, nuit ; le middle hors du tableau', () => {

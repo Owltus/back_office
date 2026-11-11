@@ -15,8 +15,6 @@ import type {
   Probleme,
   SalarieSolveur,
 } from '#/lib/planning/modele.ts'
-import { momentPropose } from '#/lib/planning/moment.ts'
-import { lusAvec } from '#/lib/planning/test/momentsTest.ts'
 import {
   droitAuRattrapage,
   journeesDuCalcul,
@@ -442,16 +440,6 @@ describe('équipe du soir ensemble (fixe : 30 min, 2026-11-06)', () => {
     expect(dit(REGLES_PAR_DEFAUT, 0.5)).toEqual([])
     // Zone non tenue en continu : rien à dire.
     expect(dit(SANS_CONTINU)).toEqual([])
-  })
-})
-
-describe('limites des moments (moments)', () => {
-  it('21:30 est une nuit à 21 h, un soir si la nuit commence à 22 h', () => {
-    const h = { debut: '21:30', fin: '23:59', pause: 0 }
-    expect(momentPropose(h)).toBe('nuit')
-    expect(momentPropose(h, lusAvec({ nuit: { debut_de: 22 * H } }))).toBe(
-      'soir',
-    )
   })
 })
 

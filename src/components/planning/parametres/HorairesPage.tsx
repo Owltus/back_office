@@ -14,7 +14,6 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
 import { Moon, Plus, Trash2 } from 'lucide-react'
 
 import {
@@ -346,18 +345,11 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
             </div>
           </section>
 
-          {/* Les limites des moments se règlent dans Besoins depuis le
-              2026-11-05 (demande utilisateur). */}
+          {/* Moments en dur depuis le 2026-11-11 (`momentFixe`). */}
           <p data-moments className="-mt-2 text-sm text-muted-foreground">
-            Le moment se calcule d'après les heures. Les limites se règlent dans{' '}
-            <Link
-              to="/planning/besoins"
-              search={{ ouvrir: 'moments' }}
-              className="font-medium text-foreground underline underline-offset-4 hover:text-primary"
-            >
-              Besoins
-            </Link>
-            .
+            Le moment se calcule d'après les heures : nuit si l'horaire contient
+            2 h du matin, soir s'il finit après 21 h, matin s'il commence à 8 h
+            ou avant, middle sinon.
           </p>
 
           <section

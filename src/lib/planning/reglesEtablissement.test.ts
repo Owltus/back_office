@@ -91,30 +91,32 @@ describe('REGLES_PAR_DEFAUT : l’hôtel d’aujourd’hui, chiffre pour chiffre
     ])
   })
 
-  it('limites des moments : celles de momentPropose et periodeLibre', () => {
-    // Les moments de l'hôtel (2026-11-06 : une liste, mêmes limites).
-    const lim = Object.fromEntries(
-      REGLES_PAR_DEFAUT.moments.liste.map((x) => [
-        x.id,
-        [x.debut_de, x.debut_a, x.fin_de, x.fin_a, x.toutes, x.libre_avant],
-      ]),
-    )
-    expect(lim).toEqual({
-      nuit: [21 * H, 5 * H, null, null, false, null],
-      soir: [15 * H, null, 21 * H, null, false, null],
-      matin: [null, 9 * H, null, 17 * H + 45, true, 12 * H + 30],
-      middle: [null, null, null, null, true, null],
-    })
+  it('moments en dur (2026-11-11) : les quatre règles de momentFixe', () => {
+    // Oracle : décision utilisateur du 2026-11-11 (« un horaire qui commence
+    // à 07h00 est du matin, qui termine après 21 h du soir, à cheval au
+    // milieu du middle, et s'il contient 2 h du matin, c'est la nuit »).
     const m = (debut: string, fin: string) =>
       momentPropose({ debut, fin, pause: 0 })
-    expect(m('21:00', '07:00')).toBe('nuit')
-    expect(m('20:59', '23:00')).toBe('soir')
-    expect(m('04:59', '12:00')).toBe('nuit')
-    expect(m('05:00', '12:00')).toBe('matin')
-    expect(m('08:59', '17:45')).toBe('matin')
-    expect(m('08:59', '17:46')).toBe('middle')
-    expect(m('09:00', '16:00')).toBe('middle')
-    expect(m('15:00', '20:00')).toBe('soir')
+    // Nuit : contient 2 h du matin.
+    expect(m('23:00', '07:00')).toBe('nuit')
+    expect(m('00:00', '07:00')).toBe('nuit')
+    expect(m('01:59', '06:00')).toBe('nuit')
+    expect(m('02:00', '06:00')).toBe('nuit')
+    expect(m('02:01', '06:00')).toBe('matin')
+    expect(m('21:00', '02:00')).toBe('soir')
+    expect(m('21:00', '02:01')).toBe('nuit')
+    // Soir : finit après 21 h, ou après minuit.
+    expect(m('14:30', '23:15')).toBe('soir')
+    expect(m('14:30', '00:30')).toBe('soir')
+    expect(m('15:00', '21:00')).toBe('middle')
+    expect(m('15:00', '21:01')).toBe('soir')
+    // Matin : commence à 8 h ou avant.
+    expect(m('07:00', '15:45')).toBe('matin')
+    expect(m('08:00', '18:00')).toBe('matin')
+    expect(m('08:01', '16:45')).toBe('middle')
+    // Middle : le reste.
+    expect(m('11:00', '19:45')).toBe('middle')
+    expect(m('12:00', '20:45')).toBe('middle')
     // Une seule limite de nuit pour un horaire et un horaire libre.
     expect(periodeLibre('20:59')).toBe('soir')
     expect(periodeLibre('21:00')).toBe('nuit')

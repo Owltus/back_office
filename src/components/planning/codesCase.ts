@@ -13,7 +13,7 @@
  * horaires de 7 h qui remplacent l'horaire de 8 h d'un shift, ou l'inverse.
  */
 
-import { lireMoments, MOMENTS_HOTEL } from '#/lib/planning/moment.ts'
+import { MOMENTS_HOTEL } from '#/lib/planning/moment.ts'
 import type { Moments } from '#/lib/planning/moment.ts'
 import { estPrefere, NIVEAUX, positionNiveau } from '#/lib/planning/niveaux.ts'
 import {
@@ -351,7 +351,7 @@ export function rubriquesDeLaCase({
 }): RubriquesCase {
   const { postes, horaires } = referentiel
   const niveaux = NIVEAUX
-  const moments = lireMoments(referentiel.moments)
+  const moments = MOMENTS_HOTEL
   const rang = (id: number) => postes.findIndex((p) => p.id === id)
   const candidats: Array<{ poste: Poste; niveau: Niveau | null }> = [
     ...personne.competences,

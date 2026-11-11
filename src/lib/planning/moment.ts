@@ -181,6 +181,7 @@ export function momentPropose(
   h: Pick<Horaire, 'debut' | 'fin' | 'pause'>,
   l: Moments = MOMENTS_HOTEL,
 ): Periode {
+  if (l === MOMENTS_HOTEL) return momentFixe(h)
   const c = cache(l)
   const debut = minutes(h.debut)
   const fin = minutes(h.fin)
@@ -191,6 +192,30 @@ export function momentPropose(
     else if (t) return m.id
   }
   return (reste ?? c.priorite[c.priorite.length - 1]).id
+}
+
+/**
+ * Le moment d'un horaire de l'établissement, EN DUR (décision utilisateur
+ * du 2026-11-11 : « en dur dans le code, mais déterminé par les horaires,
+ * assez simplement »). Dans cet ordre :
+ *   - nuit : l'horaire contient 2 h du matin ;
+ *   - soir : il finit après 21 h (ou après minuit) ;
+ *   - matin : il commence à 8 h ou avant ;
+ *   - middle : le reste, à cheval au milieu.
+ * Sur les 37 horaires de l'hôtel, seul 08:00-18:00 change (middle → matin).
+ */
+export function momentFixe(h: Pick<Horaire, 'debut' | 'fin'>): Periode {
+  const d = minutes(h.debut)
+  const f = minutes(h.fin)
+  const deuxHeures = 2 * H
+  const passeMinuit = f <= d
+  const contientDeuxHeures = passeMinuit
+    ? d <= deuxHeures || f > deuxHeures
+    : d <= deuxHeures && f > deuxHeures
+  if (contientDeuxHeures) return 'nuit'
+  if (passeMinuit || f > 21 * H) return 'soir'
+  if (d <= 8 * H) return 'matin'
+  return 'middle'
 }
 
 /** L'horaire avec son moment recalculé d'après ses heures (lecture de la

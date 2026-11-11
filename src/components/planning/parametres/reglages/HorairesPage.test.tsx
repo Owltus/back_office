@@ -161,16 +161,14 @@ describe('Horaires et absences', () => {
     }
   })
 
-  it('les moments ne se règlent plus ici : un lien vers Besoins', () => {
-    // Oracle : « migrer la partie Moments dans Besoins » (2026-11-05).
+  it('les moments ne se règlent nulle part : la règle est écrite (2026-11-11)', () => {
     monter(<HorairesPage />)
     expect(
       screen.queryByRole('textbox', { name: 'La nuit commence à' }),
     ).toBeNull()
-    const lien = screen.getByRole('link', { name: 'Besoins' })
-    expect(lien.getAttribute('href')).toBe('/planning/besoins?ouvrir=moments')
+    expect(screen.queryByRole('link', { name: 'Besoins' })).toBeNull()
     expect(document.querySelector('[data-moments]')?.textContent).toContain(
-      "Le moment se calcule d'après les heures.",
+      'nuit si l’horaire'.replace('’', "'"),
     )
   })
 

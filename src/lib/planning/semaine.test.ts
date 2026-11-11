@@ -2192,11 +2192,11 @@ describe('cycles : un shift posé tient la place de son cycle', () => {
       moment: 'nuit',
       soir: false,
     })
-    // 06:00-21:00 : un soir (il finit à 21 h), jamais un matin tôt.
+    // 06:00-21:00 : il ne finit pas APRÈS 21 h et commence avant 8 h, un
+    // matin (moments en dur du 2026-11-11, `momentFixe`).
     expect(libre('06:00', '21:00')).toMatchObject({
-      moment: 'soir',
-      soir: true,
-      matinTot: false,
+      moment: 'matin',
+      soir: false,
     })
   })
 

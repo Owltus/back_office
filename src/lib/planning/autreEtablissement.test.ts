@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 
 import { zonesPassation } from '#/lib/planning/generateur.ts'
 import type { Highs } from '#/lib/planning/generateur.ts'
-import { avecMomentCalcule, momentPropose } from '#/lib/planning/moment.ts'
+import { avecMomentCalcule } from '#/lib/planning/moment.ts'
 import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
 import { momentsAvec } from '#/lib/planning/test/momentsTest.ts'
 import { preparerGeneration } from '#/lib/planning/semaine.ts'
@@ -297,26 +297,6 @@ describe('un second établissement, fictif', () => {
     const q = planning(REGLAGES)
     const g2 = preparerGeneration(q.donnees(LUNDI), { aujourdhui: AUJOURDHUI })
     expect(zonesPassation(g2.probleme)).toEqual([])
-  })
-
-  it('moments selon les limites de l’établissement', () => {
-    const moments = lireRegles({
-      reglages: REGLAGES,
-      moments: MOMENTS_ETAB,
-    }).moments
-    const h3 = { debut: '09:00', fin: '16:30', pause: 30 }
-    expect(momentPropose(h3, moments)).toBe('matin')
-    expect(momentPropose(h3)).toBe('middle')
-    const tard = { debut: '21:30', fin: '23:30', pause: 0 }
-    expect(momentPropose(tard, moments)).toBe('soir')
-    expect(momentPropose(tard)).toBe('nuit')
-    // Le 09:00-16:30 de la Réception compte pour le matin de l'accueil.
-    const g = preparerGeneration(p.donnees(LUNDI), { aujourdhui: AUJOURDHUI })
-    const c = g.probleme.creneaux.filter(
-      (x) => x.poste === String(RECEPTION) && x.typeShift === '3',
-    )
-    expect(c.length).toBeGreaterThan(0)
-    for (const x of c) expect(x.presence).toEqual(['matin'])
   })
 
   it('il manque du monde : la Direction, non indispensable, reste vide en premier', () => {

@@ -14,13 +14,6 @@ import { texteCarte } from '#/components/planning/semaine/Cartes.tsx'
 import { NIVEAUX } from '#/lib/planning/niveaux.ts'
 import { donneesGeneration } from '#/components/planning/hooks/usePlanning.ts'
 import { premierLundiGeneration } from '#/lib/planning/semaine.ts'
-import {
-  differenceMoments,
-  erreursMoments,
-  nomsDAttente,
-  raisonHorsTableau,
-} from '#/components/planning/parametres/reglages/moments.ts'
-import { messageErreur } from '#/lib/planning/erreurs.ts'
 import { leMoment, lireMoments } from '#/lib/planning/moment.ts'
 
 import { verifierReglages } from '#/lib/planning/coherence.ts'
@@ -134,14 +127,6 @@ describe('2. un moment sorti du tableau qui garde ses chiffres', () => {
     }
   }
 
-  it('ses chiffres ne comptent plus : ni ligne, ni place à pourvoir', () => {
-    const d = donnees()
-    expect(d.referentiel.consignes.some((c) => c.periode === 'soir')).toBe(true)
-    const s = analyser(d)
-    expect(s.presence.some((x) => x.periode === 'soir')).toBe(false)
-    expect(s.a_pourvoir.some((x) => x.moment === 'soir')).toBe(false)
-  })
-
   it('les identifiants des places de l’accueil restent uniques', () => {
     const s = analyser(donnees())
     const ids = s.a_pourvoir.map((x) => x.besoin_id)
@@ -213,63 +198,8 @@ describe('8. aucun mot de l’hôtel écrit dans le code', () => {
   })
 })
 
-describe('2. écran : la case du tableau se garde tant qu’il y a des chiffres', () => {
-  const consignes = [
-    { periode: 'soir', minimum: 2, maximum: 2 },
-    { periode: 'matin', minimum: 0, maximum: 0 },
-  ]
-  it('refusé : un moment qui a des chiffres', () => {
-    expect(raisonHorsTableau('soir', consignes)).toMatch(/chiffres/)
-    const liste = momentsAvec({ soir: { compte_dans_tableau: false } })
-    expect(erreursMoments(liste, consignes).join(' ')).toMatch(/Soir/)
-  })
-  it('accepté : des chiffres à 0, ou aucun', () => {
-    expect(raisonHorsTableau('matin', consignes)).toBeNull()
-    expect(raisonHorsTableau('middle', consignes)).toBeNull()
-    const liste = momentsAvec({ matin: { compte_dans_tableau: false } })
-    expect(erreursMoments(liste, consignes)).toEqual([])
-  })
-})
-
-describe('6. échanger les noms de deux moments', () => {
-  const avant = momentsAvec()
-  const apres = avant.map((m) =>
-    m.id === 'matin'
-      ? { ...m, nom: 'Soir' }
-      : m.id === 'soir'
-        ? { ...m, nom: 'Matin' }
-        : m,
-  )
-
-  it('les deux passent d’abord par un nom d’attente', () => {
-    const { ecrire } = differenceMoments(avant, apres)
-    const attente = nomsDAttente(avant, ecrire)
-    expect(attente.map((m) => m.id).sort()).toEqual(['matin', 'soir'])
-    const noms = new Set(avant.map((m) => m.nom))
-    for (const m of attente) expect(noms.has(m.nom)).toBe(false)
-    expect(new Set(attente.map((m) => m.nom)).size).toBe(attente.length)
-  })
-
-  it('accepté : sans échange, aucune écriture de plus', () => {
-    const renomme = avant.map((m) =>
-      m.id === 'matin' ? { ...m, nom: 'Aube' } : m,
-    )
-    expect(
-      nomsDAttente(avant, differenceMoments(avant, renomme).ecrire),
-    ).toEqual([])
-  })
-
-  it('un nom déjà pris se dit en clair', () => {
-    const err = {
-      code: '23505',
-      message:
-        'duplicate key value violates unique constraint "planning_zones_nom_unique"',
-    }
-    expect(messageErreur(err, 'La zone n’a pas pu être renommée')).toMatch(
-      /porte déjà ce nom/,
-    )
-  })
-})
+// Les tests du réglage des moments (écran) sont retirés avec lui : moments
+// en dur depuis le 2026-11-11 (`momentFixe`).
 
 describe('3. la fenêtre du partage suit le réglage', () => {
   const LUNDI = '2026-11-16'

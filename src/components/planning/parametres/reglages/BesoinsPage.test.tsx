@@ -214,29 +214,6 @@ describe('Besoins', () => {
       expect(document.body.textContent).not.toMatch(/Si possible|Important\b/)
     })
 
-    it('moments : réglés depuis Besoins, aperçu puis Enregistrer', async () => {
-      // Oracle : « migrer la partie Moments dans Besoins ».
-      monter(<BesoinsPage />)
-      const region = within(screen.getByRole('region', { name: 'Moments' }))
-      // Rien à enregistrer tant qu'aucune limite ne change.
-      expect(region.queryByRole('button', { name: 'Enregistrer' })).toBeNull()
-      const champ = region.getByRole('textbox', { name: 'Nuit commence de' })
-      fireEvent.change(champ, { target: { value: '23:30' } })
-      fireEvent.blur(champ)
-      expect(
-        await region.findByRole('list', {
-          name: 'Horaires qui changeraient de moment',
-        }),
-      ).toBeTruthy()
-      expect(service.enregistrerMoments).not.toHaveBeenCalled()
-      fireEvent.click(region.getByRole('button', { name: 'Enregistrer' }))
-      await waitFor(() =>
-        expect(service.enregistrerMoments).toHaveBeenCalledWith([
-          expect.objectContaining({ id: 'nuit', debut_de: 23 * 60 + 30 }),
-        ]),
-      )
-    })
-
     it('accueil tenu en continu : ni ouverture ni fermeture à régler (2026-11-11)', () => {
       const ref = etat.referentiel as Referentiel
       for (const p of ref.postes)
