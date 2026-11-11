@@ -3083,7 +3083,10 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   passations quand la semaine en a ; trou +1 par quart d'heure) ; (3) déplacements (repos seul
   101, bloc de 4 100) ; (4) équilibre ; (5) un niveau par palier plus bas, avec la semaine
   suivante esquissée (`POIDS_SEMAINE_SUIVANTE` 500) ; (6) confort. Une place passe STRICTEMENT
-  avant un repos seul (plus d'égalité laissée au confort). Un niveau à poids positifs tenu à 0
+  avant un repos seul (plus d'égalité laissée au confort ; décision utilisateur du 2026-11-11, qui
+  remplace les choix du 10/11 : l'égalité « place contre repos seul » n'existait que dans les
+  petits tests, et l'appliquer partout donnait 495 places vides au banc des 80 au lieu de 464,
+  pour environ 90 s le mois ; ne pas y revenir). Un niveau à poids positifs tenu à 0
   n'est pas résolu (colonnes fixées à 0). Les niveaux résolus sont rappelés dans l'objectif du
   suivant (`RAPPEL_NIVEAUX` 1000 : aucun effet sur les solutions optimales, 40 → 10 s sur une
   semaine générée). Niveau non prouvé : sa meilleure solution devient sa borne, la suite
