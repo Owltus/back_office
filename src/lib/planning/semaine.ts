@@ -74,6 +74,7 @@ import {
   niveauSur,
   soutienSur,
 } from '#/lib/planning/modele.ts'
+import { ajouter } from '#/lib/planning/listes.ts'
 import {
   demandeDe,
   estAutonome,
@@ -892,12 +893,6 @@ export function joursAbsents(
   for (const [j, motif] of absencesSemaineType(x))
     if (!r.has(j)) r.set(j, motif)
   return r
-}
-
-/** Repos fixe ou absence de la semaine type : se change dans la fiche. */
-export function jourFixe(x: Salarie, jour: number): boolean {
-  const e = x.semaine_type.at(jour)
-  return e?.mode === 'repos' || e?.mode === 'absence'
 }
 
 /** Personnel à jours fixes : sa semaine type a des jours « Travaille » ou « Repos ». */
@@ -2000,7 +1995,7 @@ export function personnes(salaries: Salarie[]): Map<number, string> {
   const groupes = new Map<number, number[]>()
   for (const i of new Set([...parent.keys(), ...parent.values()])) {
     const r = racine(i)
-    groupes.set(r, [...(groupes.get(r) ?? []), i])
+    ajouter(groupes, r, i)
   }
   const cles = new Map<number, string>()
   for (const [r, membres] of groupes) {
@@ -2093,8 +2088,7 @@ export function avecSemainesVoisines(
   const travailAvant = shiftsVoisins(d.avant)
   const travailApres = shiftsVoisins(d.apres)
   const fichesDe = new Map<number | string, Salarie[]>()
-  for (const x of ctx.staff)
-    fichesDe.set(k(x.id), [...(fichesDe.get(k(x.id)) ?? []), x])
+  for (const x of ctx.staff) ajouter(fichesDe, k(x.id), x)
   const etatsVoisins = (
     key: number | string,
     decalage: number,
@@ -2278,8 +2272,7 @@ export function avecHistoire(
   const lundi = ctx.lundi
   const connus = shiftsConnus(d, []).filter((a) => a.lundi < lundi)
   const parSemaine = new Map<string, Affectation[]>()
-  for (const a of connus)
-    parSemaine.set(a.lundi, [...(parSemaine.get(a.lundi) ?? []), a])
+  for (const a of connus) ajouter(parSemaine, a.lundi, a)
   const semaine = (k: number) =>
     parSemaine.get(ajouterJours(lundi, -7 * k)) ?? []
   const parId = new Map(ctx.staff.map((x) => [x.id, x]))
@@ -3054,8 +3047,7 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
       message: v.message,
       nature: v.nature,
     }
-    for (const cid of v.creneaux)
-      parCarte.set(cid, [...(parCarte.get(cid) ?? []), alerte])
+    for (const cid of v.creneaux) ajouter(parCarte, cid, alerte)
     if (v.salarieId !== null) {
       const m = parPersonne.get(v.salarieId) ?? new Map<string, AlerteOut>()
       m.set(`${v.regle}|${v.message}`, alerte)
@@ -4156,9 +4148,8 @@ export function esquisseSuivante(
       ),
     )
     if (hors.size === 7) continue
-    const rythme =
-      !sol.contratIndicatif &&
-      Number(x.heures_hebdo) * 60 >= ctx.regles.repos.rythmeContratMin
+    // Même définition que le calcul de la semaine (les extras sont déjà sautés).
+    const rythme = rythmeHumain(sol, ctx.regles)
     personnes.set(sol.id, {
       fixes,
       neutres,

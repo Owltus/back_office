@@ -28,6 +28,7 @@ import {
   plageAccueil,
   posteDeZone,
   zoneDuPosteTrou,
+  QUART_D_HEURE,
 } from '#/lib/planning/cycles.ts'
 import {
   codeDeLaFiche,
@@ -55,6 +56,7 @@ import {
   journeeDe,
   travail,
 } from '#/lib/planning/modele.ts'
+import { ajouter } from '#/lib/planning/listes.ts'
 import {
   EQUIPE_TOLERANCE,
   jourIsoleDe,
@@ -667,7 +669,7 @@ export const POIDS_PRESENCE_MINUTE = 100
  * quart d'heure seul (1 500) non. */
 export const POIDS_TROU_QUART = 15 * POIDS_PRESENCE_MINUTE
 /** Pas de la grille des trous, en minutes réelles (0, 15, 30…). */
-const QUART = 15
+const QUART = QUART_D_HEURE
 // Départage.
 export const POIDS_DEJA_PROPOSE = 5
 /** Bruit de la graine : 0 à 3 par affectation. */
@@ -1440,8 +1442,10 @@ export function construire(
       if (
         imposees.has(k) ||
         (!c.ferme &&
-          compatible(s, c) &&
-          (options.affiner?.permis(s.id, c) ?? true))
+          // `permis` d'abord : à l'affinage, il écarte presque tout et coûte
+          // moins que `compatible` (deux tests purs, même résultat).
+          (options.affiner?.permis(s.id, c) ?? true) &&
+          compatible(s, c))
       )
         x.set(k, m.bool())
     }
@@ -1569,7 +1573,7 @@ export function construire(
     // compte pour lui (plus bas).
     if (c.ferme || c.accueil) continue
     const g = c.place ?? c.id
-    groupes.set(g, [...(groupes.get(g) ?? []), c])
+    ajouter(groupes, g, c)
   }
   for (const [g, membres] of groupes) {
     // Le besoin fixe la place ; sans lui (remplaçant orphelin), le premier.
@@ -1789,7 +1793,7 @@ export function construire(
   const parGroupe = new Map<string, Creneau[]>()
   for (const c of p.creneaux) {
     const g = groupe(c)
-    parGroupe.set(g, [...(parGroupe.get(g) ?? []), c])
+    ajouter(parGroupe, g, c)
   }
   const sommesAvec = new Map<string, Terme[]>()
   const avecDe = (
@@ -1856,7 +1860,7 @@ export function construire(
       const v = x.get(cle(s.id, c.id))
       if (!v) continue
       const k = `${jourDe(c)}|${c.moment}`
-      ensemble.set(k, [...(ensemble.get(k) ?? []), [1, v]])
+      ajouter(ensemble, k, [1, v])
     }
   }
   for (const termes of ensemble.values()) {
@@ -1886,8 +1890,7 @@ export function construire(
       const t = termesDe(c, 'tous')
       termes.push(...t)
       parCreneau.push([c.id, t])
-      if (c.accueil) possibles += sommesAccueil.get(c.id)?.n ?? 0
-      else possibles += p.salaries.filter((s) => x.has(cle(s.id, c.id))).length
+      possibles += borneDe(c)
     }
     // Manque et surplus CONTINUS : à x entiers, leur optimum est entier
     // (max(0, N - Σ), max(0, Σ - N)) ; mesuré un peu plus régulier pour HiGHS.
@@ -1946,7 +1949,7 @@ export function construire(
         }
       : { base: 0, reste: 0 }
   }
-  const trous = trousEntreEquipes(m, p, x, termesDe, continuite)
+  const trous = trousEntreEquipes(m, p, termesDe, continuite)
   // Ouverture (2026-11-01) : la première heure de chaque poste de l'accueil
   // qui a une heure d'ouverture, tenue sur CE poste.
   // Fermeture (2026-11-05) : la dernière heure, symétrique, même prix.
@@ -1954,8 +1957,6 @@ export function construire(
     (o) =>
       variablesTrous(
         m,
-        p,
-        x,
         termesDe,
         o.poste,
         o.jour,
@@ -2010,7 +2011,7 @@ export function construire(
     const parJour = new Map<number, Creneau[]>()
     for (const c of siens) {
       const j = jourDe(c)
-      parJour.set(j, [...(parJour.get(j) ?? []), c])
+      ajouter(parJour, j, c)
     }
     const travaille = new Map<number, string>()
     travailleDe.set(s.id, travaille)
@@ -2173,11 +2174,12 @@ export function construire(
     }
     // Agrégats (2) : a → jour de b → créneaux b.
     const agreges = new Map<Creneau, Map<number, Creneau[]>>()
+    const poses = new Set(fixes)
     for (let i = 0; i < siens.length; i++) {
       for (let k = i + 1; k < siens.length; k++) {
         const a = siens[i]
         const b = siens[k]
-        if (fixes.includes(a) && fixes.includes(b)) continue
+        if (poses.has(a) && poses.has(b)) continue
         if (!enConflit(a, b)) continue
         // Les candidats de l'accueil (D1) multiplient eux aussi les créneaux
         // d'un jour : même réduction, même preuve.
@@ -2190,7 +2192,7 @@ export function construire(
           if (ja !== jb && auPlusUnLeJour(jb)) {
             const parJourB = agreges.get(a) ?? new Map<number, Creneau[]>()
             agreges.set(a, parJourB)
-            parJourB.set(jb, [...(parJourB.get(jb) ?? []), b])
+            ajouter(parJourB, jb, b)
             continue
           }
         }
@@ -2255,7 +2257,7 @@ export function construire(
         const six = m.entier(0, 7)
         // six >= nb_jours - préférés
         m.ajoute(
-          [[1, six], ...nbJours.termes.map(([c, v]) => [-c, v] as Terme)],
+          [[1, six], ...negatifs(nbJours.termes)],
           '>=',
           nbJours.constante - s.joursPreferesSemaine,
         )
@@ -2500,7 +2502,7 @@ export function construire(
             }
             const exces = m.entier(0, taille)
             m.ajoute(
-              [[1, exces], ...termes.map(([c, v]) => [-c, v] as Terme)],
+              [[1, exces], ...negatifs(termes)],
               '>=',
               constante - plafond,
             )
@@ -2571,11 +2573,7 @@ export function construire(
             if (tv) autour.push([1, tv])
           }
           if (continu) continue
-          m.ajoute(
-            [[1, t], ...autour.map(([c, v]) => [-c, v] as Terme)],
-            '<=',
-            0,
-          )
+          m.ajoute([[1, t], ...negatifs(autour)], '<=', 0)
           continue
         }
         const voisins: string[] = []
@@ -2790,8 +2788,7 @@ export function construire(
   // Même personne sur deux fiches.
   const parPersonne = new Map<string, SalarieSolveur[]>()
   for (const s of p.salaries) {
-    if (s.personne !== null)
-      parPersonne.set(s.personne, [...(parPersonne.get(s.personne) ?? []), s])
+    if (s.personne !== null) ajouter(parPersonne, s.personne, s)
   }
   for (const fiches of parPersonne.values()) {
     for (let i = 0; i < fiches.length; i++) {
@@ -2925,7 +2922,7 @@ export function construire(
         const parJour =
           parHoraire.get(c.typeShift) ?? new Map<number, Terme[]>()
         const j = jourDe(c)
-        parJour.set(j, [...(parJour.get(j) ?? []), [1, v]])
+        ajouter(parJour, j, [1, v])
         parHoraire.set(c.typeShift, parJour)
       }
       if (parHoraire.size < 2) continue
@@ -2981,7 +2978,7 @@ function equite(
   const groupes = new Map<string, SalarieSolveur[]>()
   for (const s of p.salaries) {
     if (s.groupeEquite === null) continue
-    groupes.set(s.groupeEquite, [...(groupes.get(s.groupeEquite) ?? []), s])
+    ajouter(groupes, s.groupeEquite, s)
   }
   const R = p.regles ?? REGLES_PAR_DEFAUT
   // Ce que l'établissement répartit (2026-11-06) ; l'hôtel : week-ends,
@@ -3074,10 +3071,7 @@ function weekendsEquitables(
   if (n.every((e) => e.termes.length === 0)) return
   const total = m.continu(0, 1e6)
   m.ajoute(
-    [
-      [1, total],
-      ...n.flatMap((e) => e.termes.map(([c, v]) => [-c, v] as Terme)),
-    ],
+    [[1, total], ...n.flatMap((e) => negatifs(e.termes))],
     '=',
     n.reduce((t, e) => t + e.constante, 0),
   )
@@ -3087,7 +3081,7 @@ function weekendsEquitables(
     const e = m.continu(0, 1e6)
     // e >= n_i - part × total
     m.ajoute(
-      [[1, e], ...n[i].termes.map(([c, v]) => [-c, v] as Terme), [part, total]],
+      [[1, e], ...negatifs(n[i].termes), [part, total]],
       '>=',
       n[i].constante,
     )
@@ -3304,7 +3298,7 @@ function equilibreMoments(
   const parJour = new Map<string, number[]>()
   p.consignes.forEach((k, i) => {
     const cle = `${k.zone ?? premiere}|${k.jour}`
-    parJour.set(cle, [...(parJour.get(cle) ?? []), i])
+    ajouter(parJour, cle, i)
   })
   for (const indices of parJour.values()) {
     for (const a of indices) {
@@ -3715,7 +3709,9 @@ function sommeDe(m: Modele, termes: Terme[]): Terme[] {
   return [[1, v]]
 }
 
-const negatifs = (t: Terme[]): Terme[] => t.map(([c, v]) => [-c, v] as Terme)
+function negatifs(t: Terme[]): Terme[] {
+  return t.map(([c, v]) => [-c, v] as Terme)
+}
 
 /**
  * Règles morales d'une semaine `k` d'une personne (PRD, partie 4) :
@@ -3841,7 +3837,7 @@ function reglesMoralesSemaine(
     const r = rangMoment(R.moments, c.moment)
     const duJour = parRang.get(j) ?? new Map<number, Terme[]>()
     parRang.set(j, duJour)
-    duJour.set(r, [...(duJour.get(r) ?? []), [1, xv(c)]])
+    ajouter(duJour, r, [1, xv(c)])
   }
   const rangs = [
     ...new Set([...parRang.values()].flatMap((d) => [...d.keys()])),
@@ -3945,7 +3941,7 @@ function reglesMoralesSuite(
     const suivants = parJour.get(j + 1)
     if (!suivants) continue
     const parFin = new Map<number, Creneau[]>()
-    for (const a of liste) parFin.set(a.fin, [...(parFin.get(a.fin) ?? []), a])
+    for (const a of liste) ajouter(parFin, a.fin, a)
     for (const [fin, as] of parFin) {
       // Sous 11 h, la paire est déjà interdite (règle dure) : seuls les
       // services du lendemain entre 11 h et 12 h après comptent.
@@ -3986,7 +3982,7 @@ function reglesMoralesSuite(
   for (const c of siens) {
     if (!estNuit(R.moments, c.moment)) continue
     const j = jourDe(c)
-    nuits.set(j, [...(nuits.get(j) ?? []), [1, xv(c)]])
+    ajouter(nuits, j, [1, xv(c)])
   }
   if (!nuits.size && !s.nuitsAvant.size) return
   for (const [j, t] of nuits) nuits.set(j, sommeDe(m, t))
@@ -4045,7 +4041,7 @@ export function coefsHeuresPlus(p: Probleme): Map<string, number> {
   const groupes = new Map<string, SalarieSolveur[]>()
   for (const s of p.salaries) {
     if (s.groupeEquite === null || s.contratIndicatif) continue
-    groupes.set(s.groupeEquite, [...(groupes.get(s.groupeEquite) ?? []), s])
+    ajouter(groupes, s.groupeEquite, s)
   }
   for (const membres of groupes.values()) {
     if (membres.length < 2) continue
@@ -4166,7 +4162,7 @@ function reposHebdo(
           (a.place !== null || b.place !== null || a.accueil || b.accueil) &&
           auPlusUnLeJour(jb)
         ) {
-          parJourB.set(jb, [...(parJourB.get(jb) ?? []), b])
+          ajouter(parJourB, jb, b)
           continue
         }
         m.ajoute(
@@ -4223,7 +4219,6 @@ function reposHebdo(
 function trousEntreEquipes(
   m: Modele,
   p: Probleme,
-  x: Map<string, string>,
   termesDe: (c: Creneau, quoi: 'autonomes') => Terme[],
   continuite?: (couvrants: Creneau[]) => PrixPlace,
 ): Array<Trou & { v: string }> {
@@ -4244,7 +4239,7 @@ function trousEntreEquipes(
     for (const c of duPoste) {
       // Un besoin souhaité (2026-11-05) ne fait pas la plage du poste.
       if (c.ferme || c.place !== null || c.effectif <= 0 || c.souhaite) continue
-      parJour.set(jourDe(c), [...(parJour.get(jourDe(c)) ?? []), c])
+      ajouter(parJour, jourDe(c), c)
     }
     for (const jour of [...parJour.keys()].sort((a, b) => a - b)) {
       const besoins = (parJour.get(jour) ?? []).filter((c) => c.fin > c.debut)
@@ -4254,8 +4249,6 @@ function trousEntreEquipes(
       r.push(
         ...variablesTrous(
           m,
-          p,
-          x,
           termesDe,
           poste,
           jour,
@@ -4276,7 +4269,7 @@ function trousEntreEquipes(
   // que l'oracle).
   for (const vue of vuesZones(p)) {
     if (!vue.zone.continue) continue
-    r.push(...trousDeZone(m, p, vue.p, x, termesDe, vue.zone.id, continuite))
+    r.push(...trousDeZone(m, p, vue.p, termesDe, vue.zone.id, continuite))
   }
   return r
 }
@@ -4287,7 +4280,6 @@ function trousDeZone(
   m: Modele,
   p: Probleme,
   q: Probleme,
-  x: Map<string, string>,
   termesDe: (c: Creneau, quoi: 'autonomes') => Terme[],
   zone: string,
   continuite?: (couvrants: Creneau[]) => PrixPlace,
@@ -4331,8 +4323,6 @@ function trousDeZone(
       r.push(
         ...variablesTrous(
           m,
-          p,
-          x,
           termesDe,
           poste,
           jour,
@@ -4389,11 +4379,7 @@ function relevesDeZone(
     const y = quarts.map((a) => {
       const v = m.bool()
       for (const liste of [matins, soirs])
-        m.ajoute(
-          [[1, v], ...presents(liste, a).map(([n, w]) => [-n, w] as Terme)],
-          '<=',
-          0,
-        )
+        m.ajoute([[1, v], ...negatifs(presents(liste, a))], '<=', 0)
       return v
     })
     const z: string[] = []
@@ -4456,16 +4442,14 @@ function passationsVeilleur(
     if (termes.length === 1 && k <= 1) t = termes
     else if (termes.length && k > 0) {
       const b = m.bool()
-      m.ajoute([[k, b], ...termes.map(([q, w]) => [-q, w] as Terme)], '>=', 0)
+      m.ajoute([[k, b], ...negatifs(termes)], '>=', 0)
       t = [[1, b]]
     }
     tenu.set(n.id, t)
     return t
   }
   const moins = (cs: Creneau[]): Terme[] =>
-    cs.flatMap((c) =>
-      termesDe(c, 'autonomes').map(([q, w]) => [-q, w] as Terme),
-    )
+    cs.flatMap((c) => negatifs(termesDe(c, 'autonomes')))
   for (const z of zonesPassation(p)) {
     // manque >= tenu - relais - nuits d'avant ; tenu = 1 pour la veille.
     const lignes: Array<{ termes: Terme[]; tenue: number }> = []
@@ -4482,11 +4466,7 @@ function passationsVeilleur(
     if (!lignes.length) continue
     const v = m.continu(0, 1)
     for (const { termes, tenue } of lignes)
-      m.ajoute(
-        [[1, v], ...termes.map(([q, w]) => [-q, w] as Terme)],
-        '>=',
-        tenue,
-      )
+      m.ajoute([[1, v], ...negatifs(termes)], '>=', tenue)
     // Une passation manquée coûte une place (D8) : une PRIORITÉ.
     const place = placeDe(z)
     if (place) m.coutPlace(v, place.base, place.reste)
@@ -4673,8 +4653,7 @@ function equipesDeZone(
     poids: number,
   ) => {
     const parHeure = new Map<number, Creneau[]>()
-    for (const c of liste)
-      parHeure.set(heure(c), [...(parHeure.get(heure(c)) ?? []), c])
+    for (const c of liste) ajouter(parHeure, heure(c), c)
     const heures = [...parHeure.keys()].sort((a, b) => a - b)
     if (heures.length < 2 || heures.at(-1)! - heures[0] <= EQUIPE_TOLERANCE)
       return
@@ -4684,7 +4663,7 @@ function equipesDeZone(
       const k = parHeure.get(t)!.reduce((n, c) => n + borne(c), 0)
       if (!termes.length || k <= 0) continue
       const v = m.bool()
-      m.ajoute([[k, v], ...termes.map(([q, w]) => [-q, w] as Terme)], '>=', 0)
+      m.ajoute([[k, v], ...negatifs(termes)], '>=', 0)
       y.set(t, v)
     }
     let w: string | null = null
@@ -4722,7 +4701,7 @@ function equipesDeZone(
       m.ajoute(
         [
           [1, v],
-          ...n.map(([q, w]) => [-q, w] as Terme),
+          ...negatifs(n),
           ...croisent.flatMap((d) =>
             termesDe(d, 'autonomes').map(([q, w]) => [k * q, w] as Terme),
           ),
@@ -4875,8 +4854,6 @@ function releveUneZone(
  * les créneaux des postes concernés, quel que soit leur jour). */
 function variablesTrous(
   m: Modele,
-  p: Probleme,
-  x: Map<string, string>,
   termesDe: (c: Creneau, quoi: 'autonomes') => Terme[],
   poste: string,
   jour: number,
@@ -4913,16 +4890,8 @@ function variablesTrous(
     for (const c of presents) {
       if (c.debut > suite.debut || c.fin < suite.fin) continue
       couvrants.push(c)
-      if (c.accueil) {
-        // Les sommes du candidat (AGRÉGATS DE L'ACCUEIL) : ses autonomes.
-        termes.push(...termesDe(c, 'autonomes'))
-        continue
-      }
-      for (const s of p.salaries) {
-        const v = x.get(cle(s.id, c.id))
-        if (!v || soutienSur(s, c.poste)) continue
-        termes.push([1, v])
-      }
+      // Ses autonomes (les sommes du candidat pour l'accueil).
+      termes.push(...termesDe(c, 'autonomes'))
     }
     const v = m.continu(0, 1)
     m.ajoute([...termes, [1, v]], '>=', 1)

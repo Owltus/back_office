@@ -216,7 +216,16 @@ export function zoneDuCreneau(
   p: ProblemeZones,
   c: ProblemeZones['creneaux'][number],
 ): string | null {
-  return c.zone ?? zonesDesPostes(p).get(c.poste) ?? null
+  return lecteurZone(p)(c)
+}
+
+/** `zoneDuCreneau` pour beaucoup de créneaux d'un même problème : la table
+ * des zones des postes n'est calculée qu'une fois. */
+export function lecteurZone(
+  p: ProblemeZones,
+): (c: ProblemeZones['creneaux'][number]) => string | null {
+  const parPoste = zonesDesPostes(p)
+  return (c) => c.zone ?? parPoste.get(c.poste) ?? null
 }
 
 // ------------------------------------------- qui accompagne (2026-11-09)

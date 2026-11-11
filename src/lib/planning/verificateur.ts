@@ -12,14 +12,10 @@ import {
   trousAccueilDuJour,
   trousDuJour,
 } from '#/lib/planning/cycles.ts'
-import { posteDeZone } from '#/lib/planning/cycles.ts'
+import { posteDeZone, QUART_D_HEURE } from '#/lib/planning/cycles.ts'
 import type { PresencePoste } from '#/lib/planning/cycles.ts'
 import { ecartConsigne } from '#/lib/planning/presence.ts'
-import {
-  accompagnement,
-  vuesZones,
-  zoneDuCreneau,
-} from '#/lib/planning/zones.ts'
+import { accompagnement, vuesZones, lecteurZone } from '#/lib/planning/zones.ts'
 
 import {
   dernierMoment,
@@ -55,6 +51,7 @@ import {
   journeeDe,
   travail,
 } from '#/lib/planning/modele.ts'
+import { ajouter } from '#/lib/planning/listes.ts'
 import type {
   AffectationSolveur,
   Creneau,
@@ -236,7 +233,7 @@ export function violationsSalarie(
   const parJour = new Map<number, Creneau[]>()
   for (const c of liste) {
     const j = jourDe(c)
-    parJour.set(j, [...(parJour.get(j) ?? []), c])
+    ajouter(parJour, j, c)
   }
   for (const duJour of parJour.values()) {
     if (duJour.length > 1) {
@@ -1036,7 +1033,7 @@ export function violations(
     const c = creneaux.get(a.creneauId)
     const s = salaries.get(a.salarieId)
     if (!c || !s) continue
-    parSalarie.set(s.id, [...(parSalarie.get(s.id) ?? []), c])
+    ajouter(parSalarie, s.id, c)
   }
   // Une place se compte avec ses remplaçants (`c.place ?? c.id`) : un
   // titulaire en 08:00–16:45 sur la place d'un 07:00–15:45 la tient, et l'effectif plus les
@@ -1071,7 +1068,7 @@ export function violations(
       ),
     )
     if (s.personne !== null) {
-      parPersonne.set(s.personne, [...(parPersonne.get(s.personne) ?? []), s])
+      ajouter(parPersonne, s.personne, s)
     }
   }
   for (const fiches of parPersonne.values()) {
@@ -1145,7 +1142,6 @@ export const REGLE_ACCOMPAGNE = 'ACCOMPAGNE-SEUL'
 /** Son message, pour les raisons d'une place. */
 export const messageAccompagne = (lieu = 'sur ce poste') =>
   `jamais sans un salarié confirmé : aucun n’est ${lieu} à ces heures`
-export const MESSAGE_ACCOMPAGNE = messageAccompagne()
 
 /** Les minutes d'un créneau où une personne dont le contrat a la case
  * « Jamais sans un salarié confirmé » (`accompagne`) serait sans personne
@@ -1256,7 +1252,7 @@ export function manquants(
       const n = s && c ? niveauSur(s, c.poste) : null
       if (!c || !n?.autonome) continue
       const place = c.place ?? c.id
-      rangs.set(place, [...(rangs.get(place) ?? []), n.rang])
+      ajouter(rangs, place, n.rang)
     }
   }
   for (const c of p.creneaux) {
@@ -1472,11 +1468,12 @@ export function presenceParCycle(
   // Zone par zone (relecture du 2026-11-06 : le matin d'une zone comptait
   // celui d'une autre) ; un créneau sans zone est de la première.
   const premiere = (p.regles ?? REGLES_PAR_DEFAUT).zones[0].id
+  const zoneDe = lecteurZone(p)
   for (const a of affectationsCompletes(p, affectations)) {
     const c = creneaux.get(a.creneauId)
     const s = salaries.get(a.salarieId)
     if (!c || !s) continue
-    const zone = zoneDuCreneau(p, c) ?? premiere
+    const zone = zoneDe(c) ?? premiere
     for (const moment of c.presence) {
       const k = `${zone}|${jourDe(c)}|${moment}`
       presents.set(k, (presents.get(k) ?? 0) + 1)
@@ -1512,6 +1509,7 @@ export function violationsAccueil(
   affectations: AffectationSolveur[],
 ): Violation[] {
   const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
+  const zoneDe = lecteurZone(p)
   const tenus = affectationsCompletes(p, affectations)
     .map((a) => creneaux.get(a.creneauId))
     .filter((c): c is Creneau => c !== undefined)
@@ -1529,7 +1527,7 @@ export function violationsAccueil(
         (c) =>
           jourDe(c) === x.jour &&
           c.presence.includes(x.periode) &&
-          (zoneDuCreneau(p, c) ?? premiere) === x.zone,
+          (zoneDe(c) ?? premiere) === x.zone,
       )
       .map((c) => c.id)
     r.push({
@@ -1878,7 +1876,7 @@ function relevesUneZone(
 ): number[] {
   const duree = p.releveMinutes ?? 0
   if (duree <= 0) return []
-  const Q = 15
+  const Q = QUART_D_HEURE
   const k = Math.ceil(duree / Q)
   const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
   const salaries = new Map(p.salaries.map((s) => [s.id, s]))
