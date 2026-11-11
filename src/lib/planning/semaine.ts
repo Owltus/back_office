@@ -3913,6 +3913,8 @@ export function preparerGeneration(
     consignes: chiffresAccueil(ctx),
     ouvertures: ouverturesPostes(ctx),
     fermetures: fermeturesPostes(ctx),
+    // Un premier jour de contrat déjà passé n'est plus à travailler.
+    ...(depuis > 0 ? { depuis } : {}),
     ...(horizon
       ? { suivante: esquisseSuivante(d2, ctx, salaries, besoins) }
       : {}),

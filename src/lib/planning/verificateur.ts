@@ -54,6 +54,7 @@ import {
   journeeDe,
   travail,
   voisinConnuLibre,
+  premierJourSurPlace,
 } from '#/lib/planning/modele.ts'
 import { ajouter } from '#/lib/planning/listes.ts'
 import type {
@@ -453,6 +454,20 @@ export function violationsSalarie(
         semaine,
       )
     }
+  }
+  // PREMIER-JOUR : le premier jour sur place d'un contrat est travaillé
+  // (`premierJourSurPlace`, même définition que le calcul). Organisation,
+  // jamais pour juger une place : y ajouter un shift ne peut que la lever.
+  // Pas pour un contrat placé à la main (extra).
+  if (!pourUnePlace && !s.placementManuel) {
+    const arrivee = premierJourSurPlace(s, nbJours)
+    if (arrivee !== null && !liste.some((c) => jourDe(c) === arrivee))
+      ajoute(
+        'PREMIER-JOUR',
+        'en repos le premier jour de son contrat',
+        [],
+        'organisation',
+      )
   }
   // MINEUR-FERIE : permis en hôtellerie par dérogation, à éviter.
   for (const c of liste)

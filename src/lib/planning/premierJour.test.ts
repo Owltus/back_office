@@ -2,12 +2,10 @@ import highsLoader from 'highs'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import {
+  construire,
   generer,
-  POIDS_FATIGUE,
-  POIDS_JOUR_FIXE,
-  POIDS_JOUR_ISOLE,
+  POIDS_FAUTE_FORTE,
   POIDS_PREMIER_JOUR,
-  POIDS_REPOS_SEPARES,
   premierJourSurPlace,
 } from '#/lib/planning/generateur.ts'
 import type { Highs } from '#/lib/planning/generateur.ts'
@@ -18,6 +16,7 @@ import {
 } from '#/lib/planning/modele.ts'
 import type { Creneau, SalarieSolveur } from '#/lib/planning/modele.ts'
 import { MINUTES_PAR_JOUR } from '#/lib/planning/temps.ts'
+import { violations } from '#/lib/planning/verificateur.ts'
 
 /*
  * Le premier jour du contrat est travaillé (demande d'une responsable du
@@ -72,12 +71,58 @@ const joursTravailles = (s: SalarieSolveur) => {
 }
 
 describe('le premier jour du contrat est travaillé', () => {
-  it('le poids : au-dessus des repos accolés, sous la fatigue', () => {
-    expect(POIDS_PREMIER_JOUR).toBeGreaterThan(POIDS_REPOS_SEPARES)
-    expect(POIDS_PREMIER_JOUR).toBeGreaterThan(
-      POIDS_JOUR_ISOLE + POIDS_JOUR_FIXE,
+  it('le niveau : celui du rythme, sous un bloc court (2026-11-11)', () => {
+    // Au confort (10 000), la prime était rachetée par une place ou un
+    // déplacement de repos ; au niveau du rythme, plus rien ne la rachète,
+    // sauf une faute du rythme (un bloc court vaut plus).
+    expect(POIDS_PREMIER_JOUR).toBeLessThan(POIDS_FAUTE_FORTE)
+    const { modele } = construire(
+      probleme({
+        salaries: [stagiaire({ contratDebut: 0 })],
+        creneaux: [0, 1, 2, 3, 4, 5, 6].map((j) => cr(j)),
+        graine: 1,
+      }),
     )
-    expect(POIDS_PREMIER_JOUR).toBeLessThan(POIDS_FATIGUE)
+    const rythme = modele.niveaux().find(([n]) => n === 'rythme')
+    expect([...(rythme?.[1].values() ?? [])]).toContain(POIDS_PREMIER_JOUR)
+  })
+
+  it('le cas du 30/11 : entré un lundi, le lundi est travaillé même au prix d’un bloc de 4', () => {
+    // Signalement de l'utilisateur du 2026-11-11 : un stagiaire entré le
+    // lundi 30/11 était en repos le lundi et le mardi. Ici, la semaine
+    // d'après commence par deux repos : sans la règle, « rr TTTTT » tient
+    // le rythme sans rien déplacer ; avec elle, le lundi est travaillé
+    // (« T rr TTTT » : le lundi contre l'arrivée, puis un bloc de 4).
+    const s = stagiaire({
+      contratDebut: 0,
+      travailFixe: new Set<number>(),
+      etatsAvant: 'nnnnnnn',
+      joursSemainePrecedente: 0,
+      etatsApres: 'rrTTTTT',
+    })
+    const p = probleme({
+      salaries: [s],
+      creneaux: [0, 1, 2, 3, 4, 5, 6].map((j) => cr(j)),
+      graine: 1,
+    })
+    const r = generer(p, highs)
+    const jours = r.affectations
+      .map((a) => Number(a.creneauId.slice(1)))
+      .sort((a, b) => a - b)
+    expect(jours).toContain(0)
+    expect(jours).toHaveLength(5)
+    const regles = violations(p, r.affectations).map((v) => v.regle)
+    expect(regles).not.toContain('PREMIER-JOUR')
+    expect(regles).not.toContain('RYTHME-5-2')
+    // Le vérificateur dit l'ancien planning (repos lundi et mardi).
+    const avant = [2, 3, 4, 5, 6].map((j) => ({
+      salarieId: 's',
+      creneauId: `j${j}`,
+    }))
+    const dit = violations(p, avant).filter((v) => v.regle === 'PREMIER-JOUR')
+    expect(dit.map((v) => [v.message, v.nature])).toEqual([
+      ['en repos le premier jour de son contrat', 'organisation'],
+    ])
   })
 
   it('accepté : un stage qui commence lundi commence par un jour de travail', () => {

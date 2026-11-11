@@ -625,6 +625,10 @@ export interface Probleme {
    * passent avant tout le rythme, 6 jours mis à part). Absent : le modèle
    * de l'app, au caractère près. */
   controle?: { sansDeplacement?: boolean; heuresDabord?: boolean }
+  /** Jours déjà passés de la semaine (0 à `depuis` - 1, `preparerGeneration`)
+   * : un premier jour de contrat passé n'est plus à travailler
+   * (`premierJourSurPlace`). Absent : aucun. */
+  depuis?: number
 }
 
 /** L'esquisse de la semaine suivante : un jour travaillé ou non par
@@ -724,4 +728,34 @@ export interface Resultat {
   /** Jours fériés rattrapés placés (R-FERIE-RATTRAPE) : au plus un par
    * personne. Absent : aucun. */
   jfr?: Array<{ salarieId: string; jour: number }>
+}
+
+/** PREMIER JOUR DU CONTRAT (demande d'une responsable du 2026-11-04 : « mes
+ * stagiaires commencent leur stage par deux jours de repos » ; signalement
+ * de l'utilisateur du 2026-11-11 : « le premier jour d'un contrat, on est
+ * présent et pas en repos »). Le premier jour (0 à `nbJours` - 1) où la
+ * personne peut être sur place la semaine où son contrat commence : le jour
+ * d'entrée, ou le suivant quand il est pris (absence, école, repos fixe de
+ * la semaine type). null : contrat commencé avant cette semaine, ou entrée
+ * un jour déjà passé (`depuis`), ou aucun jour sur place. Une seule
+ * définition pour le calcul (`generateur.ts`, niveau du rythme) et le
+ * vérificateur (PREMIER-JOUR). */
+export function premierJourSurPlace(
+  s: Pick<
+    SalarieSolveur,
+    'contratDebut' | 'indisponibilites' | 'joursHorsSite' | 'reposFixes'
+  >,
+  nbJours: number,
+  depuis = 0,
+): number | null {
+  if (s.contratDebut === null || s.contratDebut < 0) return null
+  // Minutes réelles : un changement d'heure décale minuit d'une heure.
+  const debut = Math.floor((s.contratDebut + 720) / 1440)
+  if (debut < depuis) return null
+  for (let j = debut; j < Math.min(nbJours, 7); j++) {
+    if (s.indisponibilites.has(j) || s.joursHorsSite.has(j)) continue
+    if (s.reposFixes.has(j)) continue
+    return j
+  }
+  return null
 }

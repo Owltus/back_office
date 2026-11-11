@@ -116,6 +116,7 @@ const MESSAGES: Record<(typeof REGLES_BLOCAGE)[number], string[]> = {
   ],
   'RETOUR-CONGE': ['reprend un week-end après son congé'],
   'ECOLE-ABORDS': ["finit après 21 h la veille d'un jour d'école"],
+  'PREMIER-JOUR': ['en repos le premier jour de son contrat'],
   'TITULAIRE-DEMANDE': [
     'en dépannage sur ce poste : la place demande un titulaire',
   ],
@@ -603,6 +604,7 @@ describe('place que rien ne remplit : la raison commune en clair', () => {
     'HEURES-PLUS',
     'RETOUR-CONGE',
     'ECOLE-ABORDS',
+    'PREMIER-JOUR',
   ]
 
   it('exhaustif : une phrase courte pour chaque règle qui bloque', () => {

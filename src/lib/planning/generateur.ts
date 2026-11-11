@@ -46,6 +46,7 @@ import {
   presenceMax,
   rangImportance,
   enDepannageSur,
+  premierJourSurPlace,
   jamaisSeulSur,
   niveauAccepte,
   niveauSur,
@@ -402,15 +403,16 @@ export const ARRIVEE_MATIN_MAX = 120
  * jamais de manque (les places sont un niveau au-dessus), il choisit OÙ il
  * tombe. Un trou (personne) le paie aussi. */
 export const POIDS_SEUL_QUART = 150
-/** Le premier jour du contrat est travaillé (demande d'une responsable du
- * 2026-11-04 : « mes stagiaires commencent leur stage par deux jours de
- * repos »). Rien ne retenait le calcul de poser les deux repos de la
- * semaine sur l'arrivée. Prime sur le premier jour sur place de la semaine
- * où le contrat commence (`premierJourSurPlace`). Au-dessus des repos
- * accolés et du jour isolé, sous la fatigue et les heures : elle ne fait
- * que déplacer un repos. Pas de prime en dépannage, comme le jour
- * habituel (D13). */
-export const POIDS_PREMIER_JOUR = 10_000
+/** Le premier jour du contrat est travaillé (`premierJourSurPlace`,
+ * modele.ts) : au NIVEAU DU RYTHME (signalement de l'utilisateur du
+ * 2026-11-11 : un stagiaire entré le lundi 30/11 était en repos le lundi et
+ * le mardi). Au confort (10 000, 2026-11-04), la prime était rachetée par
+ * une place du week-end : le rythme 5 et 2 posait alors les deux repos sur
+ * l'arrivée. Un jour manqué coûte 1, sous un bloc court (2) : jamais une
+ * faute du rythme pour lui. Pas dur : un premier jour sans aucun horaire
+ * possible (le stagiaire sans salarié confirmé ce jour-là, par exemple)
+ * laisse le modèle possible ; le vérificateur le dit (PREMIER-JOUR). */
+export const POIDS_PREMIER_JOUR = 1
 /** Un apprenti ou un stagiaire de plus, le même jour et au même moment,
  * sur les postes indispensables (« éparpiller », décision de l'utilisateur
  * du 2026-11-09) : au-dessus du confort et des règles morales ordinaires
@@ -418,27 +420,8 @@ export const POIDS_PREMIER_JOUR = 10_000
  * les places et les déplacements de repos sont des niveaux au-dessus. */
 export const POIDS_EPARPILLER = 15_000
 
-/** Premier jour (0 à `nbJours` - 1) où la personne peut être sur place
- * la semaine où son contrat commence : le jour d'entrée, ou le suivant
- * quand il est pris (absence, école, repos fixe). null : contrat commencé
- * avant cette semaine, ou aucun jour sur place. */
-export function premierJourSurPlace(
-  s: Pick<
-    SalarieSolveur,
-    'contratDebut' | 'indisponibilites' | 'joursHorsSite' | 'reposFixes'
-  >,
-  nbJours: number,
-): number | null {
-  if (s.contratDebut === null || s.contratDebut < 0) return null
-  // Minutes réelles : un changement d'heure décale minuit d'une heure.
-  const debut = Math.floor((s.contratDebut + 720) / 1440)
-  for (let j = debut; j < Math.min(nbJours, 7); j++) {
-    if (s.indisponibilites.has(j) || s.joursHorsSite.has(j)) continue
-    if (s.reposFixes.has(j)) continue
-    return j
-  }
-  return null
-}
+/** Premier jour sur place (modele.ts), gardé ici pour les appelants. */
+export { premierJourSurPlace }
 
 /*
  * RÈGLES MORALES (PRD `plan/planning-bonnes-pratiques/PRD.md`, partie 4 ;
@@ -1798,7 +1781,7 @@ export function construire(
         excesRythme,
       )
 
-    const arrivee = premierJourSurPlace(s, p.nbJours)
+    const arrivee = premierJourSurPlace(s, p.nbJours, p.depuis)
     for (let k = 0; k < nbSemaines; k++) {
       const jours = intervalle(7 * k, Math.min(7 * k + 7, p.nbJours))
       const dans = (j: number) => jours.includes(j)
@@ -2191,14 +2174,22 @@ export function construire(
         const t = travaille.get(j)
         if (dans(j) && t) m.cout(-POIDS_JOUR_FIXE, t)
       }
-      // Le premier jour du contrat est travaillé (`POIDS_PREMIER_JOUR`).
-      if (k === 0 && arrivee !== null) {
+      // Le premier jour du contrat est travaillé, au niveau du rythme
+      // (`POIDS_PREMIER_JOUR`) : manque >= 1 - travaille. Sans aucun horaire
+      // possible ce jour-là (pas de variable), rien : c'est un fait.
+      if (k === 0 && arrivee !== null && !s.placementManuel) {
         const t = travaille.get(arrivee)
         if (t) {
-          m.cout(-POIDS_PREMIER_JOUR, t)
-          for (const c of siens)
-            if (jourDe(c) === arrivee && enDepannageSur(s, c.poste))
-              m.cout(POIDS_PREMIER_JOUR, xv(c))
+          const manque = m.continu(0, 1)
+          m.ajoute(
+            [
+              [1, manque],
+              [1, t],
+            ],
+            '>=',
+            1,
+          )
+          m.coutNiveau('rythme', POIDS_PREMIER_JOUR, manque)
         }
       }
       // Pas de prime de jour habituel pour un shift en dépannage (D13) : la

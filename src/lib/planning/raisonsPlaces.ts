@@ -84,6 +84,8 @@ export const REGLES_BLOCAGE = [
   'HEURES-PLUS',
   'RETOUR-CONGE',
   'ECOLE-ABORDS',
+  // Le premier jour du contrat (2026-11-11) : jamais pour juger une place.
+  'PREMIER-JOUR',
   // Niveau demandé par le besoin (2026-11-05).
   'TITULAIRE-DEMANDE',
   // Jamais sans un salarié confirmé (2026-11-09).
@@ -102,6 +104,7 @@ const PHRASES_MORALES: Record<string, string> = {
   'HEURES-PLUS': 'A déjà fait beaucoup d’heures en plus',
   'RETOUR-CONGE': 'Rentre de congé cette semaine',
   'ECOLE-ABORDS': 'Trop près d’un jour d’école',
+  'PREMIER-JOUR': 'Premier jour de son contrat',
   'RYTHME-TRANSITION': 'Changerait ses jours de repos',
 }
 
@@ -331,6 +334,7 @@ export function raisonClaire(
     case 'HEURES-PLUS':
     case 'RETOUR-CONGE':
     case 'ECOLE-ABORDS':
+    case 'PREMIER-JOUR':
       return r(PHRASES_MORALES[regle], mention('à éviter'))
     default:
       return r(
@@ -443,6 +447,7 @@ const PHRASES_COMMUNES: Record<(typeof REGLES_BLOCAGE)[number], string> = {
   'HEURES-PLUS': 'Tout le monde a déjà beaucoup d’heures en plus.',
   'RETOUR-CONGE': 'Tout le monde rentre de congé.',
   'ECOLE-ABORDS': 'Tout le monde est trop près d’un jour d’école.',
+  'PREMIER-JOUR': 'C’est pour chacun le premier jour de son contrat.',
   'TITULAIRE-DEMANDE':
     'Les personnes libres n’ont pas le niveau que la place demande.',
   'ACCOMPAGNE-SEUL':
