@@ -65,7 +65,7 @@ import type {
 import {
   EQUIPE_TOLERANCE,
   jourIsoleDe,
-  rythmeHumain,
+  regimeRythme,
   apresContrat,
 } from '#/lib/planning/regles.ts'
 import {
@@ -84,7 +84,6 @@ import {
   messageFaute,
   messageReposSeul,
   messageTransition,
-  rythmeStrictDe,
   suiteRythme,
 } from '#/lib/planning/rythmeStrict.ts'
 import { heuresLisibles as h } from '#/lib/planning/temps.ts'
@@ -253,7 +252,7 @@ export function violationsSalarie(
   // semaines voisines comprises. Permis par la loi : une alerte. Au rythme 5
   // et 2 strict (2026-11-09), RYTHME-5-2 le dit à sa place (plus de 5 jours,
   // école et absences courtes comprises), comme le calcul.
-  if (!rythmeStrictDe(s, R)) {
+  if (regimeRythme(s, R) !== 'strict') {
     const travaille = (d: number) =>
       d < 0
         ? d >= -s.serieAvant
@@ -273,7 +272,7 @@ export function violationsSalarie(
       const uneSemaine = d >= 0 && Math.floor(d / 7) === Math.floor(f / 7)
       // Depuis le 2026-11-04, 5 au plus pour un contrat de 35 h et plus (le
       // calcul ne va plus au-delà, `rythmeHumain`), 6 sinon.
-      const humain = rythmeHumain(s, R)
+      const humain = regimeRythme(s, R) === 'humain'
       const plafond = humain
         ? R.repos.joursAffilesConseilles
         : R.repos.joursAffilesMax
@@ -738,7 +737,7 @@ function alertesMorales(
   // planning en cours de saisie en serait plein) ; pour juger une place, le
   // message est court (sans les jours) : seule une faute d'un genre nouveau
   // compte.
-  if (rythmeStrictDe(s, R)) {
+  if (regimeRythme(s, R) === 'strict') {
     const etats = suiteRythme(s, nbJours, (d) => parJour.has(d))
     // Jours de travail de la semaine : shifts, école et absences courtes
     // (`joursRythmeDe`) — une semaine de CFA et un shift en font 6.
@@ -819,7 +818,7 @@ function alertesMorales(
       s.reposFixes.size < 2 &&
       // Au rythme 5 et 2, c'est le repos seul (RYTHME-REPOS-SEUL) : une
       // seule définition (2026-11-10).
-      !rythmeStrictDe(s, R) &&
+      regimeRythme(s, R) !== 'strict' &&
       complete
     ) {
       const libres = jours.filter((j) => !travaille(j))

@@ -60,7 +60,7 @@ import { ajouter } from '#/lib/planning/listes.ts'
 import {
   EQUIPE_TOLERANCE,
   jourIsoleDe,
-  rythmeHumain,
+  regimeRythme,
   apresContrat,
 } from '#/lib/planning/regles.ts'
 import {
@@ -95,7 +95,6 @@ import {
   joursRythmeDe,
   motifsInterdits,
   RYTHME_REPOS,
-  rythmeStrictDe,
   voisinesRythme,
 } from '#/lib/planning/rythmeStrict.ts'
 import type {
@@ -2219,7 +2218,7 @@ export function construire(
 
     // Rythme 5 et 2 strict (décision de l'utilisateur du 2026-11-09,
     // `rythmeStrict.ts`) : semaines voisines et esquisse comprises.
-    if (rythmeStrictDe(s, R))
+    if (regimeRythme(s, R) === 'strict')
       rythmeStrictModele(
         m,
         p,
@@ -2272,7 +2271,7 @@ export function construire(
       // jamais les heures dues de la semaine (`rythmeHumain`, comme
       // l'esquisse de la semaine d'après) : un 39 h avec deux jours de congé
       // n'en doit plus que 32 h, sa règle reste (relecture du 2026-11-11).
-      if (rythmeHumain(s, R)) {
+      if (regimeRythme(s, R) !== 'libre') {
         // Jours de présence (2026-11-02) : un départ le jeudi laisse 4 jours.
         const enContrat = jours.filter((j) => !s.horsContrat.has(j))
         const absents = enContrat.filter((j) =>
@@ -2368,7 +2367,7 @@ export function construire(
         s.reposFixes.size < 2 &&
         // Au rythme 5 et 2, deux repos de suite = pas de repos seul : le
         // rythme le dit, à son prix (une seule définition, 2026-11-10).
-        !rythmeStrictDe(s, R)
+        regimeRythme(s, R) !== 'strict'
       if (s.reposConsecutifs || (regleHotel && jours.length === 7)) {
         const pris = (d: number) =>
           fixes.some((c) => jourDe(c) === d) || s.joursHorsSite.has(d)
@@ -2442,16 +2441,17 @@ export function construire(
         // une absence courte aussi (ici elle coupe la série) ; seuls un jour
         // hors contrat et une absence longue la coupent, comme ici (révisé
         // le même jour : l'école n'est plus neutre).
-        const fenetres = rythmeStrictDe(s, R)
-          ? []
-          : ([
-              [R.repos.joursAffilesMax, POIDS_JOUR_AFFILE, false],
-              [
-                R.repos.joursAffilesConseilles,
-                POIDS_JOUR_AFFILE_CONSEILLE,
-                true,
-              ],
-            ] as const)
+        const fenetres =
+          regimeRythme(s, R) === 'strict'
+            ? []
+            : ([
+                [R.repos.joursAffilesMax, POIDS_JOUR_AFFILE, false],
+                [
+                  R.repos.joursAffilesConseilles,
+                  POIDS_JOUR_AFFILE_CONSEILLE,
+                  true,
+                ],
+              ] as const)
         for (const [plafond, poids, conseille] of fenetres) {
           const taille = plafond + 1
           for (let a = Math.max(debut, 1 - taille); a + taille <= fin; a++) {
@@ -2465,7 +2465,7 @@ export function construire(
             // (relecture du 2026-11-04 : avec le dimanche et le lundi
             // suivant libres, la paire de repos le laissait passer).
             if (
-              !(conseille && rythmeHumain(s, R)) &&
+              !(conseille && regimeRythme(s, R) === 'humain') &&
               a >= 0 &&
               derniere < p.nbJours &&
               Math.floor(a / 7) === Math.floor(derniere / 7)
@@ -2490,7 +2490,7 @@ export function construire(
             // 2026-11-03) ; plus de 5 non plus depuis le 2026-11-04 (des
             // semaines de 5 jours, plus humain), sauf un contrat indicatif.
             // Les jours posés à la main restent des faits.
-            if (!conseille || rythmeHumain(s, R)) {
+            if (!conseille || regimeRythme(s, R) === 'humain') {
               let poses = 0
               for (
                 let d = Math.max(a, 0);
@@ -2517,7 +2517,7 @@ export function construire(
       // libre, lundi possible et pas déjà posé.
       if (
         k === 0 &&
-        rythmeHumain(s, R) &&
+        regimeRythme(s, R) !== 'libre' &&
         s.joursSemainePrecedente !== null &&
         s.serieAvant === 1 &&
         !s.joursHorsSite.has(0) &&

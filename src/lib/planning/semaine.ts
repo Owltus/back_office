@@ -107,7 +107,7 @@ import type { Fiche } from '#/lib/planning/regles.ts'
 import {
   jourIsoleDe,
   RELEVE_MINUTES,
-  rythmeHumain,
+  regimeRythme,
   apresContrat,
 } from '#/lib/planning/regles.ts'
 import {
@@ -116,7 +116,6 @@ import {
   fautesRythme,
   jourConnu,
   resoudreAbsences,
-  rythmeStrictDe,
   statutAbsence,
   suiteRythme,
 } from '#/lib/planning/rythmeStrict.ts'
@@ -2814,12 +2813,13 @@ export function reposObliges(
       const affiles = gauche + 1 + droite
       // 5 au plus depuis le 2026-11-04 pour un contrat de 35 h et plus
       // (`rythmeHumain`), comme le calcul et JOURS-AFFILES ; 6 sinon.
-      const plafondAffiles = rythmeHumain(sol, regles)
-        ? regles.repos.joursAffilesConseilles
-        : regles.repos.joursAffilesMax
+      const plafondAffiles =
+        regimeRythme(sol, regles) === 'humain'
+          ? regles.repos.joursAffilesConseilles
+          : regles.repos.joursAffilesMax
       // Au rythme 5 et 2 strict, ses 6 jours interdits le disent plus bas
       // (école et absences courtes comptées comme du travail).
-      if (affiles > plafondAffiles && !rythmeStrictDe(sol, regles)) {
+      if (affiles > plafondAffiles && regimeRythme(sol, regles) !== 'strict') {
         r.push({
           jour: j,
           raison: `sinon ${affiles} jours de travail d'affilée (${plafondAffiles} au plus)`,
@@ -2856,7 +2856,7 @@ export function reposObliges(
       // absences (travail ou neutres, `rythmeAutour`), les repos fixes ou
       // posés, les jours passés, les semaines voisines ; un jour simplement
       // vide est inconnu.
-      if (rythmeStrictDe(sol, regles)) {
+      if (regimeRythme(sol, regles) === 'strict') {
         const poses = new Set(siens.map(jourDe))
         const etats = suiteRythme(sol, 7, (d) => d === j || poses.has(d)).map(
           (e, i): EtatRythme => {
@@ -4149,7 +4149,7 @@ export function esquisseSuivante(
     )
     if (hors.size === 7) continue
     // Même définition que le calcul de la semaine (les extras sont déjà sautés).
-    const rythme = rythmeHumain(sol, ctx.regles)
+    const rythme = regimeRythme(sol, ctx.regles) !== 'libre'
     personnes.set(sol.id, {
       fixes,
       neutres,

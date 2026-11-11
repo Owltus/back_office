@@ -68,10 +68,7 @@
  * `statutAbsence` et `resoudreAbsences` rangent les jours pour tous.
  */
 
-import { rythmeHumain } from '#/lib/planning/regles.ts'
 import type { SalarieSolveur } from '#/lib/planning/modele.ts'
-import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
-import { REGLES_PAR_DEFAUT } from '#/lib/planning/reglesEtablissement.ts'
 
 /** Un jour : T travaillé, r repos, n neutre, u inconnu. */
 export type EtatRythme = 'T' | 'r' | 'n' | 'u'
@@ -98,23 +95,6 @@ export interface FauteRythme {
   genre: GenreFaute
   debut: number
   fin: number
-}
-
-/** La règle s'applique-t-elle à cette personne ? Le réglage de
- * l'établissement, le rythme humain (35 h et plus, ni extra ni forfait),
- * et pas une semaine type qui fixe deux repos ou plus (elle décide seule,
- * comme pour les deux repos de suite). */
-export function rythmeStrictDe(
-  s: Parameters<typeof rythmeHumain>[0] & {
-    reposFixes: ReadonlySet<number>
-  },
-  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
-): boolean {
-  return (
-    regles.repos.rythmeStrict &&
-    s.reposFixes.size < 2 &&
-    rythmeHumain(s, regles)
-  )
 }
 
 /** Les absences décomptées d'une suite, rangées : une suite de plus de

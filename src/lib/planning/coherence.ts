@@ -79,13 +79,12 @@ import {
   rangAuTableau,
 } from '#/lib/planning/moment.ts'
 import type { Moments } from '#/lib/planning/moment.ts'
-import { RELEVE_MINUTES } from '#/lib/planning/regles.ts'
+import { regimeRythme, RELEVE_MINUTES } from '#/lib/planning/regles.ts'
 import {
   fautesRythme,
   messageFaute,
   resoudreAbsences,
   RYTHME_TRAVAIL,
-  rythmeStrictDe,
   statutAbsence,
 } from '#/lib/planning/rythmeStrict.ts'
 import type { StatutRythme } from '#/lib/planning/rythmeStrict.ts'
@@ -1367,7 +1366,7 @@ function pointsDesRegles(
           [0, 1, 2, 3, 4, 5, 6].filter((j) => semaine.at(j)?.mode === 'repos'),
         ),
       }
-      if (!rythmeStrictDe(sol, regles)) continue
+      if (regimeRythme(sol, regles) !== 'strict') continue
       // Une absence de la semaine type se lit par son motif, comme au
       // calcul (`statutAbsence`) : école ou formation = travail, sans
       // décompte = repos, sinon absence décomptée, du travail ou neutre si

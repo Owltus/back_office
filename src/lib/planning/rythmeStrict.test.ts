@@ -22,10 +22,10 @@ import {
   fautesRythme,
   messageFaute,
   motifsInterdits,
-  rythmeStrictDe,
   suiteRythme,
 } from '#/lib/planning/rythmeStrict.ts'
 import type { EtatRythme } from '#/lib/planning/rythmeStrict.ts'
+import { regimeRythme } from '#/lib/planning/regles.ts'
 import { SANS_RYTHME_STRICT } from '#/lib/planning/test/reglesTest.ts'
 import { MINUTES_PAR_JOUR } from '#/lib/planning/temps.ts'
 import {
@@ -112,11 +112,11 @@ describe('la définition (fautesRythme)', () => {
       minutesHebdoContrat: 35 * H,
       reposFixes: new Set<number>(),
     }
-    expect(rythmeStrictDe(x)).toBe(true)
-    expect(rythmeStrictDe({ ...x, minutesHebdoContrat: 30 * H })).toBe(false)
-    expect(rythmeStrictDe({ ...x, contratIndicatif: true })).toBe(false)
-    expect(rythmeStrictDe({ ...x, reposFixes: new Set([5, 6]) })).toBe(false)
-    expect(rythmeStrictDe(x, SANS_RYTHME_STRICT)).toBe(false)
+    expect(regimeRythme(x)).toBe('strict')
+    expect(regimeRythme({ ...x, minutesHebdoContrat: 30 * H })).toBe('libre')
+    expect(regimeRythme({ ...x, contratIndicatif: true })).toBe('libre')
+    expect(regimeRythme({ ...x, reposFixes: new Set([5, 6]) })).toBe('humain')
+    expect(regimeRythme(x, SANS_RYTHME_STRICT)).toBe('humain')
   })
 })
 

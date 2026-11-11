@@ -69,30 +69,46 @@ export function rythmeHumain(
   )
 }
 
+/** Le régime de la suite des jours d'une personne, UNE seule lecture pour
+ * le générateur, le vérificateur, les repos obligés et « À vérifier »
+ * (chantier « une seule suite des jours », 2026-11-11) :
+ *  - `strict` : le rythme 5 et 2 (`rythmeStrict.ts`) dit tout de la suite
+ *    des jours (6 jours, bloc court, repos seul, 3 repos) ; le réglage de
+ *    l'établissement, le rythme humain, et pas une semaine type qui fixe
+ *    deux repos ou plus (elle décide seule) ;
+ *  - `humain` : contrat de 35 h et plus (`rythmeHumain`) sans le rythme
+ *    strict : jours d'affilée, jour isolé, deux repos de suite ;
+ *  - `libre` : petit contrat, forfait jours, extra : des conseils. */
+export type RegimeRythme = 'strict' | 'humain' | 'libre'
+
+export function regimeRythme(
+  s: Parameters<typeof rythmeHumain>[0] & { reposFixes?: ReadonlySet<number> },
+  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
+): RegimeRythme {
+  if (!rythmeHumain(s, regles)) return 'libre'
+  return regles.repos.rythmeStrict && (s.reposFixes?.size ?? 0) < 2
+    ? 'strict'
+    : 'humain'
+}
+
 /** Le jour de travail seul entre deux repos, tel que la règle de
  * l'établissement le dit pour cette personne : interdit (dur pour le calcul,
  * bloque une place), à éviter (conseil), ou sans règle. Interdit seulement
- * au rythme humain (`rythmeHumain`) : les autres contrats ont des jours
- * seuls par nature, au plus un conseil. */
+ * au régime humain : les autres contrats ont des jours seuls par nature, au
+ * plus un conseil. */
 export function jourIsoleDe(
-  s: Parameters<typeof rythmeHumain>[0] & { reposFixes?: ReadonlySet<number> },
+  s: Parameters<typeof regimeRythme>[0],
   regles: RegleEtablissement = REGLES_PAR_DEFAUT,
 ): 'interdit' | 'a_eviter' | 'aucune' {
   const r = regles.repos.jourIsole
-  if (r === 'aucune') return 'aucune'
-  // Au rythme 5 et 2 (`rythmeStrictDe`, même condition), un jour seul est un
-  // bloc d'un jour : le rythme le dit et le paie, avec SES jours (un congé
-  // court y est du travail). La règle du jour isolé, qui lit un congé comme
-  // un jour sans travail, n'est pas écrite une seconde fois (relecture du
-  // 2026-11-10 : elle interdisait le seul jour dû d'une semaine de congé,
-  // et forçait 3 repos et des heures perdues).
-  if (
-    regles.repos.rythmeStrict &&
-    (s.reposFixes?.size ?? 0) < 2 &&
-    rythmeHumain(s, regles)
-  )
-    return 'aucune'
-  return r === 'interdit' && rythmeHumain(s, regles) ? 'interdit' : 'a_eviter'
+  const regime = regimeRythme(s, regles)
+  // Au rythme 5 et 2, un jour seul est un bloc d'un jour : le rythme le dit
+  // et le paie, avec SES jours (un congé court y est du travail). La règle du
+  // jour isolé, qui lit un congé comme un jour sans travail, n'est pas écrite
+  // une seconde fois (relecture du 2026-11-10 : elle interdisait le seul
+  // jour dû d'une semaine de congé, et forçait 3 repos et des heures perdues).
+  if (r === 'aucune' || regime === 'strict') return 'aucune'
+  return r === 'interdit' && regime === 'humain' ? 'interdit' : 'a_eviter'
 }
 
 /** Le jour `v` (0 = lundi de la période ; négatif, la semaine d'avant ;
