@@ -627,15 +627,14 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
         // claire ») : les postes indispensables, les autres, les moments.
         <div className="flex w-full max-w-6xl min-w-0 flex-col gap-10">
           <p className="max-w-3xl text-sm text-muted-foreground">
-            Combien de personnes il faut, chaque jour. Le planning remplit
-            d'abord les postes indispensables.
-            {modifiable && ' Cliquez sur une case pour la régler.'}
+            Le personnel nécessaire, jour par jour.
+            {modifiable && ' Cliquez sur une case pour la modifier.'}
           </p>
 
           <SectionBesoins
             id="besoins-indispensables"
             titre="Postes indispensables"
-            texte="Le planning les remplit en premier, avant tous les autres postes."
+            texte="Remplis en priorité par le planning."
             vide={
               !sections.accueilIndispensable && !sections.indispensables.length
                 ? 'Aucun poste indispensable. Dans Postes, activez Indispensable au fonctionnement.'

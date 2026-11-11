@@ -16,7 +16,7 @@
  * Écritures et Annuler : `BesoinsPage` (une seule pile pour toute la page).
  */
 
-import { seulementLaNuit, tientLaNuit } from '#/lib/planning/zones.ts'
+import { seulementLaNuit } from '#/lib/planning/zones.ts'
 import type { ZoneRegle } from '#/lib/planning/zones.ts'
 import { useState } from 'react'
 import type { Sun } from 'lucide-react'
@@ -31,7 +31,6 @@ import { useMoments } from '#/components/planning/hooks/useMoments.ts'
 import { iconeDe } from '#/components/planning/semaine/Presence.tsx'
 import { estNuit, momentDe, momentsDuTableau } from '#/lib/planning/moment.ts'
 import type { Moments } from '#/lib/planning/moment.ts'
-import { listeEt } from '#/lib/planning/affichage.ts'
 import { clePresence } from '#/lib/planning/presence.ts'
 import { JOURS } from '#/lib/planning/types.ts'
 import type { Consigne, Horaire, Poste } from '#/lib/planning/types.ts'
@@ -84,12 +83,9 @@ export function TableauAccueil({
   regler: (jour: number, periode: Periode, b: BornesAccueil) => void
 }) {
   const moments = useMoments()
-  const jour = postes
-    .filter((p) => !p.ferme && !seulementLaNuit(p, horaires, moments))
-    .map((p) => p.nom)
-  const nuit = postes
-    .filter((p) => tientLaNuit(p, horaires, moments))
-    .map((p) => p.nom)
+  const sansJour = !postes.some(
+    (p) => !p.ferme && !seulementLaNuit(p, horaires, moments),
+  )
   const titre = `titre-zone-${zone.id}`
   const periodes = periodesDuTableau(moments)
   const caseVide = periodes.some(({ periode }) =>
@@ -106,41 +102,22 @@ export function TableauAccueil({
         <h3 id={titre} className="text-base font-semibold">
           {zone.nom}
         </h3>
-        <ul className="flex list-disc flex-col gap-0.5 pl-5 text-sm text-muted-foreground">
-          <li>
-            {jour.length ? (
-              <>
-                Le matin et le soir : <strong>au moins</strong> ce nombre
-                {' en '}
-                {listeEt(jour)}
-                {jour.length > 1 && ', le planning choisit qui va où'}. Il peut
-                ajouter quelqu'un à qui il manque des heures, sans en abuser.
-              </>
-            ) : (
-              `Aucun poste le jour : dans Postes, choisissez la zone ${zone.nom}.`
-            )}
-          </li>
-          <li>
-            {nuit.length ? (
-              <>
-                La nuit : <strong>exactement</strong> ce nombre en{' '}
-                {listeEt(nuit)}. Un deuxième se pose à la main.
-              </>
-            ) : (
-              'Aucun poste la nuit.'
-            )}
-          </li>
-          <li>
-            Les apprentis et les stagiaires comptent dans le nombre, mais jamais
-            sans un titulaire ou un dépannage avec eux.
-          </li>
+        {/* Un paragraphe, pas une liste (demande utilisateur du
+            2026-11-11 : « je préfère les textes »). */}
+        {/* Court et sans nom de poste (demande utilisateur du 2026-11-11). */}
+        <p className="text-sm text-muted-foreground">
+          {sansJour &&
+            `Aucun poste de jour : rattachez-en un à la zone ${zone.nom} dans Postes. `}
+          Le jour, le nombre est un minimum ; la nuit, il est exact. Les
+          apprentis et les stagiaires comptent, mais ne sont jamais seuls.
           {caseVide && (
-            <li>
+            <>
+              {' '}
               Un tiret <span className="text-amber-500">–</span> : personne
-              n'est demandé ce jour-là.
-            </li>
+              n'est demandé.
+            </>
           )}
-        </ul>
+        </p>
       </div>
       <div className="overflow-x-auto rounded-xl border bg-card">
         <table

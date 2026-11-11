@@ -473,11 +473,12 @@ describe('Besoins', () => {
       const region = screen.getByRole('region', { name: 'Accueil' })
       // Refonte du 2026-11-11 : le jour « au moins », la nuit « exactement ».
       expect(region.textContent).toContain(
-        'au moins ce nombre en Réception et Club, le planning choisit qui va où',
+        'Le jour, le nombre est un minimum ; la nuit, il est exact.',
       )
-      expect(region.textContent).toContain(
-        'exactement ce nombre en Veille de nuit',
-      )
+      // Aucun nom de poste dans le texte (demande du 2026-11-11).
+      expect(region.textContent).not.toMatch(/Réception|Club|Veille/)
+      // Un paragraphe, pas une liste (demande du 2026-11-11).
+      expect(region.querySelector('ul')).toBeNull()
       expect(caseAccueil('5:matin')?.textContent).toBe('3')
       expect(caseAccueil('5:matin')?.getAttribute('aria-label')).toBe(
         'Matin, samedi : au moins 3 personnes.',
@@ -487,9 +488,9 @@ describe('Besoins', () => {
       )
       expect(caseAccueil('1:matin')?.textContent).toBe('–')
       // Le tiret n'est expliqué que s'il y en a un.
-      expect(region.textContent).toContain("personne n'est demandé ce jour-là")
+      expect(region.textContent).toContain("personne n'est demandé")
       // Aucun mot de l'ancien réglage.
-      expect(region.textContent).not.toMatch(/minimum|maximum|consigne/i)
+      expect(region.textContent).not.toMatch(/maximum|consigne/i)
     })
 
     it('un lien vers un poste de l’accueil mène au tableau, pas à un onglet', () => {
