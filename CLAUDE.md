@@ -3063,6 +3063,43 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   gain de priorité), 7,6 s au pire (avant 16,2 s). Test
   `prioritesConfort.test.ts` (hôtel n° 41 : un déplacement payé en partie par le confort avant,
   disparu après ; deux mutations tuées).
+- **ASSAINISSEMENT DU MOTEUR (2026-11-11, demande utilisateur : « auditer, simplifier,
+  homogénéiser… garder toutes les fonctionnalités »)**. Une seule définition par notion :
+  `regimeRythme(s, R)` rend `strict` / `humain` / `libre` (remplace `rythmeStrictDe` et les deux
+  booléens combinés) ; `voisinConnuLibre(s, d, nbJours)` (modele.ts) pour « le jour voisin est
+  connu et libre », dans le calcul, le vérificateur et les repos obligés ; 5 jours et 2 repos lus
+  de `JOURS_TRAVAILLES_PREFERES` et `REPOS_SEMAINE` (regles.ts) ; le rythme de 5 jours du
+  générateur passe par `rythmeHumain`. `POIDS_DIMANCHE_SEUL` ne vaut plus qu'au régime humain (le
+  strict le couvrait déjà, `suiteDesJours.test.ts`) ; `POIDS_JOUR_MANQUANT` reste au strict (bord
+  d'une semaine inconnue). Aides partagées : `ajouter` (`listes.ts`), `estPur`, `postesDeJour`,
+  `momentDemande` (moment.ts), `lecteurZone` (zones.ts), `contexteRaisons` (vérificateur, mis en
+  cache par semaine).
+- **CALCUL PAR NIVEAUX (2026-11-11, remplace les deux temps du 2026-11-10)** : plus aucun prix
+  ne fait passer un niveau devant un autre. Chaque coût déclare son niveau (`Modele.coutNiveau`,
+  `niveaux()`) et `resoudreModele` les résout l'un après l'autre ; la valeur trouvée devient une
+  borne (`borneNiveau`, v + 0,5, tous les poids sont entiers). Niveaux : (1) rythme (bloc court
+  2, 3 repos 5) ; (2) essentiel = heures dues (`POIDS_MINUTE_DUE` 100 / min) + places du palier le
+  plus haut (`POIDS_PLACE` = `PLACE_EN_MINUTES` 45 min dues ; passation +60 ; place de nuit +2
+  passations quand la semaine en a ; trou +1 par quart d'heure) ; (3) déplacements (repos seul
+  101, bloc de 4 100) ; (4) équilibre ; (5) un niveau par palier plus bas, avec la semaine
+  suivante esquissée (`POIDS_SEMAINE_SUIVANTE` 500) ; (6) confort. Une place passe STRICTEMENT
+  avant un repos seul (plus d'égalité laissée au confort). Un niveau à poids positifs tenu à 0
+  n'est pas résolu (colonnes fixées à 0). Les niveaux résolus sont rappelés dans l'objectif du
+  suivant (`RAPPEL_NIVEAUX` 1000 : aucun effet sur les solutions optimales, 40 → 10 s sur une
+  semaine générée). Niveau non prouvé : sa meilleure solution devient sa borne, la suite
+  continue, résultat « réalisable » ; plus de repli en un seul calcul. Un modèle neuf par niveau,
+  parti de la solution d'avant arrondie. Sans API persistante (tests) : un `solve` par niveau sur
+  le texte LP, bornes en lignes `n<i>`. L'affinage borne chaque niveau (confort à +600) et ne
+  résout que le confort. RETIRÉS, ne pas les remettre : `paliersPlaces`, `TERMES_PAR_SHIFT`,
+  `prixFauteRythme`, `prixOrdre`, `prixSousPlace`, `ECART_BLOC`, `seuilPlaces`, `placesHautes`,
+  `MARGE_PRIORITES`, `bornePriorites`, `PART_PRIORITES`, `pireCoutRemplir`, `pireMoral`,
+  `partMoraleExtra`, `coutPlaceVide(Groupe)`, `coutManqueMinimum`, `coutExtra`, `coutConsigne`,
+  `PART_FIXE_SURPLUS`, `POIDS_SURPLUS_MINUTE`, `POIDS_SOUS_CONTRAT`, `POIDS_PREVISION_MANQUE`,
+  `POIDS_TROU_QUART`, `pireJfr`, `pireHorizon`. Empreintes de `generateur.test.ts` 01dc6269 et
+  87fcbe3a. Banc de décembre (3 graines) : métriques identiques (10 places, 8 h, 0 infraction),
+  temps max 9-10 s → 17-18 s par semaine (mois 31 → 65 s). Banc des 80 scénarios : places 481 →
+  464, trous 8 490 → 8 415 min, heures, infractions et fautes de rythme identiques, déplacements
+  sans gain 0, temps max 12,2 → 14,9 s. Tests de calcul sur l'hôtel de démo à 30 s.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 
