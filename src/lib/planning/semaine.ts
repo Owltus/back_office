@@ -11,6 +11,7 @@
  * que l'écran se porte tel quel.
  */
 
+import { besoinsLus } from '#/lib/planning/besoinsAuMieux.ts'
 import {
   cycleDe,
   estCourt,
@@ -496,7 +497,9 @@ export function contexte(d: DonneesSemaine): Contexte {
   )
   const horaires = new Map(d.referentiel.horaires.map((h) => [h.id, h]))
   const regles = lireRegles(d.referentiel)
-  const besoins = [...d.referentiel.besoins]
+  // Postes non indispensables : une place facultative par horaire et par
+  // jour, plus de grille (2026-11-11, `besoinsLus`).
+  const besoins = besoinsLus(d.referentiel)
     .map((b) => {
       const h = b.horaire_id !== null ? horaires.get(b.horaire_id) : undefined
       // Nombre par niveau (2026-11-06) : effectif et soutien en sont la somme.

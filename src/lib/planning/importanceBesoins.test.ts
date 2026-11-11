@@ -407,7 +407,11 @@ const donnees = (
       },
     ]),
     verrous: [],
-    zones: [{ id: 1, nom: 'Accueil', ordre: 0, continue: continu }],
+    // Sans zone en base (défaut : tenue en continu), les besoins écrits se
+    // lisent (`besoinsLus`) ; ces tests exercent le calcul des places.
+    ...(continu
+      ? {}
+      : { zones: [{ id: 1, nom: 'Accueil', ordre: 0, continue: false }] }),
   },
   absences: [],
   affectations,

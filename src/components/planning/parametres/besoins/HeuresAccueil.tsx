@@ -104,34 +104,6 @@ export function HeuresAccueil({
   )
 }
 
-/** Ouverture et fermeture d'UN poste hors accueil (2026-11-06 : tout
- * poste), sous sa grille : la même ligne que pour l'accueil. */
-export function HeuresPoste({
-  poste,
-  modifiable,
-  duree = 60,
-}: {
-  poste: Poste
-  modifiable: boolean
-  duree?: number
-}) {
-  return (
-    <section
-      aria-label={`Ouverture et fermeture du poste ${poste.nom}`}
-      className="flex min-w-0 flex-col gap-2"
-    >
-      <p className="text-xs text-muted-foreground">
-        Ouverture et fermeture : quelqu'un tient ce poste dès l'ouverture et
-        jusqu'à la fermeture, les jours où il a un besoin, pendant au moins{' '}
-        {heuresLisibles(duree)}. Vide : rien n'est demandé.
-      </p>
-      <ul className="flex flex-col divide-y rounded-xl border bg-card">
-        <LigneHeures poste={poste} modifiable={modifiable} />
-      </ul>
-    </section>
-  )
-}
-
 function LigneHeures({
   poste,
   modifiable,

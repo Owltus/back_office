@@ -3159,6 +3159,20 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   (`SectionZones.tsx`), choix Zone de Postes, `ajouterZone`,
   `enregistrerZone`, `supprimerZone`. Le calcul est inchangé (il lit
   toujours `zone_id`, multi-zones compris dans ses tests).
+  Module 4, « Autres postes, tenus au mieux » RETIRÉ (décision utilisateur :
+  « des postes pas jugés importants d'un point de vue planning… tu remplis
+  au mieux suivant chaque personne, ses jours de repos, son temps de
+  travail ») : un poste NON indispensable n'a plus de grille ; le calcul lit
+  à la place UNE place facultative (renfort 1, effectif 0) par horaire
+  permis et par jour (`besoinsLus`, `lib/planning/besoinsAuMieux.ts`, lu par
+  `contexte`) ; ses besoins en base restent, plus lus. Seulement quand la
+  base a la zone fixe (`referentiel.zones`) : les jeux de test sans zone
+  gardent leurs besoins écrits (calcul des places toujours exercé). Plus
+  aucune grille possible à l'écran (un indispensable est dans le tableau) :
+  `GrilleBesoins.tsx`, `HeuresPoste`, onglets et « besoins / sem. » de
+  Postes retirés ; la page = tableau Personnel, Moments, ordre de décision.
+  Mesuré sur la copie locale (semaine du 04/01/2027, « Tout recalculer ») :
+  50 shifts, 4 places à pourvoir, Supervision à ses 39 h, ~10 s.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

@@ -61,7 +61,7 @@ import {
   SelectValue,
 } from '#/components/ui/select.tsx'
 import { Switch } from '#/components/ui/switch.tsx'
-import { dureeHoraire, heures } from '#/lib/planning/affichage.ts'
+import { heures } from '#/lib/planning/affichage.ts'
 import {
   JOUR_MAX_LOI,
   JOUR_MAX_POSTE_DEFAUT,
@@ -391,9 +391,6 @@ function CartePoste({
         s.actif &&
         s.competences.some((c) => c.poste_id === id && c.niveau === niveau),
     ).length
-  const besoinsSemaine = referentiel.besoins
-    .filter((b) => b.poste_id === id)
-    .reduce((n, b) => n + b.effectif * dureeHoraire(b.debut, b.fin), 0)
   const max = presenceMaxPoste(p)
   // De 4 h à la loi, par demi-heure ; la valeur actuelle toujours proposée.
   const choixMax = [
@@ -553,7 +550,6 @@ function CartePoste({
             ...NIVEAUX.liste.map(
               (n) => [compte(n.id), n.nom.toLowerCase()] as const,
             ),
-            [heures(besoinsSemaine), 'besoins / sem.'] as const,
           ].map(([v, l]) => (
             <div key={l} className="flex flex-col">
               <dd className="font-semibold tabular-nums">{v}</dd>
