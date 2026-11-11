@@ -42,7 +42,8 @@ export function besoinsLus(
     for (let jour = 0; jour < 7; jour++)
       for (const h of horaires)
         deduits.push({
-          id: -(deduits.length + 1),
+          // Loin des places du tableau (`idPlaceAccueil`, < 100 000 + …).
+          id: -(10_000_000 + deduits.length + 1),
           poste_id: p.id,
           jour,
           horaire_id: h.id,

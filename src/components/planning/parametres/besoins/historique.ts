@@ -36,6 +36,8 @@ export type Changement =
       type: 'consigne'
       /** Zone du chiffre (2026-11-06). */
       zone: number
+      /** Poste du chiffre (2026-11-11) ; null : toute la zone. */
+      poste: number | null
       jour: number
       periode: Consigne['periode']
       avant: Bornes

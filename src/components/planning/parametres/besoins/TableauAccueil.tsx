@@ -16,7 +16,7 @@
  * Écritures et Annuler : `BesoinsPage` (une seule pile pour toute la page).
  */
 
-import { seulementLaNuit } from '#/lib/planning/zones.ts'
+import { seulementLaNuit, tientLaNuit } from '#/lib/planning/zones.ts'
 import type { ZoneRegle } from '#/lib/planning/zones.ts'
 import { useState } from 'react'
 import type { Sun } from 'lucide-react'
@@ -82,17 +82,50 @@ export function TableauAccueil({
   postes: ReadonlyArray<Poste>
   horaires?: ReadonlyArray<Horaire>
   modifiable: boolean
-  affiche: (jour: number, periode: Periode) => BornesAccueil
-  regler: (jour: number, periode: Periode, b: BornesAccueil) => void
+  /** Le chiffre d'une case ; `poste` null : toute la zone (ancien
+   * tableau, jeux de test). */
+  affiche: (
+    poste: number | null,
+    jour: number,
+    periode: Periode,
+  ) => BornesAccueil
+  regler: (
+    poste: number | null,
+    nom: string,
+    jour: number,
+    periode: Periode,
+    b: BornesAccueil,
+  ) => void
 }) {
   const moments = useMoments()
-  const sansJour = !postes.some(
-    (p) => !p.ferme && !seulementLaNuit(p, horaires, moments),
-  )
+  const ouverts = postes.filter((p) => !p.ferme)
+  const sansJour = !ouverts.some((p) => !seulementLaNuit(p, horaires, moments))
   const titre = `titre-zone-${zone.id}`
-  const periodes = periodesDuTableau(moments)
-  const caseVide = periodes.some(({ periode }) =>
-    JOURS.some((_, j) => affiche(j, periode).minimum === 0),
+  // UNE LIGNE PAR MOMENT ET PAR POSTE (décision utilisateur du 2026-11-11 :
+  // « combien en réception, combien au club… les postes importants ; pour
+  // la nuit, les postes de nuit ») : le jour, les postes qui ont des
+  // horaires de jour ; la nuit, ceux qui tiennent la nuit. Aucun nom écrit
+  // dans le code. Un chiffre de toute la zone encore en base garde sa ligne.
+  const lignes = periodesDuTableau(moments).flatMap((m) => {
+    const siens = ouverts.filter((p) =>
+      m.nuit
+        ? tientLaNuit(p, horaires, moments)
+        : !seulementLaNuit(p, horaires, moments),
+    )
+    const zoneEntiere =
+      !siens.length ||
+      JOURS.some((_, j) => affiche(null, j, m.periode).minimum > 0)
+    return [
+      ...siens.map((p) => ({
+        ...m,
+        poste: p.id as number | null,
+        nomPoste: p.nom,
+      })),
+      ...(zoneEntiere ? [{ ...m, poste: null, nomPoste: null }] : []),
+    ]
+  })
+  const caseVide = lignes.some((l) =>
+    JOURS.some((_, j) => affiche(l.poste, j, l.periode).minimum === 0),
   )
 
   return (
@@ -144,35 +177,61 @@ export function TableauAccueil({
             </tr>
           </thead>
           <tbody>
-            {periodes.map(({ periode, libelle, Icone, nuit: deNuit }) => (
-              <tr key={periode} className="border-t">
-                <th
-                  scope="row"
-                  className="sticky left-0 z-[1] bg-card px-3 py-2 text-left font-medium"
-                >
-                  <span className="inline-flex items-center gap-1.5">
-                    <Icone
-                      aria-hidden
-                      className="size-4 text-muted-foreground"
-                    />
-                    {libelle}
-                  </span>
-                </th>
-                {JOURS.map((_, j) => (
-                  <td key={j} className="p-1 text-center">
-                    <CaseAccueil
-                      jour={j}
-                      periode={periode}
-                      libelle={libelle}
-                      nuit={deNuit}
-                      bornes={affiche(j, periode)}
-                      modifiable={modifiable}
-                      regler={regler}
-                    />
-                  </td>
-                ))}
-              </tr>
-            ))}
+            {lignes.map(
+              (
+                { periode, libelle, Icone, nuit: deNuit, poste, nomPoste },
+                i,
+              ) => {
+                // Un filet plus marqué entre deux moments.
+                const nouveauMoment = lignes[i - 1]?.periode !== periode
+                const nom = nomPoste ? `${libelle} · ${nomPoste}` : libelle
+                return (
+                  <tr
+                    key={`${periode}|${poste ?? ''}`}
+                    className={cn(
+                      'border-t',
+                      nouveauMoment && i > 0 && 'border-t-2',
+                    )}
+                  >
+                    <th
+                      scope="row"
+                      className="sticky left-0 z-[1] bg-card px-3 py-2 text-left font-medium"
+                    >
+                      <span className="inline-flex items-center gap-1.5">
+                        <Icone
+                          aria-hidden
+                          className="size-4 shrink-0 text-muted-foreground"
+                        />
+                        <span className="flex min-w-0 flex-col leading-tight">
+                          <span>{libelle}</span>
+                          {nomPoste && (
+                            <span className="truncate text-xs font-normal text-muted-foreground">
+                              {nomPoste}
+                            </span>
+                          )}
+                        </span>
+                      </span>
+                    </th>
+                    {JOURS.map((_, j) => (
+                      <td key={j} className="p-1 text-center">
+                        <CaseAccueil
+                          jour={j}
+                          periode={periode}
+                          poste={poste}
+                          libelle={nom}
+                          nuit={deNuit}
+                          bornes={affiche(poste, j, periode)}
+                          modifiable={modifiable}
+                          regler={(jour, p, b) =>
+                            regler(poste, nom, jour, p, b)
+                          }
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                )
+              },
+            )}
           </tbody>
         </table>
       </div>
@@ -183,6 +242,7 @@ export function TableauAccueil({
 function CaseAccueil({
   jour,
   periode,
+  poste,
   libelle,
   nuit,
   bornes,
@@ -191,6 +251,8 @@ function CaseAccueil({
 }: {
   jour: number
   periode: Periode
+  /** Poste de la ligne ; null : toute la zone. */
+  poste: number | null
   libelle: string
   nuit: boolean
   bornes: BornesAccueil
@@ -213,6 +275,7 @@ function CaseAccueil({
           type="button"
           aria-label={`${libelle}, ${nomJour.toLowerCase()} : ${dit}.`}
           data-presence={clePresence(jour, periode)}
+          data-poste={poste ?? undefined}
           className={cn(
             'flex h-12 w-full items-center justify-center rounded-md border border-transparent transition-colors outline-none hover:border-border hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring',
             ouvert && 'border-primary bg-primary/10',

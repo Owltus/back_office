@@ -1092,13 +1092,16 @@ export function construire(
   // (`coutSurplus`, confort) ; le manque est une place (D7). Chaque chiffre ne compte que les créneaux de SA zone (2026-11-06).
   const premiereZone = R.zones[0].id
   const desPostes = zonesDesPostes(p)
+  // Un chiffre par poste (2026-11-11) : seuls les créneaux de CE poste.
   const comptent = p.consignes.map((k) =>
     p.creneaux.filter(
       (c) =>
         c.presence.includes(k.periode) &&
         jourDe(c) === k.jour &&
-        (c.zone ?? desPostes.get(c.poste) ?? premiereZone) ===
-          (k.zone ?? premiereZone),
+        (k.poste === undefined
+          ? (c.zone ?? desPostes.get(c.poste) ?? premiereZone) ===
+            (k.zone ?? premiereZone)
+          : c.poste === k.poste),
     ),
   )
   const besoinDe: BesoinDe = (place) => creneaux.get(place)

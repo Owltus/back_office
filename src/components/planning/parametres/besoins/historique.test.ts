@@ -91,6 +91,7 @@ describe('historique', () => {
     const c: Changement = {
       type: 'consigne',
       zone: 1,
+      poste: null,
       jour: 5,
       periode: 'matin',
       avant: { minimum: 2, maximum: null },

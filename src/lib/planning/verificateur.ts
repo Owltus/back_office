@@ -1447,6 +1447,8 @@ function trousUneZone(
 export interface EcartPresence {
   /** Zone du chiffre. */
   zone: string
+  /** Poste du chiffre (2026-11-11) ; absent : toute la zone. */
+  poste?: string
   jour: number
   periode: PeriodePresence
   compte: number
@@ -1489,17 +1491,25 @@ export function presenceParCycle(
     for (const moment of c.presence) {
       const k = `${zone}|${jourDe(c)}|${moment}`
       presents.set(k, (presents.get(k) ?? 0) + 1)
+      // Un chiffre par poste (2026-11-11) : le compte du poste à part.
+      const kp = `p${c.poste}|${jourDe(c)}|${moment}`
+      presents.set(kp, (presents.get(kp) ?? 0) + 1)
     }
   }
   return p.consignes.map((k) => {
     const compte =
-      presents.get(`${k.zone ?? premiere}|${k.jour}|${k.periode}`) ?? 0
+      presents.get(
+        k.poste === undefined
+          ? `${k.zone ?? premiere}|${k.jour}|${k.periode}`
+          : `p${k.poste}|${k.jour}|${k.periode}`,
+      ) ?? 0
     // « Au moins … au plus … » comme le calcul : sans maximum (ou plus bas),
     // le chiffre est exact.
     const n = Math.max(0, k.minimum)
     const ecart = ecartConsigne(compte, n, Math.max(n, k.maximum ?? n))
     return {
       zone: k.zone ?? premiere,
+      ...(k.poste !== undefined ? { poste: k.poste } : {}),
       jour: k.jour,
       periode: k.periode,
       compte,
@@ -1539,7 +1549,9 @@ export function violationsAccueil(
         (c) =>
           jourDe(c) === x.jour &&
           c.presence.includes(x.periode) &&
-          (zoneDe(c) ?? premiere) === x.zone,
+          (x.poste === undefined
+            ? (zoneDe(c) ?? premiere) === x.zone
+            : c.poste === x.poste),
       )
       .map((c) => c.id)
     r.push({

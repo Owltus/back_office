@@ -56,8 +56,12 @@ import type { Consigne, Referentiel } from '#/lib/planning/types.ts'
 
 type Periode = Consigne['periode']
 
-const cleConsigne = (zone: number, jour: number, periode: Periode) =>
-  `${zone}|${jour}|${periode}`
+const cleConsigne = (
+  zone: number,
+  poste: number | null,
+  jour: number,
+  periode: Periode,
+) => `${zone}|${poste ?? ''}|${jour}|${periode}`
 const AUCUNE_BORNE: Bornes = { minimum: 0, maximum: null }
 
 /** Le focus est dans un champ de saisie : Ctrl + Z lui appartient. */
@@ -115,16 +119,31 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
   /** La zone d'une consigne en base (absente : la première). */
   const premiereZone = data ? Number(lireRegles(data).zones[0].id) : 1
   const zoneDe = (c: Consigne) => c.zone_id ?? premiereZone
+  /** La consigne d'une case : zone, poste (null : toute la zone), jour,
+   * moment (2026-11-11 : un chiffre par poste). */
+  const trouver = (
+    liste: readonly Consigne[] | undefined,
+    zone: number,
+    poste: number | null,
+    jour: number,
+    periode: Periode,
+  ) =>
+    liste?.find(
+      (x) =>
+        zoneDe(x) === zone &&
+        (x.poste_id ?? null) === poste &&
+        x.jour === jour &&
+        x.periode === periode,
+    )
   const afficheConsigne = (
     zone: number,
+    poste: number | null,
     jour: number,
     periode: Periode,
   ): Bornes => {
-    const locale = locales.get(cleConsigne(zone, jour, periode))
+    const locale = locales.get(cleConsigne(zone, poste, jour, periode))
     if (locale) return locale
-    const c = data?.consignes.find(
-      (x) => zoneDe(x) === zone && x.jour === jour && x.periode === periode,
-    )
+    const c = trouver(data?.consignes, zone, poste, jour, periode)
     return c ? { minimum: c.minimum, maximum: c.maximum } : AUCUNE_BORNE
   }
 
@@ -137,7 +156,7 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
     setLocales((m) => {
       const suite = new Map(m)
       for (const c of consignes)
-        suite.set(cleConsigne(c.zone, c.jour, c.periode), c.apres)
+        suite.set(cleConsigne(c.zone, c.poste, c.jour, c.periode), c.apres)
       return suite
     })
     enCours.current++
@@ -145,13 +164,14 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
       const r = await ecrire(async () => {
         for (const c of consignes) {
           await reglerConsigne(
-            { zone_id: c.zone, jour: c.jour, periode: c.periode, ...c.apres },
-            relu()?.consignes.find(
-              (x) =>
-                zoneDe(x) === c.zone &&
-                x.jour === c.jour &&
-                x.periode === c.periode,
-            ),
+            {
+              zone_id: c.zone,
+              poste_id: c.poste,
+              jour: c.jour,
+              periode: c.periode,
+              ...c.apres,
+            },
+            trouver(relu()?.consignes, c.zone, c.poste, c.jour, c.periode),
           )
         }
       }, "Le besoin n'a pas pu être enregistré")
@@ -206,19 +226,22 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
 
   const reglerAccueil = (
     zone: number,
+    poste: number | null,
     nom: string,
     jour: number,
     periode: Periode,
     b: Bornes,
   ) => {
-    const avant = afficheConsigne(zone, jour, periode)
+    const avant = afficheConsigne(zone, poste, jour, periode)
     // Un chiffre (minimum = maximum) ; rien de demandé retire la case.
     const haut = Math.max(b.minimum, b.maximum ?? b.minimum)
     const apres: Bornes =
       haut > 0 ? { minimum: b.minimum, maximum: haut } : AUCUNE_BORNE
     faire({
       libelle: `${nom.toLocaleLowerCase('fr-FR')}, ${JOURS[jour].toLowerCase()} ${periode}`,
-      changements: [{ type: 'consigne', zone, jour, periode, avant, apres }],
+      changements: [
+        { type: 'consigne', zone, poste, jour, periode, avant, apres },
+      ],
     })
   }
 
@@ -289,8 +312,10 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
                     postes={siens}
                     horaires={data.horaires}
                     modifiable={modifiable}
-                    affiche={(j, p) => afficheConsigne(id, j, p)}
-                    regler={(j, p, b) => reglerAccueil(id, z.nom, j, p, b)}
+                    affiche={(poste, j, p) => afficheConsigne(id, poste, j, p)}
+                    regler={(poste, nom, j, p, b) =>
+                      reglerAccueil(id, poste, nom, j, p, b)
+                    }
                   />
                   {/* Zone tenue en continu : ni ouverture ni fermeture à
                       régler (2026-11-11, `aOuvertureFermeture`). */}

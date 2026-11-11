@@ -355,7 +355,7 @@ export function pointsAttention(
         posteId: t.poste_id,
         horaireId: t.type_shift_id,
         poste: postes.find((p) => p.id === t.poste_id),
-        moment: zone ? (t.moment ?? null) : null,
+        moment: t.moment ?? null,
         debut: t.debut,
         fin: t.fin,
         manquant: t.manquant,
@@ -377,7 +377,11 @@ export function pointsAttention(
       // Un manque est déjà une place à pourvoir (avec Placer quelqu'un) :
       // ici, seulement le monde en plus (décision U6 du 2026-11-01).
       if (p.ecart <= 0 || !garder(date)) continue
-      presence.push({ cle: `${date}-${p.periode}`, date, ...p })
+      presence.push({
+        cle: `${date}-${p.periode}-${p.poste ?? ''}`,
+        date,
+        ...p,
+      })
     }
     // Données d'avant le 2026-10-30 (et fixtures) : pas de trous.
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition

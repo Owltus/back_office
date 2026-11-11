@@ -99,6 +99,10 @@ describe('Besoins', () => {
   describe("tableau de l'accueil", () => {
     // Décisions du 2026-11-01 : Réception et Club (case « présence ») et la
     // veille de nuit forment l'accueil ; un chiffre exact par case.
+    // Un chiffre PAR POSTE depuis le 2026-11-11 (« combien en réception,
+    // combien au club ; la nuit, les postes de nuit »).
+    const idDe = (ref: Referentiel, nom: string) =>
+      ref.postes.find((p) => p.nom === nom)?.id as number
     const avecAccueil = (): Referentiel => {
       const ref = referentielDemo()
       for (const p of ref.postes)
@@ -106,43 +110,66 @@ describe('Besoins', () => {
           ? 1
           : null
       ref.consignes = [
-        { id: 1, jour: 5, periode: 'matin', minimum: 3, maximum: 3 },
-        { id: 2, jour: 0, periode: 'nuit', minimum: 1, maximum: 1 },
+        {
+          id: 1,
+          zone_id: 1,
+          poste_id: idDe(ref, 'Réception'),
+          jour: 5,
+          periode: 'matin',
+          minimum: 3,
+          maximum: 3,
+        },
+        {
+          id: 2,
+          zone_id: 1,
+          poste_id: idDe(ref, 'Veille de nuit'),
+          jour: 0,
+          periode: 'nuit',
+          minimum: 1,
+          maximum: 1,
+        },
       ]
       return ref
     }
-    const caseAccueil = (cle: string) =>
-      document.querySelector<HTMLElement>(`[data-presence="${cle}"]`)
+    const caseAccueil = (cle: string, poste: number) =>
+      document.querySelector<HTMLElement>(
+        `[data-presence="${cle}"][data-poste="${poste}"]`,
+      )
 
-    it("les postes de l'accueil n'ont plus d'onglet, le tableau montre le chiffre", () => {
-      // Oracle : « il faut 3 personnes, peu importe qu'il soit réception ou club ».
-      etat.referentiel = avecAccueil()
+    it('une ligne par moment et par poste ; le texte ne nomme aucun poste', () => {
+      const ref = avecAccueil()
+      etat.referentiel = ref
+      const rec = idDe(ref, 'Réception')
+      const club = idDe(ref, 'Club')
+      const veille = idDe(ref, 'Veille de nuit')
       monter(<BesoinsPage />)
       expect(screen.queryAllByRole('tab')).toHaveLength(0)
       // Une seule zone : titrée « Personnel », jamais « Accueil » (2026-11-11).
       const region = screen.getByRole('region', { name: 'Personnel' })
-      expect(region.textContent).toContain(
+      const texte = region.querySelector('p')?.textContent ?? ''
+      expect(texte).toContain(
         'Le nombre minimum de personnes qui doivent être présentes, jour par jour.',
       )
-      expect(region.textContent).not.toMatch(/accueil|;/i)
-      // Plus d'en-tête de section visible ni de phrase au-dessus.
+      expect(texte).not.toMatch(/accueil|;|Réception|Club|Veille/i)
       expect(screen.queryByText('Postes indispensables')).toBeNull()
-      expect(screen.queryByText(/Le personnel nécessaire/)).toBeNull()
-      // Aucun nom de poste dans le texte (demande du 2026-11-11).
-      expect(region.textContent).not.toMatch(/Réception|Club|Veille/)
-      // Un paragraphe, pas une liste (demande du 2026-11-11).
       expect(region.querySelector('ul')).toBeNull()
-      expect(caseAccueil('5:matin')?.textContent).toBe('3')
-      expect(caseAccueil('5:matin')?.getAttribute('aria-label')).toBe(
-        'Matin, samedi : au moins 3 personnes.',
+      // Le jour : Réception et Club ; la nuit : la veille seule.
+      expect(caseAccueil('5:matin', rec)?.textContent).toBe('3')
+      expect(caseAccueil('5:matin', rec)?.getAttribute('aria-label')).toBe(
+        'Matin · Réception, samedi : au moins 3 personnes.',
       )
-      expect(caseAccueil('0:nuit')?.getAttribute('aria-label')).toBe(
-        'Nuit, lundi : exactement 1 personne.',
+      expect(caseAccueil('5:matin', club)?.textContent).toBe('–')
+      expect(caseAccueil('0:soir', club)).toBeTruthy()
+      expect(caseAccueil('0:nuit', veille)?.getAttribute('aria-label')).toBe(
+        'Nuit · Veille de nuit, lundi : exactement 1 personne.',
       )
-      expect(caseAccueil('1:matin')?.textContent).toBe('–')
-      // Le tiret n'est expliqué que s'il y en a un.
+      expect(caseAccueil('0:nuit', rec)).toBeNull()
+      expect(caseAccueil('0:matin', veille)).toBeNull()
+      // Aucune ligne de toute la zone quand chaque chiffre a son poste.
+      expect(
+        document.querySelector('[data-presence="0:matin"]:not([data-poste])'),
+      ).toBeNull()
       expect(region.textContent).toContain("personne n'est demandé")
-      // Aucun mot de l'ancien réglage.
       expect(region.textContent).not.toMatch(/maximum|consigne/i)
     })
 
@@ -154,43 +181,86 @@ describe('Besoins', () => {
       expect(screen.getByRole('region', { name: 'Personnel' })).toBeTruthy()
     })
 
-    it('un compteur écrit un chiffre exact ; 0 retire la case ; Annuler la remet', async () => {
-      // Oracle : contrainte `planning_consignes_exact` (minimum = maximum).
-      etat.referentiel = avecAccueil()
+    it('un compteur écrit le chiffre DU POSTE ; 0 retire la case ; Annuler la remet', async () => {
+      const ref = avecAccueil()
+      etat.referentiel = ref
+      const rec = idDe(ref, 'Réception')
+      const club = idDe(ref, 'Club')
       monter(<BesoinsPage />)
-      fireEvent.click(caseAccueil('0:soir') as HTMLElement)
+      fireEvent.click(caseAccueil('0:soir', club) as HTMLElement)
       const panneau = within(
-        screen.getByRole('dialog', { name: 'Soir · Lundi' }),
+        screen.getByRole('dialog', { name: 'Soir · Club · Lundi' }),
       )
       fireEvent.click(
         panneau.getByRole('button', { name: 'Au moins : un de plus' }),
       )
       await waitFor(() =>
         expect(service.reglerConsigne).toHaveBeenCalledWith(
-          { zone_id: 1, jour: 0, periode: 'soir', minimum: 1, maximum: 1 },
+          {
+            zone_id: 1,
+            poste_id: club,
+            jour: 0,
+            periode: 'soir',
+            minimum: 1,
+            maximum: 1,
+          },
           undefined,
         ),
       )
       fireEvent.click(screen.getByRole('button', { name: 'Annuler' }))
       await waitFor(() =>
         expect(service.reglerConsigne).toHaveBeenLastCalledWith(
-          { zone_id: 1, jour: 0, periode: 'soir', minimum: 0, maximum: null },
+          {
+            zone_id: 1,
+            poste_id: club,
+            jour: 0,
+            periode: 'soir',
+            minimum: 0,
+            maximum: null,
+          },
           undefined,
         ),
       )
-      // Samedi matin 3 → 2 : toujours un seul chiffre.
-      fireEvent.click(caseAccueil('5:matin') as HTMLElement)
+      // Samedi matin Réception 3 → 2 : la ligne existante, celle du poste.
+      fireEvent.click(caseAccueil('5:matin', rec) as HTMLElement)
       fireEvent.click(
         within(
-          screen.getByRole('dialog', { name: 'Matin · Samedi' }),
+          screen.getByRole('dialog', { name: 'Matin · Réception · Samedi' }),
         ).getByRole('button', { name: 'Au moins : un de moins' }),
       )
       await waitFor(() =>
         expect(service.reglerConsigne).toHaveBeenLastCalledWith(
-          { zone_id: 1, jour: 5, periode: 'matin', minimum: 2, maximum: 2 },
+          {
+            zone_id: 1,
+            poste_id: rec,
+            jour: 5,
+            periode: 'matin',
+            minimum: 2,
+            maximum: 2,
+          },
           expect.objectContaining({ id: 1 }),
         ),
       )
+    })
+
+    it('un ancien chiffre de toute la zone garde sa ligne', () => {
+      const ref = avecAccueil()
+      ref.consignes = [
+        {
+          id: 9,
+          zone_id: 1,
+          jour: 2,
+          periode: 'matin',
+          minimum: 2,
+          maximum: 2,
+        },
+      ]
+      etat.referentiel = ref
+      monter(<BesoinsPage />)
+      expect(
+        document.querySelector('[data-presence="2:matin"]:not([data-poste])')
+          ?.textContent,
+      ).toBe('2')
     })
   })
 

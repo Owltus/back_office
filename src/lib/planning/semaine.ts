@@ -274,14 +274,23 @@ export const idPlaceAccueil = (
   l: Moments = MOMENTS_HOTEL,
   /** Rang de la zone (0 : la première). */
   zone = 0,
+  /** Poste du chiffre (2026-11-11) : un identifiant par poste, à part. */
+  posteId?: number,
 ) => {
   // Un moment hors du tableau n'a pas de place (relecture du 2026-11-06 : son
   // rang -1 donnait l'identifiant d'un autre moment) ; `contexte` écarte ses
   // chiffres, jamais lus.
   const rang = rangAuTableau(l, periode)
   if (rang < 0) throw new Error(`Moment hors du tableau : ${periode}`)
-  return -(1 + zone * 7 * tailleTableau(l) + jour * tailleTableau(l) + rang)
+  const local = jour * tailleTableau(l) + rang
+  if (posteId !== undefined)
+    return -(ID_PLACES_POSTE + posteId * 7 * tailleTableau(l) + local)
+  return -(1 + zone * 7 * tailleTableau(l) + local)
 }
+
+/** Les places d'un chiffre par poste commencent ici (sous les places de
+ * zone, au-dessus des places déduites des autres postes, `besoinsLus`). */
+const ID_PLACES_POSTE = 100_000
 
 /** Un trou entre deux équipes, pour l'écran. */
 export interface TrouOut {
@@ -1631,6 +1640,7 @@ function chiffresAccueil(ctx: Contexte): Probleme['consignes'] {
     minimum: chiffreAccueil(c),
     maximum: plafondAccueil(c),
     zone: c.zone_id === undefined ? ctx.regles.zones[0].id : String(c.zone_id),
+    ...(c.poste_id != null ? { poste: String(c.poste_id) } : {}),
   }))
 }
 
@@ -3289,11 +3299,12 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
     jour: number
     periode: PeriodePresence
     zone?: string
+    poste?: string
   }> = []
   for (const a of ctx.affectations) {
     const zone = zoneDeCtx(ctx, a.poste_id) ?? undefined
     for (const periode of presenceDe(ctx, a))
-      presents.push({ jour: a.jour, periode, zone })
+      presents.push({ jour: a.jour, periode, zone, poste: String(a.poste_id) })
   }
   const chiffres = ctx.consignes.map((c) => ({
     ...c,
@@ -3337,7 +3348,9 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
         (c) =>
           jourDe(c) === x.jour &&
           c.presence.includes(x.periode) &&
-          (c.zone ?? zones[0].id) === zone,
+          (x.poste === undefined
+            ? (c.zone ?? zones[0].id) === zone
+            : c.poste === x.poste),
       )
       const raisons = raisonsBlocageAccueil(
         pAccueil,
@@ -3350,9 +3363,12 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
           x.periode,
           ctx.regles.moments,
           Math.max(0, rangZone(zones, zone)),
+          x.poste === undefined ? undefined : Number(x.poste),
         ),
         moment: x.periode,
-        poste_id: posteIdZone(zones, zone),
+        // Un chiffre par poste (2026-11-11) : la place est celle du poste.
+        poste_id:
+          x.poste === undefined ? posteIdZone(zones, zone) : Number(x.poste),
         jour: x.jour,
         type_shift_id: null,
         debut: ids.length

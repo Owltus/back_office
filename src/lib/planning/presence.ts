@@ -139,6 +139,8 @@ export function periodeShift(
 export interface PresenceOut {
   /** Zone du chiffre (2026-11-06). Absente : la première. */
   zone?: string
+  /** Poste du chiffre (2026-11-11) ; absent : toute la zone. */
+  poste?: string
   jour: number
   periode: PeriodePresence
   compte: number
@@ -167,6 +169,8 @@ export function bilanPresence(
     jour: number
     periode: PeriodePresence
     zone?: string
+    /** Poste du shift (2026-11-11). */
+    poste?: string
   }>,
   l: Moments = MOMENTS_HOTEL,
   /** La première zone : celle d'un chiffre ou d'un shift sans zone. */
@@ -174,20 +178,51 @@ export function bilanPresence(
 ): PresenceOut[] {
   return [...consignes].sort(triConsignes(l)).map((c) => {
     const zone = c.zone_id === undefined ? premiere : String(c.zone_id)
+    const poste = c.poste_id == null ? undefined : String(c.poste_id)
     const compte = presents.filter(
       (p) =>
         p.jour === c.jour &&
         p.periode === c.periode &&
-        (p.zone ?? premiere) === zone,
+        (p.zone ?? premiere) === zone &&
+        (poste === undefined || p.poste === poste),
     ).length
     return {
       zone,
+      ...(poste !== undefined ? { poste } : {}),
       jour: c.jour,
       periode: c.periode,
       compte,
       minimum: c.minimum,
       maximum: c.maximum,
       ecart: ecartConsigne(compte, c.minimum, c.maximum),
+    }
+  })
+}
+
+/** Les chiffres d'un même moment (un par poste depuis le 2026-11-11)
+ * réunis pour les pastilles sous chaque jour : présents et demandés
+ * additionnés ; l'écart dit d'abord ce qui manque (somme des manques), sinon
+ * le monde en plus. L'ordre d'arrivée est gardé. */
+export function parMoment(presence: readonly PresenceOut[]): PresenceOut[] {
+  const parCle = new Map<string, PresenceOut[]>()
+  for (const x of presence) {
+    const cle = `${x.zone ?? ''}|${x.jour}|${x.periode}`
+    parCle.set(cle, [...(parCle.get(cle) ?? []), x])
+  }
+  return [...parCle.values()].map((xs) => {
+    if (xs.length === 1) return xs[0]
+    const manque = xs.reduce((t, x) => t + Math.min(0, x.ecart), 0)
+    const enPlus = xs.reduce((t, x) => t + Math.max(0, x.ecart), 0)
+    return {
+      zone: xs[0].zone,
+      jour: xs[0].jour,
+      periode: xs[0].periode,
+      compte: xs.reduce((t, x) => t + x.compte, 0),
+      minimum: xs.reduce((t, x) => t + x.minimum, 0),
+      maximum: xs.some((x) => x.maximum === null)
+        ? null
+        : xs.reduce((t, x) => t + (x.maximum ?? 0), 0),
+      ecart: manque < 0 ? manque : enPlus,
     }
   })
 }

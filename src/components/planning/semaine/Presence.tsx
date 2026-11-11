@@ -24,7 +24,7 @@ import {
   nuitsDuTableau,
 } from '#/lib/planning/moment.ts'
 import type { Moments } from '#/lib/planning/moment.ts'
-import { libelleConsigne } from '#/lib/planning/presence.ts'
+import { libelleConsigne, parMoment } from '#/lib/planning/presence.ts'
 import type { PresenceOut } from '#/lib/planning/presence.ts'
 import type {
   EtatTransmission,
@@ -53,7 +53,7 @@ export function ecartTexte(ecart: number): string {
 const RIEN = "personne de demandé, l'hôtel peut rester vide"
 
 export function PastillesPresence({
-  presence,
+  presence: parPoste,
   moments: donnes,
 }: {
   presence: PresenceOut[]
@@ -61,6 +61,8 @@ export function PastillesPresence({
 }) {
   const lus = useMoments()
   const moments = donnes ?? lus
+  // Une pastille par moment, postes réunis (2026-11-11).
+  const presence = parMoment(parPoste)
   if (!presence.length) return null
   const absents = momentsDuTableau(moments).filter(
     (m) => !presence.some((p) => p.periode === m),
@@ -288,7 +290,9 @@ export function PointsPresence({
   const lus = useMoments()
   if (!presence) return null
   const l = donnes ?? lus
-  const de = (periode: string) => presence.find((x) => x.periode === periode)
+  // Un point par moment, postes réunis (2026-11-11).
+  const reunis = parMoment(presence)
+  const de = (periode: string) => reunis.find((x) => x.periode === periode)
   const tableau = momentsDuTableau(l)
   const jour = momentsDeJour(l)
   const nuit = nuitsDuTableau(l)[0] as string | undefined
@@ -306,7 +310,9 @@ export function PointsPresence({
         )
     }
   const nuitAvant =
-    nuit === undefined ? undefined : veille?.find((v) => v.periode === nuit)
+    nuit === undefined
+      ? undefined
+      : parMoment(veille ?? []).find((v) => v.periode === nuit)
   if (transmissions && veille && nuit !== undefined)
     lignes.unshift(`${ligne(l, nuit, nuitAvant)} (la veille)`)
   const pose = 'absolute top-1/2 z-10 -translate-x-1/2 -translate-y-1/2'

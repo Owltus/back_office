@@ -3120,13 +3120,12 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   d'autres départages.
 - **PAGE BESOINS REPRISE MODULE PAR MODULE (2026-11-11, demande utilisateur :
   « imbitable… que le premier venu puisse configurer »)**. Module 1, le
-  tableau de l'accueil : (a) Réception et Club FUSIONNÉS en un poste
-  « Hôtelier polyvalent » (décision utilisateur : « ne garde aucun
-  historique, migration totale ») — migration
-  `20261111100000_planning_hotelier_polyvalent` (Réception gardée et
-  renommée, compétences au meilleur niveau, horaires unis, TOUS les shifts du
-  Club versés, passé et verrous compris, Club supprimé ; livraison
-  `--avec-donnees`) ; (b) le jour, le chiffre est écrit « au moins » (c'est
+  tableau de l'accueil : (a) ~~Réception et Club fusionnés en « Hôtelier
+  polyvalent »~~ ANNULÉ le même jour (décision utilisateur : « les hôteliers
+  sont polyvalents, mais pas tous ») : la migration
+  `20261111100000_planning_hotelier_polyvalent`, jamais livrée, est retirée
+  du dépôt ; la copie locale se refait par `start.bat` (O). Ne pas
+  reproposer de fusionner des postes ; (b) le jour, le chiffre est écrit « au moins » (c'est
   déjà le calcul : surplus souple D8, « raisonnable, de temps en temps ») ;
   la nuit, « exactement » ; le réglage « au moins … au plus … » est retiré
   de l'écran (une case écrit minimum = maximum) ; (c) textes en liste
@@ -3138,7 +3137,7 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   vide ») — la continuité et la passation avec la nuit les disaient déjà.
   UNE source, `aOuvertureFermeture` (zones.ts), lue par le calcul
   (`aDesHeures`), « À vérifier » et l'écran (bloc et « Tenue pendant »
-  masqués) ; les heures déjà en base (07:00 de l'Hôtelier polyvalent) sont
+  masqués) ; les heures déjà en base (07:00 de la Réception) sont
   ignorées, rien n'est réécrit. L'arrivée du matin ensemble
   (`coutArriveeMatin`) ne perd rien : `Probleme.arriveesMatin`
   (`arriveesMatin`, semaine.ts) = l'ouverture, ou dans une zone continue le
@@ -3195,6 +3194,24 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   `phrasesOrdreDecision`, `sectionsBesoins`, `postesParImportance` et leur
   test ; `ordreDecision.ts` ne garde que les deux phrases de la case
   Indispensable (Postes). À tenir à jour si une règle de la page change.
+  TABLEAU PAR POSTE (même jour, décision utilisateur : « combien en
+  réception, combien au club… pas nécessairement eux, les postes
+  importants ; la nuit, les postes de nuit ») : migration
+  `20261111120000_planning_consignes_par_poste` (`poste_id`, clé unique
+  (zone, poste, jour, moment) `nulls not distinct` ; données : la nuit au
+  poste qui ne tient que la nuit, le jour au premier poste de jour de la
+  zone par ordre puis id — « tout sur la Réception » ; livraison
+  `--supprimer` et `--avec-donnees`). Pas de total en plus (décision).
+  Écran : une ligne par moment et par poste (jour : postes non
+  `seulementLaNuit` ; nuit : `tientLaNuit`), libellé « Matin · <poste> »
+  tiré de la configuration ; un chiffre de toute la zone (`poste_id` null)
+  garde sa ligne. Calcul : `ConsigneSolveur.poste` → seuls les créneaux de
+  ce poste comptent (`comptent`, generateur ; `presenceParCycle`,
+  `violationsAccueil`, `bilanPresence`, places à pourvoir avec le vrai
+  `poste_id` et `idPlaceAccueil(…, posteId)` à part, `ID_PLACES_POSTE`) ;
+  sans poste, la zone comme avant (empreintes inchangées). Pastilles des
+  vues : `parMoment` réunit les postes d'un moment (le manque passe devant).
+  Test `consignesParPoste.test.ts`.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

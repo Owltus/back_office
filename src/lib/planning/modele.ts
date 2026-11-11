@@ -569,6 +569,9 @@ export interface ConsigneSolveur {
   maximum: number | null
   /** Zone du chiffre ; absente : la première zone. */
   zone?: string
+  /** Poste du chiffre (2026-11-11) : seuls ses créneaux comptent. Absent :
+   * toute la zone. */
+  poste?: string
 }
 
 export interface Probleme {

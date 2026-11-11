@@ -315,6 +315,9 @@ export interface Consigne {
   /** Zone du chiffre (2026-11-06) ; absent (données de test) : la
    * première zone. */
   zone_id?: number
+  /** Poste du chiffre (2026-11-11, « combien en réception, combien au
+   * club ») ; null ou absent : toute la zone. */
+  poste_id?: number | null
 }
 
 /** Une zone de l'établissement (`planning_zones`, 2026-11-06, `zones.ts`). */
