@@ -53,6 +53,7 @@ import {
   toucheLaNuit,
   journeeDe,
   travail,
+  voisinConnuLibre,
 } from '#/lib/planning/modele.ts'
 import { ajouter } from '#/lib/planning/listes.ts'
 import type {
@@ -715,9 +716,7 @@ function alertesMorales(
     // avant le 2026-11-04).
     const libre = (d: number): boolean => {
       if (dur ? apresContrat(s, d) : false) return false
-      if (d < 0) return s.joursSemainePrecedente !== null && d < -s.serieAvant
-      if (d >= nbJours)
-        return s.joursSemaineSuivante !== null && d >= nbJours + s.serieApres
+      if (d < 0 || d >= nbJours) return voisinConnuLibre(s, d, nbJours)
       return !travaille(d) && (dur || !s.horsContrat.has(d))
     }
     for (const [d, duJour] of [...parJour].sort(([a], [b]) => a - b))
@@ -823,11 +822,7 @@ function alertesMorales(
     ) {
       const libres = jours.filter((j) => !travaille(j))
       const voisinLibre = (d: number) =>
-        d < 0
-          ? s.joursSemainePrecedente !== null && s.serieAvant === 0
-          : d >= nbJours
-            ? s.joursSemaineSuivante !== null && s.serieApres === 0
-            : !travaille(d)
+        d < 0 || d >= nbJours ? voisinConnuLibre(s, d, nbJours) : !travaille(d)
       const colles =
         jours.slice(0, -1).some((j) => !travaille(j) && !travaille(j + 1)) ||
         (!travaille(jours[0]) && voisinLibre(jours[0] - 1)) ||

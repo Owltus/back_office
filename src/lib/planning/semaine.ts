@@ -73,6 +73,7 @@ import {
   niveauAccepte,
   niveauSur,
   soutienSur,
+  voisinConnuLibre,
 } from '#/lib/planning/modele.ts'
 import { ajouter } from '#/lib/planning/listes.ts'
 import {
@@ -2833,10 +2834,7 @@ export function reposObliges(
       if (jourIsoleDe(sol, regles) === 'interdit') {
         const libreSur = (d: number): boolean => {
           if (apresContrat(sol, d)) return false
-          if (d < 0)
-            return sol.joursSemainePrecedente !== null && sol.serieAvant === 0
-          if (d > 6)
-            return sol.joursSemaineSuivante !== null && sol.serieApres === 0
+          if (d < 0 || d > 6) return voisinConnuLibre(sol, d, 7)
           if (travaille.has(d)) return false
           // Avant l'arrivée (hors contrat, pas après la fin) : du repos.
           return (

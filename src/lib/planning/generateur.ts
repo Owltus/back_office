@@ -55,6 +55,7 @@ import {
   toucheLaNuit,
   journeeDe,
   travail,
+  voisinConnuLibre,
 } from '#/lib/planning/modele.ts'
 import { ajouter } from '#/lib/planning/listes.ts'
 import {
@@ -2377,10 +2378,10 @@ export function construire(
           const lundi = jours[0]
           const dimanche = jours[6]
           if (lundi > 0) candidats.push([lundi - 1, lundi])
-          else if (s.joursSemainePrecedente !== null && s.serieAvant === 0)
+          else if (voisinConnuLibre(s, lundi - 1, p.nbJours))
             candidats.push([lundi])
           if (dimanche + 1 < p.nbJours) candidats.push([dimanche, dimanche + 1])
-          else if (s.joursSemaineSuivante !== null && s.serieApres === 0)
+          else if (voisinConnuLibre(s, dimanche + 1, p.nbJours))
             candidats.push([dimanche])
         }
         const paires: string[] = []
@@ -2518,8 +2519,8 @@ export function construire(
       if (
         k === 0 &&
         regimeRythme(s, R) !== 'libre' &&
-        s.joursSemainePrecedente !== null &&
-        s.serieAvant === 1 &&
+        !voisinConnuLibre(s, -1, p.nbJours) &&
+        voisinConnuLibre(s, -2, p.nbJours) &&
         !s.joursHorsSite.has(0) &&
         !s.horsContrat.has(0)
       ) {
@@ -2552,7 +2553,7 @@ export function construire(
               break
             }
             if (v < 0) {
-              if (s.joursSemainePrecedente === null || s.serieAvant > 0) {
+              if (!voisinConnuLibre(s, v, p.nbJours)) {
                 continu = true
                 break
               }
@@ -2564,7 +2565,7 @@ export function construire(
             // l'esquisse : son lundi n'est pas écrit, il ne peut pas tenir un
             // dimanche (le dimanche s'appuie sur le samedi).
             if (v >= p.nbJours) {
-              if (s.joursSemaineSuivante === null || s.serieApres > 0) {
+              if (!voisinConnuLibre(s, v, p.nbJours)) {
                 continu = true
                 break
               }

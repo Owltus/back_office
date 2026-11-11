@@ -398,6 +398,29 @@ export function presenceMax(s: SalarieSolveur, c: Creneau): number {
   return s.minutesJourMax
 }
 
+/** Un jour d'une semaine VOISINE (d < 0 : la semaine d'avant ; d >=
+ * `nbJours` : celle d'après) est connu et libre : la semaine voisine est lue
+ * et la série de travail qui borde la période ne l'atteint pas
+ * (`serieAvant`, `serieApres`). Une semaine voisine inconnue n'est jamais
+ * libre. UNE définition pour le générateur, le vérificateur et les repos
+ * obligés (deux repos de suite, jour isolé, dimanche seul). */
+export function voisinConnuLibre(
+  s: Pick<
+    SalarieSolveur,
+    | 'joursSemainePrecedente'
+    | 'joursSemaineSuivante'
+    | 'serieAvant'
+    | 'serieApres'
+  >,
+  d: number,
+  nbJours: number,
+): boolean {
+  if (d < 0) return s.joursSemainePrecedente !== null && d < -s.serieAvant
+  if (d >= nbJours)
+    return s.joursSemaineSuivante !== null && d >= nbJours + s.serieApres
+  throw new Error(`voisinConnuLibre : le jour ${d} est dans la période`)
+}
+
 export function dansLeContrat(s: SalarieSolveur, c: Creneau): boolean {
   return (
     (s.contratDebut === null || c.debut >= s.contratDebut) &&

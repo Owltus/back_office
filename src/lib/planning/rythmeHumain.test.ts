@@ -11,6 +11,7 @@ import {
   creneau as creneauModele,
   probleme,
   salarieSolveur,
+  voisinConnuLibre,
 } from '#/lib/planning/modele.ts'
 import type { Creneau, SalarieSolveur } from '#/lib/planning/modele.ts'
 import { rythmeHumain } from '#/lib/planning/regles.ts'
@@ -110,6 +111,33 @@ describe('rythmeHumain : qui est concerné', () => {
         minutesHebdoContrat: 39 * H,
       }),
     ).toBe(false)
+  })
+})
+
+describe('voisinConnuLibre : un jour des semaines voisines', () => {
+  const v = (kw: Partial<SalarieSolveur>) => ({
+    joursSemainePrecedente: null,
+    joursSemaineSuivante: null,
+    serieAvant: 0,
+    serieApres: 0,
+    ...kw,
+  })
+  it('semaine voisine inconnue : jamais libre', () => {
+    expect(voisinConnuLibre(v({}), -1, 7)).toBe(false)
+    expect(voisinConnuLibre(v({}), 7, 7)).toBe(false)
+  })
+  it('connue : libre au-delà de la série qui borde la période', () => {
+    const avant = v({ joursSemainePrecedente: 4, serieAvant: 2 })
+    expect(voisinConnuLibre(avant, -1, 7)).toBe(false)
+    expect(voisinConnuLibre(avant, -2, 7)).toBe(false)
+    expect(voisinConnuLibre(avant, -3, 7)).toBe(true)
+    const apres = v({ joursSemaineSuivante: 5, serieApres: 1 })
+    expect(voisinConnuLibre(apres, 7, 7)).toBe(false)
+    expect(voisinConnuLibre(apres, 8, 7)).toBe(true)
+    expect(voisinConnuLibre(v(dimancheLibre), -1, 7)).toBe(true)
+  })
+  it('un jour de la période est une erreur', () => {
+    expect(() => voisinConnuLibre(v({}), 3, 7)).toThrow()
   })
 })
 
