@@ -65,6 +65,7 @@ export function periodesDuTableau(l: Moments): ReadonlyArray<{
 export function TableauAccueil({
   zone,
   premier = true,
+  seule = false,
   postes,
   horaires = [],
   modifiable,
@@ -75,6 +76,8 @@ export function TableauAccueil({
   zone: Pick<ZoneRegle, 'id' | 'nom'>
   /** Le premier tableau de la page (il porte les ancres des liens). */
   premier?: boolean
+  /** La seule zone de l'établissement : titrée « Personnel ». */
+  seule?: boolean
   /** Les postes de la zone. */
   postes: ReadonlyArray<Poste>
   horaires?: ReadonlyArray<Horaire>
@@ -99,8 +102,10 @@ export function TableauAccueil({
       className="flex min-w-0 flex-col gap-3"
     >
       <div className="flex max-w-3xl flex-col gap-1">
+        {/* « Personnel » quand la zone est seule (2026-11-11 : « ne fais pas
+            mention d'accueil ») ; son nom sinon, pour les distinguer. */}
         <h3 id={titre} className="text-base font-semibold">
-          {zone.nom}
+          {seule ? 'Personnel' : zone.nom}
         </h3>
         {/* Un paragraphe, pas une liste (demande utilisateur du
             2026-11-11 : « je préfère les textes »). */}
@@ -108,8 +113,9 @@ export function TableauAccueil({
         <p className="text-sm text-muted-foreground">
           {sansJour &&
             `Aucun poste de jour : rattachez-en un à la zone ${zone.nom} dans Postes. `}
-          Le jour, le nombre est un minimum ; la nuit, il est exact. Les
-          apprentis et les stagiaires comptent, mais ne sont jamais seuls.
+          Le nombre minimum de personnes qui doivent être présentes, jour par
+          jour.
+          {modifiable && ' Cliquez sur une case pour la modifier.'}
           {caseVide && (
             <>
               {' '}

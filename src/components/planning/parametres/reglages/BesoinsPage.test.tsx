@@ -470,11 +470,15 @@ describe('Besoins', () => {
       expect(onglets.some((t) => /Réception|Club|Veille/.test(t ?? ''))).toBe(
         false,
       )
-      const region = screen.getByRole('region', { name: 'Accueil' })
-      // Refonte du 2026-11-11 : le jour « au moins », la nuit « exactement ».
+      // Une seule zone : titrée « Personnel », jamais « Accueil » (2026-11-11).
+      const region = screen.getByRole('region', { name: 'Personnel' })
       expect(region.textContent).toContain(
-        'Le jour, le nombre est un minimum ; la nuit, il est exact.',
+        'Le nombre minimum de personnes qui doivent être présentes, jour par jour.',
       )
+      expect(region.textContent).not.toMatch(/accueil|;/i)
+      // Plus d'en-tête de section visible ni de phrase au-dessus.
+      expect(screen.queryByText('Postes indispensables')).toBeNull()
+      expect(screen.queryByText(/Le personnel nécessaire/)).toBeNull()
       // Aucun nom de poste dans le texte (demande du 2026-11-11).
       expect(region.textContent).not.toMatch(/Réception|Club|Veille/)
       // Un paragraphe, pas une liste (demande du 2026-11-11).
@@ -498,7 +502,7 @@ describe('Besoins', () => {
       const club = etat.referentiel.postes.find((p) => p.nom === 'Club')
       monter(<BesoinsPage ouvrir={`poste-${club?.id}`} />)
       expect(screen.queryByRole('tab', { name: /^Club/ })).toBeNull()
-      expect(screen.getByRole('region', { name: 'Accueil' })).toBeTruthy()
+      expect(screen.getByRole('region', { name: 'Personnel' })).toBeTruthy()
     })
 
     it('un compteur écrit un chiffre exact ; 0 retire la case ; Annuler la remet', async () => {

@@ -473,6 +473,7 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
             <TableauAccueil
               zone={z}
               premier={i === 0}
+              seule={regles.zones.length === 1}
               postes={siens}
               horaires={data.horaires}
               modifiable={modifiable}
@@ -626,15 +627,9 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
         // Trois sections (refonte du 2026-11-05, demande utilisateur : « plus
         // claire ») : les postes indispensables, les autres, les moments.
         <div className="flex w-full max-w-6xl min-w-0 flex-col gap-10">
-          <p className="max-w-3xl text-sm text-muted-foreground">
-            Le personnel nécessaire, jour par jour.
-            {modifiable && ' Cliquez sur une case pour la modifier.'}
-          </p>
-
           <SectionBesoins
             id="besoins-indispensables"
             titre="Postes indispensables"
-            texte="Remplis en priorité par le planning."
             vide={
               !sections.accueilIndispensable && !sections.indispensables.length
                 ? 'Aucun poste indispensable. Dans Postes, activez Indispensable au fonctionnement.'
@@ -722,21 +717,26 @@ function SectionBesoins({
   /** Un filet au-dessus : la section suit une autre. */
   filet?: boolean
   id: string
+  /** Titre visible ; sans `texte`, il ne sert qu'aux lecteurs d'écran
+   * (2026-11-11 : « Postes indispensables » retiré de l'écran). */
   titre: string
-  texte: string
+  texte?: string
   vide?: string
   children: ReactNode
 }) {
   return (
     <section
       id={id}
-      aria-labelledby={`${id}-titre`}
+      aria-labelledby={texte ? `${id}-titre` : undefined}
+      aria-label={texte ? undefined : titre}
       className={cn(
         'flex min-w-0 scroll-mt-4 flex-col gap-5',
         filet && 'border-t pt-8',
       )}
     >
-      <EnTeteSection id={`${id}-titre`} titre={titre} texte={texte} />
+      {texte && (
+        <EnTeteSection id={`${id}-titre`} titre={titre} texte={texte} />
+      )}
       {vide ? (
         <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
           {vide}
