@@ -159,6 +159,12 @@ describe('Besoins', () => {
         'Matin · Réception, samedi : au moins 3 personnes.',
       )
       expect(caseAccueil('5:matin', club)?.textContent).toBe('–')
+      // Sous-tableaux (2026-11-11) : une ligne de total par moment, en
+      // lecture, la somme de ses postes.
+      const totalMatin = document.querySelector('[data-total="matin"]')
+      expect(totalMatin?.querySelectorAll('td')[5]?.textContent).toBe('3')
+      expect(totalMatin?.querySelector('button')).toBeNull()
+      expect(document.querySelectorAll('[data-total]')).toHaveLength(3)
       expect(caseAccueil('0:soir', club)).toBeTruthy()
       expect(caseAccueil('0:nuit', veille)?.getAttribute('aria-label')).toBe(
         'Nuit · Veille de nuit, lundi : exactement 1 personne.',

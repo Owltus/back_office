@@ -176,63 +176,82 @@ export function TableauAccueil({
               ))}
             </tr>
           </thead>
-          <tbody>
-            {lignes.map(
-              (
-                { periode, libelle, Icone, nuit: deNuit, poste, nomPoste },
-                i,
-              ) => {
-                // Un filet plus marqué entre deux moments.
-                const nouveauMoment = lignes[i - 1]?.periode !== periode
-                const nom = nomPoste ? `${libelle} · ${nomPoste}` : libelle
-                return (
-                  <tr
-                    key={`${periode}|${poste ?? ''}`}
-                    className={cn(
-                      'border-t',
-                      nouveauMoment && i > 0 && 'border-t-2',
-                    )}
+          {/* SOUS-TABLEAUX (demande utilisateur du 2026-11-11) : pour chaque
+              moment, une ligne de TOTAL (la somme des postes, en lecture),
+              puis une ligne par poste, où se règle le chiffre. */}
+          {periodesDuTableau(moments).map((m) => {
+            const siennes = lignes.filter((l) => l.periode === m.periode)
+            if (!siennes.length) return null
+            const { periode, libelle, Icone } = m
+            return (
+              <tbody key={periode} className="border-t-2 first:border-t-0">
+                <tr className="bg-muted/40" data-total={periode}>
+                  <th
+                    scope="row"
+                    className="sticky left-0 z-[1] bg-muted px-3 py-2 text-left font-semibold"
                   >
-                    <th
-                      scope="row"
-                      className="sticky left-0 z-[1] bg-card px-3 py-2 text-left font-medium"
-                    >
-                      <span className="inline-flex items-center gap-1.5">
-                        <Icone
-                          aria-hidden
-                          className="size-4 shrink-0 text-muted-foreground"
-                        />
-                        <span className="flex min-w-0 flex-col leading-tight">
-                          <span>{libelle}</span>
-                          {nomPoste && (
-                            <span className="truncate text-xs font-normal text-muted-foreground">
-                              {nomPoste}
-                            </span>
-                          )}
-                        </span>
-                      </span>
-                    </th>
-                    {JOURS.map((_, j) => (
-                      <td key={j} className="p-1 text-center">
-                        <CaseAccueil
-                          jour={j}
-                          periode={periode}
-                          poste={poste}
-                          libelle={nom}
-                          nuit={deNuit}
-                          bornes={affiche(poste, j, periode)}
-                          modifiable={modifiable}
-                          regler={(jour, p, b) =>
-                            regler(poste, nom, jour, p, b)
-                          }
-                        />
+                    <span className="inline-flex items-center gap-1.5">
+                      <Icone
+                        aria-hidden
+                        className="size-4 shrink-0 text-muted-foreground"
+                      />
+                      {libelle}
+                    </span>
+                  </th>
+                  {JOURS.map((nomJour, j) => {
+                    const total = siennes.reduce(
+                      (n, l) => n + affiche(l.poste, j, periode).minimum,
+                      0,
+                    )
+                    return (
+                      <td
+                        key={j}
+                        className="px-1 py-2 text-center font-semibold tabular-nums"
+                        aria-label={`${libelle}, ${nomJour.toLowerCase()} : ${total} personne${total > 1 ? 's' : ''} au total.`}
+                      >
+                        {total || (
+                          <span className="text-muted-foreground">0</span>
+                        )}
                       </td>
-                    ))}
-                  </tr>
-                )
-              },
-            )}
-          </tbody>
+                    )
+                  })}
+                </tr>
+                {siennes.map(({ poste, nomPoste, nuit: deNuit }) => {
+                  const nom = nomPoste
+                    ? `${libelle} · ${nomPoste}`
+                    : `${libelle} · tous les postes`
+                  return (
+                    <tr key={`${periode}|${poste ?? ''}`} className="border-t">
+                      <th
+                        scope="row"
+                        className="sticky left-0 z-[1] bg-card py-1 pr-3 pl-9 text-left font-normal text-muted-foreground"
+                      >
+                        <span className="block truncate">
+                          {nomPoste ?? 'Tous les postes'}
+                        </span>
+                      </th>
+                      {JOURS.map((_, j) => (
+                        <td key={j} className="p-1 text-center">
+                          <CaseAccueil
+                            jour={j}
+                            periode={periode}
+                            poste={poste}
+                            libelle={nom}
+                            nuit={deNuit}
+                            bornes={affiche(poste, j, periode)}
+                            modifiable={modifiable}
+                            regler={(jour, p, b) =>
+                              regler(poste, nom, jour, p, b)
+                            }
+                          />
+                        </td>
+                      ))}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            )
+          })}
         </table>
       </div>
     </section>
