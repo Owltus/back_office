@@ -2,11 +2,10 @@ import highsLoader from 'highs'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import {
-  coutManqueMinimum,
+  construire,
   generer,
-  pireMoral,
   POIDS_PASSATION,
-  POIDS_SOUS_CONTRAT,
+  POIDS_PLACE,
   zonesPassation,
 } from '#/lib/planning/generateur.ts'
 import type { Highs } from '#/lib/planning/generateur.ts'
@@ -244,11 +243,30 @@ describe('une présence, pas un compte de personnes (comme l’oracle)', () => {
 })
 
 describe('le rang de la passation', () => {
-  it('au-dessus des heures dues d’un shift de 12 h, sous les places', () => {
-    expect(POIDS_PASSATION).toBeGreaterThan(POIDS_SOUS_CONTRAT * 12 * H)
+  it('une place, un peu plus chère ; la nuit sans veilleur vaut plus que ses deux passations', () => {
+    // Une passation manquée est une place (niveau essentiel, avec les
+    // heures dues), un peu plus chère qu'une autre.
+    expect(POIDS_PASSATION).toBeGreaterThan(POIDS_PLACE)
     // Un veilleur ajouté peut manquer ses deux passations : la nuit sans
-    // veilleur coûte plus.
-    expect(pireMoral(nuit)).toBeGreaterThanOrEqual(2 * POIDS_PASSATION)
-    expect(coutManqueMinimum([nuit], 0)).toBeGreaterThan(2 * POIDS_PASSATION)
+    // veilleur coûte plus, sinon elle resterait vide pour les éviter.
+    const { modele, minimums, passations } = construire(
+      probleme({
+        salaries,
+        creneaux: [cand('s', 'rec', 0, 15, 23, ['soir']), nuit],
+        consignes: [chiffre(0, 'soir', 1), chiffre(0, 'nuit', 1)],
+        nbJours: 1,
+      }),
+    )
+    const essentiel = new Map(
+      modele.niveaux().find(([nom]) => nom === 'essentiel')![1],
+    )
+    expect(passations.length).toBeGreaterThan(0)
+    for (const { v } of passations)
+      expect(essentiel.get(v)).toBe(POIDS_PASSATION)
+    const manqueNuit = minimums.find((x) => x.consigne === 1)!.v
+    expect(essentiel.get(manqueNuit)).toBeGreaterThan(2 * POIDS_PASSATION)
+    expect(essentiel.get(minimums.find((x) => x.consigne === 0)!.v)).toBe(
+      POIDS_PLACE,
+    )
   })
 })

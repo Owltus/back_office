@@ -4,7 +4,7 @@
  * poste est indispensable au fonctionnement, ou ne l'est pas (décision
  * utilisateur du 2026-11-05 : « soit un poste est important, soit il ne
  * l'est pas ») : les postes indispensables sont remplis en premier. Même
- * ordre que le calcul (`paliersPlaces`, generateur.ts) : besoin souhaité,
+ * ordre que le calcul (un niveau par palier, generateur.ts) : besoin souhaité,
  * poste non indispensable, poste indispensable. Pur ; aucun poids en
  * chiffres, aucun nom de poste en dur.
  */

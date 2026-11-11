@@ -6,7 +6,6 @@ import {
   generer,
   POIDS_DIMANCHE_SEUL,
   POIDS_JOUR_MANQUANT,
-  prixOrdre,
 } from '#/lib/planning/generateur.ts'
 import type { Highs } from '#/lib/planning/generateur.ts'
 import {
@@ -86,9 +85,19 @@ describe('le dimanche d’avant seul : payé une seule fois, par le rythme 5 et 
         f.fin,
       ]),
     ).toEqual([['travail-court', 6, 6]])
-    // Le prix fort dépasse de loin la prime, même quand la place la plus
-    // chère vaut 1.
-    expect(prixOrdre([1], 35 * H).fort).toBeGreaterThan(POIDS_DIMANCHE_SEUL)
+    // Le bloc court est au niveau du rythme, au-dessus de tout le confort
+    // où vit la prime (ORDRE DE DÉCISION).
+    const noms = construire(
+      probleme({
+        salaries: [personne(avant)],
+        creneaux: [0, 1, 2, 3, 4, 5, 6].map((j) => cr(j)),
+        graine: 1,
+      }),
+    )
+      .modele.niveaux()
+      .map(([nom]) => nom)
+    expect(noms[0]).toBe('rythme')
+    expect(noms.at(-1)).toBe('confort')
   })
   it('accepté : sans la prime, le rythme seul fait travailler le lundi', () => {
     // Deux places chaque jour, une seconde personne sans passé qui pourrait

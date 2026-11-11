@@ -3,10 +3,8 @@ import { beforeAll, describe, expect, it } from 'vitest'
 
 import {
   coefsHeuresPlus,
-  coutPlaceVide,
+  construire,
   generer,
-  pireCoutRemplir,
-  pireMoral,
   PART_FIXE_DEPANNAGE,
   POIDS_ECOLE_ABORDS,
   POIDS_MOMENT_ARRIERE,
@@ -16,7 +14,6 @@ import {
   POIDS_REPRISE_APRES_NUIT,
   POIDS_RETOUR_WEEKEND,
   POIDS_JOUR_AFFILE,
-  POIDS_SOUS_CONTRAT,
   POIDS_WEEKEND_LIBRE,
 } from '#/lib/planning/generateur.ts'
 import type { Highs } from '#/lib/planning/generateur.ts'
@@ -100,17 +97,19 @@ const loi = (p: Probleme, r: Resultat) =>
   violations(p, r.affectations).filter((v) => !REGLES_MORALES.has(v.regle))
 
 describe('les poids moraux : sous les places et les heures dues, au-dessus du dépannage', () => {
-  it('Q1 : chaque règle seule coûte moins que les heures dues d’un shift de 4 h', () => {
+  it('Q1 : chaque règle seule au-dessus du dépannage, dans le confort', () => {
+    // Les heures dues et les places sont deux niveaux au-dessus du confort
+    // (ORDRE DE DÉCISION) : aucune règle morale ne les rachète, quel que
+    // soit son poids (« une place vide coûte plus que toutes les règles
+    // morales ensemble », plus bas).
     for (const w of [
       POIDS_MOMENT_EN_TROP,
       POIDS_MOMENT_ARRIERE,
       POIDS_NUIT_AFFILEE,
       POIDS_RETOUR_WEEKEND,
       POIDS_ECOLE_ABORDS,
-    ]) {
-      expect(w).toBeLessThan(POIDS_SOUS_CONTRAT * 4 * H)
+    ])
       expect(w).toBeGreaterThan(PART_FIXE_DEPANNAGE)
-    }
   })
 
   it('les heures avant la fatigue : moins qu’une heure due, plus que les autres règles (2026-11-04)', () => {
@@ -119,7 +118,6 @@ describe('les poids moraux : sous les places et les heures dues, au-dessus du d�
       POIDS_WEEKEND_LIBRE,
       POIDS_REPRISE_APRES_NUIT,
     ]) {
-      expect(w).toBeLessThan(POIDS_SOUS_CONTRAT * H)
       for (const autre of [
         POIDS_MOMENT_EN_TROP,
         POIDS_MOMENT_ARRIERE,
@@ -129,20 +127,27 @@ describe('les poids moraux : sous les places et les heures dues, au-dessus du d�
       ])
         expect(w).toBeGreaterThan(autre)
     }
-    // Plus de 6 jours d'affilée : dur pour le calcul, ce poids ne sert qu'au
-    // pire d'une place.
-    expect(POIDS_JOUR_AFFILE).toBeLessThan(POIDS_SOUS_CONTRAT * 4 * H)
+    // Plus de 6 jours d'affilée : dur pour le calcul, ce poids ne sert
+    // qu'aux cas où la règle ne peut pas l'être.
+    expect(POIDS_JOUR_AFFILE).toBeGreaterThan(0)
   })
 
   it('une place vide coûte plus que toutes les règles morales ensemble', () => {
+    // Par niveau, plus par prix : la place est au niveau essentiel, toutes
+    // les règles morales au confort, résolu ensuite et borné par lui.
     for (const moment of ['matin', 'soir', 'nuit'] as const) {
-      const c = cr('c', 0, 7, 15, { moment })
-      expect(pireCoutRemplir(c, 0)).toBeGreaterThan(pireMoral(c))
-      expect(coutPlaceVide(c, 0)).toBeGreaterThan(pireCoutRemplir(c, 0))
+      const { modele, manque } = construire(
+        probleme({
+          salaries: [personne('a', 35)],
+          creneaux: [cr('c', 0, 7, 15, { moment })],
+        }),
+      )
+      const niveaux = modele.niveaux()
+      const v = manque.get('c')!
+      expect(niveaux.find(([, n]) => n.has(v))?.[0]).toBe('essentiel')
+      expect(niveaux.at(-1)?.[0]).toBe('confort')
+      expect(modele.objectif.has(v)).toBe(false)
     }
-    expect(pireMoral(cr('n', 0, 23, 31, { moment: 'nuit' }))).toBeGreaterThan(
-      pireMoral(cr('j', 0, 7, 15, { moment: 'matin' })),
-    )
   })
 })
 

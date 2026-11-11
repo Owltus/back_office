@@ -2,12 +2,7 @@ import fc from 'fast-check'
 import highsLoader from 'highs'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import {
-  FOIS_FAUTE_RYTHME,
-  generer,
-  POIDS_RYTHME_BORD,
-  prixFauteRythme,
-} from '#/lib/planning/generateur.ts'
+import { generer } from '#/lib/planning/generateur.ts'
 import type { Highs } from '#/lib/planning/generateur.ts'
 import {
   creneau as creneauModele,
@@ -410,6 +405,19 @@ const rythmeDit = (p: Probleme, affs: AffectationSolveur[]) =>
   violations(p, affs)
     .filter((v) => v.regle === 'RYTHME-5-2')
     .map((v) => v.message)
+const reposSeulDit = (p: Probleme, affs: AffectationSolveur[]) =>
+  violations(p, affs)
+    .filter((v) => v.regle === 'RYTHME-REPOS-SEUL')
+    .map((v) => v.message)
+/** Les mêmes places, sauf le dimanche : sans place à tenir ce jour-là, le
+ * rythme garde ses deux repos (CALCUL PAR NIVEAUX du 2026-11-11 : une place
+ * passe avant un repos seul, rien d'autre ne le justifie). */
+const sansDimanche = (s: SalarieSolveur) =>
+  resoudre(s, {
+    creneaux: SEMAINE.filter((j) => j !== 6 && !s.indisponibilites.has(j)).map(
+      cr,
+    ),
+  })
 /** La suite lue par le vérificateur, en lettres. */
 const lue = (p: Probleme, affs: AffectationSolveur[]) => {
   const j = new Set(
@@ -497,11 +505,20 @@ describe('le calcul et le vérificateur', () => {
       minutesHebdoContrat: 0 * H,
       minutesContrat: 35 * H,
     })
+    const sans = sansDimanche(s)
+    expect(sans.r.statut).not.toBe('inconnu')
+    expect(tenus(sans.r)).toEqual([])
+    expect(lue(sans.p, sans.r.affectations)).toBe('TTTTTrr')
     const { p, r } = resoudre(s)
-    expect(r.statut).not.toBe('inconnu')
-    expect(tenus(r)).toEqual([])
-    expect(lue(p, r.affectations)).toBe('TTTTTrr')
     expect(rythmeDit(p, [{ salarieId: 'a', creneauId: 'j5' }])).toHaveLength(1)
+    // Une place le dimanche : tenue par un repos seul le samedi (une place
+    // passe avant un déplacement de repos, 2026-11-11), jamais le samedi
+    // (6 jours de travail) ni une faute du rythme.
+    expect(tenus(r)).toEqual([6])
+    expect(rythmeDit(p, r.affectations)).toEqual([])
+    expect(reposSeulDit(p, r.affectations)).toEqual([
+      'changement de jours de repos : repos seul le samedi',
+    ])
   })
   it('CFA de 3 jours : complété par 2 shifts ; refusé : 3 jours seuls', () => {
     const s = personne({
@@ -510,9 +527,13 @@ describe('le calcul et le vérificateur', () => {
       minutesHebdoContrat: 14 * H,
       minutesContrat: 35 * H,
     })
-    const { p, r } = resoudre(s)
+    const { p, r } = sansDimanche(s)
     expect(tenus(r)).toEqual([3, 4])
     expect(rythmeDit(p, r.affectations)).toEqual([])
+    // Une place le dimanche : tenue par un repos seul le samedi.
+    const avec = resoudre(s)
+    expect(tenus(avec.r)).toEqual([3, 4, 6])
+    expect(rythmeDit(avec.p, avec.r.affectations)).toEqual([])
     // Un bloc de 4 (CFA et un shift) : un changement de jours de repos
     // (transition, 2026-11-09), dit sans bloquer.
     const un = [{ salarieId: 'a', creneauId: 'j3' }]
@@ -536,24 +557,27 @@ describe('le calcul et le vérificateur', () => {
   })
   it('congé de 3 jours : 2 shifts ; de 5 jours : rien ; de deux semaines : neutre', () => {
     // Les heures dues de la semaine, congé retiré (14 h, puis 0).
-    const trois = resoudre(
-      personne({
-        ...AVANT,
-        ...travailSansShift([0, 1, 2]),
-        minutesHebdoContrat: 14 * H,
-        minutesContrat: 35 * H,
-      }),
-    )
-    expect(tenus(trois.r)).toEqual([3, 4])
-    const cinq = resoudre(
-      personne({
-        ...AVANT,
-        ...travailSansShift([0, 1, 2, 3, 4]),
-        minutesHebdoContrat: 0,
-        minutesContrat: 35 * H,
-      }),
-    )
-    expect(tenus(cinq.r)).toEqual([])
+    const conge3 = personne({
+      ...AVANT,
+      ...travailSansShift([0, 1, 2]),
+      minutesHebdoContrat: 14 * H,
+      minutesContrat: 35 * H,
+    })
+    expect(tenus(sansDimanche(conge3).r)).toEqual([3, 4])
+    // La place du dimanche : un repos seul le samedi, sans faute.
+    const trois = resoudre(conge3)
+    expect(tenus(trois.r)).toEqual([3, 4, 6])
+    expect(rythmeDit(trois.p, trois.r.affectations)).toEqual([])
+    const conge5 = personne({
+      ...AVANT,
+      ...travailSansShift([0, 1, 2, 3, 4]),
+      minutesHebdoContrat: 0,
+      minutesContrat: 35 * H,
+    })
+    expect(tenus(sansDimanche(conge5).r)).toEqual([])
+    const cinq = resoudre(conge5)
+    expect(tenus(cinq.r)).toEqual([6])
+    expect(rythmeDit(cinq.p, cinq.r.affectations)).toEqual([])
     // Retour d'un congé de deux semaines le jeudi (la semaine d'avant et
     // lundi-mercredi : neutres) : 4 jours, pas de 2 repos exigés avant.
     const long = personne({
@@ -624,8 +648,10 @@ describe('le calcul et le vérificateur', () => {
       minutesHebdoContrat: 28 * H,
       minutesContrat: 35 * H,
     })
+    expect(tenus(sansDimanche(s).r)).toEqual([0, 1, 3, 4])
     const { p, r } = resoudre(s)
-    expect(tenus(r)).toEqual([0, 1, 3, 4])
+    // La place du dimanche : un repos seul le samedi, sans faute.
+    expect(tenus(r)).toEqual([0, 1, 3, 4, 6])
     expect(rythmeDit(p, r.affectations)).toEqual([])
     const affs = [0, 1, 3, 4, 5].map((j) => ({
       salarieId: 'a',
@@ -642,14 +668,18 @@ describe('le calcul et le vérificateur', () => {
       ...AVANT,
       jfr: { jours: new Set([0]), reduction: 7 * H },
     })
-    const p = probleme({
-      salaries: [s],
-      creneaux: [1, 2, 3, 4, 5, 6].map(cr),
-      graine: 1,
-    })
-    const r = generer(p, highs)
+    const de = (jours: number[]) =>
+      generer(
+        probleme({ salaries: [s], creneaux: jours.map(cr), graine: 1 }),
+        highs,
+      )
+    const r = de([1, 2, 3, 4, 5])
     expect((r.jfr ?? []).map((x) => x.jour)).toEqual([0])
     expect(tenus(r)).toEqual([1, 2, 3, 4])
+    // La place du dimanche : un repos seul le samedi, le JFR toujours lundi.
+    const avec = de([1, 2, 3, 4, 5, 6])
+    expect((avec.jfr ?? []).map((x) => x.jour)).toEqual([0])
+    expect(tenus(avec)).toEqual([1, 2, 3, 4, 6])
   })
   it('début de contrat le mercredi : 3 jours contre l’arrivée ; refusé : 5 jours collés à la semaine d’après', () => {
     // Heures dues d'un début le mercredi (2 jours hors contrat, aucune
@@ -729,30 +759,25 @@ describe('le calcul et le vérificateur', () => {
       ]),
       groupes: [],
     }
-    const { r } = resoudre(personne(AVANT), { suivante })
+    const { p, r } = resoudre(personne(AVANT), { suivante })
     const t = tenus(r)
     // Le dimanche et le samedi ne peuvent pas être tous deux travaillés
     // avec jeudi et vendredi : le bloc reste à 5 au plus.
     let serie = 2
     for (let j = 6; j >= 0 && t.includes(j); j--) serie++
     expect(serie <= 5 || !t.includes(6)).toBe(true)
-    expect(t).toEqual([0, 1, 2, 3, 4])
-  })
-})
-
-describe('le prix d’une faute', () => {
-  it('plus que tout ce qu’une faute pourrait racheter, jamais sous le plancher', () => {
-    fc.assert(
-      fc.property(fc.array(fc.integer({ min: -1e8, max: 1e8 })), (couts) => {
-        const prix = prixFauteRythme(couts)
-        expect(prix).toBeGreaterThanOrEqual(POIDS_RYTHME_BORD)
-        for (const c of couts)
-          expect(prix).toBeGreaterThan(FOIS_FAUTE_RYTHME * Math.abs(c))
-      }),
-      { numRuns: 200, seed: 3 },
-    )
-    // La place la plus chère du banc de décembre (20 736 967) : 10 000 000
-    // fixe valait moins qu'elle.
-    expect(prixFauteRythme([20_736_967])).toBeGreaterThan(7 * 20_736_967)
+    // La place du dimanche : un repos seul le samedi ; le dimanche et les 2
+    // jours de congé d'après font un bloc de 3, permis contre la semaine
+    // d'après encore inconnue.
+    expect(t).toEqual([0, 1, 2, 3, 4, 6])
+    expect(rythmeDit(p, r.affectations)).toEqual([])
+    expect(
+      tenus(
+        resoudre(personne(AVANT), {
+          suivante,
+          creneaux: [0, 1, 2, 3, 4, 5].map(cr),
+        }).r,
+      ),
+    ).toEqual([0, 1, 2, 3, 4])
   })
 })

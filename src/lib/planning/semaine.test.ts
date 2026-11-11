@@ -1,7 +1,7 @@
 import fc from 'fast-check'
 import { momentPropose } from '#/lib/planning/moment.ts'
 import highsLoader from 'highs'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { generer } from '#/lib/planning/generateur.ts'
 import type { Highs } from '#/lib/planning/generateur.ts'
@@ -66,6 +66,10 @@ import {
   violations,
 } from '#/lib/planning/verificateur.ts'
 import type { Violation } from '#/lib/planning/verificateur.ts'
+
+// Un vrai calcul, niveau par niveau (CALCUL PAR NIVEAUX du 2026-11-11, à
+// peu près deux fois le temps d'avant) : lent quand toute la suite tourne.
+vi.setConfig({ testTimeout: 30_000 })
 
 /*
  * Port des tests du prototype qui passaient par l'API et SQLite
@@ -774,7 +778,7 @@ describe('garde-fous (test_garde_fous.py)', () => {
       }
       expect(max, `${x.prenom} ${x.nom}`).toBeLessThanOrEqual(6)
     }
-  })
+  }, 30_000)
 
   it('trois semaines générées à la suite : 5 jours d’affilée visés (2026-11-02)', () => {
     // Demande utilisateur : « tu abuses beaucoup trop des 6 jours
@@ -1118,7 +1122,7 @@ describe('planning de la semaine (test_api.py)', () => {
         a.jour < 5 ? p.horaire('AM').id : p.horaire('N').id,
       )
     }
-  })
+  }, 30_000)
 
   it('les plannings fixes sont placés d’office', () => {
     const p = demo()

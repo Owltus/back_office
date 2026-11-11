@@ -12,16 +12,11 @@ import {
 import type { PresencePoste } from '#/lib/planning/cycles.ts'
 import {
   construire,
-  coutDepannage,
-  coutExtra,
-  coutManqueMinimum,
   coutSurplus,
   generer,
   PART_FIXE_DEPANNAGE,
-  partMoraleExtra,
-  pireMoral,
+  POIDS_PLACE,
   POIDS_SIXIEME_JOUR,
-  POIDS_SOUS_CONTRAT,
   POIDS_SUR_CONTRAT,
 } from '#/lib/planning/generateur.ts'
 import type { Highs } from '#/lib/planning/generateur.ts'
@@ -32,7 +27,6 @@ import {
   probleme,
   role,
   salarieSolveur,
-  travail,
 } from '#/lib/planning/modele.ts'
 import type {
   ConsigneSolveur,
@@ -482,26 +476,25 @@ describe('titulaire < dépannage < vide, jamais un extra (D7, 2026-11-03)', () =
   })
 
   it('les paliers en chiffres', () => {
+    // Un extra n'a aucune variable : le calcul ne le place jamais (décision
+    // de l'utilisateur du 2026-11-03), il n'a donc aucun prix. Le manque du
+    // moment est une place (niveau essentiel) ; le dépannage, du confort.
     const c = cand('c', 'rec', 0, 7, 15.75, ['matin'], { pause: 45 })
-    // Un extra coûte plus qu'un dépannage qui ferait le shift en heures en
-    // plus ET en 6e jour.
-    expect(coutExtra(c)).toBeGreaterThan(
-      coutDepannage(c) + POIDS_SUR_CONTRAT * duree(c) + POIDS_SIXIEME_JOUR,
-    )
-    // La place vide coûte plus que tout, extra compris.
-    expect(coutManqueMinimum([c], coutSurplus([c]))).toBeGreaterThan(
-      coutExtra(c) + coutSurplus([c]),
-    )
-    // Décision utilisateur du 2026-11-03 : un extra coûte aussi plus que
-    // tout ce qu'il épargnerait à un salarié en règles morales, équité et
-    // confort. Il ne sert qu'à une place qui resterait vide.
-    expect(partMoraleExtra(c)).toBeGreaterThan(pireMoral(c))
-    expect(coutExtra(c)).toBeGreaterThan(
-      coutDepannage(c) +
-        POIDS_SUR_CONTRAT * duree(c) +
-        POIDS_SIXIEME_JOUR +
-        partMoraleExtra(c),
-    )
+    const construit = (salaries: SalarieSolveur[]) =>
+      construire(
+        probleme({
+          salaries,
+          creneaux: [c],
+          consignes: [chiffre(0, 'matin', 1)],
+          nbJours: 1,
+        }),
+      )
+    expect(construit([ext]).x.size).toBe(0)
+    const { modele, minimums, x } = construit([dep])
+    const [nom, couts] = modele.niveaux().find(([, n]) => n.has(minimums[0].v))!
+    expect([nom, couts.get(minimums[0].v)]).toEqual(['essentiel', POIDS_PLACE])
+    const v = [...x.values()][0]
+    expect(modele.objectif.get(v)).toBeGreaterThanOrEqual(PART_FIXE_DEPANNAGE)
   })
 
   it('refusé : un extra n’est jamais pris pour libérer un week-end', () => {
@@ -654,14 +647,20 @@ describe('le surplus : en dernier recours pour des heures dues (D8)', () => {
     expect(coutSurplus([c])).toBeGreaterThan(
       PART_FIXE_DEPANNAGE + POIDS_SIXIEME_JOUR + POIDS_SUR_CONTRAT * duree(c),
     )
-    // Moins que les heures dues d'un shift, dépannage et confort payés ; un
-    // middle en plus l'est deux fois.
-    for (const x of [c, mi])
-      expect(x.presence.length * coutSurplus([x])).toBeLessThan(
-        POIDS_SOUS_CONTRAT * travail(x) -
-          coutDepannage(x) -
-          PART_FIXE_DEPANNAGE,
-      )
+    // Les heures dues sont deux niveaux au-dessus (essentiel) : le surplus,
+    // au confort, ne les rachète jamais (plus de plafond à dériver).
+    const { modele, sousContrat } = construire(
+      probleme({
+        salaries: [sal('a')],
+        creneaux: [c, mi],
+        consignes: [chiffre(0, 'matin', 0)],
+        nbJours: 1,
+      }),
+    )
+    const moins = sousContrat[0][1]
+    expect(modele.niveaux().find(([, n]) => n.has(moins))?.[0]).toBe(
+      'essentiel',
+    )
     // Un shift posé (fait) ne pèse pas dans le calcul.
     expect(coutSurplus([{ ...c, ferme: true }])).toBe(0)
   })
@@ -691,29 +690,42 @@ describe('affinage : les mêmes horaires dans la semaine (2026-11-05)', () => {
       graine,
     })
   it('refusé : un affinage arrêté au temps limite ne remplace pas l’optimum', () => {
-    let appels = 0
-    const lps: string[] = []
-    const faux: Highs = {
-      solve: (lp, o) => {
-        lps.push(lp)
-        const r = highs.solve(lp, o)
-        return appels++ === 1 ? { ...r, Status: 'Time limit reached' } : r
-      },
-    }
-    for (const graine of [1, 2, 3, 4, 5, 6]) {
-      appels = 0
-      const avant = generer(p(graine), faux)
-      expect(appels).toBe(2)
-      // Le calcul seul (sans affinage) rend la même chose : rien n'a changé.
-      const seul = generer(p(graine), {
+    // Sans API persistante, un appel par niveau, puis l'affinage (le
+    // dernier appel). Arrêté au temps limite AVEC une solution, ou sans
+    // solution : le calcul est rendu tel quel, prouvé optimal.
+    const appelsDe = (graine: number) => {
+      let n = 0
+      generer(p(graine), {
         solve: (lp, o) => {
-          const r = highs.solve(lp, o)
-          return lp === lps[0] ? r : { ...r, Status: 'Time limit reached' }
+          n++
+          return highs.solve(lp, o)
         },
       })
+      return n
+    }
+    const arrete = (dernier: number, sansSolution: boolean): Highs => {
+      let appels = 0
+      return {
+        solve: (lp, o) => {
+          const r = highs.solve(lp, o)
+          if (appels++ !== dernier) return r
+          if (!sansSolution) return { ...r, Status: 'Time limit reached' }
+          return {
+            Status: 'Time limit reached',
+            ObjectiveValue: Number.POSITIVE_INFINITY,
+            Columns: {},
+          }
+        },
+      }
+    }
+    for (const graine of [1, 2, 3, 4, 5, 6]) {
+      const n = appelsDe(graine)
+      expect(n).toBeGreaterThan(1)
+      const avant = generer(p(graine), arrete(n - 1, false))
+      const seul = generer(p(graine), arrete(n - 1, true))
       expect(avant.statut).toBe('optimal')
+      expect(seul.statut).toBe('optimal')
       expect(qui(avant)).toEqual(qui(seul))
-      lps.length = 0
     }
   })
 

@@ -1,8 +1,8 @@
 /*
  * Génération d'un planning (prototype `solveur/generateur.py`, OR-Tools
  * CP-SAT) traduite en programme linéaire en nombres entiers, résolu par
- * HiGHS (WebAssembly, `highs`). Même modèle (poids revus depuis, voir
- * l'ORDRE DE DÉCISION plus bas) : une variable
+ * HiGHS (WebAssembly, `highs`), niveau par niveau (ORDRE DE DÉCISION plus
+ * bas). Même modèle que le prototype au départ : une variable
  * booléenne par couple (salarié, créneau), 1 si le salarié le tient. Les
  * règles légales sont des contraintes dures ; la couverture est souple (s'il
  * manque du monde, le meilleur planning légal et la liste des trous).
@@ -109,6 +109,48 @@ import type {
 } from '#/lib/planning/modele.ts'
 
 /*
+ * ORDRE DE DÉCISION (le seul ; principe de l'utilisateur du 2026-11-10 :
+ * « un moteur de logique qui attribue les shifts avec les meilleures
+ * pratiques, sans comportement étrange émergent… pas du cas par cas » ;
+ * CALCUL PAR NIVEAUX du 2026-11-11, `resoudreModele`). Le calcul tranche
+ * NIVEAU PAR NIVEAU : un niveau n'est regardé qu'à égalité de tous ceux
+ * d'au-dessus, quel que soit son total. Aucun prix ne sert à faire passer
+ * un niveau devant un autre ; dans un niveau, les poids gardent leur sens
+ * relatif (`Modele.niveaux`, `POIDS DANS UN NIVEAU`).
+ *   0. LA LOI et les règles dures de l'hôtel : des contraintes (repos de
+ *      11 h, 48 h, 6 jours, nuit des mineurs, horaire fixé, journées du
+ *      calcul, soutien jamais seul, jamais sans un salarié confirmé, deux
+ *      repos de suite, au rythme 5 et 2 jamais 6 jours de travail…).
+ *   1. RYTHME (au rythme 5 et 2, `rythmeStrict.ts`) : jamais 3 repos ou plus
+ *      entre deux blocs, jamais un bloc de 1 à 3 jours (il contient le jour
+ *      isolé). Payés et non durs : quand les faits l'imposent, le modèle
+ *      reste possible et fait le moins de fautes (`fauteScellee`).
+ *   2. ESSENTIEL : les heures dues du contrat, « quoi qu'il arrive », et les
+ *      places du palier le plus haut présent (IMPORTANCE DES POSTES) : une
+ *      place vide, une personne de moins au chiffre d'un moment, un trou
+ *      entre deux équipes, une passation avec le veilleur. Une heure due
+ *      passe devant une place (`PLACE_EN_MINUTES`). À l'optimum, une place
+ *      n'est vide que si personne ne peut la tenir sans enfreindre un
+ *      niveau au-dessus (`raisonsBlocage`) : aucun confort ne la rachète.
+ *   3. DÉPLACEMENTS DE REPOS (au rythme 5 et 2, DÉPLACER DES REPOS dans
+ *      `rythmeStrict.ts`) : un repos seul, un bloc de 4. Ils se font pour
+ *      une place ou des heures, jamais pour moins ; le confort ne peut
+ *      jamais en acheter un (décision de l'utilisateur du 2026-11-10).
+ *   4. ÉQUILIBRE entre les moments d'une zone (`equilibreMoments`).
+ *   5. PLACES DES PALIERS PLUS BAS : postes non indispensables, puis besoins
+ *      souhaités, un niveau par palier.
+ *   6. SEMAINE SUIVANTE esquissée (horizon glissant) : une personne qui y
+ *      manquerait.
+ *   7. CONFORT, tout le reste, avec ses poids relatifs : un titulaire avant
+ *      un dépannage, l'horaire imposé avant un remplaçant, une personne en
+ *      plus du chiffre d'un moment (SURPLUS), le rythme de 5 jours d'un
+ *      contrat, le jour férié rattrapé, le 6e jour, les heures au-delà du
+ *      contrat, les règles morales et la fatigue, l'éparpillement des
+ *      apprentis et stagiaires, puis le confort ordinaire (jours habituels,
+ *      équité, arrivée à l'ouverture, départage).
+ * Limite assumée : sous une heure, un horaire plus court peut encore tenir
+ * une place (niveau 2).
+ *
  * TABLEAU DE L'ACCUEIL (plan planning-accueil-2026-11-01, décisions
  * utilisateur D1-D15 du 2026-11-01). Les postes de l'accueil (Réception,
  * Club, et la Veille de nuit pour la nuit) n'ont plus de besoins : leurs
@@ -123,11 +165,12 @@ import type {
  *     au matin ET au soir (D11 du 2026-11-01) ; un soutien (apprenti,
  *     stagiaire) compte (D5) mais n'est jamais seul : sur un candidat, un
  *     soutien <= les autonomes du MÊME poste dont le shift chevauche le sien.
- *   - Σ = N, souple des deux côtés : un MANQUE coûte une place vide (P1,
- *     `coutManqueMinimum`) ; un SURPLUS coûte `coutSurplus` (D8, ci-dessous).
+ *   - Σ = N, souple des deux côtés : un MANQUE est une place (niveau 2) ;
+ *     un SURPLUS coûte `coutSurplus` (confort, D8, ci-dessous).
  *   - Ordre de remplissage (D7) : titulaire < dépannage (`coutDepannage`)
- *     < extra (`coutExtra`) < vide. Les extras (`placementManuel`), exclus
- *     de tout autre créneau, sont permis sur les candidats SEULEMENT.
+ *     < vide. Un extra n'est jamais placé par le calcul (décision de
+ *     l'utilisateur du 2026-11-03, `compatible`) : posé à la main, c'est un
+ *     fait.
  *   - Trous (D15) : sur l'accueil ENTIER d'un jour (Réception et Club
  *     ensemble), du premier au dernier moment demandé (`plageAccueil`,
  *     `cycles.ts`), même grille et même prix qu'entre deux équipes.
@@ -137,99 +180,15 @@ import type {
  * gardent EXACTEMENT leurs besoins, remplaçants et paliers ci-dessous.
  *
  * SURPLUS (D8 : « sois souple et logique… appli RH, faire au mieux »).
- * Une personne en plus du chiffre d'un moment coûte `coutSurplus` :
- *   - PLUS que tout le confort d'un shift (part fixe = `PART_FIXE_DEPANNAGE`,
- *     qui dépasse jour habituel, repos accolés, équité, départage) et que
- *     les heures ordinaires : 100 par minute du plus long candidat du
- *     moment (un shift de 8 h 45 : 57 109, plus qu'un 6e jour 15 000, 8 h 45
- *     en plus 26 250, ou un trou de 9 h). Personne ne vient en plus pour
- *     son jour habituel, pour l'équité, ni pour fermer un trou ordinaire ;
- *   - MOINS qu'un manque d'heures dues : le coût est PLAFONNÉ, pour chaque
- *     candidat du moment, sous ce que rapportent ses heures dues (400 par
- *     minute de travail) une fois payés un dépannage et tout le confort,
- *     et divisé par le nombre de moments où il compte (un middle en plus
- *     l'est deux fois). Une personne à qui il manque les heures d'un shift
- *     vient donc EN PLUS en DERNIER recours : seulement si aucun autre jour
- *     ne peut les lui donner sans surplus (ailleurs, rien ne coûte). C'est
- *     signalé (le compte du moment dépasse le chiffre). Un extra (contrat
- *     indicatif : 1 par minute) ne vient jamais en plus.
- *
- * ORDRE DE DÉCISION DU 2026-11-10 (principe de l'utilisateur : « un
- * moteur de logique qui attribue les shifts avec les meilleures pratiques,
- * sans comportement étrange émergent… pas du cas par cas »). Il PASSE
- * DEVANT l'ordre d'avant (plus bas) là où ils diffèrent, sans exception ni
- * plafond :
- *   1. la loi, DURE ;
- *   2. au rythme 5 et 2 (`rythmeStrict.ts`) : jamais 6 jours de travail
- *      (DUR), jamais 3 repos ou plus entre deux blocs (prix `dur`, au-dessus
- *      de tout ; le modèle reste possible quand les faits l'imposent,
- *      `fauteScellee`), jamais un bloc de 1 à 3 jours (prix `fort`, plus
- *      qu'une semaine d'heures dues ; il contient le jour isolé) ;
- *   3. les heures dues du contrat, « quoi qu'il arrive » (`minuteDue` :
- *      une heure vaut plus qu'une place et un repos seul ensemble) ;
- *   4. les places (P1 plus bas, paliers d'importance) ; « jamais sans un
- *      salarié confirmé » DUR sur l'ensemble des postes indispensables
- *      (`accompagnement`, zones.ts) ;
- *   5. au rythme 5 et 2, DÉPLACER DES REPOS (`rythmeStrict.ts`) : chaque
- *      repos seul (`reposSeul`) et chaque bloc de 4 (`bloc`) coûte un peu
- *      MOINS que la place la moins chère du palier le plus haut que la
- *      personne peut tenir (`placesHautes`) : il se fait pour UNE place de
- *      ce palier ou pour des heures, jamais pour moins ; le repos seul coûte
- *      un peu plus que le bloc (il est évité d'abord), mais le bloc perd un
- *      jour : quand des heures sont en jeu, c'est le repos seul ;
- *   6. l'ÉQUILIBRE entre les moments d'une zone (`equilibreMoments`), sous
- *      un bloc ;
- *   7. ÉPARPILLER les apprentis et stagiaires sur les postes indispensables
- *      (`POIDS_EPARPILLER`, au-dessus du confort) ;
- *   8. le reste, dans l'ordre d'avant.
- * Les points 1 à 6 sont les PRIORITÉS, résolues d'abord seules ; le reste
- * (7, 8 : le confort) ne vient qu'ensuite, sans pouvoir en dégrader aucune
- * (CALCUL PAR PRIORITÉS, `resoudreModele`, décision du 2026-11-10) : aucun
- * déplacement de repos n'est acheté par du confort.
- * Au rythme 5 et 2, la règle « deux repos de suite dans la semaine » est la
- * même que « pas de repos seul » : elle n'est pas écrite une seconde fois.
- * Limite assumée : sous une heure, 15 ou 30 minutes dues d'un horaire plus
- * court peuvent encore tenir une place.
- *
- * ORDRE DE DÉCISION (étape 10 du plan « réglages cohérents », D3 = A,
- * D1 = A, D13, D14, D15). La phrase de la page Besoins le dit : la loi
- * d'abord, puis les personnes nécessaires, puis le matin et le soir et les
- * contrats, puis un titulaire avant un dépannage, puis le confort.
- *
- *   P0  la loi : contraintes DURES (repos de 11 h, 6 jours, 48 h, nuit des
- *       mineurs, soutien jamais seul, horaire fixé…). Aucun poids ne la passe.
- *   P1  une place « nécessaire » vide : `coutPlaceVide`, DÉRIVÉ des poids
- *       ci-dessous (pas posé à la main) ; une PLACE est le besoin et ses
- *       remplaçants (`coutPlaceVideGroupe`). Au même niveau, une personne
- *       de moins que le chiffre d'un moment de l'accueil, matin, soir ou
- *       nuit (`coutManqueMinimum`, même dérivation, extra compris, D7).
- *       Entre places, l'IMPORTANCE du poste et le besoin souhaité décident
- *       (`paliersPlaces`, D11 du 2026-11-05, oui / non) : souhaité <
- *       poste non indispensable < poste indispensable.
- *   P2  un trou (entre deux équipes d'un poste à part compté, ou sur
- *       l'accueil entier, D15) : `POIDS_TROU_QUART` par quart d'heure (D10).
- *   P3  (les heures dues sont passées AU-DESSUS de P1 le 2026-11-09, voir
- *       plus haut ; le reste de P3 garde sa place)
- *       les contrats : heures dues (`POIDS_SOUS_CONTRAT`) > une personne en
- *       plus du chiffre d'un moment (`coutSurplus`, D8, plafonné sous les
- *       heures dues) > jour manquant au rythme de 5 jours > jour férié
- *       rattrapé en attente (`POIDS_JFR_EN_ATTENTE`, R-FERIE-RATTRAPE) >
- *       6e jour > heures au-delà (`POIDS_SUR_CONTRAT`).
- *   P4  le métier d'abord (D13), à heures de contrat égales (un
- *       remplaçant ne compte jamais plus d'heures dues ni moins d'heures en
- *       plus que son besoin, `minutesDues`, `minutesEnPlus`) :
- *         titulaire à l'horaire imposé              0
- *         ou à sa VERSION ÉTOILE                    0 (ses vraies minutes)
- *       < titulaire avec un autre horaire du cycle  POIDS_REMPLACANT (2 000)
- *       < dépannage à l'horaire imposé              `coutDepannage` (10 / min
- *                                               + PART_FIXE_DEPANNAGE 4 609)
- *       < dépannage avec un autre horaire          `coutDepannage` + 2 000
- *       < extra (accueil seulement, D7)         `coutExtra` : au-dessus
- *                                               d'un dépannage qui ferait
- *                                               le shift en heures en plus
- *                                               ET en 6e jour
- *       < place vide                            P1.
- *   P5  le confort : jours habituels, repos accolés, équité.
+ * Une personne en plus du chiffre d'un moment coûte `coutSurplus`, au
+ * confort : plus que tout le confort d'un shift (la part fixe du
+ * dépannage) et que les heures ordinaires (100 par minute du plus long
+ * candidat du moment : un shift de 8 h 45 vaut 57 109, plus qu'un 6e jour
+ * 15 000, 8 h 45 au-delà du contrat 26 250, ou un trou de 9 h). Personne ne
+ * vient en plus pour son jour habituel ni pour l'équité. Les heures dues
+ * sont deux niveaux au-dessus : une personne à qui il manque les heures
+ * d'un shift vient en plus si aucun autre jour ne peut les lui donner ;
+ * c'est signalé (le compte du moment dépasse le chiffre).
  *
  * JOURNÉE ÉTOILE (décisions utilisateur du 2026-11-02, D3 à D5). Plus de
  * raccourci ni de variable « court » : un contrat de plus de 35 h fait sa
@@ -249,95 +208,40 @@ import type {
  * heures ne se comptent pas, un horaire plus court lui coûterait moins pour
  * rien (`compatible`).
  *
- * P1 : ajouter UNE personne libre (rien d'autre ne bouge) sur un créneau `c`
- * coûte au pire, tous termes de l'objectif confondus :
- *     (POIDS_SUR_CONTRAT + POIDS_DEPANNAGE_MINUTE) × durée(c)   heures en plus, dépannage
- *   + PART_FIXE_DEPANNAGE                                       dépannage, part fixe
- *   + POIDS_REMPLACANT (si `c` est un remplaçant)               un autre horaire du cycle
- *     (pour un remplaçant, durée(c) des heures en plus = la plus longue
- *     de c et de son besoin, `minutesEnPlus`)
- *   + POIDS_SIXIEME_JOUR                                        un jour de plus = au plus un 6e jour
- *   + POIDS_REPOS_SEPARES                                       la paire de repos accolés perdue
- *   + POIDS_JOUR_ISOLE                                          un jour de travail isolé
- *   + 7 × POIDS_JOUR_AFFILE                                     plus de 6 jours d'affilée
- *   + 6 × POIDS_JOUR_AFFILE_CONSEILLE                           plus de 5 jours d'affilée
- *   + POIDS_MINEUR_FERIE                                        un mineur un jour férié
- *   + `coutExtra` (si `c` est un candidat de l'accueil)          un extra
- *   + le plus cher des surplus                                  une personne en plus d'un autre moment
- *   + EQUITE_MAX_PAR_SHIFT                                      équité, au pire
- *   + POIDS_ARRIVEE_MATIN_MINUTE × ARRIVEE_MATIN_MAX            arriver après l'ouverture
- *     (un matin de l'accueil)
- *   + POIDS_DEJA_PROPOSE + BRUIT_MAX                            rebattre, hasard
- *   + `pireJfr` (s'il y a un JFR à placer dans la semaine)       le JFR perdu ce jour-là,
- *                                                               sa préférence, et les heures
- *                                                               dues qu'il retirait
- *                                                               (compté avec le surplus)
- * (les heures dues ne peuvent que baisser ; travail(c) <= durée(c) ; un
- * contrat indicatif coûte 1 par minute <= POIDS_SUR_CONTRAT). La place vide
- * coûte strictement plus : à l'optimum, une place nécessaire n'est vide que
- * si PERSONNE ne peut y être ajouté sans enfreindre une règle dure — ce que
- * dit `raisonsBlocage`. L'inégalité tient quels que soient les poids, parce
- * que `coutPlaceVide` les relit. Une place qui a des remplaçants coûte le
- * PIRE de ses créneaux : elle n'est vide que si personne ne peut tenir aucun
- * de ses horaires. Le minimum d'une consigne se dérive de même sur les créneaux
- * qui y comptent. Ni les trous (ajouter une personne n'en crée pas) ni le
- * minimum (il ne peut que baisser) n'ont à entrer dans le pire coût ; le
- * « max des consignes » ne relit que les MAXIMUMS, sinon le minimum
- * dépendrait de lui-même.
- *
- * P2 sous P1 : `coutPlaceVide` contient le plus cher des maximums. Un trou
- * ne se compare pas à une place : il disparaît dès qu'une personne de plus
- * est là. P2 par minute (100) > heures au-delà (50) : pour un shift de
- * 8 h, une personne de trop sur un « au plus », ou 8 h de trou, pèse plus
- * qu'un 6e jour et 8 h en plus (39 000 < 48 000).
- * Mais P2 < heures dues (400 par minute) : une personne due reste placée,
- * au pire en trop sur un « au plus » (choix du 2026-10-27, gardé). Le coût
- * d'une consigne est donc PLAFONNÉ sous les heures dues de chaque créneau
- * qui y compte, dépannage et confort payés (`coutConsigne`) : sans ce
- * plafond, une période dont
- * le plus long créneau fait 10 h (60 000) laissait sans shift une personne
- * due de 2 h (48 000) (relecture adverse du 2026-10-29).
- *
- * P4 sous P3 : dépannage 10 par minute < heures au-delà 50 par minute ; avec
- * la part fixe (4 609), le dépannage reste sous les heures en plus dès 2 h
- * de shift, et sous le 6e jour jusqu'à 17 h : un titulaire qui ferait des
- * heures en plus ou un 6e jour laisse la place au dépannage. P4 sous P1 :
- * une place tenue en dépannage vaut mieux qu'une place vide (D13, D14).
- * Remplaçant (D16, option A) : POIDS_REMPLACANT < PART_FIXE_DEPANNAGE, donc
- * un titulaire change d'horaire plutôt que de laisser la place à un
- * dépannage ; il est au niveau du confort (jour habituel 2 000), qui peut
- * rarement faire préférer un horaire voisin (accepté). L'écart d'heures avec
- * le besoin ne rapporte rien (`minutesDues`, `minutesEnPlus`) : sinon un
- * remplaçant d'une heure plus long rapportait 24 000 d'heures dues et
- * passait devant l'horaire imposé partout (relecture adverse du 2026-10-30) ;
- * ses minutes réelles au-delà du contrat se paient (50 par minute). Sous
- * un trou d'une demi-heure (3 000) : changer d'horaire pour fermer un trou
- * vaut la peine, une heure en plus comprise (3 000 + 2 000 < 6 000).
+ * DANS LE CONFORT (niveau 7), les poids se rangent ainsi :
+ *   - les contrats : 6e jour (`POIDS_SIXIEME_JOUR`) et heures au-delà
+ *     (`POIDS_SUR_CONTRAT`, 50 par minute) au-dessus du dépannage
+ *     (`coutDepannage`, 10 par minute + `PART_FIXE_DEPANNAGE`) : dès 2 h de
+ *     shift, un titulaire qui ferait des heures en plus laisse la place à
+ *     un dépannage, et jusqu'à 17 h pour un 6e jour (D13, D14) ;
+ *   - le métier : titulaire à l'horaire imposé ou à sa version étoile (0) <
+ *     titulaire avec un autre horaire du cycle (`POIDS_REMPLACANT`, sous la
+ *     part fixe du dépannage, D16 option A) < dépannage à l'horaire imposé
+ *     < dépannage avec un autre horaire. L'écart d'heures avec le besoin ne
+ *     rapporte rien (`minutesDues`, `minutesEnPlus`) : sinon un remplaçant
+ *     d'une heure plus long passait devant l'horaire imposé partout
+ *     (relecture adverse du 2026-10-30) ;
+ *   - le confort ordinaire sous le dépannage, pour TOUTE durée de shift :
+ *     la part fixe du dépannage dépasse la somme de tout le confort qu'un
+ *     shift peut faire gagner ou perdre (jour habituel, mêmes repos, équité
+ *     au pire, départage), et un dépannage ne reçoit jamais la prime de jour
+ *     habituel (relecture adverse du 2026-10-29). L'équité, la plus faible,
+ *     ne fait faire ni une heure en plus ni un dépannage.
  *
  * RELÈVE (chevauchement de l'équipe qui arrive et de celle qui part, D4) :
- * PAS de bonus dans le modèle. Le bonus devait être P5 ; or la part fixe du
- * dépannage est DÉRIVÉE de tout le confort d'un shift : un bonus de relève
- * l'obligeait à grandir (le modèle de toutes les semaines changeait) et
- * demandait une variable par paire de créneaux qui se chevauchent. Le coût
- * des trous pousse déjà les horaires à se toucher ; un chevauchement n'est pas
- * récompensé de plus.
+ * PAS de bonus dans le modèle (il demandait une variable par paire de
+ * créneaux qui se chevauchent). Le coût des trous pousse déjà les horaires à
+ * se toucher ; un chevauchement n'est pas récompensé de plus.
  *
- * P5 sous P4, pour TOUTE durée de shift : la part fixe du dépannage dépasse
- * la somme de tout le confort qu'un shift peut faire gagner ou perdre (jour
- * habituel, repos accolés, équité au pire, départage), et un dépannage ne
- * reçoit jamais la prime de jour habituel. Avant (relecture adverse du
- * 2026-10-29), seul le coût par minute séparait les deux : sur 3 h (1 800),
- * la prime de jour habituel d'un dépannage (2 000) le faisait passer devant
- * un titulaire libre. L'équité, la plus faible, ne fait faire ni une heure
- * en plus (3 000) ni un dépannage.
- *
- * Les coefficients restent sous 1e6 (place vide de 12 h ~ 1,3e5) : sûr pour
- * HiGHS. ÉCART VOULU avec le prototype (`generateur.py`) : ses poids
- * laissaient un trou de 4 h (24 000) plutôt qu'un 6e jour + 4 h en plus
- * (27 000), et ignoraient l'équité.
+ * Les coefficients restent petits : un niveau à la fois, le plus gros est
+ * une place de nuit au niveau essentiel (quelques dizaines de milliers),
+ * ou le confort (quelques centaines de milliers) ; le rappel des niveaux
+ * résolus (`RAPPEL_NIVEAUX`) les multiplie par 1 000 au plus. ÉCART VOULU
+ * avec le prototype (`generateur.py`) : ses poids laissaient un trou de 4 h
+ * plutôt qu'un 6e jour + 4 h en plus, et ignoraient l'équité.
  */
 
-// P5 — confort.
+// Confort (niveau 7).
 /** Par jour d'écart à sa part (week-ends, soirs, matins tôt). */
 export const POIDS_EQUITE = 100
 /** Deux jours de repos qui se suivent. DUR pour le calcul depuis le
@@ -347,10 +251,10 @@ export const POIDS_EQUITE = 100
  * me dis ») : chaque semaine complète a une paire de jours libres, sauf si
  * les shifts déjà posés et l'école n'en laissent aucune (voir la règle dans
  * `generer`). Une place peut donc rester vide pour elle, et l'écran le dit
- * (REPOS-SEPARES bloque, `raisonCommune`). Ce poids ne sert plus qu'au pire
- * coût d'une place (`pireCoutRemplir`, `partMoraleExtra`), où il reste une
- * borne prudente. Avant : 8 000 au confort, sacrifié dès qu'une heure, une
- * passation ou une fatigue était en jeu. */
+ * (REPOS-SEPARES bloque, `raisonCommune`). Ce poids ne paie plus que la
+ * paire perdue quand la règle ne peut pas être dure (`generer`). Avant :
+ * 8 000 au confort, sacrifié dès qu'une heure, une passation ou une fatigue
+ * était en jeu. */
 export const POIDS_REPOS_SEPARES = 8_000
 /** Un jour de travail seul entre deux jours sans travail (congé, repos,
  * absence ; demande utilisateur du 2026-11-02 : « je ne vais pas prendre 4
@@ -360,8 +264,8 @@ export const POIDS_REPOS_SEPARES = 8_000
  * pour le calcul depuis le 2026-11-04 (décision d'une responsable : « tu ne
  * peux pas donner des jours et redonner des jours ensuite, ce n'est ni joli
  * ni une bonne pratique »), pour un contrat de 35 h et plus
- * (`rythmeHumain`), sauf un jour posé ; ce poids ne sert plus qu'aux autres
- * et au pire coût d'une place. */
+ * (`rythmeHumain`), sauf un jour posé ; ce poids ne sert plus qu'aux
+ * autres. */
 export const POIDS_JOUR_ISOLE = 4_000
 /** Le dimanche d'avant travaillé, le samedi d'avant libre : sans le lundi,
  * ce dimanche resterait seul entre deux repos (2026-11-04, banc de
@@ -377,33 +281,27 @@ export const POIDS_DIMANCHE_SEUL = 50_000
  * important ; si on ne le respecte pas, on les paye quand même alors qu'il
  * ne les a pas faites »). Trois règles de repos : moins de 12 h entre deux
  * services (règle 3), une reprise de jour moins de 2 jours après des nuits
- * (règle 7), aucun week-end libre sur 4 semaines (règle 4). Leur poids est
- * SOUS les heures dues d'une heure de travail (`POIDS_SOUS_CONTRAT` × 60 =
- * 24 000, figé par un test) : le calcul ne retire jamais un shift pour
- * elles. Limite assumée : 20 000 valent 50 minutes dues ; pour éviter UNE
- * de ces règles, un horaire plus court de 45 minutes au plus peut être
- * préféré (deux règles : 1 h 40). À heures égales, il les évite avant le
- * 6e jour, la relève, les jours d'affilée conseillés, les repos accolés et
- * les heures en plus (jusqu'à 6 h 40) ; le rythme de 5 jours, une personne
- * en plus, l'ouverture, la passation et un mineur un jour férié passent
- * devant. Les places nécessaires
- * passent toujours devant (`coutPlaceVide` relit ces poids). Plus de 6
+ * (règle 7), aucun week-end libre sur 4 semaines (règle 4). Confort : les
+ * heures dues et les places sont des niveaux au-dessus, le calcul ne retire
+ * jamais un shift pour elles. Dans le confort, il les évite avant le 6e
+ * jour, la relève, les jours d'affilée conseillés, les repos accolés et les
+ * heures en plus (jusqu'à 6 h 40) ; le rythme de 5 jours, une personne en
+ * plus, l'ouverture et un mineur un jour férié passent devant. Plus de 6
  * jours d'affilée reste DUR pour le calcul (PRD règle 2 : « au-delà,
  * seulement à la main »). */
 export const POIDS_FATIGUE = 20_000
 /** Par jour au-delà de 6 d'affilée, sur chaque fenêtre de 7 jours qui
  * traverse une semaine voisine (`JOURS_AFFILES_MAX`). DUR pour le calcul
- * depuis le 2026-11-03 ; ce poids ne sert plus qu'au pire coût d'une place
- * (`pireMoral`, `pireCoutRemplir`). Une semaine seule est déjà bornée à
- * 6 jours (R-SIX-JOURS-MAX). */
+ * depuis le 2026-11-03 ; ce poids ne sert plus qu'aux cas où la règle ne
+ * peut pas être dure. Une semaine seule est déjà bornée à 6 jours
+ * (R-SIX-JOURS-MAX). */
 export const POIDS_JOUR_AFFILE = 12_000
 /** Par jour au-delà de 5 d'affilée, sur chaque fenêtre de 6 jours qui
  * traverse une semaine voisine (`JOURS_AFFILES_CONSEILLES`, demande
  * utilisateur du 2026-11-02). DUR pour le calcul depuis le 2026-11-04
  * (décision d'une responsable : « privilégie vraiment les semaines de 5
  * jours, plus humain »), pour un contrat de 35 h et plus
- * (`rythmeHumain`) : ce poids ne sert plus qu'aux autres et au pire coût
- * d'une place. */
+ * (`rythmeHumain`) : ce poids ne sert plus qu'aux autres. */
 export const POIDS_JOUR_AFFILE_CONSEILLE = 10_000
 /** Un mineur placé un jour férié (permis en hôtellerie par dérogation, à
  * éviter : décision utilisateur du 2026-11-02). Au-dessus du confort et du
@@ -423,52 +321,56 @@ export const POIDS_JFR_EN_ATTENTE = 20_000
 /** R-FERIE-RATTRAPE : le JFR collé à un jour sans travail (repos, congé),
  * pour une coupure plus longue. Confort, sous les repos accolés. */
 export const POIDS_JFR_COLLE = 1_000
-/** P1 : ce que peut coûter, au pire, l'ajout d'une personne qui avait un JFR
- * ce jour-là et le perd : le rattrapage en attente, sa préférence, et les
- * heures dues que le JFR retirait (`reduction`, au plus `reductionMax`).
- * 0 sans JFR dans la semaine : les places vides gardent leur prix. */
-export function pireJfr(reductionMax: number): number {
-  return reductionMax > 0
-    ? POIDS_JFR_EN_ATTENTE + POIDS_JFR_COLLE + POIDS_SOUS_CONTRAT * reductionMax
-    : 0
-}
-/** Horizon glissant (2026-11-04) : une personne qui manque un jour de la
- * semaine SUIVANTE esquissée (une place qui y resterait vide). Au-dessus du
- * week-end libre et des heures d'un shift de 12 h (les places passent avant
- * les heures et la fatigue), sous les places de la semaine écrite
- * (`pireHorizon` entre dans leur coût). Valeur d'avant le 2026-11-04 : la
- * fatigue a baissé, pas les places. */
-export const POIDS_PREVISION_MANQUE = 300_000
-/** P1 : le pire que coûte, dans l'esquisse de la semaine suivante, un
- * shift ajouté à la semaine écrite. Il peut la priver d'un jour (jours
- * d'affilée) : un jour attendu en moins et UN manque (un jour de présence
- * ne tient qu'une place, tous groupes confondus) ; et faire perdre le
- * week-end libre couplé (règle 4). Sans esquisse : 0, le modèle d'avant. */
-export function pireHorizon(suivante: Probleme['suivante']): number {
-  if (!suivante) return 0
-  return (
-    POIDS_WEEKEND_LIBRE +
-    POIDS_JOUR_MANQUANT +
-    (suivante.groupes.length ? POIDS_PREVISION_MANQUE : 0)
-  )
-}
 /** Ouverture d'un poste de l'accueil (07:00 Réception et Club, réglage du
  * poste) : un quart d'heure sans personne sur ce poste dans la première
  * heure. « Obligatoire » (2026-11-01) : au-dessus des contrats d'un jour de
  * travail. */
 export const POIDS_OUVERTURE_QUART = 40_000
+/*
+ * POIDS DANS UN NIVEAU (ordre de décision en tête). Un poids n'a de sens
+ * que face aux autres poids de SON niveau : aucun ne sert à faire passer un
+ * niveau devant un autre, c'est le calcul par niveaux qui le fait.
+ *
+ * Niveau « rythme » : un bloc de 1 à 3 jours (`fort`) et 3 repos ou plus
+ * (`dur`) ; 3 repos valent plus que deux blocs courts. */
+export const POIDS_FAUTE_FORTE = 2
+export const POIDS_FAUTE_DURE = 5
+/** Niveau « essentiel » : les heures dues et les places du palier le plus
+ * haut. Une minute due vaut `POIDS_MINUTE_DUE` ; une place vaut
+ * `PLACE_EN_MINUTES` minutes dues : une heure due passe devant une place,
+ * une demi-heure non (« les heures dues, quoi qu'il arrive », ORDRE DE
+ * DÉCISION du 2026-11-10 ; limite assumée : sous une heure, un horaire plus
+ * court peut tenir une place). Les places des paliers plus bas, à leur
+ * niveau, gardent les mêmes poids entre elles. */
+export const POIDS_MINUTE_DUE = 100
+export const PLACE_EN_MINUTES = 45
+export const POIDS_PLACE = PLACE_EN_MINUTES * POIDS_MINUTE_DUE
 /** PASSATION AVEC LE VEILLEUR (décision utilisateur du 2026-11-04 : « une
  * passation pour le soir, c'est très important ; le shift finit à 23 h pour
  * le soir et celui de la nuit commence à 23 h ; il faut qu'elle soit
  * nickel »). Par nuit de l'accueil et par côté : le soir, le veilleur
  * arrive avant que le dernier du soir parte (à la minute près : une fin à
  * 23:00 pour une nuit à 23:00 suffit) ; le matin, le premier du matin
- * arrive avant que le veilleur parte. Au-dessus des heures dues d'un shift
- * de 12 h (288 000, figé par un test) : on ne laisse pas un veilleur seul
- * pour donner des heures ; sous les places (un veilleur ajouté peut en
- * manquer deux, `pireMoral`). Même définition que l'oracle
- * (`transmissions`, verificateur.ts). */
-export const POIDS_PASSATION = 300_000
+ * arrive avant que le veilleur parte. Une passation manquée est une place
+ * (continuité obligatoire, D8), un peu plus chère qu'une autre. Une place
+ * de NUIT (un veilleur qui viendrait) vaut en plus deux passations : un
+ * veilleur ajouté peut en manquer deux, sa place n'est donc vide que si
+ * personne ne peut la tenir. Même définition que l'oracle (`transmissions`,
+ * verificateur.ts). */
+export const POIDS_PASSATION = POIDS_PLACE + 60
+/** Un trou entre deux équipes : une place par morceau, plus ce poids par
+ * quart d'heure (à places égales, le trou le plus court reste). */
+export const POIDS_PLACE_QUART = 1
+/** Niveau « déplacements » : au rythme 5 et 2, un repos seul et un bloc de
+ * 4 (`rythmeStrict.ts`, DÉPLACER DES REPOS). Le repos seul coûte un peu
+ * plus que le bloc (il est évité d'abord), mais un repos seul coûte moins
+ * que deux blocs. */
+/** Une personne qui manquerait un jour de la semaine SUIVANTE esquissée
+ * (horizon glissant) : au niveau du palier le plus bas, un neuvième de
+ * place environ (une place de cette semaine passe devant). */
+export const POIDS_SEMAINE_SUIVANTE = 5 * POIDS_MINUTE_DUE
+export const POIDS_REPOS_SEUL = 101
+export const POIDS_BLOC = 100
 /** Pas de relève (l'équipe du matin et celle de l'après-midi jamais
  * ensemble le temps réglé) : au-dessus du 6e jour et des repos accolés,
  * sous les contrats. */
@@ -482,7 +384,7 @@ export const POIDS_JOUR_FIXE = 2_000
  * matins tôt, et laissait une personne seule à l'ouverture. Par minute
  * d'arrivée après l'ouverture du poste ce jour-là, un horaire du matin d'un
  * poste de l'accueil, plafonné à `ARRIVEE_MATIN_MAX` minutes. Linéaire, sur
- * chaque affectation : aucune variable de plus. Confort (P5) attaché au
+ * chaque affectation : aucune variable de plus. Confort attaché au
  * CRÉNEAU, le même pour qui le prend : il ne départage pas un titulaire et
  * un dépannage, d'où son absence de `PART_FIXE_DEPANNAGE` (il reste sous
  * cette part fixe, test de palier) ; à 60 minutes, plus que l'écart d'équité le plus
@@ -497,9 +399,8 @@ export const ARRIVEE_MATIN_MAX = 120
  * mettait le manque au hasard, parfois tout sur le soir (« 3 et 1 » plutôt
  * que « 2 et 2 ») : de 6 à 30 soirs avec une personne seule à 21 h selon la
  * graine. Bien sous une place vide et sous une heure due : il ne crée
- * jamais de manque, il choisit OÙ il tombe. Ajouter une personne ne le fait
- * jamais payer (P1 tient sans rien ajouter). Un trou (personne) le paie
- * aussi, en plus de `POIDS_TROU_QUART`. */
+ * jamais de manque (les places sont un niveau au-dessus), il choisit OÙ il
+ * tombe. Un trou (personne) le paie aussi. */
 export const POIDS_SEUL_QUART = 150
 /** Le premier jour du contrat est travaillé (demande d'une responsable du
  * 2026-11-04 : « mes stagiaires commencent leur stage par deux jours de
@@ -513,8 +414,8 @@ export const POIDS_PREMIER_JOUR = 10_000
 /** Un apprenti ou un stagiaire de plus, le même jour et au même moment,
  * sur les postes indispensables (« éparpiller », décision de l'utilisateur
  * du 2026-11-09) : au-dessus du confort et des règles morales ordinaires
- * (le premier jour, les repos accolés), sous la fatigue, les heures dues et
- * les places, qui le comptent dans leur pire (`pireCoutRemplir`). */
+ * (le premier jour, les repos accolés), sous la fatigue ; les heures dues,
+ * les places et les déplacements de repos sont des niveaux au-dessus. */
 export const POIDS_EPARPILLER = 15_000
 
 /** Premier jour (0 à `nbJours` - 1) où la personne peut être sur place
@@ -542,12 +443,10 @@ export function premierJourSurPlace(
 /*
  * RÈGLES MORALES (PRD `plan/planning-bonnes-pratiques/PRD.md`, partie 4 ;
  * décisions prises par l'assistant le 2026-11-02, déléguées par
- * l'utilisateur, question Q1). Ordre : la loi (dur) > les places nécessaires
- * (P1, `coutPlaceVide` les relit toutes : une place n'est jamais laissée
- * vide pour une règle morale) > les heures dues du contrat (400 par minute :
- * 96 000 pour un shift de 4 h, plus que n'importe laquelle de ces règles
- * seule ; ne pas donner ses heures à quelqu'un est aussi injuste) > ces
- * règles > le confort. Chacune est AU-DESSUS de la part fixe du dépannage
+ * l'utilisateur, question Q1). Ordre : la loi (dur) > les heures dues et
+ * les places (niveau essentiel : une place n'est jamais laissée vide ni
+ * une heure retirée pour une règle morale) > ces règles > le confort
+ * ordinaire, dans le niveau du confort. Chacune est AU-DESSUS de la part fixe du dépannage
  * (`PART_FIXE_DEPANNAGE`) : un collègue en dépannage vaut mieux qu'une
  * entorse. Quand rien d'autre n'est possible, l'entorse a lieu et le
  * vérificateur la dit (alerte d'organisation). Les variables ne sont créées
@@ -606,7 +505,7 @@ export const EQUITE_HEURES_PLUS_MAX = 6
  * qui était un repos la semaine d'avant. Comptée dans la part fixe du
  * dépannage, comme tout le confort. */
 export const POIDS_MEMES_REPOS = 500
-// P4 — titulaire avant dépannage, horaire imposé avant remplaçant.
+// Confort : titulaire avant dépannage, horaire imposé avant remplaçant.
 export const POIDS_DEPANNAGE_MINUTE = 10
 /** Un shift tenu avec un AUTRE code du même cycle que celui du besoin
  * (créneau remplaçant `r…`, D5, D16 option A). Sous la part fixe d'un
@@ -615,7 +514,7 @@ export const POIDS_DEPANNAGE_MINUTE = 10
  * voisin (accepté, D16). */
 export const POIDS_REMPLACANT = 2_000
 
-/** P4 : ce que coûte un shift tenu sur le remplaçant `r` au lieu du besoin
+/** Ce que coûte un shift tenu sur le remplaçant `r` au lieu du besoin
  * de sa place : POIDS_REMPLACANT, rien de plus. L'ÉCART D'HEURES entre les
  * deux codes ne se paie pas ici mais dans la mesure du contrat
  * (`minutesDues`, `minutesEnPlus`) : un remplaçant ne rapporte jamais plus
@@ -648,8 +547,8 @@ export function minutesDues(c: Creneau, besoin?: Creneau): number {
  * remplaçant plus court n'épargne donc rien ; un plus long paie ses minutes
  * réelles. Avec `minutesDues` : à heures de contrat égales, l'horaire imposé
  * reste TOUJOURS devant, et un remplaçant n'est posé que si l'horaire imposé
- * ne se peut pas, ou pour une raison au-dessus des contrats (P1, P2 :
- * consigne, trou). Les plafonds légaux (48 h, journée) lisent, eux, les
+ * ne se peut pas, ou pour une raison d'un niveau au-dessus (place, minimum
+ * d'un moment, trou). Les plafonds légaux (48 h, journée) lisent, eux, les
  * minutes réelles. */
 export function minutesEnPlus(c: Creneau, besoin?: Creneau): number {
   return mesureParLeBesoin(c, besoin)
@@ -659,20 +558,12 @@ export function minutesEnPlus(c: Creneau, besoin?: Creneau): number {
 
 /** Le besoin d'un créneau remplaçant, cherché par son id de place. */
 export type BesoinDe = (place: string) => Creneau | undefined
-// P3 — contrats.
+// Confort : les contrats (les heures dues sont au niveau essentiel).
 export const POIDS_SUR_CONTRAT = 50
 export const POIDS_SIXIEME_JOUR = 15_000
-export const POIDS_SOUS_CONTRAT = 400
-// P2 — matin et soir.
-/** Une personne de moins (ou de plus) qu'une consigne, par minute de la
- * période (durée du plus long créneau qui y compte ce jour-là). */
+/** Une personne de plus qu'un moment, par minute du plus long créneau qui y
+ * compte ce jour-là (`coutSurplus`). */
 export const POIDS_PRESENCE_MINUTE = 100
-/** Un quart d'heure sans personne autonome sur un poste compté dans la
- * présence, entre le premier et le dernier besoin du jour (trou entre deux
- * équipes, D10) : le prix d'une personne qui manque à une consigne, par
- * minute. Une demi-heure (3 000) vaut un changement d'horaire (2 000), un
- * quart d'heure seul (1 500) non. */
-export const POIDS_TROU_QUART = 15 * POIDS_PRESENCE_MINUTE
 /** Pas de la grille des trous, en minutes réelles (0, 15, 30…). */
 const QUART = QUART_D_HEURE
 // Départage.
@@ -680,7 +571,7 @@ export const POIDS_DEJA_PROPOSE = 5
 /** Bruit de la graine : 0 à 3 par affectation. */
 export const BRUIT_MAX = 3
 /** Soirs et matins tôt : rattrapage compté au plus (écart à sa part sur
- * les 4 semaines d'avant, plafonné : le palier P5 ne change pas). */
+ * les 4 semaines d'avant, plafonné). */
 export const EQUITE_RATTRAPAGE_MAX = 7
 /** Le pire que coûte l'équité pour UN shift ajouté : le week-end déplace la
  * somme des écarts d'au plus 2 (son écart de 1 - part, ceux des autres de
@@ -688,8 +579,8 @@ export const EQUITE_RATTRAPAGE_MAX = 7
 export const EQUITE_MAX_PAR_SHIFT =
   2 * POIDS_EQUITE + 2 * EQUITE_RATTRAPAGE_MAX * POIDS_EQUITE
 
-/** P4 : part fixe d'un shift en dépannage, au-dessus de la somme de TOUT le
- * confort (P5) qu'un shift peut faire gagner ou perdre, départage compris :
+/** Part fixe d'un shift en dépannage, au-dessus de la somme de TOUT le
+ * confort ordinaire qu'un shift peut faire gagner ou perdre, départage compris :
  * un titulaire libre passe devant, quelle que soit la durée du shift (D13).
  * Les repos accolés n'y sont plus (2026-11-01) : ils sont devenus une
  * priorité au niveau du dépannage, sous le 6e jour ; les y laisser rendait
@@ -702,190 +593,23 @@ export const PART_FIXE_DEPANNAGE =
   BRUIT_MAX +
   1
 
-/** P1 : ce que les règles morales peuvent coûter, au pire, quand on ajoute
- * un shift `c` à une personne (règles 3, 4, 6, 7, 8, 13 et 14 du PRD) : deux
- * repos courts (la veille et le lendemain, retour de congé compris), le
- * week-end libre perdu, deux changements de moment (la veille et le
- * lendemain), un retour en arrière avec
- * chacun des deux jours d'avant et des deux jours d'après, le 6e
- * jour et la reprise un week-end au retour, les deux abords de l'école, un
- * jour de repos de la semaine d'avant ; une nuit entre dans au plus 6
- * fenêtres de 6 nuits et précède au plus deux reprises de jour, un service
- * de jour suit au plus une nuit. Les heures en plus (règle 12) se comptent
- * à la minute, avec les autres (`pireCoutRemplir`). */
-export function pireMoral(
-  c: Creneau,
-  R: RegleEtablissement = REGLES_PAR_DEFAUT,
-): number {
-  return (
-    2 * (POIDS_REPOS_COURT + POIDS_RETOUR_REPOS_COURT) +
-    POIDS_WEEKEND_LIBRE +
-    2 * POIDS_MOMENT_EN_TROP +
-    2 * R.repos.momentArriereJours * POIDS_MOMENT_ARRIERE +
-    (estNuit(R.moments, c.moment)
-      ? 6 * POIDS_NUIT_AFFILEE + 2 * POIDS_REPRISE_APRES_NUIT
-      : POIDS_REPRISE_APRES_NUIT) +
-    POIDS_RETOUR_SIXIEME +
-    POIDS_RETOUR_WEEKEND +
-    2 * POIDS_ECOLE_ABORDS +
-    POIDS_MEMES_REPOS +
-    // Règle 17 : une personne ajoutée au soir étale au plus ses arrivées et
-    // ses départs (un coût par jour chacun), et manque au plus sa relève.
-    POIDS_EQUIPE_ARRIVEE +
-    POIDS_EQUIPE_DEPART +
-    POIDS_RELEVE_CHACUN +
-    // Un veilleur ajouté peut manquer sa passation des deux côtés
-    // (passation avec la nuit fixe, 2026-11-06).
-    (c.presence.some((q) => estNuit(R.moments, q)) ? 2 * POIDS_PASSATION : 0)
-  )
-}
-
-/** P4 : ce que coûte un shift `c` tenu en dépannage. */
+/** Ce que coûte un shift `c` tenu en dépannage (confort). */
 export function coutDepannage(c: Creneau) {
   return POIDS_DEPANNAGE_MINUTE * duree(c) + PART_FIXE_DEPANNAGE
 }
 
-/** P2 : une personne de moins (ou de plus) qu'une consigne, sur une
- * période dont `creneaux` sont les créneaux qui y comptent ce jour-là.
- * Proportionnel au plus long, PLAFONNÉ sous ce que rapportent les heures
- * dues de chacun, une fois payés un dépannage et tout le confort
- * (voir P2 sous P1 : une personne due reste placée). */
-export function coutConsigne(
-  creneaux: Creneau[],
-  besoinDe: BesoinDe = () => undefined,
-): number {
-  if (!creneaux.length) return 0
-  const long = Math.max(...creneaux.map(duree))
-  // Un remplaçant ne rapporte que ses heures moins son coût de code.
-  const plafond = Math.min(
-    ...creneaux.map(
-      (c) =>
-        POIDS_SOUS_CONTRAT *
-          minutesDues(c, c.place !== null ? besoinDe(c.place) : undefined) -
-        coutDepannage(c) -
-        coutRemplacant(c),
-    ),
-  )
-  return Math.max(0, Math.min(POIDS_PRESENCE_MINUTE * long, plafond))
-}
-
-/** P4 (D7 du 2026-11-01) : ce que coûte un shift tenu par un EXTRA sur un
- * candidat de l'accueil. Au-dessus d'un dépannage qui ferait ce même shift
- * en heures en plus ET en 6e jour (un extra est payé 1 par minute, contrat
- * indicatif : sans cette part, il passerait devant tout le monde) ; sous la
- * place vide, qui le compte dans son pire (`pireCoutRemplir`).
- *
- * Plus `PART_MORALE_EXTRA` (décision utilisateur du 2026-11-03 : « on ne
- * prend pas d'extra pour la justice de répartition ; un extra coûte de
- * l'argent, seulement s'il n'y a pas le choix ») : tout ce qu'un shift peut
- * coûter en règles morales, en équité et en confort à la personne qu'il
- * soulagerait. Un extra ne sert donc jamais à libérer un week-end ni à
- * équilibrer, seulement à tenir une place qui resterait vide. */
-export function coutExtra(
-  c: Creneau,
-  R: RegleEtablissement = REGLES_PAR_DEFAUT,
-) {
-  return (
-    POIDS_SUR_CONTRAT * duree(c) +
-    POIDS_SIXIEME_JOUR +
-    coutDepannage(c) +
-    partMoraleExtra(c, R) +
-    1
-  )
-}
-
-/** Ce qu'un shift peut coûter, au pire, en règles morales (`pireMoral`),
- * en équité et en confort (repos accolés, jour isolé, jour habituel, jours
- * d'affilée) à qui le ferait : la part de `coutExtra` qui interdit de
- * prendre un extra pour le soulager. */
-export function partMoraleExtra(
-  c: Creneau,
-  R: RegleEtablissement = REGLES_PAR_DEFAUT,
-): number {
-  return (
-    pireMoral(c, R) +
-    EQUITE_MAX_PAR_SHIFT +
-    POIDS_REPOS_SEPARES +
-    POIDS_JOUR_ISOLE +
-    POIDS_JOUR_FIXE +
-    7 * POIDS_JOUR_AFFILE +
-    6 * POIDS_JOUR_AFFILE_CONSEILLE
-  )
-}
-
-/** D8 : part fixe d'une personne en plus du chiffre d'un moment, au-dessus
- * de TOUT le confort d'un shift (la même somme que le dépannage). */
-export const PART_FIXE_SURPLUS = PART_FIXE_DEPANNAGE
-/** D8 : par minute du plus long candidat du moment. */
-export const POIDS_SURPLUS_MINUTE = POIDS_PRESENCE_MINUTE
-
 /** D8 : une personne EN PLUS du chiffre d'un moment, dont `creneaux` sont
  * les créneaux qui y comptent ce jour-là (voir SURPLUS en tête). Au-dessus
- * du confort et des heures ordinaires (`POIDS_SURPLUS_MINUTE` par minute du
- * plus long + `PART_FIXE_SURPLUS`), PLAFONNÉ sous les heures dues de chaque
- * créneau ouvert, dépannage et confort payés, divisé par ses moments. Les
- * shifts posés (`ferme`) ne comptent pas dans le calcul : ils sont là. */
+ * de tout le confort d'un shift (`POIDS_PRESENCE_MINUTE` par minute du plus
+ * long, plus `PART_FIXE_DEPANNAGE`) ; les heures dues, à un niveau
+ * au-dessus, passent toujours devant. Les shifts posés (`ferme`) ne
+ * comptent pas : ils sont là. */
 export function coutSurplus(creneaux: Creneau[]): number {
   const ouverts = creneaux.filter((c) => !c.ferme)
   if (!ouverts.length) return 0
-  const long = Math.max(...ouverts.map(duree))
-  const plafond = Math.min(
-    ...ouverts.map(
-      (c) =>
-        Math.floor(
-          (POIDS_SOUS_CONTRAT * travail(c) -
-            coutDepannage(c) -
-            PART_FIXE_DEPANNAGE) /
-            Math.max(1, c.presence.length),
-        ) - 1,
-    ),
-  )
-  return Math.max(
-    0,
-    Math.min(POIDS_SURPLUS_MINUTE * long + PART_FIXE_SURPLUS, plafond),
-  )
-}
-
-/** Le pire que coûte l'ajout d'une personne libre sur `c` (voir P1), le
- * changement d'horaire compris quand `c` est un remplaçant, un extra quand
- * `c` est un candidat de l'accueil. */
-export function pireCoutRemplir(
-  c: Creneau,
-  presenceLaPlusChere: number,
-  besoin?: Creneau,
-  R: RegleEtablissement = REGLES_PAR_DEFAUT,
-) {
-  // Heures en plus comptées pour un remplaçant : au moins celles du besoin
-  // (`minutesEnPlus`), donc au plus la plus longue des deux durées.
-  const enPlus = mesureParLeBesoin(c, besoin)
-    ? Math.max(duree(c), duree(besoin))
-    : duree(c)
   return (
-    (POIDS_SUR_CONTRAT + POIDS_EQUITE_HEURES_PLUS * EQUITE_HEURES_PLUS_MAX) *
-      enPlus +
-    pireMoral(c, R) +
-    POIDS_DEPANNAGE_MINUTE * duree(c) +
-    PART_FIXE_DEPANNAGE +
-    coutRemplacant(c) +
-    (c.accueil ? coutExtra(c, R) : 0) +
-    POIDS_SIXIEME_JOUR +
-    POIDS_REPOS_SEPARES +
-    POIDS_JOUR_ISOLE +
-    // Un jour de plus entre dans au plus 7 fenêtres de 7 jours et 6 de 6.
-    7 * POIDS_JOUR_AFFILE +
-    6 * POIDS_JOUR_AFFILE_CONSEILLE +
-    POIDS_MINEUR_FERIE +
-    // Un apprenti ou un stagiaire de plus au même moment (2026-11-09).
-    POIDS_EPARPILLER +
-    presenceLaPlusChere +
-    EQUITE_MAX_PAR_SHIFT +
-    // Arriver après l'ouverture (2026-11-05), au plus : le premier moment
-    // de jour du tableau (à l'hôtel, le matin).
-    (c.moment === premierMoment(R.moments) && c.accueil
-      ? POIDS_ARRIVEE_MATIN_MINUTE * ARRIVEE_MATIN_MAX
-      : 0) +
-    POIDS_DEJA_PROPOSE +
-    BRUIT_MAX
+    POIDS_PRESENCE_MINUTE * Math.max(...ouverts.map(duree)) +
+    PART_FIXE_DEPANNAGE
   )
 }
 
@@ -904,88 +628,25 @@ export function coutArriveeMatin(
   return POIDS_ARRIVEE_MATIN_MINUTE * retard
 }
 
-/** P1 : une personne qui manque sur une place nécessaire, strictement plus
- * que tout ce qu'il faudrait payer pour la remplir. */
-export function coutPlaceVide(
-  c: Creneau,
-  presenceLaPlusChere: number,
-  besoin?: Creneau,
-  R: RegleEtablissement = REGLES_PAR_DEFAUT,
-) {
-  return pireCoutRemplir(c, presenceLaPlusChere, besoin, R) + 1
-}
-
-/** P1 : une personne qui manque sur une PLACE tenue par le besoin ou l'un
- * de ses remplaçants (`membres`) : au-dessus du pire de chacun, pour que la
- * place ne reste vide que si personne ne peut tenir AUCUN des horaires. Sans
- * remplaçant, `coutPlaceVide` du besoin, inchangé. */
-export function coutPlaceVideGroupe(
-  membres: Creneau[],
-  presenceLaPlusChere: number,
-  besoinDe: BesoinDe = (place) => membres.find((m) => m.id === place),
-  R: RegleEtablissement = REGLES_PAR_DEFAUT,
-) {
-  return Math.max(
-    ...membres.map((c) =>
-      coutPlaceVide(
-        c,
-        presenceLaPlusChere,
-        c.place !== null ? besoinDe(c.place) : undefined,
-        R,
-      ),
-    ),
-  )
-}
-
-/** P1 (D7) : une personne de moins que le minimum d'une consigne, dont
- * `creneaux` sont les créneaux qui y comptent ce jour-là. Même dérivation
- * que la place vide : ajouter une personne libre sur l'un d'eux coûte au
- * plus `pireCoutRemplir` (heures en plus, dépannage, remplaçant, 6e jour,
- * repos accolés, « au plus » d'une consigne, équité, départage) ; le manque
- * coûte strictement plus que le pire d'entre eux. À l'optimum, un minimum
- * n'est manqué que si personne ne peut être ajouté sur aucun créneau qui
- * compte (règle dure, ou place déjà au plus). Un shift posé à la main
- * (`ferme`) ne reçoit personne : il n'entre pas dans le calcul. */
-export function coutManqueMinimum(
-  creneaux: Creneau[],
-  presenceLaPlusChere: number,
-  besoinDe?: BesoinDe,
-  R: RegleEtablissement = REGLES_PAR_DEFAUT,
-) {
-  const ouverts = creneaux.filter((c) => !c.ferme)
-  return ouverts.length
-    ? coutPlaceVideGroupe(ouverts, presenceLaPlusChere, besoinDe, R)
-    : 0
-}
-
 /*
  * IMPORTANCE DES POSTES (D11, OUI / NON depuis la décision utilisateur du
  * 2026-11-05 : « soit un poste est important, soit il ne l'est pas ») et
  * BESOINS SOUHAITÉS (D4). Aucun poste n'est nommé ici : seul compte le
  * réglage « indispensable » de chaque poste. Chaque
- * place nécessaire (P1 : une place, un manque de l'accueil, un trou entre
- * deux équipes, une passation avec le veilleur) appartient à un PALIER :
+ * place nécessaire (une place, un manque de l'accueil, un trou entre deux
+ * équipes, une passation avec le veilleur) appartient à un PALIER :
  *   0  un besoin souhaité (`obligatoire = false`), quel que soit son poste ;
  *   1  une place d'un poste non indispensable (l'ancienne valeur
  *      « important » compte ici) ;
  *   2  une place d'un poste indispensable.
  * Le palier d'un manque ou d'un trou est le plus haut des postes qui le
- * tiendraient ; celui d'une passation, le plus bas de ses nuits. Son prix
- * reste le prix DÉRIVÉ d'aujourd'hui (`coutPlaceVide` : une place n'est
- * vide que si personne ne peut la tenir), plus un DÉCALAGE par palier :
- * le i-ème palier présent dans la semaine reçoit i × `pas`, où `pas`
- * dépasse le prix le plus cher d'une place d'un palier plus bas, surplus
- * de nuit compris. Donc, à une personne près, une place d'un palier plus
- * bas reste vide avant toute place d'un palier plus haut, et à palier égal
- * rien ne change. Une semaine où un seul palier est présent (tous les
- * postes au même réglage, ou un hôtel qui n'a rien réglé) a un
- * décalage nul : le modèle est celui d'avant, au caractère près.
- * Les passations : un veilleur ajouté peut en casser deux, donc les places
- * de nuit paient deux passations (D8, `extraNuit`). Le décalage d'une
- * passation la rendrait plus chère qu'un palier ; elle ne le reçoit que si
- * ses nuits sont au palier le plus haut présent (rien au-dessus à
- * dépasser), sinon elle garde le prix d'une place de son palier sans
- * décalage.
+ * tiendraient ; celui d'une passation, le plus bas de ses nuits. Chaque
+ * palier est un NIVEAU de l'ordre de décision (`Modele.niveaux`) : le plus
+ * haut présent dans la semaine partage le niveau des heures dues
+ * (`essentiel`) ; les autres viennent après les déplacements de repos et
+ * l'équilibre, du plus haut au plus bas. Une place d'un palier plus bas
+ * reste donc vide avant toute place d'un palier plus haut, sans prix à
+ * dériver.
  */
 
 /** Palier d'un besoin souhaité, et d'un poste non indispensable. */
@@ -1003,76 +664,11 @@ export const rangDe = (cs: readonly Creneau[]) =>
     ? Math.max(...cs.map((c) => rangImportance(c.indispensable)))
     : RANG_AUTRE
 
-/** Le prix d'une place : sa base et le reste (`Modele.coutPlace`). */
+/** Une place des priorités (`Modele.coutPlace`) : son palier et son
+ * poids dans le niveau de ce palier. */
 interface PrixPlace {
-  base: number
-  reste: number
-}
-
-/** Une passation avec le veilleur, pour les paliers : sa clé, son prix
- * dérivé (au-delà de `POIDS_PASSATION`) et son palier. */
-export interface ZonePrix {
-  cle: string
-  plus: number
   rang: number
-}
-
-export interface Paliers {
-  /** Les paliers présents, du plus bas au plus haut. */
-  presents: number[]
-  /** Le pas entre deux paliers (0 : un seul palier). */
-  pas: number
-  /** Décalage du prix d'une place de ce palier. */
-  decalage: (rang: number) => number
-  /** Décalage d'une passation de ce palier (0 hors du palier le plus haut). */
-  passation: (rang: number) => number
-  /** Ce qu'une passation peut coûter de plus qu'un `POIDS_PASSATION`, pour
-   * un veilleur d'un manque ou d'un trou de ce palier. */
-  extraNuit: (rang: number) => number
-}
-
-/** Ce qu'UN shift peut gagner de places d'un même palier, au plus : sa
- * place, les minimums des deux moments d'un middle, un trou entre deux
- * équipes ou une ouverture (revue adverse du 2026-11-10 : un pas d'une
- * seule place laissait deux manques d'un palier bas valoir plus qu'une
- * place du palier haut, donc qu'un repos seul). */
-export const TERMES_PAR_SHIFT = 4
-
-/** Les paliers d'une semaine (voir plus haut). `prix(c)` : le prix dérivé
- * d'une place vide sur `c` (`coutPlaceVide`), lu seulement s'il y a plus
- * d'un palier. */
-export function paliersPlaces(
-  creneaux: readonly Creneau[],
-  zones: readonly ZonePrix[],
-  prix: (c: Creneau) => number,
-): Paliers {
-  const ouverts = creneaux.filter((c) => !c.ferme)
-  const presents = [
-    ...new Set([
-      ...ouverts.map(rangPlace),
-      ...ouverts.map((c) => rangImportance(c.indispensable)),
-      ...zones.map((z) => z.rang),
-    ]),
-  ].sort((a, b) => a - b)
-  const haut = presents.at(-1) ?? RANG_AUTRE
-  const extraBas = Math.max(0, ...zones.map((z) => z.plus))
-  let pas = 0
-  if (presents.length > 1)
-    pas =
-      TERMES_PAR_SHIFT * (Math.max(0, ...ouverts.map(prix)) + 2 * extraBas) + 1
-  const decalage = (rang: number) => {
-    const i = presents.findIndex((r) => r >= rang)
-    return (i < 0 ? presents.length - 1 : i) * pas
-  }
-  const passation = (rang: number) => (rang >= haut ? decalage(haut) : 0)
-  const extraHaut = Math.max(0, ...zones.map((z) => z.plus + passation(z.rang)))
-  return {
-    presents,
-    pas,
-    decalage,
-    passation,
-    extraNuit: (rang) => (rang >= haut ? extraHaut : extraBas),
-  }
+  poids: number
 }
 
 /** Un moment sans personne autonome sur un poste compté dans la présence,
@@ -1123,7 +719,7 @@ export interface Highs {
   }
   /** API persistante de `highs` (1.15) : un modèle qu'on résout, modifie et
    * résout encore, en partant d'une solution connue (CALCUL PAR
-   * PRIORITÉS). Absente : un seul calcul, comme avant. */
+   * NIVEAUX). Absente : un calcul par niveau sur le texte LP. */
   createModel?: (source: { format: 'lp'; data: string }) => ModeleHighs
 }
 
@@ -1137,6 +733,7 @@ export interface ModeleHighs {
     selection: { kind: 'range'; from: number; to: number },
     couts: Float64Array,
   ) => void
+  changeColBounds: (index: number, bas: number, haut: number) => void
   addRow: (
     bas: number,
     haut: number,
@@ -1235,12 +832,10 @@ class Modele {
   readonly entiers: Array<[string, number, number]> = []
   readonly continues: Array<[string, number, number]> = []
   readonly contraintes: string[] = []
+  /** Le CONFORT, dernier niveau de l'ordre de décision (`cout`). */
   readonly objectif = new Map<string, number>()
-  /** La part de `objectif` qui fait les PRIORITÉS (CALCUL PAR PRIORITÉS,
-   * `resoudreModele`) : le rythme 5 et 2, les heures dues,
-   * les places, les déplacements de repos, l'équilibre. Le reste de
-   * `objectif` est le confort. */
-  readonly ordre = new Map<string, number>()
+  /** Les niveaux des PRIORITÉS, par nom (`coutNiveau`, `niveaux`). */
+  private readonly priorites = new Map<string, Map<string, number>>()
   impossible = false
 
   bool(): string {
@@ -1276,58 +871,96 @@ class Modele {
     )
   }
 
+  /** Un coût du confort (le dernier niveau). */
   cout(coef: number, v: string): void {
     if (coef === 0) return
     this.objectif.set(v, (this.objectif.get(v) ?? 0) + coef)
   }
 
-  /** Un coût des PRIORITÉS : dans `objectif` ET dans `ordre`. */
-  coutOrdre(coef: number, v: string): void {
+  /** Un coût d'un niveau des priorités (`NIVEAUX`). */
+  coutNiveau(niveau: string, coef: number, v: string): void {
     if (coef === 0) return
-    this.cout(coef, v)
-    this.ordre.set(v, (this.ordre.get(v) ?? 0) + coef)
+    let n = this.priorites.get(niveau)
+    if (!n) this.priorites.set(niveau, (n = new Map()))
+    n.set(v, (n.get(v) ?? 0) + coef)
   }
 
-  private places: Array<{ v: string; reste: number }> = []
-  private base = 0
+  private places: Array<{ v: string; rang: number; poids: number }> = []
 
-  /**
-   * Une PLACE des priorités (place vide, personne de moins à un moment,
-   * trou entre deux équipes, passation) : `base` + `reste` dans l'objectif.
-   * `base` est le prix dérivé de la place (`coutPlaceVide` : plus que tout
-   * le CONFORT qu'il faudrait payer pour la remplir, `pireCoutRemplir`) ;
-   * `reste` ce qui s'y ajoute (palier, nuit, passation, minutes d'un trou).
-   * Aux priorités (`ordre`), `base` est remplacée par la plus grande base
-   * posée (`ordrePlaces`, `fermerPlaces`) : au temps 1, le confort ne
-   * départage pas deux places (une base plus haute d'une heure de confort
-   * aurait suffi à choisir la place laissée vide) ; c'est le temps 2,
-   * confort compris, qui choisit. Une base nulle (personne ne peut tenir la
-   * place) n'est pas une place : son prix reste tel quel.
-   */
-  coutPlace(v: string, base: number, reste = 0): void {
-    if (base <= 0) {
-      this.coutOrdre(base + reste, v)
-      return
-    }
-    this.cout(base + reste, v)
-    this.places.push({ v, reste })
-    this.base = Math.max(this.base, base)
+  /** Une PLACE (place vide, personne de moins à un moment, trou entre deux
+   * équipes, passation) de palier `rang` (IMPORTANCE DES POSTES) : son
+   * niveau n'est connu qu'une fois toutes les places posées
+   * (`fermerPlaces`). */
+  coutPlace(v: string, rang: number, poids: number): void {
+    this.places.push({ v, rang, poids })
   }
 
-  /** Le prix aux priorités de chaque place posée (`coutPlace`). */
-  ordrePlaces(): number[] {
-    return this.places.map(({ reste }) => this.base + reste)
-  }
-
-  /** Pose le prix des places aux priorités (`coutPlace`). */
+  /** Range chaque place à son niveau : le palier le plus haut posé avec les
+   * heures dues (`essentiel`), les autres à `places-<palier>`. */
   fermerPlaces(): void {
-    for (const { v, reste } of this.places)
-      this.ordre.set(v, (this.ordre.get(v) ?? 0) + this.base + reste)
+    const haut = Math.max(-Infinity, ...this.places.map((x) => x.rang))
+    for (const { v, rang, poids } of this.places)
+      this.coutNiveau(rang >= haut ? 'essentiel' : `places-${rang}`, poids, v)
     this.places = []
+    // La semaine suivante rejoint le palier le plus bas, sous ses places
+    // (`POIDS_SEMAINE_SUIVANTE`) : un calcul de moins (mesuré le 2026-11-11,
+    // environ une seconde par niveau et par semaine).
+    const bas = Math.min(
+      ...[...this.priorites.keys()]
+        .filter((k) => k.startsWith('places-'))
+        .map((k) => Number(k.slice(7))),
+    )
+    const suivante = this.priorites.get('suivante')
+    if (suivante && Number.isFinite(bas)) {
+      for (const [v, c] of suivante) this.coutNiveau(`places-${bas}`, c, v)
+      this.priorites.delete('suivante')
+    }
   }
 
-  lp(): string {
-    const obj = [...this.objectif].map(([v, c]) => [c, v] as Terme)
+  /** Les niveaux, dans l'ordre de décision : les priorités qui ont un coût,
+   * puis le confort (toujours, même vide). */
+  niveaux(): Array<[string, ReadonlyMap<string, number>]> {
+    const paliers = [...this.priorites.keys()]
+      .filter((k) => k.startsWith('places-'))
+      .sort((a, b) => Number(b.slice(7)) - Number(a.slice(7)))
+    const noms = [
+      'rythme',
+      'essentiel',
+      'deplacements',
+      'equilibre',
+      ...paliers,
+      'suivante',
+    ]
+    const r: Array<[string, ReadonlyMap<string, number>]> = []
+    for (const k of noms) {
+      const n = this.priorites.get(k)
+      if (n?.size) r.push([k, n])
+    }
+    r.push(['confort', this.objectif])
+    return r
+  }
+
+  /** Le texte LP du modèle. `objectif` : celui à minimiser (par défaut, la
+   * somme de tous les niveaux, sans ordre : pour comparer deux modèles) ;
+   * `bornes` : des lignes « Σ coûts <= haut » en plus (les niveaux déjà
+   * résolus, `resoudreModele` sans API persistante). */
+  lp(
+    objectif?: ReadonlyMap<string, number>,
+    bornes: ReadonlyArray<{
+      couts: ReadonlyMap<string, number>
+      haut: number
+    }> = [],
+  ): string {
+    let somme = objectif
+    if (!somme) {
+      const t = new Map<string, number>()
+      for (const [, n] of this.niveaux())
+        for (const [v, c] of n) t.set(v, (t.get(v) ?? 0) + c)
+      somme = t
+    }
+    const obj = [...somme]
+      .filter(([, c]) => c !== 0)
+      .map(([v, c]) => [c, v] as Terme)
     const toutes = [
       ...this.binaires,
       ...this.entiers.map((e) => e[0]),
@@ -1339,6 +972,12 @@ class Modele {
       'Subject To',
     ]
     this.contraintes.forEach((c, i) => parts.push(` c${i}: ${c}`))
+    bornes.forEach(({ couts, haut }, i) => {
+      const t = [...couts]
+        .filter(([, c]) => c !== 0)
+        .map(([v, c]) => [c, v] as Terme)
+      if (t.length) parts.push(` n${i}: ${ligne(t)} <= ${haut}`)
+    })
     parts.push('Bounds')
     for (const [v, min, max] of [...this.entiers, ...this.continues]) {
       parts.push(` ${min} <= ${v} <= ${max}`)
@@ -1422,9 +1061,9 @@ export interface OptionsConstruction {
    * coût des horaires de plus par personne. */
   affiner?: {
     permis: (salarieId: string, c: Creneau) => boolean
-    borne: number
-    /** La borne des PRIORITÉS (`Modele.ordre`) : celle du calcul. */
-    borneOrdre?: number
+    /** La borne de chaque niveau (`Modele.niveaux`), par nom : les
+     * priorités du calcul, et son confort plus la marge de l'affinage. */
+    bornes: ReadonlyMap<string, number>
   }
 }
 
@@ -1467,10 +1106,7 @@ export function construire(
 
   // Tableau de l'accueil : les créneaux qui comptent, ce jour et à ce
   // moment (un middle dans deux moments). Le surplus se paie selon D8
-  // (`coutSurplus`) ; le manque est une place nécessaire (P1, D7), dérivé
-  // comme `coutPlaceVide`. Seul le surplus entre dans `presenceLaPlusChere`
-  // : le coût du manque en dépend, il ne peut pas en faire partie.
-  // Chaque chiffre ne compte que les créneaux de SA zone (2026-11-06).
+  // (`coutSurplus`, confort) ; le manque est une place (D7). Chaque chiffre ne compte que les créneaux de SA zone (2026-11-06).
   const premiereZone = R.zones[0].id
   const desPostes = zonesDesPostes(p)
   const comptent = p.consignes.map((k) =>
@@ -1484,92 +1120,34 @@ export function construire(
   )
   const besoinDe: BesoinDe = (place) => creneaux.get(place)
   const coutsSurplus = comptent.map((cs) => coutSurplus(cs))
-  // Une personne ajoutée peut aussi perdre son JFR (R-FERIE-RATTRAPE) : son
-  // pire est compté avec celui du surplus dans les places nécessaires.
-  // Sans JFR dans la semaine, rien ne change (même texte LP qu'avant).
-  const presenceLaPlusChere =
-    Math.max(0, ...coutsSurplus) +
-    pireJfr(Math.max(0, ...p.salaries.map((s) => s.jfr?.reduction ?? 0))) +
-    // Horizon glissant : ce qu'un shift ajouté peut coûter à l'esquisse.
-    pireHorizon(p.suivante)
   // CONTINUITÉ OBLIGATOIRE (D8, plus bas) : une passation avec le veilleur
-  // manquée coûte aussi une place nécessaire, au-dessus de tout ce qu'il
-  // faudrait payer pour ajouter quelqu'un sur un créneau qui la tiendrait
-  // (un relais). Un veilleur ajouté peut en manquer deux : ce surplus
-  // (`extraNuit`, au-delà de `POIDS_PASSATION` déjà dans `pireMoral`) entre
-  // dans le prix des places de nuit (P1). Règle fixe du 2026-11-06.
-  const zones: ZonePrix[] = []
+  // manquée est une place (`POIDS_PASSATION`), du palier de ses nuits (un
+  // veilleur ajouté est ce qui peut la casser), le plus bas. Règle fixe du
+  // 2026-11-06.
   const passationsZones = zonesPassation(p)
+  const placePassation = new Map<string, PrixPlace>()
   for (const z of passationsZones) {
     const relais = new Set<Creneau>()
     if (z.veille) for (const c of z.relais(z.veille)) relais.add(c)
     for (const n of z.nuits) for (const c of z.relais(n)) relais.add(c)
-    const ouverts = [...relais].filter((c) => !c.ferme)
-    const plus = ouverts.length
-      ? coutPlaceVideGroupe(ouverts, presenceLaPlusChere, besoinDe, R)
-      : 0
-    // Le palier de la passation : celui de ses nuits (un veilleur ajouté
-    // est ce qui peut la casser), le plus bas.
     const nuits = z.nuits.length ? z.nuits : [...relais]
-    zones.push({
-      cle: clePassation(z, premiereZone),
-      plus,
+    placePassation.set(clePassation(z, premiereZone), {
       rang: nuits.length
         ? Math.min(...nuits.map((c) => rangImportance(c.indispensable)))
         : RANG_AUTRE,
+      poids: POIDS_PASSATION,
     })
   }
-  // Le prix d'une place vide, calculé une fois par créneau.
-  const prixPlaces = new Map<string, number>()
-  const prixPlace = (c: Creneau): number => {
-    let prix = prixPlaces.get(c.id)
-    if (prix === undefined) {
-      prix = coutPlaceVide(
-        c,
-        presenceLaPlusChere,
-        c.place !== null ? besoinDe(c.place) : undefined,
-        R,
-      )
-      prixPlaces.set(c.id, prix)
-    }
-    return prix
-  }
-  // IMPORTANCE DES POSTES (D11) et besoins souhaités : `paliersPlaces`.
-  const pl = paliersPlaces(p.creneaux, zones, prixPlace)
-  // Une passation : une place (`coutPlace`, la base de ses relais), plus
-  // `POIDS_PASSATION` et son palier.
-  const placePassation = new Map(
-    zones.map((z) => [
-      z.cle,
-      { base: z.plus, reste: POIDS_PASSATION + pl.passation(z.rang) },
-    ]),
-  )
-  /** Le surplus de nuit d'un manque ou d'un trou de ce palier (D8). */
-  const nuitDe = (cs: Creneau[], rang: number) =>
+  /** Une place que tiendraient les créneaux `cs` : une de NUIT vaut en plus
+   * deux passations quand la semaine en a (un veilleur ajouté peut en
+   * manquer deux, `POIDS_PASSATION`). Sinon toutes les places se valent : à
+   * nombre égal, les niveaux d'en dessous choisissent laquelle reste vide
+   * (l'équilibre, puis le confort : personne seule, heures en plus…). */
+  const poidsPlace = (cs: readonly Creneau[]) =>
+    passationsZones.length &&
     cs.some((c) => !c.ferme && c.presence.some((q) => estNuit(R.moments, q)))
-      ? 2 * pl.extraNuit(rang)
-      : 0
-  // Le prix d'une personne de moins à un moment : sa base (`coutPlace`) et
-  // le reste (nuit, palier).
-  const basesMinimum = comptent.map((cs) =>
-    coutManqueMinimum(cs, presenceLaPlusChere, besoinDe, R),
-  )
-  const rangsMinimum = comptent.map((cs) => rangDe(cs.filter((c) => !c.ferme)))
-  const restesMinimum = comptent.map(
-    (cs, i) => nuitDe(cs, rangsMinimum[i]) + pl.decalage(rangsMinimum[i]),
-  )
-  const coutsMinimum = basesMinimum.map((b, i) => b + restesMinimum[i])
-  // La place la moins chère du palier le plus haut (`seuilPlaces`) : ce
-  // que vaut UNE place qu'un repos seul ou un bloc de 4 peut remplir.
-  const hautes = placesHautes(
-    p.creneaux,
-    pl,
-    prixPlace,
-    comptent,
-    rangsMinimum,
-    coutsMinimum,
-  )
-  const seuil = hautes.size ? Math.min(...hautes.values()) : 0
+      ? POIDS_PLACE + 2 * POIDS_PASSATION
+      : POIDS_PLACE
 
   // Couverture, par PLACE : un besoin `b…` et ses remplaçants `r…`
   // (`place` = id du besoin, même cycle, autre horaire permis) forment un
@@ -1600,11 +1178,11 @@ export function construire(
           autonomes.push(v)
           rangs.push(n?.rang ?? 0)
         }
-        // P4 : un dépannage coûte, un titulaire libre passe devant (D13) ;
+        // Un dépannage coûte, un titulaire libre passe devant (D13) ;
         // un niveau entre les deux, une part du prix (`partSur`).
         const part = partSur(s, c.poste)
         if (part > 0) m.cout(coutDepannage(c) * part, v)
-        // P4 : un autre horaire du cycle coûte, l'horaire imposé passe devant
+        // Un autre horaire du cycle coûte, l'horaire imposé passe devant
         // (D5, D13, D16), en plus du dépannage s'il y a lieu ; l'écart
         // d'heures avec le besoin est rendu (`coutRemplacant`).
         if (c.place !== null) m.cout(coutRemplacant(c), v)
@@ -1622,11 +1200,7 @@ export function construire(
       '<=',
       tete.effectif + tete.facultatif,
     )
-    m.coutPlace(
-      vm,
-      coutPlaceVideGroupe(membres, presenceLaPlusChere, besoinDe, R),
-      pl.decalage(rangPlace(tete)),
-    )
+    m.coutPlace(vm, rangPlace(tete), poidsPlace(membres))
     // Nombre par niveau (2026-11-06) : « 1 Responsable + 2 Équipiers ».
     // Jusqu'à chaque rang demandé, les personnes de ce rang ou mieux, plus
     // les places vides, couvrent le nombre cumulé (les places vides sont
@@ -1763,15 +1337,15 @@ export function construire(
       ? (sommesAccueil.get(c.id)?.n ?? 0)
       : p.salaries.filter((s) => x.has(cle(s.id, c.id))).length
 
-  // Candidats de l'accueil : le prix du dépannage ou de l'extra (D7).
+  // Candidats de l'accueil : le prix du dépannage (D7). Un extra n'y est
+  // jamais placé par le calcul (`compatible`) : seulement posé, un fait.
   for (const c of p.creneaux) {
     if (!c.accueil || c.ferme) continue
     for (const s of p.salaries) {
       const v = x.get(cle(s.id, c.id))
-      if (!v) continue
+      if (!v || s.placementManuel) continue
       const part = partSur(s, c.poste)
-      if (s.placementManuel) m.cout(coutExtra(c, R), v)
-      else if (part > 0) m.cout(coutDepannage(c) * part, v)
+      if (part > 0) m.cout(coutDepannage(c) * part, v)
     }
   }
 
@@ -1880,7 +1454,7 @@ export function construire(
 
   // Le chiffre de chaque moment (D3) : Σ des shifts qui comptent, soutiens
   // compris (D5) = N. Souple des deux côtés (le modèle reste toujours
-  // réalisable) : un manque (P1) ou un surplus (D8) se paie. Le chiffre est
+  // réalisable) : un manque (une place) ou un surplus (D8) se paie. Le chiffre est
   // `minimum` (minimum = maximum après la migration ; s'il diffère, le
   // minimum fait foi).
   // Manque et surplus de chaque moment (ÉQUILIBRE, plus bas).
@@ -1905,7 +1479,11 @@ export function construire(
     if (n > 0) {
       const vm = m.continu(0, n)
       m.ajoute([...termes, [1, vm]], '>=', n)
-      m.coutPlace(vm, basesMinimum[i], restesMinimum[i])
+      m.coutPlace(
+        vm,
+        rangDe(comptent[i].filter((c) => !c.ferme)),
+        poidsPlace(comptent[i]),
+      )
       minimums.push({ v: vm, consigne: i })
       manqueDe.set(i, vm)
     }
@@ -1931,32 +1509,18 @@ export function construire(
       surplusDe.set(i, { v: vp, borne: possibles, haut, parCreneau })
     }
   })
-  equilibreMoments(
-    m,
-    p,
-    manqueDe,
-    surplusDe,
-    coutsMinimum.map((c) => Math.min(c, prixSousPlace(seuil, 'equilibre'))),
-    comptent,
-  )
+  equilibreMoments(m, p, manqueDe, surplusDe, comptent)
 
   // CONTINUITÉ ENTRE ÉQUIPES (D8 du 2026-11-05, FIXE depuis le 2026-11-06) :
   // un trou entre la fin d'une équipe et l'arrivée de la suivante (passation
   // avec le veilleur comprise : la plage de l'accueil va d'un veilleur à
-  // l'autre) coûte une PLACE NÉCESSAIRE (P1) : plus que tout ce qu'il
-  // faudrait payer pour ajouter une personne sur l'un des créneaux qui le
-  // couvriraient. Jamais dur : si personne ne peut le tenir, il reste (D3).
+  // l'autre) est une PLACE (niveau de son palier), comme une place vide.
+  // Jamais dur : si personne ne peut le tenir, il reste (D3).
   // Le chevauchement (relève) reste une préférence.
-  const continuite = (couvrants: Creneau[]): PrixPlace => {
-    const ouverts = couvrants.filter((c) => !c.ferme)
-    const rang = rangDe(couvrants)
-    return ouverts.length
-      ? {
-          base: coutPlaceVideGroupe(ouverts, presenceLaPlusChere, besoinDe, R),
-          reste: nuitDe(ouverts, rang) + pl.decalage(rang),
-        }
-      : { base: 0, reste: 0 }
-  }
+  const continuite = (couvrants: Creneau[]): PrixPlace => ({
+    rang: rangDe(couvrants),
+    poids: poidsPlace(couvrants),
+  })
   const trous = trousEntreEquipes(m, p, termesDe, continuite)
   // Ouverture (2026-11-01) : la première heure de chaque poste de l'accueil
   // qui a une heure d'ouverture, tenue sur CE poste.
@@ -1991,14 +1555,14 @@ export function construire(
   const travailleDe = new Map<string, Map<number, string>>()
   const jfrs: Array<{ salarieId: string; jour: number; v: string }> = []
   // Rythme 5 et 2 strict : les fautes payées, leur prix posé à la fin
-  // (ORDRE DE DÉCISION du 2026-11-09, `prixOrdre`).
+  // (chacune à son niveau, `construire`, fin).
   const excesRythme: ExcesRythme = {
     dur: [],
     fort: [],
     bloc: [],
     reposSeul: [],
   }
-  // Heures dues manquantes (P3 du 2026-11-09), leur prix posé à la fin.
+  // Heures dues manquantes (niveau essentiel), posées à la fin.
   const moinsDus: string[] = []
   const coefsPlus = coefsHeuresPlus(p)
   // Horizon glissant : jour de l'esquisse (nbJours + 0..6) → 1 (travaillé
@@ -2745,7 +2309,7 @@ export function construire(
   }
   // Horizon glissant : les personnes nécessaires chaque jour de la semaine
   // suivante, par groupe (accueil, poste à part). Un manque se paie
-  // `POIDS_PREVISION_MANQUE` : la semaine écrite ne doit pas laisser la
+  // `POIDS_SEMAINE_SUIVANTE` : la semaine écrite ne doit pas laisser la
   // suivante sans monde.
   // Un jour de présence ne tient qu'UNE place : une personne de plusieurs
   // groupes y est répartie (part continue par groupe, somme au plus son
@@ -2791,7 +2355,7 @@ export function construire(
       if (g.besoins[j] <= constante) continue
       const manqueJ = m.continu(0, g.besoins[j] - constante)
       m.ajoute([[1, manqueJ], ...termes], '>=', g.besoins[j] - constante)
-      m.coutOrdre(POIDS_PREVISION_MANQUE, manqueJ)
+      m.coutNiveau('suivante', POIDS_SEMAINE_SUIVANTE, manqueJ)
     }
   })
 
@@ -2858,47 +2422,23 @@ export function construire(
       if (cout > 0) m.cout(cout, v)
     }
   }
-  // ORDRE DE DÉCISION (2026-11-09) : les heures dues, les transitions et
-  // les fautes au rythme 5 et 2, posées quand tout le reste est écrit
-  // (`prixOrdre` : leur prix se lit sur la place la plus chère).
-  const prix = prixOrdre(
-    [...m.objectif.values(), ...m.ordrePlaces()],
-    Math.max(
-      0,
-      ...p.salaries
-        .filter((s) => !s.contratIndicatif)
-        .map((s) => s.minutesHebdoContrat),
-    ),
-    seuil,
-  )
-  for (const v of moinsDus) m.coutOrdre(prix.minuteDue, v)
-  // Le seuil de CHAQUE personne : la moins chère des places du palier le
-  // plus haut qu'elle peut tenir (revue adverse du 2026-11-10 : le seuil de
-  // tout le problème prenait une place d'une heure que personne ne tient,
-  // et un déplacement se faisait pour bien moins qu'une place). Sans place
-  // du palier haut à sa portée : le seuil de tout le problème.
-  const seuilDe = new Map<string, number>()
-  for (const k of x.keys()) {
-    const [sid, cid] = scinder(k)
-    const v = hautes.get(cid)
-    if (v !== undefined) seuilDe.set(sid, Math.min(seuilDe.get(sid) ?? v, v))
-  }
-  const prixDe = (sid: string) => {
-    const a = seuilDe.get(sid) ?? prix.seuil
-    return {
-      reposSeul: prixSousPlace(Math.min(a, prix.place), 'reposSeul'),
-      bloc: prixSousPlace(Math.min(a, prix.place), 'bloc'),
-    }
-  }
+  // ORDRE DE DÉCISION : les heures dues (niveau « essentiel ») et les
+  // fautes au rythme 5 et 2, chacune à son niveau.
+  for (const v of moinsDus) m.coutNiveau('essentiel', POIDS_MINUTE_DUE, v)
   // Contrôles de mesure (`Probleme.controle`) : jamais posés par l'app.
+  // Sans déplacement : un repos seul ou un bloc de 4 au rang de 3 repos ;
+  // les heures d'abord : 3 repos au rang d'un bloc de 4.
   const sansDeplacement = !!p.controle?.sansDeplacement
-  for (const { v, salarie } of excesRythme.reposSeul)
-    m.coutOrdre(sansDeplacement ? prix.dur : prixDe(salarie).reposSeul, v)
-  for (const { v, salarie } of excesRythme.bloc)
-    m.coutOrdre(sansDeplacement ? prix.dur : prixDe(salarie).bloc, v)
-  for (const v of excesRythme.fort) m.coutOrdre(prix.fort, v)
+  for (const { v } of excesRythme.reposSeul)
+    if (sansDeplacement) m.coutNiveau('rythme', POIDS_FAUTE_DURE, v)
+    else m.coutNiveau('deplacements', POIDS_REPOS_SEUL, v)
+  for (const { v } of excesRythme.bloc)
+    if (sansDeplacement) m.coutNiveau('rythme', POIDS_FAUTE_DURE, v)
+    else m.coutNiveau('deplacements', POIDS_BLOC, v)
+  for (const v of excesRythme.fort) m.coutNiveau('rythme', POIDS_FAUTE_FORTE, v)
   for (const v of excesRythme.dur)
-    m.coutOrdre(p.controle?.heuresDabord ? prix.bloc : prix.dur, v)
+    if (p.controle?.heuresDabord) m.coutNiveau('deplacements', POIDS_BLOC, v)
+    else m.coutNiveau('rythme', POIDS_FAUTE_DURE, v)
   // Petit bruit : à qualité égale, chaque graine donne une autre simulation.
   // Pas à l'affinage : l'objectif d'origine y est borné par celui du calcul,
   // qui contient déjà son bruit (positif) ; sans bruit, le planning du
@@ -2908,20 +2448,18 @@ export function construire(
   }
   m.fermerPlaces()
   if (options.affiner) {
-    // L'objectif d'origine ne dépasse pas la borne…
-    m.ajoute(
-      [...m.objectif].map(([v, c]) => [c, v] as Terme),
-      '<=',
-      options.affiner.borne,
-    )
-    // … les PRIORITÉS non plus (CALCUL PAR PRIORITÉS) : l'affinage ne
-    // rachète jamais une priorité par des horaires gardés…
-    if (options.affiner.borneOrdre !== undefined && m.ordre.size)
-      m.ajoute(
-        [...m.ordre].map(([v, c]) => [c, v] as Terme),
-        '<=',
-        options.affiner.borneOrdre,
-      )
+    // Aucun niveau ne dépasse sa borne : les priorités, celles du calcul (un
+    // horaire gardé ne rachète jamais une priorité), et le confort, le sien
+    // plus la marge de l'affinage…
+    for (const [nom, couts] of m.niveaux()) {
+      const borne = options.affiner.bornes.get(nom)
+      if (borne !== undefined)
+        m.ajoute(
+          [...couts].map(([v, c]) => [c, v] as Terme),
+          '<=',
+          borne,
+        )
+    }
     // … et chaque horaire de plus qu'une personne fait à l'accueil coûte.
     for (const s of p.salaries) {
       const parHoraire = new Map<string, Map<number, Terme[]>>()
@@ -3101,30 +2639,8 @@ function weekendsEquitables(
   })
 }
 
-/** Rythme 5 et 2 strict : le prix le plus bas d'une faute (un motif
- * interdit, `motifsInterdits`, payé par jour en trop), relevé au besoin par
- * `prixFauteRythme`. */
-export const POIDS_RYTHME_BORD = 10_000_000
-
-/** Combien de fois le plus gros coût du modèle coûte une faute au rythme
- * 5 et 2 : plus que les 7 places d'une personne sur une semaine, même au
- * palier le plus haut. */
-export const FOIS_FAUTE_RYTHME = 8
-
-/** Le prix d'une faute au rythme 5 et 2 (relecture du 2026-11-09, banc de
- * décembre) : au moins `POIDS_RYTHME_BORD`, et plus que tout ce qu'une faute
- * pourrait racheter (`FOIS_FAUTE_RYTHME` fois le plus gros coût posé). À
- * 10 000 000 fixe, une place du palier le plus haut (20 736 967 au banc)
- * valait plus qu'une faute : le calcul en faisait pour remplir des places.
- * Dérivé, le calcul fait d'abord le moins de fautes possible, puis remplit
- * les places — jamais l'inverse. */
-export function prixFauteRythme(couts: Iterable<number>): number {
-  let plusGros = 0
-  for (const c of couts) plusGros = Math.max(plusGros, Math.abs(c))
-  return Math.max(POIDS_RYTHME_BORD, FOIS_FAUTE_RYTHME * plusGros + 1)
-}
-
-/** Les fautes au rythme 5 et 2 payées, par prix (`prixOrdre`). */
+/** Les fautes au rythme 5 et 2 payées, par genre : chacune à son niveau
+ * (`construire`, fin). */
 export interface ExcesRythme {
   /** 3 repos ou plus entre deux blocs. */
   dur: string[]
@@ -3136,143 +2652,6 @@ export interface ExcesRythme {
   reposSeul: Array<{ v: string; salarie: string }>
 }
 
-/** Les prix de l'ORDRE DE DÉCISION du 2026-11-10 (voir en tête). */
-export interface PrixOrdre {
-  /** Le plus gros coût posé avant eux. */
-  place: number
-  /** La place la moins chère du palier le plus haut (`seuilPlaces`). */
-  seuil: number
-  /** Un repos seul : un peu moins que `seuil`. */
-  reposSeul: number
-  /** Un bloc de 4 : un peu moins qu'un repos seul. */
-  bloc: number
-  /** Une minute d'heures dues manquante. */
-  minuteDue: number
-  /** Un bloc de 1 à 3 jours : plus que la semaine d'heures dues. */
-  fort: number
-  /** 3 repos ou plus entre deux blocs : deux fois `fort`. */
-  dur: number
-}
-
-/** L'écart entre le repos seul et un bloc de 4, et la moitié de l'écart
- * avec l'équilibre : plus que le petit bruit de la graine sur une semaine
- * (3 par shift), pour que l'ordre ne dépende jamais de la graine. */
-export const ECART_BLOC = 100
-
-/** Sous `seuil`, dans l'ordre : le repos seul (1 de moins), un décalage
- * par un bloc de 4 (`ECART_BLOC` de moins), l'équilibre entre les moments
- * (deux fois). Toujours au moins 1. */
-export function prixSousPlace(
-  seuil: number,
-  quoi: 'reposSeul' | 'bloc' | 'equilibre',
-): number {
-  const ecart =
-    quoi === 'reposSeul' ? 1 : quoi === 'bloc' ? ECART_BLOC : 2 * ECART_BLOC
-  return Math.max(1, seuil - ecart)
-}
-
-/** La place la moins chère du palier le plus haut présent : une place
- * vide d'un besoin (`prix`, plus le décalage du palier) ou une personne de
- * moins qu'un minimum de ce palier (`coutsMinimum`, déjà décalé). Le
- * décalage entre paliers (`paliersPlaces`) dépasse toute place d'un palier
- * plus bas : ce qui coûte un peu moins que ce seuil passe donc devant toute
- * place d'un palier plus bas et derrière toute place du palier le plus
- * haut. Sans place : 0 (`prixOrdre` prend alors le plus gros coût). */
-export function seuilPlaces(
-  creneaux: readonly Creneau[],
-  pl: Paliers,
-  prix: (c: Creneau) => number,
-  rangsMinimum: readonly number[],
-  coutsMinimum: readonly number[],
-  comptent: ReadonlyArray<readonly Creneau[]> = [],
-): number {
-  const h = placesHautes(
-    creneaux,
-    pl,
-    prix,
-    comptent,
-    rangsMinimum,
-    coutsMinimum,
-  )
-  return h.size ? Math.min(...h.values()) : 0
-}
-
-/** Pour chaque créneau qui tient une place du palier le plus haut (sa
- * place, ou un minimum de ce palier où il compte) : le prix de la moins
- * chère de ces places. `seuilPlaces` en est le minimum ; le calcul en tire
- * le seuil de chaque personne (les créneaux qu'elle peut tenir). */
-export function placesHautes(
-  creneaux: readonly Creneau[],
-  pl: Paliers,
-  prix: (c: Creneau) => number,
-  comptent: ReadonlyArray<readonly Creneau[]>,
-  rangsMinimum: readonly number[],
-  coutsMinimum: readonly number[],
-): Map<string, number> {
-  const r = new Map<string, number>()
-  const haut = pl.presents.at(-1)
-  if (haut === undefined) return r
-  const pose = (id: string, v: number) => r.set(id, Math.min(r.get(id) ?? v, v))
-  for (const c of creneaux)
-    if (!c.ferme && !c.accueil && rangPlace(c) === haut)
-      pose(c.id, prix(c) + pl.decalage(haut))
-  rangsMinimum.forEach((rang, i) => {
-    if (rang !== haut || !(coutsMinimum[i] > 0)) return
-    for (const c of comptent[i] ?? []) if (!c.ferme) pose(c.id, coutsMinimum[i])
-    // Sans créneau listé (tests de prix) : un minimum sans porteur.
-    if (!(comptent[i] ?? []).length) pose(`minimum-${i}`, coutsMinimum[i])
-  })
-  return r
-}
-
-/**
- * Les prix de l'ordre de décision (principe de l'utilisateur du
- * 2026-11-10), posés quand tout le reste est écrit, sur `couts` (le reste
- * de l'objectif), `minutesSemaine` (le plus gros contrat de la semaine) et
- * `seuil` (`seuilPlaces`) :
- *   - un REPOS SEUL vaut un peu moins qu'une place du palier le plus haut,
- *     un BLOC DE 4 un peu moins encore (`prixSousPlace`) :
- *     l'un ou l'autre se fait pour une place de ce palier, jamais pour
- *     moins, et le repos seul (aucun jour perdu) passe devant le bloc ;
- *   - une HEURE due vaut plus qu'une place et un repos seul ensemble :
- *     `minuteDue` = (repos seul + P + 1) / 60, au moins
- *     `POIDS_SOUS_CONTRAT` (P = le plus gros coût posé) ;
- *   - un BLOC DE 1 À 3 JOURS (`fort`) vaut plus que la semaine entière du
- *     plus gros contrat en heures dues, et au moins `prixFauteRythme` ;
- *   - 3 REPOS OU PLUS valent deux `fort` : au-dessus de tout, le modèle
- *     restant possible quand les faits l'imposent.
- */
-export function prixOrdre(
-  couts: Iterable<number>,
-  minutesSemaine: number,
-  seuil = 0,
-): PrixOrdre {
-  let place = 1
-  for (const c of couts) place = Math.max(place, Math.abs(c))
-  const s = seuil > 0 ? Math.min(seuil, place) : place
-  const reposSeul = prixSousPlace(s, 'reposSeul')
-  const bloc = prixSousPlace(s, 'bloc')
-  // Le seuil d'une personne ne dépasse jamais `place` : son repos seul non
-  // plus (`prixSousPlace(place)`).
-  const minuteDue = Math.max(
-    POIDS_SOUS_CONTRAT,
-    Math.ceil((prixSousPlace(place, 'reposSeul') + place + 1) / 60),
-  )
-  const fort = Math.max(
-    prixFauteRythme([place]),
-    minuteDue * Math.max(60, minutesSemaine) + 1,
-  )
-  return {
-    place,
-    seuil: s,
-    reposSeul,
-    bloc,
-    minuteDue,
-    fort,
-    dur: 2 * fort + 1,
-  }
-}
-
 /**
  * ÉQUILIBRE ENTRE LES MOMENTS (décision de l'utilisateur du 2026-11-09 :
  * « les moments où tu places quatre personnes le soir alors que personne
@@ -3280,8 +2659,8 @@ export function prixOrdre(
  * moment (au-dessus de son chiffre du tableau) pendant qu'un autre moment
  * est SOUS son minimum. Pour chaque paire (en trop `a`, sous `b`) :
  * w >= min(surplus de a, manque de b), une variable 0/1 choisissant lequel
- * borne, au prix d'une place de `b` par personne (son manque,
- * `coutsMinimum`) : sous une transition, sous une heure due. Aucun nom de
+ * borne, 1 par personne au niveau « équilibre » (après les déplacements de
+ * repos, avant les paliers plus bas). Aucun nom de
  * moment ni de zone : les chiffres du tableau (`Probleme.consignes`). La
  * nuit n'a jamais de surplus (plafond dur). Même définition que
  * `desequilibres` (presence.ts).
@@ -3300,7 +2679,6 @@ function equilibreMoments(
   p: Probleme,
   manqueDe: ReadonlyMap<number, string>,
   surplusDe: ReadonlyMap<number, SurplusMoment>,
-  coutsMinimum: readonly number[],
   comptent: ReadonlyArray<readonly Creneau[]>,
 ): void {
   if (!manqueDe.size || !surplusDe.size) return
@@ -3355,7 +2733,7 @@ function equilibreMoments(
           '>=',
           0,
         )
-        m.coutOrdre(coutsMinimum[b], w)
+        m.coutNiveau('equilibre', 1, w)
       }
     }
   }
@@ -3379,7 +2757,7 @@ function equilibreMoments(
  * DURS (un
  * plafond de travail, que ne pas travailler tient toujours : le modèle
  * reste possible). Les autres motifs se paient, selon leur genre
- * (`genreMotif`, ORDRE DE DÉCISION du 2026-11-10, `prixOrdre`) : 3 repos
+ * (`genreMotif`, ORDRE DE DÉCISION en tête, chacun à son niveau) : 3 repos
  * ou plus au prix `dur`, un bloc de 1 à 3 jours au prix `fort`, un repos
  * seul au prix `reposSeul`, un bloc de 4 au prix `bloc`. Aucun plafond,
  * aucune fenêtre : chaque outil a son prix. Une faute déjà faite par les
@@ -3396,7 +2774,7 @@ function rythmeStrictModele(
   jfrDuJour: ReadonlyMap<number, string>,
   sk: ReadonlyMap<number, string | 1> | null,
   esquisse: SuivantePersonne | undefined,
-  /** Les fautes payées, leur prix posé à la fin (`prixOrdre`). */
+  /** Les fautes payées, rangées à leur niveau à la fin (`construire`). */
   excesRythme: ExcesRythme,
 ): void {
   // `INCONNU` : un jour de l'avenir que rien ne dit (semaine d'après non
@@ -3544,7 +2922,7 @@ function rythmeStrictModele(
         m.ajoute(termes, '<=', Math.max(plafond, 0))
         continue
       }
-      // Les autres motifs se paient (`prixFauteRythme`) : des faits peuvent
+      // Les autres motifs se paient (niveaux rythme et déplacements) : des faits peuvent
       // rendre la règle impossible à tenir (une semaine d'avant hors du
       // rythme, puis une semaine de CFA du lundi au vendredi). Durs, ils
       // laissaient alors la semaine VIDE, en faute quand même, au lieu de la
@@ -4204,7 +3582,7 @@ function reposHebdo(
 }
 
 /**
- * Trous entre équipes (D10, contrat de la vague 1 §3), P2, jamais dur. MÊME
+ * Trous entre équipes (D10, contrat de la vague 1 §3), une place, jamais dur. MÊME
  * définition que l'oracle (`trousDuJour`, `cycles.ts`), réécrite ici sans
  * rien en reprendre :
  *   - postes regardés : ceux qui ont au moins un créneau du matin ou du soir
@@ -4220,17 +3598,17 @@ function reposHebdo(
  *     (la nuit de la veille couvre le petit matin), sur leurs vraies heures.
  * Une variable par suite de quarts d'heure où les mêmes créneaux couvrent :
  *   Σ x(autonomes qui couvrent) + trou >= 1
- * coût `POIDS_TROU_QUART` par quart d'heure de la suite (au prorata d'un
- * quart coupé au bord de la plage).
+ * au prix d'une place (continuité obligatoire, D8), plus
+ * `POIDS_PLACE_QUART` par quart d'heure de la suite (au prorata d'un quart
+ * coupé au bord de la plage).
  *
- * Ajouter une personne ne crée jamais de trou : la dérivation de P1
- * (`pireCoutRemplir`) n'a rien à compter.
+ * Ajouter une personne ne crée jamais de trou.
  */
 function trousEntreEquipes(
   m: Modele,
   p: Probleme,
   termesDe: (c: Creneau, quoi: 'autonomes') => Terme[],
-  continuite?: (couvrants: Creneau[]) => PrixPlace,
+  continuite: (couvrants: Creneau[]) => PrixPlace,
 ): Array<Trou & { v: string }> {
   // Postes à part comptés (un besoin `b…` au matin ou au soir) ; un
   // candidat de l'accueil n'en fait pas un (ses trous sont plus bas).
@@ -4265,7 +3643,7 @@ function trousEntreEquipes(
           debut,
           fin,
           duPoste,
-          POIDS_TROU_QUART,
+          0,
           0,
           Infinity,
           continuite,
@@ -4292,7 +3670,7 @@ function trousDeZone(
   q: Probleme,
   termesDe: (c: Creneau, quoi: 'autonomes') => Terme[],
   zone: string,
-  continuite?: (couvrants: Creneau[]) => PrixPlace,
+  continuite: (couvrants: Creneau[]) => PrixPlace,
 ): Array<Trou & { v: string }> {
   const r: Array<Trou & { v: string }> = []
   const L = momentsDe(p)
@@ -4339,7 +3717,7 @@ function trousDeZone(
           plage.debut,
           plage.fin,
           tenus,
-          POIDS_TROU_QUART,
+          0,
           POIDS_SEUL_QUART,
           finSeul,
           continuite,
@@ -4430,14 +3808,14 @@ function relevesDeZone(
  * lundi matin, la nuit du dimanche d'avant est un fait
  * (`Probleme.veilleDuLundi`). Un manque par zone, entre 0 et 1. Ajouter
  * quelqu'un de jour ne crée jamais de manque ; ajouter un veilleur en crée
- * au plus deux (`pireMoral`).
+ * au plus deux (`POIDS_PASSATION`).
  */
 function passationsVeilleur(
   m: Modele,
   zonesP: ZonePassation[],
   termesDe: (c: Creneau, quoi: 'autonomes') => Terme[],
   borne: (c: Creneau) => number,
-  placeDe: (z: ZonePassation) => { base: number; reste: number } | undefined,
+  placeDe: (z: ZonePassation) => PrixPlace | undefined,
 ): Array<Passation & { v: string }> {
   const r: Array<Passation & { v: string }> = []
   const tenu = new Map<string, Terme[]>()
@@ -4476,9 +3854,8 @@ function passationsVeilleur(
     for (const { termes, tenue } of lignes)
       m.ajoute([[1, v], ...negatifs(termes)], '>=', tenue)
     // Une passation manquée coûte une place (D8) : une PRIORITÉ.
-    const place = placeDe(z)
-    if (place) m.coutPlace(v, place.base, place.reste)
-    else m.coutOrdre(POIDS_PASSATION, v)
+    const place = placeDe(z) ?? { rang: RANG_AUTRE, poids: POIDS_PASSATION }
+    m.coutPlace(v, place.rang, place.poids)
 
     r.push({ jour: z.jour, cote: z.cote, v })
   }
@@ -4857,11 +4234,14 @@ function variablesTrous(
   debut: number,
   fin: number,
   tenus: Creneau[],
-  poidsQuart = POIDS_TROU_QUART,
+  /** Le prix par quart d'heure, au confort (une ouverture ou une
+   * fermeture manquée) ; sans objet quand `continuite` est donnée. */
+  poidsQuart: number,
   poidsSeul = 0,
   finSeul = Infinity,
-  /** Continuité obligatoire (D8) : le prix d'une place nécessaire pour un
-   * trou que ces créneaux couvriraient, en plus du prix au quart d'heure. */
+  /** Continuité obligatoire (D8) : un trou que ces créneaux couvriraient
+   * est une place (son palier, son poids), plus `POIDS_PLACE_QUART` par
+   * quart d'heure. */
   continuite?: (couvrants: Creneau[]) => PrixPlace,
 ): Array<Trou & { v: string }> {
   const r: Array<Trou & { v: string }> = []
@@ -4895,12 +4275,16 @@ function variablesTrous(
     // Un trou entre deux équipes coûte une place (continuité obligatoire,
     // D8) : une PRIORITÉ ; une ouverture ou une fermeture manquée (sans
     // `continuite`) reste du confort.
-    const minutes = Math.round((poidsQuart * (suite.fin - suite.debut)) / QUART)
-    if (!continuite) m.cout(minutes, v)
-    else if (!termes.length) m.coutOrdre(minutes, v)
+    if (!continuite)
+      m.cout(Math.round((poidsQuart * (suite.fin - suite.debut)) / QUART), v)
     else {
-      const { base, reste } = continuite(couvrants)
-      m.coutPlace(v, base, reste + minutes)
+      const { rang, poids } = continuite(couvrants)
+      m.coutPlace(
+        v,
+        rang,
+        poids +
+          Math.round((POIDS_PLACE_QUART * (suite.fin - suite.debut)) / QUART),
+      )
     }
 
     r.push({ poste, jour, debut: suite.debut, fin: suite.fin, v })
@@ -4932,10 +4316,9 @@ type Resolution = Omit<ResultatGeneration, 'etapes'> & {
   sousContrat: Set<string>
   /** Fiches à contrat non indicatif au-dessus de leur contrat. */
   auDessusContrat: Set<string>
-  /** Valeur de l'objectif (HiGHS) ; absente sans solution. */
-  objectif?: number
-  /** Valeur des PRIORITÉS (`Modele.ordre`) ; absente sans solution. */
-  ordre?: number
+  /** La valeur de chaque niveau (`Modele.niveaux`), par nom ; absente
+   * sans solution. */
+  valeurs?: ReadonlyMap<string, number>
 }
 
 const echec = (): Resolution => ({
@@ -4956,62 +4339,50 @@ const echec = (): Resolution => ({
 const TEMPS_MIN = 0.05
 
 /*
- * CALCUL PAR PRIORITÉS (décision de l'utilisateur du 2026-11-10 : « aucun
- * déplacement de repos ne doit être acheté par du confort »). Un repos seul
- * ou un bloc de 4 coûte un peu moins qu'une place ; une somme de confort de
- * la semaine (relève de chacun, personne seule, équité, horaires…) pouvait
- * dépasser ce prix : au banc de 80 scénarios, 8 déplacements sur 252 ne
- * gagnaient ni place, ni trou, ni heure. Aucun prix unique ne l'empêche
- * (le confort cumulé n'a pas de plafond). Le calcul se fait donc en DEUX
- * TEMPS, sur le même modèle :
- *   1. les PRIORITÉS seules (`Modele.ordre`) : le rythme 5 et
- *      2 (3 repos, bloc de 1 à 3 jours, repos seul, bloc de 4), les heures
- *      dues, les places (paliers, minimums de l'accueil, trous entre deux
- *      équipes et passations, au prix d'une place), l'équilibre entre les
- *      moments. Le confort ne compte pas : il ne peut rien acheter ;
- *   2. tout l'objectif (priorités + confort), les priorités BORNÉES à la
- *      valeur trouvée au temps 1 (`bornePriorites`), en partant de la
- *      solution du temps 1 (elle tient la borne : le temps 2 a toujours une
- *      solution, jamais moins bonne).
- * L'ÉQUILIBRE est au temps 1 (demande de l'utilisateur, et mesuré : voir
- * plan/planning-bonnes-pratiques/PRD.md) : il défait « 4 le soir, 0 le
- * matin », que le confort ne voit pas. L'ÉPARPILLEMENT des apprentis est au
- * temps 2 : il se range sous les déplacements de repos dans l'ordre de
- * décision, et au temps 1 une somme d'éparpillements pourrait encore
- * acheter un déplacement — ce que la règle interdit.
- * Temps 1 sans optimum prouvé (temps limite) : le calcul d'avant, en un
- * seul temps sur tout l'objectif, avec le temps qui reste et en partant de
- * la meilleure solution du temps 1 (relecture adverse du 2026-11-10 : une
- * borne non prouvée figerait des priorités peut-être mauvaises et, si le
- * temps 2 ne trouvait pas mieux, rendrait un confort tiré au hasard).
- * Temps 2 sans solution (il part de celle du temps 1, donc jamais en
- * pratique) : la solution du temps 1. Le statut « optimal » ne dit que le
- * temps 2 : il est borné par un temps 1 prouvé.
- * Budget : `PART_PRIORITES` du temps de l'appel au temps 1, le reste au
- * temps 2.
+ * CALCUL PAR NIVEAUX (ordre de décision en tête ; décisions de
+ * l'utilisateur du 2026-11-10 : « aucun déplacement de repos ne doit être
+ * acheté par du confort », puis du 2026-11-11 : plus de prix empilés).
+ * Chaque niveau (`Modele.niveaux`) est résolu à son tour, sur le même
+ * modèle : le premier seul ; sa valeur trouvée devient une BORNE
+ * (`borneNiveau`) ; puis le suivant, en partant de la solution d'avant
+ * (elle tient la borne : chaque niveau a toujours une solution, jamais
+ * moins bonne) ; et ainsi de suite jusqu'au confort. Un niveau ne peut
+ * donc rien acheter à un niveau au-dessus, quel que soit son total.
+ * Un niveau des priorités que la solution connue tient déjà à 0 (tous ses
+ * poids sont positifs) n'est pas résolu : il ne peut pas faire mieux.
+ * Chaque niveau repart d'un modèle NEUF, lu du même texte (mêmes colonnes,
+ * même ordre) : rien de l'état d'avant (coupes, bornes) ne le suit ; il
+ * part de la solution d'avant ARRONDIE (mesuré le 2026-11-10 : partir de la
+ * solution brute, HiGHS a rendu « optimal » un calcul qui ne l'était pas).
+ * Un niveau sans optimum prouvé dans son temps (temps limite) : sa
+ * meilleure solution est gardée, sa valeur devient la borne, les niveaux
+ * suivants continuent ; le résultat est « réalisable », jamais
+ * « optimal ». (Avant, un seul calcul reprenait tout l'objectif : il
+ * demandait des prix qui font passer un niveau devant un autre, retirés.)
+ * Budget : chaque niveau des priorités a au plus `PART_NIVEAU` du temps qui
+ * reste ; le confort, tout ce qui reste.
  */
-export const PART_PRIORITES = 0.5
+export const PART_NIVEAU = 0.5
 
 /**
- * La borne des priorités au temps 2, sur leur valeur `v` au temps 1. Les
- * prix des priorités sont des entiers, et leurs écarts voulus valent au
- * moins 1 :
- *   - 1 entre une place et le repos seul qui la remplirait
- *     (`prixSousPlace`, « un peu sous la place ») : c'est une ÉGALITÉ à
- *     départager, pas une priorité. La marge de 1,5 la laisse au confort,
- *     comme avant (une place contre un repos seul : le shift qui la tient
- *     coûte des heures en plus, un 6e jour… ; le repos seul ne se fait que
- *     si rien ne s'y oppose). Le confort ne peut pas, lui, FAIRE un
- *     déplacement : un déplacement de plus coûte presque une place ;
- *   - 99 entre un repos seul et un bloc de 4, 100 et 200 sous une place pour
- *     le bloc et l'équilibre, au moins `POIDS_SOUS_CONTRAT` par minute due,
- *     une place et plus pour le reste : aucun n'entre dans la marge.
- * Un prix non entier (aucun aujourd'hui) : la même marge, plus un
- * milliardième de `v` (l'arrondi d'un objectif de 10^10).
+ * Les niveaux déjà résolus sont RAPPELÉS dans l'objectif du suivant, avec
+ * ce poids. Leur borne les tient déjà à leur valeur : sur les solutions
+ * permises, ils ne bougent plus : le rappel ne change pas les solutions
+ * optimales, il guide seulement HiGHS (mesuré le 2026-11-11 : sans lui, le
+ * confort seul sous ses bornes prenait jusqu'à 40 s pour une semaine
+ * générée, avec lui 3 à 14 s). Un niveau non prouvé (temps limite) peut
+ * encore s'améliorer au suivant, qui le voit.
  */
-export const MARGE_PRIORITES = 1.5
-export const bornePriorites = (v: number, entiers: boolean) =>
-  v + MARGE_PRIORITES + (entiers ? 0 : 1e-9 * Math.abs(v))
+export const RAPPEL_NIVEAUX = 1000
+
+/**
+ * La borne d'un niveau, sur sa valeur `v` trouvée. Les poids d'un niveau
+ * sont des entiers : deux solutions diffèrent d'au moins 1, la borne garde
+ * donc exactement les solutions aussi bonnes. Un poids non entier : un
+ * millionième de `v` pour l'arrondi du solveur.
+ */
+export const borneNiveau = (v: number, entiers: boolean) =>
+  v + (entiers ? 0.5 : 1e-6 * Math.max(1, Math.abs(v)))
 
 /** Les statuts « optimal » et « impossible » du modèle persistant de
  * `highs`. */
@@ -5023,25 +4394,23 @@ interface SolutionModele {
   statut: 'optimal' | 'realisable' | 'inconnu'
   /** La valeur d'une variable, arrondie (0 si absente). */
   valeur: (v: string) => number
-  objectif?: number
-  ordre?: number
+  valeurs?: ReadonlyMap<string, number>
 }
 
-/** Résout `m` avec HiGHS en au plus `tempsMax` secondes : par PRIORITÉS
- * (voir plus haut) quand `parPriorites` et l'API persistante le
- * permettent, sinon en un seul calcul (l'affinage, un modèle sans
- * priorité). */
+/** Résout `m` avec HiGHS en au plus `tempsMax` secondes, niveau par niveau
+ * (voir plus haut). `seulementDernier` : le confort seul (l'affinage, dont
+ * les priorités sont déjà bornées par des lignes du modèle). */
 function resoudreModele(
   highs: Highs,
   m: Modele,
   {
     tempsMax,
     graine,
-    parPriorites,
+    seulementDernier = false,
   }: {
     tempsMax: number
     graine: number
-    parPriorites: boolean
+    seulementDernier?: boolean
   },
 ): SolutionModele {
   const reglages = {
@@ -5051,150 +4420,192 @@ function resoudreModele(
     output_flag: false,
   }
   const inconnu: SolutionModele = { statut: 'inconnu', valeur: () => 0 }
-  if (!parPriorites || !m.ordre.size || !highs.createModel) {
-    const solution = highs.solve(m.lp(), {
-      ...reglages,
-      time_limit: Math.max(TEMPS_MIN, tempsMax),
-    })
-    // Au temps limite SANS solution, HiGHS rend des colonnes à zéro et un
-    // objectif infini : ce n'est pas une solution (un planning vide
-    // passerait pour réalisable, sans manque).
-    const aSolution =
-      Object.keys(solution.Columns).length > 0 &&
-      Number.isFinite(solution.ObjectiveValue)
-    const statut = !aSolution
-      ? 'inconnu'
-      : solution.Status === 'Optimal'
-        ? 'optimal'
-        : /time limit|iteration limit|interrupt/i.test(solution.Status)
-          ? 'realisable'
-          : 'inconnu'
-    if (statut === 'inconnu') return inconnu
-    const ordre = [...m.ordre].reduce(
-      (t, [v, c]) => t + c * (solution.Columns[v]?.Primal ?? 0),
-      0,
-    )
-    return {
-      statut,
-      valeur: (v) => Math.round(solution.Columns[v]?.Primal ?? 0),
-      objectif: solution.ObjectiveValue,
-      ordre,
-    }
-  }
+  const tous = m.niveaux()
+  const niveaux = seulementDernier ? tous.slice(-1) : tous
   const debut = Date.now()
   const reste = () =>
     Math.max(TEMPS_MIN, tempsMax - (Date.now() - debut) / 1000)
-  const texte = m.lp()
-  const creer = (source: { format: 'lp'; data: string }) =>
-    (highs.createModel as NonNullable<Highs['createModel']>).call(highs, source)
-  let h = creer({ format: 'lp', data: texte })
-  try {
-    const n = h.getDimensions().numCols
-    const index = new Map<string, number>()
-    for (let i = 0; i < n; i++) index.set(h.getColName(i), i)
-    const couts = (source: ReadonlyMap<string, number>) => {
-      const c = new Float64Array(n)
-      for (const [v, k] of source) {
-        const i = index.get(v)
-        if (i !== undefined) c[i] += k
-      }
-      return c
-    }
-    const total = couts(m.objectif)
-    const ordre = couts(m.ordre)
-    const produit = (c: Float64Array, x: Float64Array) => {
+  const tempsDe = (k: number) =>
+    k === niveaux.length - 1
+      ? reste()
+      : Math.max(TEMPS_MIN, reste() * PART_NIVEAU)
+  const entiers = (couts: ReadonlyMap<string, number>) =>
+    [...couts.values()].every(Number.isInteger)
+  const positifs = (couts: ReadonlyMap<string, number>) =>
+    [...couts.values()].every((c) => c >= 0)
+
+  // Sans API persistante (un faux solveur des tests) : un calcul par
+  // niveau sur le texte LP, les niveaux d'avant en lignes de plus.
+  if (!highs.createModel) {
+    let valeursX: Map<string, number> | null = null
+    let prouve = true
+    const bornes: Array<{ couts: ReadonlyMap<string, number>; haut: number }> =
+      []
+    const valeurDe = (couts: ReadonlyMap<string, number>) => {
       let t = 0
-      for (let i = 0; i < n; i++) if (c[i]) t += c[i] * x[i]
+      for (const [v, c] of couts) t += c * (valeursX?.get(v) ?? 0)
       return t
     }
-    const toutes = { kind: 'range' as const, from: 0, to: n - 1 }
-    // Une solution connue (« feasible ») : sa copie, sinon null.
-    const lire = () =>
-      Number(h.info.get('primal_solution_status')) === 2
-        ? Float64Array.from(h.getSolution().colValue)
-        : null
-    const rendre = (
-      x: Float64Array,
-      statut: 'optimal' | 'realisable',
-    ): SolutionModele => ({
-      statut,
-      valeur: (v) => {
-        const i = index.get(v)
-        return i === undefined ? 0 : Math.round(x[i])
-      },
-      objectif: produit(total, x),
-      ordre: produit(ordre, x),
-    })
-    // Temps 1 : les priorités seules.
-    h.changeColsCost(toutes, ordre)
-    h.options.set({
-      ...reglages,
-      time_limit: Math.max(TEMPS_MIN, tempsMax * PART_PRIORITES),
-    })
-    const s1 = h.run().modelStatus
-    if (s1 === STATUT_IMPOSSIBLE) return inconnu
-    const x1 = lire()
-    // Le temps 2 sur un modèle NEUF, lu du même texte (mêmes colonnes, dans
-    // le même ordre ; son objectif est tout l'objectif) : rien de l'état du
-    // temps 1 (coupes, bornes) ne le suit.
-    h.dispose()
-    h = creer({ format: 'lp', data: texte })
-    h.options.set(reglages)
-    if (
-      h.getDimensions().numCols !== n ||
-      h.getColName(n - 1) !== [...index.keys()][n - 1]
-    )
-      throw new Error('modèle du temps 2 différent du temps 1')
-    if (!x1 || s1 !== STATUT_OPTIMAL) {
-      // Temps 1 sans optimum prouvé (temps limite) : un seul calcul sur
-      // tout l'objectif, comme avant, depuis sa meilleure solution s'il en
-      // a une. Sans optimum, aucune borne ne serait sûre : elle figerait des
-      // priorités encore mauvaises, avec un confort calculé au hasard.
-      if (x1) h.setSolution({ colValue: x1 })
-      h.options.set({ time_limit: reste() })
-      const s = h.run().modelStatus
-      const x = lire()
-      if (x) return rendre(x, s === STATUT_OPTIMAL ? 'optimal' : 'realisable')
-      return x1 ? rendre(x1, 'realisable') : inconnu
-    }
-    // Temps 2 : tout l'objectif, priorités bornées, depuis la solution du
-    // temps 1.
-    const indices: number[] = []
-    const valeurs: number[] = []
-    let entiers = true
-    ordre.forEach((c, i) => {
-      if (c) {
-        indices.push(i)
-        valeurs.push(c)
-        if (!Number.isInteger(c)) entiers = false
+    for (let k = 0; k < niveaux.length; k++) {
+      const [, couts] = niveaux[k]
+      const dernier = k === niveaux.length - 1
+      if (valeursX && !dernier && positifs(couts) && valeurDe(couts) <= 1e-6) {
+        bornes.push({ couts, haut: borneNiveau(0, entiers(couts)) })
+        continue
       }
+      // Les niveaux déjà résolus, rappelés (`RAPPEL_NIVEAUX`).
+      const objectif = new Map(couts)
+      for (const b of bornes)
+        for (const [v, c] of b.couts)
+          objectif.set(v, (objectif.get(v) ?? 0) + RAPPEL_NIVEAUX * c)
+      const solution = highs.solve(m.lp(objectif, bornes), {
+        ...reglages,
+        time_limit: tempsDe(k),
+      })
+      // Au temps limite SANS solution, HiGHS rend des colonnes à zéro et un
+      // objectif infini : ce n'est pas une solution (un planning vide
+      // passerait pour réalisable, sans manque).
+      const aSolution =
+        Object.keys(solution.Columns).length > 0 &&
+        Number.isFinite(solution.ObjectiveValue)
+      const statut = !aSolution
+        ? 'inconnu'
+        : solution.Status === 'Optimal'
+          ? 'optimal'
+          : /time limit|iteration limit|interrupt/i.test(solution.Status)
+            ? 'realisable'
+            : 'inconnu'
+      if (statut === 'inconnu') {
+        if (!valeursX) return inconnu
+        prouve = false
+      } else {
+        valeursX = new Map(
+          Object.entries(solution.Columns).map(([v, c]) => [v, c.Primal ?? 0]),
+        )
+        if (statut !== 'optimal') prouve = false
+      }
+      bornes.push({ couts, haut: borneNiveau(valeurDe(couts), entiers(couts)) })
+    }
+    if (!valeursX) return inconnu
+    const fin = valeursX
+    return {
+      statut: prouve ? 'optimal' : 'realisable',
+      valeur: (v) => Math.round(fin.get(v) ?? 0),
+      valeurs: new Map(tous.map(([nom, couts]) => [nom, valeurDe(couts)])),
+    }
+  }
+
+  const texte = m.lp()
+  const creer = () =>
+    (highs.createModel as NonNullable<Highs['createModel']>).call(highs, {
+      format: 'lp',
+      data: texte,
     })
-    // Départ : la solution du temps 1 ARRONDIE (ses variables valent des
-    // entiers à la précision du solveur près). Mesuré : partir de la
-    // solution brute, HiGHS a rendu « optimal » un temps 2 qui ne l'était
-    // pas (banc de décembre, une graine sur trois, 4,7 × 10^8 de confort en
-    // trop sous les mêmes priorités). La borne prend la plus haute des deux
-    // valeurs : jamais plus serrée que la solution réelle.
-    const x1r = x1.map(Math.round)
-    h.addRow(
-      -Infinity,
-      bornePriorites(
-        Math.max(produit(ordre, x1), produit(ordre, x1r)),
-        entiers,
-      ),
-      {
-        indices: Int32Array.from(indices),
-        values: Float64Array.from(valeurs),
-      },
+  let h = creer()
+  const n = h.getDimensions().numCols
+  const index = new Map<string, number>()
+  for (let i = 0; i < n; i++) index.set(h.getColName(i), i)
+  const derniere = h.getColName(n - 1)
+  h.dispose()
+  const vecteur = (source: ReadonlyMap<string, number>) => {
+    const c = new Float64Array(n)
+    for (const [v, k] of source) {
+      const i = index.get(v)
+      if (i !== undefined) c[i] += k
+    }
+    return c
+  }
+  const produit = (c: Float64Array, x: Float64Array) => {
+    let t = 0
+    for (let i = 0; i < n; i++) if (c[i]) t += c[i] * x[i]
+    return t
+  }
+  const toutes = { kind: 'range' as const, from: 0, to: n - 1 }
+  /** La solution connue (brute) et son arrondi, point de départ du niveau
+   * suivant. */
+  let x: Float64Array | null = null
+  let prouve = true
+  const lignes: Array<{ c: Float64Array; haut: number }> = []
+  /** Les colonnes d'un niveau à poids positifs tenu à 0 : chacune vaut 0
+   * (toutes les variables sont positives), sans ligne de borne. */
+  const nulles: number[] = []
+  const borner = (c: Float64Array, v: number, ent: boolean, pos: boolean) => {
+    if (pos && v <= 1e-6) c.forEach((k, i) => k > 0 && nulles.push(i))
+    else lignes.push({ c, haut: borneNiveau(v, ent) })
+  }
+  for (let k = 0; k < niveaux.length; k++) {
+    const [, couts] = niveaux[k]
+    const c = vecteur(couts)
+    const dernier = k === niveaux.length - 1
+    // Déjà au mieux : un niveau à poids positifs tenu à 0.
+    if (x && !dernier && positifs(couts) && produit(c, x) <= 1e-6) {
+      borner(c, 0, true, true)
+      continue
+    }
+    h = creer()
+    try {
+      if (h.getDimensions().numCols !== n || h.getColName(n - 1) !== derniere)
+        throw new Error('modèle d’un niveau différent du premier')
+      h.options.set({ ...reglages, time_limit: tempsDe(k) })
+      for (const i of nulles) h.changeColBounds(i, 0, 0)
+      for (const l of lignes) {
+        const indices: number[] = []
+        const valeurs: number[] = []
+        l.c.forEach((v, i) => {
+          if (v) {
+            indices.push(i)
+            valeurs.push(v)
+          }
+        })
+        h.addRow(-Infinity, l.haut, {
+          indices: Int32Array.from(indices),
+          values: Float64Array.from(valeurs),
+        })
+      }
+      // Les niveaux déjà résolus, rappelés dans l'objectif (`RAPPEL_NIVEAUX`).
+      const objectif = Float64Array.from(c)
+      for (const l of lignes)
+        l.c.forEach((v, i) => (objectif[i] += RAPPEL_NIVEAUX * v))
+      h.changeColsCost(toutes, objectif)
+      if (x) h.setSolution({ colValue: x.map(Math.round) })
+      const s = h.run().modelStatus
+      const xk =
+        s !== STATUT_IMPOSSIBLE &&
+        Number(h.info.get('primal_solution_status')) === 2
+          ? Float64Array.from(h.getSolution().colValue)
+          : null
+      if (!xk) {
+        // Rien de mieux (ou rien du tout au premier niveau).
+        if (!x) return inconnu
+        prouve = false
+      } else {
+        x = xk
+        if (s !== STATUT_OPTIMAL) prouve = false
+      }
+    } finally {
+      h.dispose()
+    }
+    // La borne prend la plus haute des deux valeurs (brute, arrondie) :
+    // jamais plus serrée que la solution réelle.
+    const xr = x.map(Math.round)
+    borner(
+      c,
+      Math.max(produit(c, x), produit(c, xr)),
+      entiers(couts),
+      positifs(couts),
     )
-    h.setSolution({ colValue: x1r })
-    h.options.set({ time_limit: reste() })
-    const s2 = h.run().modelStatus
-    const x2 = lire()
-    if (!x2) return rendre(x1, 'realisable')
-    return rendre(x2, s2 === STATUT_OPTIMAL ? 'optimal' : 'realisable')
-  } finally {
-    h.dispose()
+  }
+  if (!x) return inconnu
+  const fin = x
+  return {
+    statut: prouve ? 'optimal' : 'realisable',
+    valeur: (v) => {
+      const i = index.get(v)
+      return i === undefined ? 0 : Math.round(fin[i])
+    },
+    valeurs: new Map(
+      tous.map(([nom, couts]) => [nom, produit(vecteur(couts), fin)]),
+    ),
   }
 }
 
@@ -5269,12 +4680,12 @@ function resoudreUneFois(
     TEMPS_MIN,
     Math.min(plafond, (echeance - Date.now()) / 1000),
   )
-  // CALCUL PAR PRIORITÉS (plus haut) ; l'affinage, lui, en un seul calcul :
-  // ses priorités sont déjà bornées (`borneOrdre`).
+  // CALCUL PAR NIVEAUX (plus haut) ; l'affinage, lui, le confort seul :
+  // ses priorités sont déjà bornées (`OptionsConstruction.affiner`).
   const solution = resoudreModele(highs, modele, {
     tempsMax,
     graine: p.graine,
-    parPriorites: !affiner,
+    seulementDernier: !!affiner,
   })
   const { statut, valeur } = solution
   if (statut === 'inconnu') return echec()
@@ -5309,8 +4720,7 @@ function resoudreUneFois(
   const restes = reunir(trous)
   return {
     statut,
-    objectif: solution.objectif,
-    ordre: solution.ordre,
+    valeurs: solution.valeurs,
     affectations,
     manques,
     ecartTotalMinutes: ecarts.reduce(
@@ -5367,7 +4777,8 @@ function affiner(
   r: Resolution,
 ): Resolution {
   if (AFFINAGE_TOLERANCE <= 0) return r
-  if (r.statut !== 'optimal' || r.objectif === undefined) return r
+  const confort = r.valeurs?.get('confort')
+  if (r.statut !== 'optimal' || !r.valeurs || confort === undefined) return r
   if ((echeance - Date.now()) / 1000 <= 1) return r
   const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
   // Rien à affiner sans shift de l'accueil (aucun second calcul).
@@ -5402,18 +4813,19 @@ function affiner(
     p,
     {
       permis,
-      borne: r.objectif + AFFINAGE_TOLERANCE,
-      // Les priorités du calcul, jamais dégradées (CALCUL PAR PRIORITÉS).
-      ...(r.ordre !== undefined
-        ? { borneOrdre: bornePriorites(r.ordre, true) }
-        : {}),
+      // Les priorités du calcul, jamais dégradées (leurs poids sont
+      // entiers, `borneNiveau`) ; le confort, à la marge près.
+      bornes: new Map(
+        [...r.valeurs].map(([nom, v]) => [
+          nom,
+          nom === 'confort' ? v + AFFINAGE_TOLERANCE : borneNiveau(v, true),
+        ]),
+      ),
     },
   )
   // Seulement un affinage PROUVÉ (relecture du 2026-11-05) : arrêté au temps
   // limite, il pourrait coûter la marge sans rien gagner.
-  return r2.statut === 'optimal'
-    ? { ...r2, objectif: r.objectif, ordre: r.ordre }
-    : r
+  return r2.statut === 'optimal' ? { ...r2, valeurs: r.valeurs } : r
 }
 
 /** Ce qui reste à tenir et qu'un remplaçant pourrait tenir : places
@@ -5434,8 +4846,7 @@ const rendre = (
     manqueMinimum: _,
     sousContrat: _s,
     auDessusContrat: _a,
-    objectif: _o,
-    ordre: _p,
+    valeurs: _v,
     ...r
   }: Resolution,
   etapes: 1 | 2,
@@ -5469,8 +4880,8 @@ const rendre = (
  *         manque des heures dues est libre et pourrait tenir un créneau,
  *         et où une place à remplaçants est tenue par quelqu'un qui peut la
  *         céder sans perdre d'heures dues (extra, ou au-dessus de son
- *         contrat) : `remplacantsPourHeures`. P3 passe devant P4 : 7 h dues
- *         valent 168 000, un remplaçant 2 000. Le jour entier, pour la
+ *         contrat) : `remplacantsPourHeures`. Les heures dues sont un
+ *         niveau au-dessus du remplaçant (confort). Le jour entier, pour la
  *         chaîne d'un cran : elle prend le remplaçant, OU une autre passe
  *         sur le remplaçant pour lui laisser l'horaire imposé ;
  *   - si aucun des deux, la solution du temps 1 est rendue.
@@ -5480,25 +4891,21 @@ const rendre = (
  * remplaçant coûte toujours POIDS_REMPLACANT (2 000) de plus, ne rapporte
  * jamais plus d'heures dues que le besoin ni n'épargne d'heures en plus
  * (`minutesDues`, `minutesEnPlus`), et ne sert qu'à tenir une place, un
- * minimum, fermer un trou (P1, P2), donner des heures dues (P3) ou éviter
- * un dépannage (P4 : part fixe au-dessus du remplaçant). Les cinq sont
- * regardés ci-dessus. Ce que le problème complet peut encore gagner, contre
- * au moins 2 000 par remplaçant :
- *   - P3 par une chaîne d'un jour à l'autre (une personne passe sur un
- *     remplaçant un AUTRE jour que celui où il manque des heures à
- *     l'autre), ou à travers quelqu'un qui est pile à son contrat, ou pour
- *     retirer des heures en plus ou un 6e jour à quelqu'un ;
- *   - P2 maximum d'une consigne (un horaire voisin d'une autre période) ;
- *   - P5 confort (repos accolés, équité, jours habituels), plafonné par
+ * minimum, fermer un trou, donner des heures dues (niveau essentiel) ou
+ * éviter un dépannage (confort : part fixe au-dessus du remplaçant). Les
+ * cinq sont regardés ci-dessus. Ce que le problème complet peut encore
+ * gagner :
+ *   - des heures dues par une chaîne d'un jour à l'autre (une personne passe
+ *     sur un remplaçant un AUTRE jour que celui où il manque des heures à
+ *     l'autre), ou à travers quelqu'un qui est pile à son contrat ; retirer
+ *     des heures en plus ou un 6e jour à quelqu'un (confort) ;
+ *   - le maximum d'un moment (un horaire voisin d'une autre période) ;
+ *   - du confort (repos accolés, équité, jours habituels), plafonné par
  *     shift sous la part fixe d'un dépannage, donc rarement plus de 2 000.
  * Dans ces cas l'optimum du problème complet PEUT différer de celui rendu :
  * « l'horaire exact tant qu'il suffit » ; chaque place reste tenue avec le
  * code demandé, rien n'est vide ni hors la loi, et aucune heure due n'est
  * perdue qu'un remplaçant du même jour aurait donnée.
- * Les poids dérivés (`coutPlaceVideGroupe`, `coutManqueMinimum`, maximum
- * des consignes) sont calculés sur les créneaux de CHAQUE problème : les
- * deux premiers ne jouent qu'en cas de manque (alors problème complet) ; le
- * maximum garde son rang P2.
  *
  * Budget : `tempsMaxSecondes` couvre les deux temps, construction des
  * modèles comprise (le temps laissé à HiGHS est compté après elle). Le

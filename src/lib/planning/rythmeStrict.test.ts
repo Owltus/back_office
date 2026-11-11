@@ -177,11 +177,26 @@ const SEMAINE = [0, 1, 2, 3, 4, 5, 6]
 describe('le calcul', () => {
   it('le stagiaire : après un dimanche de repos, le lundi aussi, puis 5 jours', () => {
     const s = personne({ etatsAvant: 'rTTTTTr', joursSemainePrecedente: 5 })
-    const { p, r } = resoudre(s, SEMAINE)
+    // Sans place le lundi ni le dimanche : le rythme seul décide.
+    const { p, r } = resoudre(s, [1, 2, 3, 4, 5])
     expect(tenus(r)).toEqual([1, 2, 3, 4, 5])
     expect(lue(p, r.affectations)).toEqual([])
     expect(
       violations(p, r.affectations).filter((v) => v.regle === 'RYTHME-5-2'),
+    ).toEqual([])
+    // Une place chaque jour : une place passe avant un déplacement de repos
+    // (CALCUL PAR NIVEAUX, 2026-11-11). Deux repos seuls (le dimanche
+    // d'avant, le samedi) pour deux places de plus, jamais une faute.
+    const tout = resoudre(s, SEMAINE)
+    expect(tenus(tout.r)).toEqual([0, 1, 2, 3, 4, 6])
+    expect(lue(tout.p, tout.r.affectations).map((f) => f.genre)).toEqual([
+      'repos-seul',
+      'repos-seul',
+    ])
+    expect(
+      violations(tout.p, tout.r.affectations).filter(
+        (v) => v.regle === 'RYTHME-5-2',
+      ),
     ).toEqual([])
   })
   it('refusé : la semaine r TT r TTT du stagiaire est dite, et elle bloque', () => {
@@ -309,11 +324,29 @@ describe('le calcul', () => {
       graine: 1,
     })
     const r = generer(p, highs)
-    expect(tenus(r)).toEqual([0, 1, 2, 3, 4])
-    expect(lue(p, r.affectations)).toEqual([])
+    // Les deux places du week-end passent avant un déplacement de repos
+    // (CALCUL PAR NIVEAUX, 2026-11-11) : un bloc de 4 et un repos seul, le
+    // jeudi souhaité tenu, le vendredi souhaité laissé. Jamais « TTT rr
+    // TT » (un bloc court, que le lundi posé sauté laissait gratuit).
+    expect(tenus(r)).toEqual([0, 1, 2, 3, 5, 6])
+    const fautes = lue(p, r.affectations)
+    expect(fautes.map((f) => [f.genre, f.fin - f.debut + 1])).toEqual([
+      ['travail-court', 4],
+      ['repos-seul', 1],
+    ])
     // Accepté aussi : sans le lundi posé, le même choix.
     const libre = probleme({ salaries: [s], creneaux, graine: 1 })
-    expect(tenus(generer(libre, highs))).toEqual([0, 1, 2, 3, 4])
+    expect(tenus(generer(libre, highs))).toEqual([0, 1, 2, 3, 5, 6])
+    // Sans place le week-end : le bloc de 5 du lundi au vendredi.
+    const semaine = probleme({
+      salaries: [s],
+      creneaux: creneaux.slice(0, 5),
+      imposees: new Set(['a|j0']),
+      graine: 1,
+    })
+    const sr = generer(semaine, highs)
+    expect(tenus(sr)).toEqual([0, 1, 2, 3, 4])
+    expect(lue(semaine, sr.affectations)).toEqual([])
   })
   it('toujours possible : une semaine d’avant qui impose l’impossible coûte, ne bloque pas', () => {
     // 2 jours à la fin de la semaine d'avant : le bloc doit aller au mardi,

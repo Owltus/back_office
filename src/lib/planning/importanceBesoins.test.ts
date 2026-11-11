@@ -3,9 +3,8 @@ import { beforeAll, describe, expect, it } from 'vitest'
 
 import { verifierReglages } from '#/lib/planning/coherence.ts'
 import {
+  construire,
   generer,
-  paliersPlaces,
-  TERMES_PAR_SHIFT,
   RANG_AUTRE,
   rangPlace,
 } from '#/lib/planning/generateur.ts'
@@ -118,13 +117,17 @@ describe('importance des postes : oui / non (D11, 2026-11-05)', () => {
     expect(rangImportance(false)).toBe(RANG_AUTRE)
     expect(rangImportance(true)).toBeGreaterThan(RANG_AUTRE)
   })
-  it('à réglage égal : la place la plus chère à laisser vide', () => {
-    expect(tenus(resoudre(places('si_possible', 'si_possible')))).toEqual(['a'])
-    expect(tenus(resoudre(places('indispensable', 'indispensable')))).toEqual([
-      'a',
-    ])
+  it('à réglage égal : une place vaut une place, le confort choisit', () => {
+    // Deux places au même niveau, une personne : l'une est tenue, et le
+    // même choix quel que soit le réglage commun (le confort tranche : la
+    // plus courte, moins d'heures au-delà d'un contrat nul).
+    const egal = tenus(resoudre(places('si_possible', 'si_possible')))
+    expect(egal).toHaveLength(1)
+    expect(tenus(resoudre(places('indispensable', 'indispensable')))).toEqual(
+      egal,
+    )
     // L'ancienne valeur ne fait plus un palier à part.
-    expect(tenus(resoudre(places('important', 'si_possible')))).toEqual(['a'])
+    expect(tenus(resoudre(places('important', 'si_possible')))).toEqual(egal)
   })
   it('un poste indispensable est rempli avant un poste qui ne l’est pas', () => {
     const r = resoudre(places('si_possible', 'indispensable'))
@@ -140,26 +143,28 @@ describe('importance des postes : oui / non (D11, 2026-11-05)', () => {
     expect(tenus(r)).toEqual(['a', 'b'])
     expect(r.manques).toEqual([])
   })
-  it('paliers : un seul palier = aucun décalage, sinon un pas au-dessus du plus cher', () => {
-    const seul = paliersPlaces(places('important', 'si_possible'), [], () => 7)
-    expect(seul.pas).toBe(0)
-    expect(seul.presents).toEqual([RANG_AUTRE])
-    expect(seul.decalage(RANG_AUTRE)).toBe(0)
-    const deux = paliersPlaces(
-      places('si_possible', 'indispensable'),
-      [{ cle: 'z', plus: 10, rang: rangImportance(true) }],
-      (c) => (c.id === 'a' ? 100 : 50),
-    )
-    expect(deux.presents).toEqual([1, 2])
-    // Au-dessus de tout ce qu’un shift peut gagner d’un palier plus bas
-    // (`TERMES_PAR_SHIFT` places, 2026-11-10).
-    expect(deux.pas).toBe(TERMES_PAR_SHIFT * (100 + 2 * 10) + 1)
-    expect(deux.decalage(1)).toBe(0)
-    expect(deux.decalage(2)).toBe(deux.pas)
-    // Passation au palier le plus haut : décalée, et la nuit la paie deux fois.
-    expect(deux.passation(2)).toBe(deux.pas)
-    expect(deux.extraNuit(2)).toBe(10 + deux.pas)
-    expect(deux.extraNuit(1)).toBe(10)
+  it('paliers : un niveau chacun, le plus haut avec les heures dues', () => {
+    const niveaux = (cs: Creneau[]) => {
+      const { modele, manque } = construire(
+        probleme({ creneaux: cs, salaries: [personne('p0', 0)] }),
+      )
+      const n = modele.niveaux()
+      return Object.fromEntries(
+        cs.map((c) => [c.id, n.find(([, m]) => m.has(manque.get(c.id)!))?.[0]]),
+      )
+    }
+    // Un seul palier : au niveau essentiel, comme les heures dues.
+    expect(niveaux(places('important', 'si_possible'))).toEqual({
+      a: 'essentiel',
+      b: 'essentiel',
+    })
+    // Deux paliers : le plus bas à son niveau, après les déplacements de
+    // repos et l'équilibre, avant le confort.
+    expect(niveaux(places('si_possible', 'indispensable'))).toEqual({
+      a: `places-${RANG_AUTRE}`,
+      b: 'essentiel',
+    })
+    expect(rangImportance(true)).toBeGreaterThan(RANG_AUTRE)
   })
   it('un poste neuf indispensable, au nom quelconque, est traité comme la Réception', () => {
     // Aucun nom ni id de poste dans le moteur : seul le réglage compte.

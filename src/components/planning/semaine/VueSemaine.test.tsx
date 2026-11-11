@@ -17,6 +17,10 @@ import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
 import { horaireTest } from '#/lib/planning/test/codesTest.ts'
 import type { Affectation } from '#/lib/planning/types.ts'
 
+// Un vrai calcul, niveau par niveau (CALCUL PAR NIVEAUX du 2026-11-11, à
+// peu près deux fois le temps d'avant) : lent quand toute la suite tourne.
+vi.setConfig({ testTimeout: 30_000 })
+
 /*
  * Vue semaine sur l'hôtel fictif, analysée pour de vrai (`analyser`), avec le
  * service et les hooks d'accès simulés : la base n'est pas touchée. Oracles :

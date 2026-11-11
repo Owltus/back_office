@@ -1,8 +1,9 @@
 import highsLoader from 'highs'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import { bornePriorites, generer } from '#/lib/planning/generateur.ts'
+import { borneNiveau, generer } from '#/lib/planning/generateur.ts'
 import type { Highs } from '#/lib/planning/generateur.ts'
+import type { Probleme } from '#/lib/planning/modele.ts'
 import { analyser, preparerGeneration } from '#/lib/planning/semaine.ts'
 import type { SemaineOut } from '#/lib/planning/semaine.ts'
 import {
@@ -12,10 +13,12 @@ import {
 import type { Affectation } from '#/lib/planning/types.ts'
 
 /*
- * CALCUL PAR PRIORITÉS (décision de l'utilisateur du 2026-11-10) : aucun
- * déplacement de repos n'est acheté par du confort. Oracle : le calcul
- * d'avant, en UN seul temps, s'obtient avec le même HiGHS sans son API
- * persistante (`resoudreModele` retombe alors sur un seul calcul).
+ * CALCUL PAR NIVEAUX (décisions de l'utilisateur du 2026-11-10 et du
+ * 2026-11-11) : aucun déplacement de repos n'est acheté par du confort, ni
+ * par l'équilibre. Oracle : le contrôle « sans déplacement »
+ * (`Probleme.controle.sansDeplacement`, un repos seul ou un bloc de 4 au
+ * rang de 3 repos) ; un déplacement de plus que lui doit gagner une place,
+ * un trou ou des heures dues.
  */
 
 let highs: Highs
@@ -23,15 +26,15 @@ beforeAll(async () => {
   highs = (await highsLoader()) as unknown as Highs
 })
 
-/** La semaine de l'hôtel tiré par `graine`, calculée par `solveur`. */
-function calculer(graine: number, solveur: Highs): SemaineOut {
+/** La semaine de l'hôtel tiré par `graine`, calculée avec `controle`. */
+function calculer(graine: number, controle?: Probleme['controle']): SemaineOut {
   const d = semaineGeneree(graine)
   const g = preparerGeneration(d, {
     aujourdhui: AUJOURDHUI_GENERE,
     graine: 1,
     horizon: { suivanteRecalculee: false },
   })
-  const r = generer(g.probleme, solveur)
+  const r = generer({ ...g.probleme, controle }, highs)
   const nouveaux: Affectation[] = g
     .traduire(r)
     .filter((n) => n.jour >= g.depuis)
@@ -47,7 +50,7 @@ const compte = (s: SemaineOut, regles: string[]) =>
     (t, b) => t + b.alertes.filter((a) => regles.includes(a.regle)).length,
     0,
   )
-/** Ce que les priorités regardent, sauf les déplacements. */
+/** Ce que les niveaux au-dessus des déplacements regardent. */
 const priorites = (s: SemaineOut) => ({
   places: s.stats.places - s.stats.pourvues,
   trous: s.trous.length,
@@ -55,37 +58,40 @@ const priorites = (s: SemaineOut) => ({
     (t, b) => t + Math.max(0, b.minutes_contrat - b.minutes),
     0,
   ),
-  desequilibres: s.desequilibres?.length ?? 0,
   infractions: s.stats.infractions,
 })
 const DEPLACEMENTS = ['RYTHME-REPOS-SEUL', 'RYTHME-TRANSITION']
 
-describe('calcul par priorités : le confort n’achète aucun déplacement', () => {
-  it('refusé avant, accepté après : un déplacement payé en partie par le confort disparaît', () => {
-    // Hôtel fictif n° 41 du banc : en un seul temps, un repos est déplacé
-    // sans gagner ni place, ni trou, ni heure due ; il ne gagne qu'un
-    // équilibre entre les moments (qui vaut moins qu'un déplacement, ordre
-    // de décision) et le confort paie le reste. Par priorités, il n'est
-    // plus fait ; places, trous, heures dues et infractions sont les mêmes.
-    const avant = calculer(41, {
-      solve: (lp, o) => highs.solve(lp, o),
-    })
-    const apres = calculer(41, highs)
-    expect(compte(avant, DEPLACEMENTS)).toBe(1)
-    expect(compte(apres, DEPLACEMENTS)).toBe(0)
-    const { desequilibres: da, ...pa } = priorites(avant)
-    const { desequilibres: dn, ...pn } = priorites(apres)
-    expect(pn).toEqual(pa)
-    expect(dn).toBe(da + 1)
-  }, 60_000)
+describe('calcul par niveaux : le confort n’achète aucun déplacement', () => {
+  it('un déplacement de plus que le contrôle gagne une place, un trou ou des heures', () => {
+    // Hôtel n° 41 du banc : avant le calcul par priorités, un repos y était
+    // déplacé pour un équilibre et du confort ; n° 12 : plusieurs
+    // déplacements, chacun pour une place.
+    for (const graine of [41, 12]) {
+      const n = calculer(graine)
+      const c = calculer(graine, { sansDeplacement: true })
+      const pn = priorites(n)
+      const pc = priorites(c)
+      expect(pn.infractions).toBe(0)
+      if (compte(n, DEPLACEMENTS) > compte(c, DEPLACEMENTS))
+        expect(
+          pn.places < pc.places || pn.trous < pc.trous || pn.heures < pc.heures,
+        ).toBe(true)
+      else expect(pn).toEqual(pc)
+      // Jamais moins bien que le contrôle sur ce qui passe avant.
+      expect(pn.places).toBeLessThanOrEqual(pc.places)
+      expect(pn.heures).toBeLessThanOrEqual(pc.heures)
+    }
+  }, 120_000)
 
-  it('la borne des priorités : une égalité de 1 au confort, rien de plus', () => {
-    // 1 : une place contre le repos seul qui la remplirait, une égalité
-    // que le confort départage. 99 (repos seul / bloc de 4), 100, 200 et
-    // une minute due (au moins 400) restent des priorités.
+  it('la borne d’un niveau : exacte pour des poids entiers', () => {
+    // Deux solutions d'un niveau à poids entiers diffèrent d'au moins 1 :
+    // la borne garde les aussi bonnes, jamais une moins bonne.
     const v = 1e10
-    expect(bornePriorites(v, true)).toBeGreaterThan(v + 1)
-    expect(bornePriorites(v, true)).toBeLessThan(v + 2)
-    expect(bornePriorites(v, false)).toBeLessThan(v + 99)
+    expect(borneNiveau(v, true)).toBeGreaterThan(v)
+    expect(borneNiveau(v, true)).toBeLessThan(v + 1)
+    expect(borneNiveau(v, false)).toBeGreaterThan(v)
+    expect(borneNiveau(v, false)).toBeLessThan(v + 1e5)
+    expect(borneNiveau(0, false)).toBeGreaterThan(0)
   })
 })

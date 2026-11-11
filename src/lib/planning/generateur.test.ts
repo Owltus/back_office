@@ -606,14 +606,26 @@ describe('générateur', () => {
     range(7).map((j) => creneau(`soir-${j}`, 'reception', j, 15, 22))
 
   it('cinq jours et deux repos de suite, même avec un trou ; jamais sept', () => {
-    // Avant le 2026-11-04 : six jours pour couvrir un trou. Les deux repos
-    // de suite passent désormais avant la place.
-    const p = probleme({ salaries: [sixJours()], creneaux: soirs() })
+    // Avant le 2026-11-04 : six jours pour couvrir un trou. Au régime
+    // humain, les deux repos de suite passent avant la place (DUR).
+    const p = probleme({
+      salaries: [sixJours()],
+      creneaux: soirs(),
+      regles: SANS_RYTHME_STRICT,
+    })
     const r = gen(p)
     expect(r.affectations.length).toBe(5)
     expect(reglesDe(p, r.affectations)).toEqual(new Set())
     const sept = p.creneaux.map((c) => aff('r0', c.id))
     expect(reglesDe(p, sept).has('R-SIX-JOURS-MAX')).toBe(true)
+    // Au rythme 5 et 2 (le défaut), la paire de repos est le repos seul :
+    // un déplacement de repos, qui se fait pour une place (CALCUL PAR
+    // NIVEAUX, 2026-11-11). Six jours, un repos seul dit, jamais sept.
+    const q = probleme({ salaries: [sixJours()], creneaux: soirs() })
+    const rq = gen(q)
+    expect(rq.affectations.length).toBe(6)
+    expect(reglesDe(q, rq.affectations).has('RYTHME-REPOS-SEUL')).toBe(true)
+    expect(reglesDe(q, rq.affectations).has('RYTHME-5-2')).toBe(false)
   })
 
   it('cinq jours de préférence', () => {
@@ -655,7 +667,7 @@ describe('générateur', () => {
  * donne la même solution : rien ne bouge pour une semaine sans cycles.
  */
 /** Empreinte du modèle avec le rythme 5 et 2 strict (le défaut). */
-const EMPREINTE_STRICT = 'c6c795d8'
+const EMPREINTE_STRICT = '87fcbe3a'
 
 describe('sans remplaçant, consigne ni présence : le modèle d’avant', () => {
   /** FNV-1a 32 bits, assez pour reconnaître un texte. */
@@ -811,7 +823,12 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
     // place la plus chère), et le pas entre deux paliers dépasse ce qu'UN
     // shift peut gagner d'un palier plus bas (`TERMES_PAR_SHIFT`) : les prix
     // des places et des heures changent, rien d'autre.
-    expect(empreinte(textesLp(false))).toBe('f31fcde5')
+    // 01dc6269 (2026-11-11, CALCUL PAR NIVEAUX) : plus de prix dérivé ;
+    // chaque coût a son niveau (`Modele.niveaux`) et l'objectif du texte LP
+    // est la somme des niveaux, à leurs poids : une place `POIDS_PLACE`, une
+    // minute due `POIDS_MINUTE_DUE`, le confort tel quel. Les contraintes
+    // sont les mêmes.
+    expect(empreinte(textesLp(false))).toBe('01dc6269')
   })
 
   it('rythme 5 et 2 strict : une empreinte à part', () => {
@@ -846,6 +863,10 @@ describe('sans remplaçant, consigne ni présence : le modèle d’avant', () =>
     // inconnu d'après l'horizon ; au rythme 5 et 2, ni la paire de la
     // semaine ni le jour isolé ne sont écrits une seconde fois ; le reste
     // comme f31fcde5.
+    // 87fcbe3a (2026-11-11, CALCUL PAR NIVEAUX) : comme 01dc6269, et les
+    // fautes du rythme à leur niveau (3 repos `POIDS_FAUTE_DURE`, bloc court
+    // `POIDS_FAUTE_FORTE`, repos seul et bloc de 4 au niveau des
+    // déplacements) au lieu des prix `prixOrdre`.
     expect(empreinte(textesLp(true))).toBe(EMPREINTE_STRICT)
   })
 })

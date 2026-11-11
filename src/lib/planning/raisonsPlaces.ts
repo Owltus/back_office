@@ -107,7 +107,8 @@ const PHRASES_MORALES: Record<string, string> = {
 
 /** Sans aucune règle enfreinte : la personne peut prendre la place. On ne
  * dit rien de ses heures (rien ne les a comptées ici) : une place nécessaire
- * vide passe avant les heures en plus (`coutPlaceVide`), donc le planning
+ * vide passe avant les heures en plus (un niveau au-dessus du confort,
+ * ORDRE DE DÉCISION du générateur), donc le planning
  * automatique l'aurait prise ; c'est une place laissée vide à la main ou
  * pas encore générée. */
 export const RAISON_LIBRE = 'LIBRE'

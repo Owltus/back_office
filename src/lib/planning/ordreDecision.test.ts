@@ -6,12 +6,10 @@ import {
   ARRIVEE_MATIN_MAX,
   BRUIT_MAX,
   compatible,
-  coutConsigne,
+  construire,
   coutDepannage,
-  coutManqueMinimum,
-  coutPlaceVide,
-  coutPlaceVideGroupe,
   coutRemplacant,
+  coutSurplus,
   EQUITE_MAX_PAR_SHIFT,
   EQUITE_RATTRAPAGE_MAX,
   generer,
@@ -19,19 +17,19 @@ import {
   minutesEnPlus,
   PART_FIXE_DEPANNAGE,
   PART_TEMPS_1,
-  pireCoutRemplir,
   POIDS_ARRIVEE_MATIN_MINUTE,
   POIDS_DEJA_PROPOSE,
   POIDS_DEPANNAGE_MINUTE,
   POIDS_EQUITE,
   POIDS_JOUR_FIXE,
+  POIDS_MINUTE_DUE,
+  POIDS_PLACE,
+  POIDS_PLACE_QUART,
   POIDS_PRESENCE_MINUTE,
   POIDS_REMPLACANT,
   POIDS_REPOS_SEPARES,
   POIDS_SIXIEME_JOUR,
-  POIDS_SOUS_CONTRAT,
   POIDS_SUR_CONTRAT,
-  POIDS_TROU_QUART,
 } from '#/lib/planning/generateur.ts'
 import type { Highs } from '#/lib/planning/generateur.ts'
 import {
@@ -106,6 +104,17 @@ function personne(
   })
 }
 
+/** Le niveau de l'ordre de décision où une variable coûte, et son poids. */
+const niveauDe = (
+  p: Probleme,
+  quoi: (c: ReturnType<typeof construire>) => string,
+) => {
+  const c = construire(p)
+  const v = quoi(c)
+  const n = c.modele.niveaux().find(([, m]) => m.has(v))
+  return n ? [n[0], n[1].get(v)] : null
+}
+
 const qui = (r: Resultat, creneauId: string) =>
   r.affectations
     .filter((a) => a.creneauId === creneauId)
@@ -119,23 +128,25 @@ const semaineEtSamedi = (samedi: Partial<Creneau>) => [
   creneau('sam', 5, 8, 12, samedi),
 ]
 
-describe('les poids sont des paliers dérivés', () => {
-  it('une place vide coûte plus que tout ce qu’il faut payer pour la remplir', () => {
+describe('les niveaux, puis les poids du confort', () => {
+  it('une place vide est un niveau au-dessus de tout ce qu’il faut payer pour la remplir', () => {
+    // Plus de prix dérivé : la place (et les heures dues) au niveau
+    // essentiel, le 6e jour, les heures en plus, le dépannage, les repos
+    // accolés et l'équité au confort, résolu ensuite et borné par elle.
     for (const heures of [2, 4, 8, 12]) {
-      const c = creneau('c', 0, 7, 7 + heures)
-      for (const presence of [0, 48_000, 72_000]) {
-        expect(coutPlaceVide(c, presence)).toBeGreaterThan(
-          pireCoutRemplir(c, presence),
-        )
-        // Le pire coût contient bien chacun des paliers du dessous.
-        expect(pireCoutRemplir(c, presence)).toBeGreaterThanOrEqual(
-          POIDS_SIXIEME_JOUR +
-            (POIDS_SUR_CONTRAT + POIDS_DEPANNAGE_MINUTE) * heures * H +
-            POIDS_REPOS_SEPARES +
-            presence +
-            EQUITE_MAX_PAR_SHIFT,
-        )
-      }
+      const p = probleme({
+        salaries: [personne('a', 35)],
+        creneaux: [creneau('c', 0, 7, 7 + heures)],
+      })
+      expect(niveauDe(p, (c) => c.manque.get('c')!)).toEqual([
+        'essentiel',
+        POIDS_PLACE,
+      ])
+      expect(niveauDe(p, (c) => c.sousContrat[0][1])).toEqual([
+        'essentiel',
+        POIDS_MINUTE_DUE,
+      ])
+      expect(niveauDe(p, (c) => c.sousContrat[0][2])?.[0]).toBe('confort')
     }
   })
 
@@ -145,8 +156,8 @@ describe('les poids sont des paliers dérivés', () => {
     expect(POIDS_PRESENCE_MINUTE * huit).toBeGreaterThan(
       POIDS_SIXIEME_JOUR + POIDS_SUR_CONTRAT * huit,
     )
-    // …mais les heures dues passent devant (une personne due reste placée).
-    expect(POIDS_SOUS_CONTRAT).toBeGreaterThan(POIDS_PRESENCE_MINUTE)
+    // …mais les heures dues passent devant (une personne due reste placée) :
+    // elles sont au niveau essentiel, le surplus au confort.
     // P3 > P4 : heures en plus et 6e jour avant le dépannage.
     expect(POIDS_SUR_CONTRAT).toBeGreaterThan(POIDS_DEPANNAGE_MINUTE)
     // P4 > P5 : un dépannage, même d'une heure, coûte plus que TOUT le
@@ -220,15 +231,16 @@ describe('P1 : une place nécessaire passe avant le 6e jour et les heures en plu
       creneaux: [0, 1, 2, 3, 4, 5, 6].map((j) => creneau(`m${j}`, j, 7, 14)),
     })
     const r = gen(p)
-    // Deux repos de suite (2026-11-04) : cinq jours, deux places vides.
-    expect(r.affectations).toHaveLength(5)
-    expect(manquants(p, r.affectations).size).toBe(2)
+    // Au rythme 5 et 2, une place passe avant un déplacement de repos
+    // (CALCUL PAR NIVEAUX, 2026-11-11) : six jours, un repos seul, une
+    // place vide, jamais un 7e jour ni 6 jours d'affilée.
+    expect(r.affectations).toHaveLength(6)
+    expect(manquants(p, r.affectations).size).toBe(1)
+    const regles = violations(p, r.affectations).map((v) => v.regle)
+    expect(regles).toContain('RYTHME-REPOS-SEUL')
+    expect(regles).not.toContain('RYTHME-5-2')
     for (const vide of manquants(p, r.affectations).keys())
-      expect(
-        raisonsBlocage(p, r.affectations, vide)
-          .get('a')!
-          .map((v) => v.regle),
-      ).toContain('RYTHME-REPOS-SEUL')
+      expect(raisonsBlocage(p, r.affectations, vide).get('a')!).not.toEqual([])
     // Sept jours : la loi.
     expect(
       violations(
@@ -307,33 +319,30 @@ describe('P2 : le matin et le soir, sous les places nécessaires (D1 = A)', () =
     }
   })
 
-  // Vague 1 des cycles (D7) : ce plafond ne vaut plus que pour le MAXIMUM ;
-  // le minimum est une place nécessaire (P1), voir plus bas.
-  it('le coût du maximum d’une consigne est plafonné sous les heures dues de chaque créneau qui y compte', () => {
+  // Vague 1 des cycles (D7) : le maximum est du confort, le minimum une
+  // place ; les heures dues sont au niveau essentiel (plus de plafond).
+  it('le maximum d’un moment est du confort, son minimum une place', () => {
     const long = creneau('long', 0, 7, 17, { presence: ['matin'] })
     const court = creneau('court', 0, 7, 9, { presence: ['matin'] })
-    // Un seul créneau long : proportionnel, comme avant.
-    expect(coutConsigne([long])).toBe(POIDS_PRESENCE_MINUTE * 10 * H)
-    // Avec un créneau de 2 h : sous ce que rapportent ses heures dues, une
-    // fois payés un dépannage et le confort.
-    expect(coutConsigne([long, court])).toBeLessThanOrEqual(
-      POIDS_SOUS_CONTRAT * 2 * H - coutDepannage(court),
+    // Le surplus : proportionnel au plus long, plus la part fixe.
+    expect(coutSurplus([long])).toBe(
+      POIDS_PRESENCE_MINUTE * 10 * H + PART_FIXE_DEPANNAGE,
     )
-    expect(coutConsigne([long, court])).toBeLessThan(
-      POIDS_PRESENCE_MINUTE * 10 * H,
-    )
-    expect(coutConsigne([long, court])).toBeGreaterThan(0)
-    expect(coutConsigne([])).toBe(0)
-    // Le minimum, lui, n'est pas plafonné : il passe au-dessus de tout ce
-    // qu'il faut payer pour ajouter quelqu'un.
-    expect(coutManqueMinimum([long, court], 0)).toBeGreaterThan(
-      coutConsigne([long, court]),
-    )
+    expect(coutSurplus([long, court])).toBe(coutSurplus([long]))
+    expect(coutSurplus([])).toBe(0)
+    const p = probleme({
+      salaries: [personne('a', 10)],
+      creneaux: [long],
+      consignes: [{ jour: 0, periode: 'matin', minimum: 1, maximum: 1 }],
+    })
+    expect(niveauDe(p, (c) => c.minimums[0].v)).toEqual([
+      'essentiel',
+      POIDS_PLACE,
+    ])
   })
 
   // Vague 1 des cycles (D7) : le minimum est AU NIVEAU d'une place
-  // nécessaire. Avant, la place passait toujours devant la consigne ; à
-  // durée égale, les deux coûtent désormais la même chose.
+  // nécessaire, au même poids.
   it('une place nécessaire et le minimum d’une consigne sont au même niveau', () => {
     const besoin = creneau('besoin', 0, 13, 20)
     const renfort = creneau('renfort', 0, 7, 14, {
@@ -341,7 +350,14 @@ describe('P2 : le matin et le soir, sous les places nécessaires (D1 = A)', () =
       facultatif: 1,
       presence: ['matin'],
     })
-    expect(coutManqueMinimum([renfort], 0)).toBe(coutPlaceVide(besoin, 0))
+    const deux = probleme({
+      salaries: [personne('a', 7)],
+      creneaux: [besoin, renfort],
+      consignes: [lundi(1)],
+    })
+    expect(niveauDe(deux, (c) => c.minimums[0].v)).toEqual(
+      niveauDe(deux, (c) => c.manque.get('besoin')!),
+    )
     // Une seule personne : elle tient l'un des deux, l'autre manque.
     const r = gen(
       probleme({
@@ -893,19 +909,16 @@ describe('cycles : un autre code du même cycle tient la place (D5, D13, D16)', 
     // Titulaire remplaçant < dépannage au code imposé, quelle que soit la
     // durée du shift.
     expect(POIDS_REMPLACANT).toBeLessThan(PART_FIXE_DEPANNAGE)
-    // Dépannage au code imposé < dépannage remplaçant < place vide.
-    expect(coutDepannage(remplacant) + POIDS_REMPLACANT).toBeLessThan(
-      coutPlaceVideGroupe(place, 0),
-    )
-    // La place vide d'une place à remplaçants dépasse le pire de ses codes.
-    expect(coutPlaceVideGroupe(place, 0)).toBeGreaterThan(
-      pireCoutRemplir(remplacant, 0),
-    )
-    expect(pireCoutRemplir(remplacant, 0)).toBe(
-      pireCoutRemplir(besoin, 0) + POIDS_REMPLACANT,
-    )
-    // Sans remplaçant, la place vide est celle d'avant.
-    expect(coutPlaceVideGroupe([besoin], 0)).toBe(coutPlaceVide(besoin, 0))
+    // Dépannage au code imposé < dépannage remplaçant < place vide : le
+    // dépannage et le remplaçant sont du confort, la place (le besoin et
+    // ses remplaçants, un seul manque) est au niveau essentiel.
+    expect(coutDepannage(remplacant)).toBeGreaterThan(0)
+    const p = probleme({ salaries: [personne('a', 7)], creneaux: place })
+    expect(niveauDe(p, (c) => c.manque.get('b1')!)).toEqual([
+      'essentiel',
+      POIDS_PLACE,
+    ])
+    expect(construire(p).manque.size).toBe(1)
   })
 
   // Les quatre paliers, chacun seul possible, puis deux à la fois : le plus
@@ -966,7 +979,7 @@ describe('cycles : le minimum d’une consigne est une place nécessaire (D7)', 
     maximum: null,
   })
 
-  it('le coût du manque est dérivé comme une place vide', () => {
+  it('le manque est une place, quel que soit l’horaire', () => {
     for (const heures of [2, 7, 10]) {
       const c = creneau('c', 0, 7, 7 + heures, { presence: ['matin'] })
       const r = creneau('r', 0, 8, 8 + heures, {
@@ -974,22 +987,17 @@ describe('cycles : le minimum d’une consigne est une place nécessaire (D7)', 
         place: 'c',
         effectif: 0,
       })
-      for (const presence of [0, 48_000]) {
-        // Au-dessus du pire coût d'ajouter quelqu'un sur CHACUN des créneaux
-        // qui comptent, remplaçant compris.
-        for (const k of [c, r]) {
-          expect(coutManqueMinimum([c, r], presence)).toBeGreaterThan(
-            pireCoutRemplir(k, presence),
-          )
-        }
-      }
-      // Un shift posé à la main ne reçoit personne : hors du calcul.
-      const pose = creneau('pose', 0, 0, 23, {
-        presence: ['matin'],
-        ferme: true,
+      // Au même niveau et au même poids qu'une place vide, remplaçant
+      // compris : jamais vide tant que quelqu'un peut en tenir un horaire.
+      const p = probleme({
+        salaries: [personne('a', 0)],
+        creneaux: [c, r],
+        consignes: [lundi('matin', 1)],
       })
-      expect(coutManqueMinimum([c, pose], 0)).toBe(coutPlaceVide(c, 0))
-      expect(coutManqueMinimum([pose], 0)).toBe(0)
+      expect(niveauDe(p, (k) => k.minimums[0].v)).toEqual([
+        'essentiel',
+        POIDS_PLACE,
+      ])
     }
   })
 
@@ -1005,13 +1013,8 @@ describe('cycles : le minimum d’une consigne est une place nécessaire (D7)', 
         presence: ['matin'],
       }),
     ]
-    // Avant la vague (P2, plafonné) : 12 000 < 6e jour + 2 h en plus.
-    expect(coutConsigne([creneaux[4]])).toBeLessThan(
-      POIDS_SIXIEME_JOUR + POIDS_SUR_CONTRAT * 2 * H,
-    )
-    expect(coutManqueMinimum([creneaux[4]], 0)).toBeGreaterThan(
-      POIDS_SIXIEME_JOUR + POIDS_SUR_CONTRAT * 2 * H,
-    )
+    // Le manque est une place (niveau essentiel) ; le 6e jour et les heures
+    // en plus, du confort.
     for (const graine of graines) {
       const r = gen(
         probleme({
@@ -1050,11 +1053,9 @@ describe('cycles : le minimum d’une consigne est une place nécessaire (D7)', 
       effectif: 0,
       facultatif: 1,
     })
-    // Avant (P2) : 42 000 < 110 min dues (44 000) < maintenant (P1).
-    expect(coutConsigne([lun])).toBeLessThan(POIDS_SOUS_CONTRAT * 110)
-    expect(coutManqueMinimum([lun], 0)).toBeGreaterThan(
-      POIDS_SOUS_CONTRAT * 110,
-    )
+    // Au même niveau (essentiel) : 110 minutes dues valent plus qu'une
+    // place.
+    expect(POIDS_MINUTE_DUE * 110).toBeGreaterThan(POIDS_PLACE)
     const sans = gen(probleme({ salaries: [a], creneaux: [lun, mar] }))
     expect(qui(sans, 'mar')).toEqual(['a'])
     for (const graine of graines) {
@@ -1133,16 +1134,18 @@ describe('cycles : pas de trou entre deux équipes (D10)', () => {
     personne('b', 7, { shiftsAutorises: new Set(['S1', 'S2']) }),
   ]
 
-  it('le coût d’un trou : par quart d’heure, au niveau d’une consigne', () => {
-    expect(POIDS_TROU_QUART).toBe(15 * POIDS_PRESENCE_MINUTE)
-    // Un quart d'heure ne vaut pas un changement de code, une demi-heure si.
-    expect(POIDS_TROU_QUART).toBeLessThan(POIDS_REMPLACANT)
-    expect(2 * POIDS_TROU_QUART).toBeGreaterThan(POIDS_REMPLACANT)
-    // Le trou d'une heure contre le soir long : une heure en plus et un
-    // changement de code.
-    expect(4 * POIDS_TROU_QUART).toBeGreaterThan(
-      POIDS_SUR_CONTRAT * H + POIDS_REMPLACANT,
+  it('le coût d’un trou : une place, plus son quart d’heure', () => {
+    // Continuité obligatoire (D8) : au niveau essentiel, avant tout le
+    // confort (un changement de code, une heure en plus).
+    const { modele, trous } = construire(
+      probleme({ salaries: equipe, creneaux: [matin, soir, soirLong] }),
     )
+    const essentiel = modele.niveaux().find(([n]) => n === 'essentiel')![1]
+    expect(trous.length).toBeGreaterThan(0)
+    for (const t of trous)
+      expect(essentiel.get(t.v)).toBe(
+        POIDS_PLACE + Math.round((POIDS_PLACE_QUART * (t.fin - t.debut)) / 15),
+      )
   })
 
   it('un code qui couvre le trou de 15 h à 16 h est choisi', () => {
@@ -1662,7 +1665,8 @@ describe('deux temps : résultats sans solution, heures dues, budget', () => {
       creneaux: [m3(0), m6(0), creneau('c0', 0, 7, 14, { typeShift: 'M3' })],
     })
     const r = generer(p, faux)
-    expect(appels).toBe(2)
+    // Un appel par niveau (sans API persistante) : le temps 2 a eu lieu.
+    expect(appels).toBeGreaterThan(1)
     expect(r.etapes).toBe(2)
     expect(r.statut).toBe('realisable')
     expect(r.affectations).toHaveLength(1)
@@ -1725,9 +1729,16 @@ describe('deux temps : résultats sans solution, heures dues, budget', () => {
       { ...probleme({ ...semaineCdi(), graine: 1 }), tempsMaxSecondes: budget },
       lent,
     )
-    expect(limites).toHaveLength(2)
-    expect(limites[0]).toBeLessThanOrEqual(budget * PART_TEMPS_1)
-    expect(limites[1]).toBeCloseTo(budget - limites[0], 6)
+    // Un calcul par niveau : le temps 1 use exactement sa part (son dernier
+    // niveau a tout ce qui reste), le temps 2 le reste du budget.
+    expect(limites.length).toBeGreaterThan(2)
+    const cumul = limites.map((_, i) =>
+      limites.slice(0, i + 1).reduce((t, x) => t + x, 0),
+    )
+    expect(cumul.some((t) => Math.abs(t - budget * PART_TEMPS_1) < 1e-6)).toBe(
+      true,
+    )
+    expect(cumul.at(-1)).toBeCloseTo(budget, 6)
     expect(r.etapes).toBe(2)
     expect(r.manques).toEqual([])
     expect(qui(r, 'r0-M6')).toEqual(['a'])
@@ -1749,9 +1760,11 @@ describe('deux temps : résultats sans solution, heures dues, budget', () => {
       creneaux: [m3(0), m6(0)],
     })
     const r = generer(p, faux)
-    expect(appels).toBe(2)
+    expect(appels).toBeGreaterThan(1)
     // Le second modèle porte le remplaçant (des variables de plus).
-    expect(lps[1].length).toBeGreaterThan(lps[0].length)
+    const binaires = (lp: string) =>
+      lp.slice(lp.indexOf('Binary')).split(/\s+/).length
+    expect(binaires(lps.at(-1)!)).toBeGreaterThan(binaires(lps[0]))
     expect(r.etapes).toBe(2)
     expect(r.manques).toEqual([])
   })

@@ -73,8 +73,8 @@ export interface Creneau {
    * où ses minutes réelles font 7 h ou 9 h. Null : les minutes réelles. */
   travailMural: number | null
   /** Poste indispensable (D11, oui / non ; booléen depuis le 2026-11-06) :
-   * il passe devant les autres quand il manque du monde (`paliersPlaces`,
-   * générateur). */
+   * il passe devant les autres quand il manque du monde (ses places sont au
+   * niveau essentiel, IMPORTANCE DES POSTES du générateur). */
   indispensable: boolean
   /** Besoin souhaité (`obligatoire = false`, 2026-11-05) : rempli si
    * possible, vide avant toute place obligatoire, jamais une place à

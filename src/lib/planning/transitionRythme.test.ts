@@ -1,15 +1,18 @@
-import fc from 'fast-check'
 import highsLoader from 'highs'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import {
+  construire,
   generer,
-  ECART_BLOC,
-  paliersPlaces,
-  prixFauteRythme,
-  prixOrdre,
-  prixSousPlace,
-  seuilPlaces,
+  PLACE_EN_MINUTES,
+  POIDS_BLOC,
+  POIDS_FAUTE_DURE,
+  POIDS_FAUTE_FORTE,
+  POIDS_MINUTE_DUE,
+  POIDS_PASSATION,
+  POIDS_PLACE,
+  POIDS_REPOS_SEUL,
+  POIDS_SEMAINE_SUIVANTE,
 } from '#/lib/planning/generateur.ts'
 import type { Highs } from '#/lib/planning/generateur.ts'
 import {
@@ -119,84 +122,69 @@ describe('la définition', () => {
   })
 })
 
-describe('les prix de l’ordre', () => {
-  it('bloc de 4 < repos seul < une place du palier le plus haut < une heure due < bloc court < 3 repos', () => {
-    fc.assert(
-      fc.property(
-        fc.array(fc.integer({ min: -5e7, max: 5e7 }), { minLength: 1 }),
-        fc.integer({ min: 0, max: 48 * H }),
-        fc.integer({ min: 0, max: 6e7 }),
-        (couts, minutes, seuil) => {
-          const p = prixOrdre(couts, minutes, seuil)
-          const place = Math.max(1, ...couts.map(Math.abs))
-          expect(p.place).toBe(place)
-          expect(p.seuil).toBe(seuil > 0 ? Math.min(seuil, place) : place)
-          // Le repos seul et le bloc : sous une place du palier le plus
-          // haut, le bloc sous le repos seul.
-          if (p.seuil > 2 * ECART_BLOC) {
-            expect(p.reposSeul).toBeLessThan(p.seuil)
-            expect(p.bloc).toBeLessThan(p.reposSeul)
-            expect(prixSousPlace(p.seuil, 'equilibre')).toBeLessThan(p.bloc)
-          }
-          // Une heure due : plus qu'une place et un repos seul ensemble.
-          expect(60 * p.minuteDue).toBeGreaterThan(p.reposSeul + place)
-          // Un bloc de 1 à 3 jours : plus que la semaine du plus gros
-          // contrat ; 3 repos : plus encore.
-          expect(p.fort).toBeGreaterThan(p.minuteDue * minutes)
-          expect(p.fort).toBeGreaterThanOrEqual(prixFauteRythme([place]))
-          expect(p.dur).toBeGreaterThan(p.fort)
-        },
-      ),
-    )
-  })
-  it('le seuil : sous toute place du palier le plus haut, au-dessus de toute place plus basse', () => {
-    const c = (id: string, indispensable: boolean, prixPlace: number) => ({
-      c: creneauModele({
-        id,
-        poste: 'r',
-        debut: 8 * H,
-        fin: 15 * H,
-        effectif: 1,
-        indispensable,
-      }),
-      prixPlace,
+describe('les niveaux de l’ordre', () => {
+  it('chaque faute à son niveau, dans l’ordre de décision', () => {
+    // Une personne au rythme 5 et 2, une place chaque jour, deux paliers
+    // (le lundi d'un poste non indispensable) et deux moments du lundi.
+    const a = personne({
+      postes: new Set(['r', 'z']),
+      etatsAvant: 'rTTTTTr',
+      joursSemainePrecedente: 5,
     })
-    const liste = [c('a', true, 900), c('b', true, 700), c('x', false, 950)]
-    const prix = (x: Creneau) => liste.find((l) => l.c.id === x.id)!.prixPlace
-    const pl = paliersPlaces(
-      liste.map((l) => l.c),
-      [],
-      prix,
+    const { modele, sousContrat } = construire(
+      probleme({
+        salaries: [a],
+        creneaux: [
+          ...[0, 1, 2, 3, 4, 5, 6].map((j) => cr(j, { presence: ['matin'] })),
+          cr(0, { id: 'z0', poste: 'z', presence: ['soir'] }),
+        ],
+        consignes: [
+          { jour: 0, periode: 'matin', minimum: 1, maximum: 1 },
+          { jour: 0, periode: 'soir', minimum: 1, maximum: 1 },
+        ],
+        graine: 1,
+      }),
     )
-    const seuil = seuilPlaces(
-      liste.map((l) => l.c),
-      pl,
-      prix,
-      [],
-      [],
+    const noms = modele.niveaux().map(([nom]) => nom)
+    // Toujours dans cet ordre ; le confort, toujours le dernier.
+    const ordre = ['rythme', 'essentiel', 'deplacements', 'equilibre']
+    expect(noms.filter((n) => ordre.includes(n))).toEqual(
+      ordre.filter((n) => noms.includes(n)),
     )
-    // La moins chère du palier le plus haut, décalée.
-    expect(seuil).toBe(700 + pl.decalage(2))
-    // Ce qui coûte un peu moins (repos seul, bloc, équilibre) passe devant
-    // la place la plus chère d'un palier plus bas.
-    expect(prixSousPlace(seuil, 'equilibre')).toBeGreaterThan(
-      950 + pl.decalage(1),
-    )
-    // Un seul palier : la place la moins chère.
-    const un = liste.slice(0, 2)
-    expect(
-      seuilPlaces(
-        un.map((l) => l.c),
-        paliersPlaces(
-          un.map((l) => l.c),
-          [],
-          prix,
-        ),
-        prix,
-        [],
-        [],
-      ),
-    ).toBe(700)
+    expect(noms.at(-1)).toBe('confort')
+    expect(noms).toContain('rythme')
+    expect(noms).toContain('deplacements')
+    // Les heures dues : au niveau essentiel.
+    const essentiel = modele.niveaux().find(([n]) => n === 'essentiel')![1]
+    expect(essentiel.get(sousContrat[0][1])).toBe(POIDS_MINUTE_DUE)
+  })
+  it('les poids dans un niveau', () => {
+    // Rythme : 3 repos valent plus que deux blocs courts.
+    expect(POIDS_FAUTE_DURE).toBeGreaterThan(2 * POIDS_FAUTE_FORTE)
+    // Essentiel : une heure due passe devant une place, une demi-heure non ;
+    // une passation est une place un peu plus chère.
+    expect(60 * POIDS_MINUTE_DUE).toBeGreaterThan(POIDS_PLACE)
+    expect(30 * POIDS_MINUTE_DUE).toBeLessThan(POIDS_PLACE)
+    expect(POIDS_PLACE).toBe(PLACE_EN_MINUTES * POIDS_MINUTE_DUE)
+    expect(POIDS_PASSATION).toBeGreaterThan(POIDS_PLACE)
+    // Déplacements : le repos seul un peu plus cher que le bloc de 4, mais
+    // moins que deux blocs.
+    expect(POIDS_REPOS_SEUL).toBeGreaterThan(POIDS_BLOC)
+    expect(2 * POIDS_BLOC).toBeGreaterThan(POIDS_REPOS_SEUL)
+    // La semaine suivante : sous une place de cette semaine.
+    expect(POIDS_SEMAINE_SUIVANTE).toBeLessThan(POIDS_PLACE)
+    // Tous entiers : la borne d'un niveau est exacte (`borneNiveau`).
+    for (const w of [
+      POIDS_FAUTE_DURE,
+      POIDS_FAUTE_FORTE,
+      POIDS_MINUTE_DUE,
+      POIDS_PLACE,
+      POIDS_PASSATION,
+      POIDS_REPOS_SEUL,
+      POIDS_BLOC,
+      POIDS_SEMAINE_SUIVANTE,
+    ])
+      expect(Number.isInteger(w)).toBe(true)
   })
 })
 
@@ -279,18 +267,19 @@ describe('le calcul', () => {
   })
   it('refusé : la transition qui ne sert à rien (aucune place de plus)', () => {
     // Repos du mardi et du mercredi (semaine d'avant : lundi travaillé, puis
-    // jeudi au dimanche) ; une place chaque jour. Garder le rythme donne 5
-    // places ; décaler les repos aussi : aucune transition.
+    // jeudi au dimanche) ; une place chaque jour. Un repos seul le mardi
+    // tient une place de plus (une place passe avant un déplacement de
+    // repos, 2026-11-11) ; un bloc de 4 n'en tiendrait aucune : jamais.
     const s = personne({
       etatsAvant: 'TrrTTTT',
       joursSemainePrecedente: 5,
       serieAvant: 4,
     })
     const { p, r } = resoudre(s, [0, 1, 2, 3, 4, 5, 6])
-    expect(tenus(r)).toEqual([0, 3, 4, 5, 6])
-    expect(
-      violations(p, r.affectations).some((v) => v.regle === REGLE_TRANSITION),
-    ).toBe(false)
+    expect(tenus(r)).toEqual([0, 2, 3, 4, 5, 6])
+    const regles = violations(p, r.affectations).map((v) => v.regle)
+    expect(regles).not.toContain(REGLE_TRANSITION)
+    expect(regles.filter((x) => x === 'RYTHME-REPOS-SEUL')).toHaveLength(1)
   })
   it('les heures dues passent avant : 39 h en 5 jours, rythme gardé', () => {
     const s = personne({

@@ -201,15 +201,16 @@ export function fautesRythme(etats: readonly EtatRythme[]): FauteRythme[] {
  *     suite »), sauf quand les faits l'imposent (`fauteScellee`).
  * Un bloc de 1 à 3 jours n'est PAS un outil : il défait plusieurs jours
  * d'un coup (« donner des jours et en redonner ensuite ») ; comme 3 repos,
- * il passe avant les heures (prix `fort`). Il contient le jour isolé, dit
+ * il passe avant les heures (niveau rythme). Il contient le jour isolé, dit
  * une seule fois (`jourIsoleDe` ne s'applique pas au rythme 5 et 2).
  * L'ordre de l'utilisateur tranche seul, sans exception ni plafond : la loi,
  * puis jamais 6 jours, jamais 3 repos ni un bloc de moins de 4 jours, puis
  * les heures dues, puis les
  * places indispensables, puis le repos seul, puis le bloc de 4, puis
- * l'équilibre, puis le reste (`prixOrdre`, generateur.ts). Chaque outil a
- * SON prix, le calcul en met le moins possible, et seulement quand des
- * heures dues ou des places l'exigent (faits connus d'avance dans
+ * l'équilibre, puis le reste (ORDRE DE DÉCISION de generateur.ts : repos
+ * seul et bloc de 4 partagent un niveau). Chaque outil a SON poids, le
+ * calcul en met le moins possible, et seulement quand des heures dues ou
+ * des places l'exigent (faits connus d'avance dans
  * l'horizon : école, absences, semaines validées).
  * PAS D'ALLER-RETOUR, par construction : chaque outil permis avance les
  * repos d'un jour ; les ramener demande 3 repos (interdit) ou six outils de

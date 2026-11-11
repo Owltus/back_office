@@ -1,5 +1,5 @@
 import highsLoader from 'highs'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { generer } from '#/lib/planning/generateur.ts'
 import type { Highs } from '#/lib/planning/generateur.ts'
@@ -14,6 +14,10 @@ import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
 import { sansAccompagne } from '#/lib/planning/test/reglesTest.ts'
 import { ajouterJours } from '#/lib/planning/temps.ts'
 import type { Affectation } from '#/lib/planning/types.ts'
+
+// Un vrai calcul, niveau par niveau (CALCUL PAR NIVEAUX du 2026-11-11, à
+// peu près deux fois le temps d'avant) : lent quand toute la suite tourne.
+vi.setConfig({ testTimeout: 30_000 })
 
 /*
  * Bout à bout sur l'hôtel fictif : préparer → HiGHS → poser → analyser. Le
@@ -98,7 +102,7 @@ describe('génération bout à bout (hôtel fictif)', () => {
     const s2 = analyser(donnees(seconds))
     expect(s2.stats.infractions).toBe(0)
     expect(s2.stats.pourvues).toBe(s2.stats.places)
-  })
+  }, 30_000)
 
   it('les shifts validés restent tels quels', () => {
     const d = donnees()
