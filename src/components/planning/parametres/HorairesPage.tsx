@@ -27,12 +27,7 @@ import {
   usageMotif,
 } from '#/components/planning/parametres/reglages/absencesParMotif.ts'
 import type { LigneAbsence } from '#/components/planning/parametres/reglages/absencesParMotif.ts'
-import {
-  COLONNES_LISTES,
-  LigneCompacte,
-  ListeCompacte,
-  PastilleCode,
-} from '#/components/planning/parametres/reglages/ListeCompacte.tsx'
+import { PastilleCode } from '#/components/planning/parametres/reglages/ListeCompacte.tsx'
 import {
   idCible,
   useOuvrirCible,
@@ -375,36 +370,26 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
                 }
               />
             </div>
-            <div className={COLONNES_LISTES}>
+            {/* Un tableau par groupe, l'un sous l'autre (2026-11-12), comme
+                les horaires. */}
+            <div className="flex w-full flex-col gap-6">
               {[
                 { titre: 'Repos', nature: 'repos' as const },
                 { titre: 'Absences', nature: 'absence' as const },
                 { titre: 'École', nature: 'ecole' as const },
-              ].map((g) => {
-                const liste = data.motifs.filter((m) => m.nature === g.nature)
-                if (!liste.length) return null
-                return (
-                  <ListeCompacte
-                    key={g.nature}
-                    titre={g.titre}
-                    nombre={liste.length}
-                  >
-                    {liste.map((m) => (
-                      <LigneMotif
-                        key={m.id}
-                        m={m}
-                        usage={
-                          absences.data
-                            ? usageMotif(m.id, data.salaries, absences.data)
-                                .jours
-                            : undefined
-                        }
-                        onOuvrir={() => setOuvert({ type: 'motif', id: m.id })}
-                      />
-                    ))}
-                  </ListeCompacte>
-                )
-              })}
+              ].map((g) => (
+                <TableauMotifs
+                  key={g.nature}
+                  titre={g.titre}
+                  motifs={data.motifs.filter((m) => m.nature === g.nature)}
+                  usage={(m) =>
+                    absences.data
+                      ? usageMotif(m.id, data.salaries, absences.data).jours
+                      : undefined
+                  }
+                  onOuvrir={(m) => setOuvert({ type: 'motif', id: m.id })}
+                />
+              ))}
             </div>
           </section>
 
@@ -526,14 +511,14 @@ function TableauHoraires({
         </span>
       </h3>
       <div className="overflow-x-auto rounded-xl border bg-card">
-        <table className="w-full text-sm">
+        <table className="w-full table-fixed text-sm">
           <thead className="bg-muted/50 text-xs text-muted-foreground">
             <tr>
               <th className="w-8 px-3 py-2" aria-label="Couleur" />
               <th className="px-3 py-2 text-left font-medium">Horaire</th>
-              <th className="px-3 py-2 text-left font-medium">Travail</th>
-              <th className="px-3 py-2 text-left font-medium">Pause</th>
-              <th className="px-3 py-2 text-left font-medium">
+              <th className="w-28 px-3 py-2 text-left font-medium">Travail</th>
+              <th className="w-28 px-3 py-2 text-left font-medium">Pause</th>
+              <th className="w-40 px-3 py-2 text-left font-medium">
                 <span className="sr-only">Journée étoile</span>
               </th>
             </tr>
@@ -586,23 +571,78 @@ function TableauHoraires({
   )
 }
 
-function LigneMotif({
-  m,
+/** Les motifs d'un groupe en tableau (2026-11-12) : une ligne par motif, un
+ * clic ouvre son réglage. */
+function TableauMotifs({
+  titre,
+  motifs,
   usage,
   onOuvrir,
 }: {
-  m: Motif
-  usage: number | undefined
-  onOuvrir: () => void
+  titre: string
+  motifs: readonly Motif[]
+  usage: (m: Motif) => number | undefined
+  onOuvrir: (m: Motif) => void
 }) {
+  if (!motifs.length) return null
   return (
-    <LigneCompacte
-      etiquette={`Régler ${m.code}, ${m.nom}`}
-      pastille={<PastilleCode code={m.code} couleur={m.couleur} />}
-      libelle={m.nom}
-      detail={`${m.decompte ? 'compte dans les heures' : 'hors heures'}${usage !== undefined ? ` · ${usage} j` : ''}`}
-      onOuvrir={onOuvrir}
-    />
+    <section aria-label={titre} className="flex flex-col gap-2">
+      <h3 className="text-sm font-semibold">
+        {titre}{' '}
+        <span className="font-normal text-muted-foreground tabular-nums">
+          ({motifs.length})
+        </span>
+      </h3>
+      <div className="overflow-x-auto rounded-xl border bg-card">
+        <table className="w-full table-fixed text-sm">
+          <thead className="bg-muted/50 text-xs text-muted-foreground">
+            <tr>
+              <th className="w-20 px-3 py-2 text-left font-medium">Code</th>
+              <th className="px-3 py-2 text-left font-medium">Motif</th>
+              <th className="w-56 px-3 py-2 text-left font-medium">Heures</th>
+              <th className="w-32 px-3 py-2 text-left font-medium">
+                Jours posés
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {motifs.map((m) => {
+              const n = usage(m)
+              return (
+                <tr
+                  key={m.id}
+                  className="cursor-pointer border-t hover:bg-muted/40"
+                  onClick={() => onOuvrir(m)}
+                >
+                  <td className="px-3 py-2">
+                    <PastilleCode code={m.code} couleur={m.couleur} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <button
+                      type="button"
+                      aria-label={`Régler ${m.code}, ${m.nom}`}
+                      className="font-medium outline-none focus-visible:underline"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onOuvrir(m)
+                      }}
+                    >
+                      {m.nom}
+                    </button>
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground">
+                    {m.decompte ? 'compte dans les heures' : 'hors heures'}
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground tabular-nums">
+                    {n === undefined ? '' : `${n} j`}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
   )
 }
 

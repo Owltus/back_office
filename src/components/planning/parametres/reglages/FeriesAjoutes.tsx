@@ -89,7 +89,7 @@ export function FeriesAjoutes({
         titre="Jours fériés en plus"
         texte="Les 11 jours fériés de la loi sont comptés d'office. Ajoutez ici une fête locale ou un jour chômé de l'établissement : il est traité comme les autres."
       />
-      <div className="flex max-w-3xl flex-col gap-3">
+      <div className="flex w-full flex-col gap-3">
         {feries.length > 0 ? (
           <ul className="flex flex-col divide-y rounded-xl border bg-card">
             {feries.map((f) => (
