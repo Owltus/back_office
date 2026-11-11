@@ -471,13 +471,23 @@ describe('Besoins', () => {
         false,
       )
       const region = screen.getByRole('region', { name: 'Accueil' })
-      expect(region.textContent).toContain('Réception et Club ensemble')
-      expect(region.textContent).toContain('La nuit : Veille de nuit.')
+      // Refonte du 2026-11-11 : le jour « au moins », la nuit « exactement ».
+      expect(region.textContent).toContain(
+        'au moins ce nombre en Réception et Club, le planning choisit qui va où',
+      )
+      expect(region.textContent).toContain(
+        'exactement ce nombre en Veille de nuit',
+      )
       expect(caseAccueil('5:matin')?.textContent).toBe('3')
       expect(caseAccueil('5:matin')?.getAttribute('aria-label')).toBe(
-        'Matin, samedi : 3 personnes.',
+        'Matin, samedi : au moins 3 personnes.',
+      )
+      expect(caseAccueil('0:nuit')?.getAttribute('aria-label')).toBe(
+        'Nuit, lundi : exactement 1 personne.',
       )
       expect(caseAccueil('1:matin')?.textContent).toBe('–')
+      // Le tiret n'est expliqué que s'il y en a un.
+      expect(region.textContent).toContain("personne n'est demandé ce jour-là")
       // Aucun mot de l'ancien réglage.
       expect(region.textContent).not.toMatch(/minimum|maximum|consigne/i)
     })
@@ -499,7 +509,7 @@ describe('Besoins', () => {
         screen.getByRole('dialog', { name: 'Soir · Lundi' }),
       )
       fireEvent.click(
-        panneau.getByRole('button', { name: 'Personnes : un de plus' }),
+        panneau.getByRole('button', { name: 'Au moins : un de plus' }),
       )
       await waitFor(() =>
         expect(service.reglerConsigne).toHaveBeenCalledWith(
@@ -519,7 +529,7 @@ describe('Besoins', () => {
       fireEvent.click(
         within(
           screen.getByRole('dialog', { name: 'Matin · Samedi' }),
-        ).getByRole('button', { name: 'Personnes : un de moins' }),
+        ).getByRole('button', { name: 'Au moins : un de moins' }),
       )
       await waitFor(() =>
         expect(service.reglerConsigne).toHaveBeenLastCalledWith(

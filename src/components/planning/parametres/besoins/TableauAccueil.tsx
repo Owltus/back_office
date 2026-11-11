@@ -3,8 +3,15 @@
  * utilisateur du 2026-11-01, plan `plan/planning-accueil-2026-11-01/`) :
  * combien de personnes le matin, le soir et la nuit, chaque jour. Les postes
  * du matin et du soir ensemble (l'app répartit et choisit les horaires),
- * ceux de la nuit la nuit. Un chiffre EXACT par défaut (minimum = maximum) ;
- * « au moins … au plus … » sur demande (2026-11-06). 0 retire la case.
+ * ceux de la nuit la nuit. 0 retire la case.
+ *
+ * Refait le 2026-11-11 (demande utilisateur : « imbitable »). Le jour, le
+ * chiffre est un MINIMUM : le calcul peut ajouter quelqu'un qui manque
+ * d'heures, au prix du surplus (D8, `generateur.ts`), « raisonnable, de temps
+ * en temps ». La nuit, il est exact (plafond dur, un seul veilleur). Le
+ * réglage « au moins … au plus … » (2026-11-06) est RETIRÉ de l'écran : la
+ * case écrit minimum = maximum ; un maximum plus haut déjà en base reste lu
+ * par le calcul.
  *
  * Écritures et Annuler : `BesoinsPage` (une seule pile pour toute la page).
  */
@@ -20,13 +27,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '#/components/ui/popover.tsx'
-import { Button } from '#/components/ui/button.tsx'
 import { useMoments } from '#/components/planning/hooks/useMoments.ts'
 import { iconeDe } from '#/components/planning/semaine/Presence.tsx'
-import { momentDe, momentsDuTableau } from '#/lib/planning/moment.ts'
+import { estNuit, momentDe, momentsDuTableau } from '#/lib/planning/moment.ts'
 import type { Moments } from '#/lib/planning/moment.ts'
 import { listeEt } from '#/lib/planning/affichage.ts'
-import { clePresence, libelleConsigne } from '#/lib/planning/presence.ts'
+import { clePresence } from '#/lib/planning/presence.ts'
 import { JOURS } from '#/lib/planning/types.ts'
 import type { Consigne, Horaire, Poste } from '#/lib/planning/types.ts'
 import { cn } from '#/lib/utils.ts'
@@ -46,11 +52,14 @@ export function periodesDuTableau(l: Moments): ReadonlyArray<{
   periode: Periode
   libelle: string
   Icone: typeof Sun
+  /** Moment de nuit : chiffre exact, jamais personne en plus. */
+  nuit: boolean
 }> {
   return momentsDuTableau(l).map((p) => ({
     periode: p,
     libelle: momentDe(l, p)?.nom ?? p,
     Icone: iconeDe(l, p),
+    nuit: estNuit(l, p),
   }))
 }
 
@@ -82,6 +91,10 @@ export function TableauAccueil({
     .filter((p) => tientLaNuit(p, horaires, moments))
     .map((p) => p.nom)
   const titre = `titre-zone-${zone.id}`
+  const periodes = periodesDuTableau(moments)
+  const caseVide = periodes.some(({ periode }) =>
+    JOURS.some((_, j) => affiche(j, periode).minimum === 0),
+  )
 
   return (
     <section
@@ -93,16 +106,41 @@ export function TableauAccueil({
         <h3 id={titre} className="text-base font-semibold">
           {zone.nom}
         </h3>
-        <p className="text-sm text-muted-foreground">
-          {jour.length
-            ? `Le jour : ${listeEt(jour)} ensemble, le planning répartit.`
-            : `Aucun poste de jour : dans Postes, choisissez la zone ${zone.nom}.`}{' '}
-          {nuit.length ? `La nuit : ${listeEt(nuit)}.` : 'Aucun poste de nuit.'}
-        </p>
-        <p className="text-xs text-muted-foreground">
-          Les apprentis comptent, jamais seuls. Un tiret orange : personne de
-          demandé.
-        </p>
+        <ul className="flex list-disc flex-col gap-0.5 pl-5 text-sm text-muted-foreground">
+          <li>
+            {jour.length ? (
+              <>
+                Le matin et le soir : <strong>au moins</strong> ce nombre
+                {' en '}
+                {listeEt(jour)}
+                {jour.length > 1 && ', le planning choisit qui va où'}. Il peut
+                ajouter quelqu'un à qui il manque des heures, sans en abuser.
+              </>
+            ) : (
+              `Aucun poste le jour : dans Postes, choisissez la zone ${zone.nom}.`
+            )}
+          </li>
+          <li>
+            {nuit.length ? (
+              <>
+                La nuit : <strong>exactement</strong> ce nombre en{' '}
+                {listeEt(nuit)}. Un deuxième se pose à la main.
+              </>
+            ) : (
+              'Aucun poste la nuit.'
+            )}
+          </li>
+          <li>
+            Les apprentis et les stagiaires comptent dans le nombre, mais jamais
+            sans un titulaire ou un dépannage avec eux.
+          </li>
+          {caseVide && (
+            <li>
+              Un tiret <span className="text-amber-500">–</span> : personne
+              n'est demandé ce jour-là.
+            </li>
+          )}
+        </ul>
       </div>
       <div className="overflow-x-auto rounded-xl border bg-card">
         <table
@@ -120,11 +158,10 @@ export function TableauAccueil({
                   <span className="sr-only">{j}</span>
                 </th>
               ))}
-              <th className="w-10" />
             </tr>
           </thead>
           <tbody>
-            {periodesDuTableau(moments).map(({ periode, libelle, Icone }) => (
+            {periodes.map(({ periode, libelle, Icone, nuit: deNuit }) => (
               <tr key={periode} className="border-t">
                 <th
                   scope="row"
@@ -144,13 +181,13 @@ export function TableauAccueil({
                       jour={j}
                       periode={periode}
                       libelle={libelle}
+                      nuit={deNuit}
                       bornes={affiche(j, periode)}
                       modifiable={modifiable}
                       regler={regler}
                     />
                   </td>
                 ))}
-                <td />
               </tr>
             ))}
           </tbody>
@@ -164,6 +201,7 @@ function CaseAccueil({
   jour,
   periode,
   libelle,
+  nuit,
   bornes,
   modifiable,
   regler,
@@ -171,22 +209,20 @@ function CaseAccueil({
   jour: number
   periode: Periode
   libelle: string
+  nuit: boolean
   bornes: BornesAccueil
   modifiable: boolean
   regler: (jour: number, periode: Periode, b: BornesAccueil) => void
 }) {
   const [ouvert, setOuvert] = useState(false)
   const nombre = bornes.minimum
-  const plafond = Math.max(nombre, bornes.maximum ?? nombre)
-  const plage = plafond > nombre
-  // « Au moins … au plus … » montré sur demande, ou s'il est déjà réglé.
-  const [deux, setDeux] = useState(plage)
   const nomJour = JOURS[jour]
   const titre = `${libelle} · ${nomJour}`
-  const texte = libelleConsigne(nombre, plafond)
-  const dit = plafond
-    ? `${texte} personne${plafond > 1 ? 's' : ''}`
-    : "personne de demandé, l'hôtel peut rester vide"
+  const pluriel = nombre > 1 ? 's' : ''
+  const mot = nuit ? 'Exactement' : 'Au moins'
+  const dit = !nombre
+    ? "personne n'est demandé"
+    : `${mot.toLowerCase()} ${nombre} personne${pluriel}`
   return (
     <Popover open={ouvert} onOpenChange={setOuvert}>
       <PopoverTrigger asChild>
@@ -202,79 +238,34 @@ function CaseAccueil({
           <span
             className={cn(
               'text-sm font-semibold tabular-nums',
-              !plafond && 'text-amber-500',
+              !nombre && 'text-amber-500',
             )}
           >
-            {plafond ? texte : '–'}
+            {nombre || '–'}
           </span>
         </button>
       </PopoverTrigger>
       <PopoverContent align="center" className="w-64" aria-label={titre}>
         <div className="flex flex-col gap-3 text-sm">
           <p className="font-semibold">{titre}</p>
-          {deux ? (
-            <>
-              <div className="flex items-center justify-between gap-3">
-                <p className="font-medium">Au moins</p>
-                <Compteur
-                  valeur={nombre}
-                  etiquette="Au moins"
-                  disabled={!modifiable}
-                  onChange={(v) =>
-                    regler(jour, periode, {
-                      minimum: v,
-                      maximum: Math.max(v, plafond),
-                    })
-                  }
-                />
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <p className="font-medium">Au plus</p>
-                <Compteur
-                  valeur={plafond}
-                  min={nombre}
-                  etiquette="Au plus"
-                  disabled={!modifiable}
-                  onChange={(v) =>
-                    regler(jour, periode, { minimum: nombre, maximum: v })
-                  }
-                />
-              </div>
-            </>
-          ) : (
-            <div className="flex items-center justify-between gap-3">
-              <p className="font-medium">Personnes</p>
-              <Compteur
-                valeur={nombre}
-                etiquette="Personnes"
-                disabled={!modifiable}
-                onChange={(v) =>
-                  regler(jour, periode, { minimum: v, maximum: v })
-                }
-              />
-            </div>
-          )}
+          <div className="flex items-center justify-between gap-3">
+            <p className="font-medium">{mot}</p>
+            <Compteur
+              valeur={nombre}
+              etiquette={mot}
+              disabled={!modifiable}
+              onChange={(v) =>
+                regler(jour, periode, { minimum: v, maximum: v })
+              }
+            />
+          </div>
           <p className="text-xs text-muted-foreground">
-            {!plafond
-              ? "Personne de demandé : l'hôtel peut rester sans personne à ce moment."
-              : plage
-                ? `Entre ${nombre} et ${plafond} personnes. S'il en manque, l'app vous le dit.`
-                : "Exactement ce nombre. S'il manque du monde, l'app vous le dit."}
+            {!nombre
+              ? "Personne n'est demandé : ce moment peut rester vide."
+              : nuit
+                ? `Le planning met ${nombre} personne${pluriel}, jamais plus. S'il en manque, il vous le dit.`
+                : `Le planning met au moins ${nombre} personne${pluriel}. Il en ajoute une si quelqu'un manque d'heures. S'il en manque, il vous le dit.`}
           </p>
-          {modifiable && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="self-start px-0 text-xs"
-              onClick={() => {
-                if (deux)
-                  regler(jour, periode, { minimum: nombre, maximum: nombre })
-                setDeux(!deux)
-              }}
-            >
-              {deux ? 'Un chiffre exact' : 'Au moins … au plus …'}
-            </Button>
-          )}
         </div>
       </PopoverContent>
     </Popover>

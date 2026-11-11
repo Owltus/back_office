@@ -631,7 +631,7 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
           <SectionBesoins
             id="besoins-indispensables"
             titre="Postes indispensables"
-            texte="Sans eux, l'hôtel ne tourne pas. Le planning les remplit en premier."
+            texte="Le planning les remplit en premier, avant tous les autres postes."
             vide={
               !sections.accueilIndispensable && !sections.indispensables.length
                 ? 'Aucun poste indispensable. Dans Postes, activez Indispensable au fonctionnement.'

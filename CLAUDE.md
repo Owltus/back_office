@@ -3118,6 +3118,20 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   inchangées. Test : `premierJour.test.ts`. Temps : 97 % chez HiGHS (construction du modèle
   0,5 s le mois) ; regagner du temps demanderait moins de niveaux ou un modèle plus petit, donc
   d'autres départages.
+- **PAGE BESOINS REPRISE MODULE PAR MODULE (2026-11-11, demande utilisateur :
+  « imbitable… que le premier venu puisse configurer »)**. Module 1, le
+  tableau de l'accueil : (a) Réception et Club FUSIONNÉS en un poste
+  « Hôtelier polyvalent » (décision utilisateur : « ne garde aucun
+  historique, migration totale ») — migration
+  `20261111100000_planning_hotelier_polyvalent` (Réception gardée et
+  renommée, compétences au meilleur niveau, horaires unis, TOUS les shifts du
+  Club versés, passé et verrous compris, Club supprimé ; livraison
+  `--avec-donnees`) ; (b) le jour, le chiffre est écrit « au moins » (c'est
+  déjà le calcul : surplus souple D8, « raisonnable, de temps en temps ») ;
+  la nuit, « exactement » ; le réglage « au moins … au plus … » est retiré
+  de l'écran (une case écrit minimum = maximum) ; (c) textes en liste
+  (postes comptés, apprentis jamais sans titulaire ou dépannage), légende du
+  tiret seulement s'il y en a un, colonne vide retirée.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 
