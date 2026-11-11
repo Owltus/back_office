@@ -21,7 +21,10 @@ import {
   dernierMoment,
   estNuit,
   momentsDeJour,
+  momentDemande,
   momentsDe,
+  estPur,
+  postesDeJour,
   motMoment,
   pairesDeJour,
   premierMoment,
@@ -1918,17 +1921,10 @@ function relevesUneZone(
   const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
   const salaries = new Map(p.salaries.map((s) => [s.id, s]))
   const L = momentsDe(p)
-  const postesJour = new Set(
-    p.creneaux
-      .filter((c) => c.accueil && !c.presence.some((q) => estNuit(L, q)))
-      .map((c) => c.poste),
-  )
-  const pur = (c: Creneau, moment: string) =>
-    c.presence.length === 1 && c.presence[0] === moment
+  const postesJour = postesDeJour(p.creneaux, L)
+  const pur = estPur
   const demande = (j: number, periode: string) =>
-    p.consignes.some(
-      (c) => c.jour === j && c.periode === periode && c.minimum > 0,
-    )
+    momentDemande(p.consignes, j, periode)
   const faits = affectationsCompletes(p, affectations).flatMap((a) => {
     const c = creneaux.get(a.creneauId)
     const s = salaries.get(a.salarieId)
@@ -2018,17 +2014,10 @@ function equipesUneZone(
   const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
   const salaries = new Map(p.salaries.map((s) => [s.id, s]))
   const L = momentsDe(p)
-  const postesJour = new Set(
-    p.creneaux
-      .filter((c) => c.accueil && !c.presence.some((q) => estNuit(L, q)))
-      .map((c) => c.poste),
-  )
-  const pur = (c: Creneau, moment: string) =>
-    c.presence.length === 1 && c.presence[0] === moment
+  const postesJour = postesDeJour(p.creneaux, L)
+  const pur = estPur
   const demande = (j: number, periode: string) =>
-    p.consignes.some(
-      (c) => c.jour === j && c.periode === periode && c.minimum > 0,
-    )
+    momentDemande(p.consignes, j, periode)
   const faits = affectationsCompletes(p, affectations).flatMap((a) => {
     const c = creneaux.get(a.creneauId)
     const s = salaries.get(a.salarieId)

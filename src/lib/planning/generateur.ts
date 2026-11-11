@@ -73,8 +73,11 @@ import {
   deJourAuTableau,
   estNuit,
   MOMENTS_HOTEL,
+  momentDemande,
   momentsDe,
-  momentsDeJour,
+  estPur,
+  postesDeJour,
+  dernierMoment,
   pairesDeJour,
   premierMoment,
   rangMoment,
@@ -4527,9 +4530,8 @@ function passationsDeZone(
   const L = momentsDe(p)
   // Le premier moment de jour reprend la nuit, le dernier la lui passe (à
   // l'hôtel : le matin et le soir).
-  const jourDuTableau = momentsDeJour(L)
-  const premier = jourDuTableau[0] ?? null
-  const dernier = jourDuTableau[jourDuTableau.length - 1] ?? null
+  const premier = premierMoment(L)
+  const dernier = dernierMoment(L)
   const deNuit = (c: Creneau) => c.presence.some((q) => estNuit(L, q))
   const postesAccueil = new Set(
     p.creneaux.filter((c) => c.accueil).map((c) => c.poste),
@@ -4538,10 +4540,7 @@ function passationsDeZone(
     (c) => postesAccueil.has(c.poste) && !deNuit(c),
   )
   const demande = (j: number, periode: string | null) =>
-    periode !== null &&
-    p.consignes.some(
-      (k) => k.jour === j && k.periode === periode && k.minimum > 0,
-    )
+    periode !== null && momentDemande(p.consignes, j, periode)
   const matinsDe = (j: number) =>
     deJour.filter(
       (c) =>
@@ -4746,17 +4745,10 @@ function equipesUneZone(
   releve: boolean
 }> {
   const L = momentsDe(p)
-  const postesJour = new Set(
-    p.creneaux
-      .filter((c) => c.accueil && !c.presence.some((q) => estNuit(L, q)))
-      .map((c) => c.poste),
-  )
-  const pur = (c: Creneau, moment: string) =>
-    c.presence.length === 1 && c.presence[0] === moment
+  const postesJour = postesDeJour(p.creneaux, L)
+  const pur = estPur
   const demande = (j: number, periode: string) =>
-    p.consignes.some(
-      (c) => c.jour === j && c.periode === periode && c.minimum > 0,
-    )
+    momentDemande(p.consignes, j, periode)
   const r: Array<{
     jour: number
     moments: [string, string]
@@ -4814,16 +4806,9 @@ function releveUneZone(
   if (duree <= 0) return []
   const L = momentsDe(p)
   const demande = (j: number, periode: string) =>
-    p.consignes.some(
-      (c) => c.jour === j && c.periode === periode && c.minimum > 0,
-    )
-  const postesJour = new Set(
-    p.creneaux
-      .filter((c) => c.accueil && !c.presence.some((q) => estNuit(L, q)))
-      .map((c) => c.poste),
-  )
-  const pur = (c: Creneau, moment: string) =>
-    c.presence.length === 1 && c.presence[0] === moment
+    momentDemande(p.consignes, j, periode)
+  const postesJour = postesDeJour(p.creneaux, L)
+  const pur = estPur
   const r: Array<{
     jour: number
     quarts: number[]

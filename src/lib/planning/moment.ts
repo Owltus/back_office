@@ -330,3 +330,43 @@ export function pairesDeJour(l: Moments): Array<[string, string]> {
  * inconnu. */
 export const motMoment = (l: Moments, id: Periode) =>
   (momentDe(l, id)?.nom ?? id).toLocaleLowerCase('fr-FR')
+
+// ------------------------------------------- l'accueil, lu de la même façon
+
+/** Le créneau n'a que ce moment (un matin pur, un soir pur). */
+export const estPur = (
+  c: { presence: readonly string[] },
+  moment: string,
+): boolean => c.presence.length === 1 && c.presence[0] === moment
+
+/** Les postes de l'accueil tenus de jour : ceux d'un créneau de l'accueil qui
+ * ne touche aucun moment de nuit. */
+export function postesDeJour(
+  creneaux: ReadonlyArray<{
+    accueil?: boolean
+    poste: string
+    presence: readonly string[]
+  }>,
+  l: Moments,
+): Set<string> {
+  return new Set(
+    creneaux
+      .filter((c) => c.accueil && !c.presence.some((q) => estNuit(l, q)))
+      .map((c) => c.poste),
+  )
+}
+
+/** Ce moment est demandé ce jour-là : une consigne avec un minimum. */
+export function momentDemande(
+  consignes: ReadonlyArray<{
+    jour: number
+    periode: string | null
+    minimum: number
+  }>,
+  jour: number,
+  periode: string,
+): boolean {
+  return consignes.some(
+    (k) => k.jour === jour && k.periode === periode && k.minimum > 0,
+  )
+}

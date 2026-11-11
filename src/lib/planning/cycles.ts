@@ -23,6 +23,7 @@ import {
   estNuit,
   MOMENTS_HOTEL,
   momentsDeJour,
+  estPur,
 } from '#/lib/planning/moment.ts'
 import type { Moments } from '#/lib/planning/moment.ts'
 import { periodeLibre } from '#/lib/planning/presence.ts'
@@ -207,9 +208,7 @@ export function plageAccueil(
   const dernier = jour[jour.length - 1] ?? null
   if (!premier || !dernier) return null
   const du = (moment: string) => {
-    const purs = candidats.filter(
-      (c) => c.presence.length === 1 && c.presence[0] === moment,
-    )
+    const purs = candidats.filter((c) => estPur(c, moment))
     return purs.length
       ? purs
       : candidats.filter((c) => c.presence.includes(moment))
