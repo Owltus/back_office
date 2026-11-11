@@ -21,26 +21,14 @@
  *   Sans point à voir, la génération part directement, comme avant.
  */
 
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import type { ReactNode } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { Check, ChevronDown, OctagonAlert } from 'lucide-react'
+import { Check, OctagonAlert } from 'lucide-react'
 
 import { useNotifier } from '#/components/planning/Messages.tsx'
-import {
-  PanneauControle,
-  usePointsReglages,
-} from '#/components/planning/parametres/ControleReglages.tsx'
 import { useAujourdhui } from '#/components/planning/hooks/usePlanning.ts'
 import { Button } from '#/components/ui/button.tsx'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '#/components/ui/dialog.tsx'
 import {
   LIBELLE_ECRAN,
   ORDRE_ECRANS,
@@ -48,6 +36,7 @@ import {
   besoinsDemandes,
   momentsAccueilDemandes,
   ordonnerPoints,
+  verifierReglages,
 } from '#/lib/planning/coherence.ts'
 import type {
   EcranReglage,
@@ -163,6 +152,18 @@ const SANS_GRILLE: readonly EcranReglage[] = ['horaires', 'postes', 'equipe']
 export function grilleInutile(points: readonly PointReglage[]): boolean {
   return points.some(
     (p) => p.gravite === 'bloquant' && SANS_GRILLE.includes(p.ecran),
+  )
+}
+
+/** Les points des réglages, recalculés seulement quand ils changent : ils
+ * ne servent plus qu'à savoir si un réglage BLOQUANT manque. */
+function usePointsReglages(
+  referentiel: Referentiel | undefined,
+  aujourdhui?: string,
+): PointReglage[] | null {
+  return useMemo(
+    () => (referentiel ? verifierReglages(referentiel, { aujourdhui }) : null),
+    [referentiel, aujourdhui],
   )
 }
 
@@ -341,133 +342,22 @@ export function GardeDemarrage({
   )
 }
 
-// ------------------------------------------------------------ confirmation
-
-/** Ce qu'on a accepté : chaque point, avec son texte (un point dont le
- * chiffre change, il manque 12 h devenu 40 h, redemande). */
-export function signaturePoints(points: readonly PointReglage[]): string {
-  return points
-    .map((p) => `${p.id}\u0000${p.texte}`)
-    .sort()
-    .join('\u0001')
-}
+// ------------------------------------------------------------ génération
 
 /**
- * `demander(lancer)` : refuse s'il reste un bloquant (message dans le fil),
- * lance directement s'il n'y a rien à voir (ou si cette liste a déjà été
- * acceptée), sinon ouvre la confirmation. Monter `dialogue` une fois.
+ * `demander(lancer)` : refuse s'il reste un réglage BLOQUANT (message dans le
+ * fil), lance sinon. La fenêtre « N points à vérifier » qui précédait le
+ * calcul est RETIRÉE (demande utilisateur du 2026-11-11 : « ça
+ * m'intéresse pas »), comme la pastille À vérifier des paramètres.
  */
 export function useConfirmationGeneration(etat: EtatGeneration) {
   const notifier = useNotifier()
-  const aller = useAllerAuReglage()
-  const [attente, setAttente] = useState<(() => void) | null>(null)
-  // Dernière liste acceptée, dans l'état de la vue (semaine ou mois) : elle
-  // survit au changement de semaine, pas à la fermeture de la vue.
-  const [acceptee, setAcceptee] = useState<string | null>(null)
   const demander = (lancer: () => void) => {
     if (etat.blocage) {
       notifier(etat.blocage.texte, 'attention')
       return
     }
-    if (!etat.aVoir.length || acceptee === signaturePoints(etat.aVoir)) {
-      lancer()
-      return
-    }
-    setAttente(() => lancer)
+    lancer()
   }
-  const dialogue = (
-    <ConfirmationGeneration
-      ouvert={!!attente}
-      points={etat.aVoir}
-      onFermer={() => setAttente(null)}
-      onGenerer={() => {
-        const lancer = attente
-        setAcceptee(signaturePoints(etat.aVoir))
-        setAttente(null)
-        lancer?.()
-      }}
-      onAller={(lien) => {
-        setAttente(null)
-        aller(lien)
-      }}
-    />
-  )
-  return { demander, dialogue }
-}
-
-export function ConfirmationGeneration({
-  ouvert,
-  points,
-  onFermer,
-  onGenerer,
-  onAller,
-}: {
-  ouvert: boolean
-  points: PointReglage[]
-  onFermer: () => void
-  onGenerer: () => void
-  onAller: (lien: LienReglage) => void
-}) {
-  const [deplie, setDeplie] = useState(false)
-  const fermer = () => {
-    setDeplie(false)
-    onFermer()
-  }
-  const n = points.length
-  const resume = `${n} point${n > 1 ? 's' : ''} à vérifier`
-  return (
-    <Dialog
-      open={ouvert}
-      onOpenChange={(o) => {
-        if (!o) fermer()
-      }}
-    >
-      <DialogContent className="flex max-h-[90dvh] flex-col sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Générer le planning ?</DialogTitle>
-          <DialogDescription>
-            {resume} dans les réglages. Vous pouvez générer quand même : les
-            shifts générés restent des propositions, que vous relisez et validez
-            ensuite.
-          </DialogDescription>
-        </DialogHeader>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="self-start"
-          aria-expanded={deplie}
-          onClick={() => setDeplie((d) => !d)}
-        >
-          <ChevronDown
-            className={cn('transition-transform', deplie && 'rotate-180')}
-          />
-          {deplie
-            ? n > 1
-              ? 'Masquer les points'
-              : 'Masquer le point'
-            : n > 1
-              ? `Voir les ${resume}`
-              : 'Voir le point à vérifier'}
-        </Button>
-        {deplie && (
-          <div className="min-h-0 overflow-y-auto">
-            <PanneauControle points={points} onAller={onAller} />
-          </div>
-        )}
-        <DialogFooter>
-          <Button variant="outline" onClick={fermer}>
-            Annuler
-          </Button>
-          <Button
-            onClick={() => {
-              setDeplie(false)
-              onGenerer()
-            }}
-          >
-            Générer quand même
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
+  return { demander, dialogue: null }
 }

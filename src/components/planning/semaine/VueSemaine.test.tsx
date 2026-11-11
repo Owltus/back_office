@@ -203,12 +203,8 @@ describe('VueSemaine', () => {
     expect(
       (bouton('Verrouiller la semaine') as HTMLButtonElement).disabled,
     ).toBe(true)
+    // Plus de fenêtre « points à vérifier » (2026-11-11) : le calcul part.
     fireEvent.click(bouton('Compléter le planning'))
-    // L'hôtel fictif a des points à voir : la génération les montre d'abord.
-    expect(etat.generer).not.toHaveBeenCalled()
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Générer quand même' }),
-    )
     await waitFor(() =>
       expect(etat.generer).toHaveBeenCalledWith(LUNDI, {
         signal: expect.any(AbortSignal),
@@ -236,9 +232,6 @@ describe('VueSemaine', () => {
     try {
       rendre()
       fireEvent.click(bouton('Compléter le planning'))
-      fireEvent.click(
-        await screen.findByRole('button', { name: 'Générer quand même' }),
-      )
       const texte = await screen.findByText(
         /^Planning généré. 3 shifts proposés/,
       )
@@ -477,36 +470,14 @@ describe('VueSemaine', () => {
       ).toBe(true)
     })
 
-    it('seed prêt : Compléter actif, sans description de blocage ; Annuler ne génère pas', async () => {
+    it('seed prêt : Compléter actif, sans blocage, le calcul part sans fenêtre (2026-11-11)', async () => {
       etat.droits = { pret: true, lire: true, ecrire: true, gerer: false }
       rendre()
       const completer = bouton('Compléter le planning') as HTMLButtonElement
       expect(completer.disabled).toBe(false)
       expect(completer.getAttribute('aria-describedby')).toBeNull()
       fireEvent.click(completer)
-      const dialogue = await screen.findByRole('dialog')
-      expect(
-        within(dialogue).getByText(/3 points à vérifier dans les réglages/),
-      ).toBeTruthy()
-      fireEvent.click(within(dialogue).getByRole('button', { name: 'Annuler' }))
-      expect(etat.generer).not.toHaveBeenCalled()
-    })
-
-    it('liste acceptée : le clic suivant génère sans redemander', async () => {
-      etat.droits = { pret: true, lire: true, ecrire: true, gerer: false }
-      rendre()
-      fireEvent.click(bouton('Compléter le planning'))
-      fireEvent.click(
-        await screen.findByRole('button', { name: 'Générer quand même' }),
-      )
       await waitFor(() => expect(etat.generer).toHaveBeenCalledTimes(1))
-      await waitFor(() =>
-        expect(
-          (bouton('Compléter le planning') as HTMLButtonElement).disabled,
-        ).toBe(false),
-      )
-      fireEvent.click(bouton('Compléter le planning'))
-      await waitFor(() => expect(etat.generer).toHaveBeenCalledTimes(2))
       expect(screen.queryByRole('dialog')).toBeNull()
     })
 

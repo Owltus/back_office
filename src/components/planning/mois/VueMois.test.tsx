@@ -91,10 +91,9 @@ const { FilMessages } = await import('#/components/planning/Messages.tsx')
 /** « Compléter le mois » : l'hôtel fictif a des points à voir dans ses
  * réglages, la génération les montre d'abord (étape 7). */
 async function completerLeMois() {
+  // Plus de fenêtre « points à vérifier » (2026-11-11) : le calcul part.
   fireEvent.click(screen.getByRole('button', { name: 'Compléter le mois' }))
-  fireEvent.click(
-    await screen.findByRole('button', { name: 'Générer quand même' }),
-  )
+  await Promise.resolve()
 }
 
 function monter() {

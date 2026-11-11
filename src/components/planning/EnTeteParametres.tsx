@@ -24,7 +24,6 @@ import {
   Users,
 } from 'lucide-react'
 
-import { ControleReglages } from '#/components/planning/parametres/ControleReglages.tsx'
 import { usePretAGenerer } from '#/components/planning/PretAGenerer.tsx'
 import { useReferentiel } from '#/components/planning/hooks/usePlanning.ts'
 
@@ -71,7 +70,8 @@ export function MenuParametres({ actif }: { actif?: CheminParametre }) {
   const fait = new Set(etapes.filter((e) => e.fait).map((e) => e.ecran))
   return (
     <>
-      {actif && <ControleReglages />}
+      {/* Pastille « À vérifier » RETIRÉE le 2026-11-11 (demande
+          utilisateur : « ça m'intéresse pas »). */}
       <DropdownMenu>
         <Tip label="Paramètres : horaires et absences, postes, équipe, besoins">
           <DropdownMenuTrigger asChild>

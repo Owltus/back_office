@@ -3,7 +3,6 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { TooltipProvider } from '#/components/ui/tooltip.tsx'
-import type { PointReglage } from '#/lib/planning/coherence.ts'
 
 vi.mock('#/lib/supabase.ts', () => ({ supabase: {} }))
 vi.mock('#/components/planning/EnTeteParametres.tsx', () => ({
@@ -12,10 +11,6 @@ vi.mock('#/components/planning/EnTeteParametres.tsx', () => ({
 
 const { resumeCycles, resumePoints } =
   await import('#/components/planning/attention.ts')
-const { etiquetteAVerifier } =
-  await import('#/components/planning/parametres/ControleReglages.tsx')
-const { ConfirmationGeneration } =
-  await import('#/components/planning/PretAGenerer.tsx')
 const { EnTeteSemaine } =
   await import('#/components/planning/semaine/EnTeteSemaine.tsx')
 
@@ -59,43 +54,6 @@ describe('5. résumé des points : le vocabulaire de « Personnes par cycle »',
       aRegarder: [],
     } as unknown as Parameters<typeof resumePoints>[0])
     expect(texte).toBe("1 point : 1 moment de l'accueil à compléter.")
-  })
-})
-
-describe('6. À vérifier : la pastille dit sa part de données à ranger', () => {
-  it('29 = 13 points des réglages + 16 données à ranger', () => {
-    expect(etiquetteAVerifier(13, 16)).toBe(
-      'À vérifier : 29 points, dont 16 shifts à corriger',
-    )
-    expect(etiquetteAVerifier(13, 0)).toBe('À vérifier : 13 points')
-    expect(etiquetteAVerifier(0, 1)).toBe(
-      'À vérifier : 1 point, dont 1 shift à corriger',
-    )
-    expect(etiquetteAVerifier(0, 0)).toBe(
-      'Réglages cohérents : rien à vérifier',
-    )
-  })
-  it('la boîte de génération dit que les données à ranger n’y sont pas', () => {
-    const points: PointReglage[] = Array.from({ length: 13 }, (_, i) => ({
-      id: `p${i}`,
-      gravite: 'a-voir',
-      ecran: 'besoins',
-      texte: `Point ${i}`,
-      lien: { page: '/planning/besoins' },
-    }))
-    render(
-      <ConfirmationGeneration
-        ouvert
-        points={points}
-        onFermer={vi.fn()}
-        onGenerer={vi.fn()}
-        onAller={vi.fn()}
-      />,
-    )
-    expect(
-      screen.getByText(/13 points à vérifier dans les réglages/),
-    ).toBeTruthy()
-    expect(screen.getByText(/Vous pouvez générer quand même/)).toBeTruthy()
   })
 })
 

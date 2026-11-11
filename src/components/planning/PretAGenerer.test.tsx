@@ -1,18 +1,9 @@
 // @vitest-environment jsdom
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  renderHook,
-  screen,
-} from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type * as ModRouteur from '@tanstack/react-router'
-import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { verifierReglages } from '#/lib/planning/coherence.ts'
-import type { PointReglage } from '#/lib/planning/coherence.ts'
 import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
 import { SEMAINE_TYPE_VIDE } from '#/lib/planning/types.ts'
 import type { Referentiel, Salarie } from '#/lib/planning/types.ts'
@@ -25,15 +16,12 @@ vi.mock('@tanstack/react-router', async (orig) => ({
 }))
 
 const {
-  ConfirmationGeneration,
   GardeDemarrage,
   PourCommencer,
   blocageGeneration,
   etapesDemarrage,
   grilleInutile,
-  useConfirmationGeneration,
 } = await import('#/components/planning/PretAGenerer.tsx')
-const { FilMessages } = await import('#/components/planning/Messages.tsx')
 
 afterEach(cleanup)
 
@@ -227,42 +215,6 @@ describe('blocageGeneration', () => {
   })
 })
 
-describe('ConfirmationGeneration', () => {
-  const points: PointReglage[] = Array.from({ length: 8 }, (_, i) => ({
-    id: `p${i}`,
-    gravite: 'a-voir',
-    ecran: 'equipe',
-    texte: `Point ${i}`,
-    lien: { page: '/planning/equipe' },
-  }))
-
-  it('points repliés, puis dépliés ; Générer quand même lance', () => {
-    const onGenerer = vi.fn()
-    render(
-      <ConfirmationGeneration
-        ouvert
-        points={points}
-        onFermer={vi.fn()}
-        onGenerer={onGenerer}
-        onAller={vi.fn()}
-      />,
-    )
-    expect(
-      screen.getByText(/8 points à vérifier dans les réglages/),
-    ).toBeTruthy()
-    expect(screen.getByText(/restent des propositions/)).toBeTruthy()
-    expect(screen.queryByText('Point 0')).toBeNull()
-    const deplier = screen.getByRole('button', {
-      name: 'Voir les 8 points à vérifier',
-    })
-    expect(deplier.getAttribute('aria-expanded')).toBe('false')
-    fireEvent.click(deplier)
-    expect(screen.getByText('Point 0')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Générer quand même' }))
-    expect(onGenerer).toHaveBeenCalledTimes(1)
-  })
-})
-
 describe('GardeDemarrage', () => {
   const etat = (r: Referentiel) => {
     const points = verifierReglages(r)
@@ -303,95 +255,5 @@ describe('GardeDemarrage', () => {
     garde(apres(2))
     expect(screen.queryByText('grille')).toBeNull()
     expect(screen.getByRole('heading', { name: 'Pour commencer' })).toBeTruthy()
-  })
-})
-
-describe('useConfirmationGeneration : mémoire de l accord', () => {
-  const point = (texte: string): PointReglage => ({
-    id: 'heures:1',
-    gravite: 'a-voir',
-    ecran: 'besoins',
-    texte,
-    lien: { page: '/planning/besoins' },
-  })
-  const etatAvec = (p: PointReglage[]) => ({
-    points: p,
-    etapes: [],
-    blocage: null,
-    grilleInutile: false,
-    aVoir: p,
-  })
-  const enveloppe = ({ children }: { children: ReactNode }) => (
-    <FilMessages>{children}</FilMessages>
-  )
-
-  it('acceptée une fois, la même liste passe ; un texte changé redemande', () => {
-    const lancer = vi.fn()
-    const { result, rerender } = renderHook(
-      ({ e }) => useConfirmationGeneration(e),
-      {
-        wrapper: enveloppe,
-        initialProps: { e: etatAvec([point('Il manque 12 h.')]) },
-      },
-    )
-    // Première demande : la boîte s'ouvre, rien n'est lancé.
-    act(() => result.current.demander(lancer))
-    expect(lancer).not.toHaveBeenCalled()
-    const boite = render(result.current.dialogue, { wrapper: enveloppe })
-    fireEvent.click(screen.getByRole('button', { name: 'Générer quand même' }))
-    expect(lancer).toHaveBeenCalledTimes(1)
-    boite.unmount()
-
-    // Même liste : lancée directement.
-    act(() => result.current.demander(lancer))
-    expect(lancer).toHaveBeenCalledTimes(2)
-
-    // Même point, texte changé : la question revient.
-    rerender({ e: etatAvec([point('Il manque 40 h.')]) })
-    act(() => result.current.demander(lancer))
-    expect(lancer).toHaveBeenCalledTimes(2)
-  })
-
-  it('une autre ouverture (autre compte, page rechargée) redemande', () => {
-    const lancer = vi.fn()
-    const e = etatAvec([point('Il manque 12 h.')])
-    const a = renderHook(() => useConfirmationGeneration(e), {
-      wrapper: enveloppe,
-    })
-    act(() => a.result.current.demander(lancer))
-    render(a.result.current.dialogue, { wrapper: enveloppe })
-    fireEvent.click(screen.getByRole('button', { name: 'Générer quand même' }))
-    expect(lancer).toHaveBeenCalledTimes(1)
-    cleanup()
-    const b = renderHook(() => useConfirmationGeneration(e), {
-      wrapper: enveloppe,
-    })
-    act(() => b.result.current.demander(lancer))
-    expect(lancer).toHaveBeenCalledTimes(1)
-  })
-})
-
-describe('ConfirmationGeneration : un seul point', () => {
-  it('Voir le point à vérifier, au singulier', () => {
-    render(
-      <ConfirmationGeneration
-        ouvert
-        points={[
-          {
-            id: 'p',
-            gravite: 'a-voir',
-            ecran: 'equipe',
-            texte: 'Un point',
-            lien: { page: '/planning/equipe' },
-          },
-        ]}
-        onFermer={vi.fn()}
-        onGenerer={vi.fn()}
-        onAller={vi.fn()}
-      />,
-    )
-    expect(
-      screen.getByRole('button', { name: 'Voir le point à vérifier' }),
-    ).toBeTruthy()
   })
 })

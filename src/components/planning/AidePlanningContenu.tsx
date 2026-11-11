@@ -623,10 +623,9 @@ export function AidePlanningContenu({
           </li>
         </ol>
         <p className="text-muted-foreground">
-          La pastille À vérifier, à côté de l’engrenage, relit les réglages et
-          dit ce qui ne colle pas. Le menu coche chaque écran sans point
-          bloquant. Quand les quatre sont cochés, le planning est prêt à
-          générer.
+          Le menu de l’engrenage coche chaque écran réglé. Quand les quatre sont
+          cochés, le planning est prêt à générer. S’il manque un réglage
+          indispensable, le planning le dit au moment de générer.
         </p>
         <p>
           Chaque semaine est calculée en regardant aussi la suivante : qui
@@ -1312,10 +1311,6 @@ export function AidePlanningContenu({
         <Tableau
           entetes={['Où', 'Ce qu’on y lit']}
           lignes={[
-            [
-              'À vérifier',
-              'Pastille à côté de l’engrenage, sur les écrans de paramètres. Les réglages qui ne collent pas, rangés par écran, chacun avec un lien vers le réglage. Les points bloquants empêchent de générer.',
-            ],
             [
               'Points d’attention',
               'Bouton de la semaine et du mois. Du plus grave au moins grave : la loi, les places à pourvoir, l’accueil du matin, du soir et de la nuit, les trous, puis le reste par personne.',
