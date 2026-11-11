@@ -324,7 +324,7 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
             </div>
             {/* Un tableau par moment, l'un sous l'autre (demande utilisateur
                 du 2026-11-11 : plus de colonnes côte à côte). */}
-            <div className="flex max-w-3xl flex-col gap-6">
+            <div className="flex w-full flex-col gap-6">
               {grouperHoraires(data.horaires, lireRegles(data).moments).map(
                 (g) => (
                   <TableauHoraires
