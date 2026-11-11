@@ -43,8 +43,6 @@ export const JOURS_TRAVAILLES_PREFERES = 5
  * laisser se reposer »). Le générateur l'évite (`POIDS_JOUR_AFFILE`), le
  * vérificateur le signale (JOURS-AFFILES) ; la loi en permet jusqu'à 12. */
 export const JOURS_AFFILES_MAX = REGLES_PAR_DEFAUT.repos.joursAffilesMax
-/** Contrats à rythme de 5 jours : 35 h et plus (2026-11-01). */
-export const RYTHME_CONTRAT_MIN = REGLES_PAR_DEFAUT.repos.rythmeContratMin
 
 /** Les semaines « humaines » du 2026-11-04 (décision d'une responsable) :
  * au plus `JOURS_AFFILES_CONSEILLES` jours d'affilée et jamais un jour de
@@ -177,10 +175,6 @@ export const ECOLE_VEILLE_FIN = REGLES_PAR_DEFAUT.ecole.veilleFin
 /** Règle 14 : le lendemain d'un jour d'école, pas de service qui commence
  * avant cette heure. */
 export const ECOLE_LENDEMAIN_DEBUT = REGLES_PAR_DEFAUT.ecole.lendemainDebut
-/** Règle 12 : au-delà du contrat ce nombre de semaines sur 4 (celle-ci
- * comprise) : alerte. */
-export const SEMAINES_EN_PLUS_ALERTE =
-  REGLES_PAR_DEFAUT.heures.semainesEnPlusAlerte
 
 export const REPOS_DEUX_SEMAINES = 3
 export const TEMPS_PLEIN = 35 * H
@@ -189,17 +183,10 @@ export const TEMPS_PLEIN = 35 * H
  * le jour d'un horaire de MOINS de `JOURNEE_PLEINE` (décision utilisateur du
  * 2026-11-02 : un horaire qui existe, plus aucun raccourci). */
 export const JOURNEE_PLEINE = REGLES_PAR_DEFAUT.contrats.journeePleine
-export const JOURNEES_COURTES_MAX =
-  REGLES_PAR_DEFAUT.contrats.journeesCourtesMax
 /** Version étoile d'un horaire de 8 h (`etoile.ts`) : un horaire d'AU MOINS
  * 7 h (et de moins de 8 h), la journée de 7 h des 39 h. Un horaire plus
  * court (3 h, 5 h) n'est pas proposé comme journée étoile. */
 export const JOURNEE_ETOILE_MIN = REGLES_PAR_DEFAUT.contrats.journeeEtoileMin
-/** Les journées du calcul (`journeesDuCalcul`) : 7 h et 8 h pile, et les
- * deux contrats qui en ont une. */
-export const JOURNEE_COURTE = REGLES_PAR_DEFAUT.contrats.journeeCourte
-export const CONTRAT_35H = REGLES_PAR_DEFAUT.contrats.journees[0].minutesHebdo
-export const CONTRAT_39H = REGLES_PAR_DEFAUT.contrats.journees[1].minutesHebdo
 /** R-ABSENCE-HEURES : un jour d'absence compté vaut une journée ; 5 au plus. */
 export const JOURS_CONTRAT = 5
 /** R-CADRE-FJ : seuls le repos de 11 h et le repos hebdo, soit 13 h d'amplitude. */

@@ -1553,26 +1553,68 @@ export function violationsAccueil(
  * listé (il ne vient jamais seul, D5), ni celui qui tient déjà l'un de ces
  * candidats. Aucun « à appeler » : sur l'accueil, un extra libre est
  * simplement libre. */
+/** Ce que les raisons d'une place relisent à chaque appel : les créneaux,
+ * les présents, l'accompagnement, les shifts de chacun et ses violations
+ * actuelles. L'écran demande les raisons de chaque place vide d'une même
+ * semaine (mêmes `p` et `affectations`) : tout est calculé une seule fois. */
+interface ContexteRaisons {
+  p: Probleme
+  creneaux: Map<string, Creneau>
+  presents: ReturnType<typeof presentsDe>
+  acc: ReturnType<typeof accompagnement>
+  siens: (s: SalarieSolveur) => Creneau[]
+  avant: (s: SalarieSolveur) => Violation[]
+}
+const contextesRaisons = new WeakMap<AffectationSolveur[], ContexteRaisons>()
+
+function contexteRaisons(
+  p: Probleme,
+  affectations: AffectationSolveur[],
+): ContexteRaisons {
+  const deja = contextesRaisons.get(affectations)
+  if (deja && deja.p === p) return deja
+  const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
+  const parSalarie = new Map<string, Creneau[]>()
+  for (const a of affectations) {
+    const c = creneaux.get(a.creneauId)
+    if (c) ajouter(parSalarie, a.salarieId, c)
+  }
+  const avants = new Map<string, Violation[]>()
+  const siens = (s: SalarieSolveur) => parSalarie.get(s.id) ?? []
+  const ctx: ContexteRaisons = {
+    p,
+    creneaux,
+    presents: presentsDe(p, affectations),
+    acc: accompagnement(p),
+    siens,
+    avant: (s) => {
+      let v = avants.get(s.id)
+      if (!v) {
+        v = violationsSalarie(s, siens(s), p.nbJours, true, p.regles)
+        avants.set(s.id, v)
+      }
+      return v
+    },
+  }
+  contextesRaisons.set(affectations, ctx)
+  return ctx
+}
+
 export function raisonsBlocageAccueil(
   p: Probleme,
   affectations: AffectationSolveur[],
   candidatIds: readonly string[],
 ): Map<string, Violation[]> {
-  const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
+  const { creneaux, presents, acc, ...lire } = contexteRaisons(p, affectations)
   const cibles = candidatIds
     .map((id) => creneaux.get(id))
     .filter((c): c is Creneau => c !== undefined)
   const raisons = new Map<string, Violation[]>()
-  const presents = presentsDe(p, affectations)
-  const acc = accompagnement(p)
   for (const s of p.salaries) {
-    const siens = affectations
-      .filter((a) => a.salarieId === s.id)
-      .map((a) => creneaux.get(a.creneauId))
-      .filter((c): c is Creneau => c !== undefined)
-    const avant = violationsSalarie(s, siens, p.nbJours, true, p.regles)
+    const siens = lire.siens(s)
     // Déjà compté dans ce moment : ce n'est pas lui qui manque.
     if (cibles.some((c) => siens.includes(c))) continue
+    const avant = lire.avant(s)
     let meilleure: Violation[] | null = null
     for (const cible of cibles) {
       if (!autonomeSur(s, cible.poste)) continue
@@ -1612,19 +1654,14 @@ export function raisonsBlocage(
   affectations: AffectationSolveur[],
   creneauId: string,
 ): Map<string, Violation[]> {
-  const creneaux = new Map(p.creneaux.map((c) => [c.id, c]))
+  const { creneaux, presents, acc, ...lire } = contexteRaisons(p, affectations)
   const cible = creneaux.get(creneauId)
   const raisons = new Map<string, Violation[]>()
   if (!cible) return raisons
-  const presents = presentsDe(p, affectations)
-  const acc = accompagnement(p)
   for (const s of p.salaries) {
     const n = niveauSur(s, cible.poste)
     if (!n?.autonome) continue
-    const siens = affectations
-      .filter((a) => a.salarieId === s.id)
-      .map((a) => creneaux.get(a.creneauId))
-      .filter((c): c is Creneau => c !== undefined)
+    const siens = lire.siens(s)
     if (siens.includes(cible)) continue
     // Niveau demandé (2026-11-05) : un niveau moins préféré ne tient
     // jamais la place, comme dans le calcul (`compatible`).
@@ -1640,7 +1677,7 @@ export function raisonsBlocage(
       ])
       continue
     }
-    const avant = violationsSalarie(s, siens, p.nbJours, true, p.regles)
+    const avant = lire.avant(s)
     const apres = violationsSalarie(
       s,
       [...siens, cible],

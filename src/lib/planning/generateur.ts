@@ -1494,7 +1494,8 @@ export function construire(
   // (`extraNuit`, au-delà de `POIDS_PASSATION` déjà dans `pireMoral`) entre
   // dans le prix des places de nuit (P1). Règle fixe du 2026-11-06.
   const zones: ZonePrix[] = []
-  for (const z of zonesPassation(p)) {
+  const passationsZones = zonesPassation(p)
+  for (const z of passationsZones) {
     const relais = new Set<Creneau>()
     if (z.veille) for (const c of z.relais(z.veille)) relais.add(c)
     for (const n of z.nuits) for (const c of z.relais(n)) relais.add(c)
@@ -1506,22 +1507,30 @@ export function construire(
     // est ce qui peut la casser), le plus bas.
     const nuits = z.nuits.length ? z.nuits : [...relais]
     zones.push({
-      cle: `${z.zone === premiereZone ? '' : `${z.zone}|`}${z.jour}|${z.cote}`,
+      cle: clePassation(z, premiereZone),
       plus,
       rang: nuits.length
         ? Math.min(...nuits.map((c) => rangImportance(c.indispensable)))
         : RANG_AUTRE,
     })
   }
+  // Le prix d'une place vide, calculé une fois par créneau.
+  const prixPlaces = new Map<string, number>()
+  const prixPlace = (c: Creneau): number => {
+    let prix = prixPlaces.get(c.id)
+    if (prix === undefined) {
+      prix = coutPlaceVide(
+        c,
+        presenceLaPlusChere,
+        c.place !== null ? besoinDe(c.place) : undefined,
+        R,
+      )
+      prixPlaces.set(c.id, prix)
+    }
+    return prix
+  }
   // IMPORTANCE DES POSTES (D11) et besoins souhaités : `paliersPlaces`.
-  const pl = paliersPlaces(p.creneaux, zones, (c) =>
-    coutPlaceVide(
-      c,
-      presenceLaPlusChere,
-      c.place !== null ? besoinDe(c.place) : undefined,
-      R,
-    ),
-  )
+  const pl = paliersPlaces(p.creneaux, zones, prixPlace)
   // Une passation : une place (`coutPlace`, la base de ses relais), plus
   // `POIDS_PASSATION` et son palier.
   const placePassation = new Map(
@@ -1540,25 +1549,19 @@ export function construire(
   const basesMinimum = comptent.map((cs) =>
     coutManqueMinimum(cs, presenceLaPlusChere, besoinDe, R),
   )
-  const restesMinimum = comptent.map((cs) => {
-    const rang = rangDe(cs.filter((c) => !c.ferme))
-    return nuitDe(cs, rang) + pl.decalage(rang)
-  })
+  const rangsMinimum = comptent.map((cs) => rangDe(cs.filter((c) => !c.ferme)))
+  const restesMinimum = comptent.map(
+    (cs, i) => nuitDe(cs, rangsMinimum[i]) + pl.decalage(rangsMinimum[i]),
+  )
   const coutsMinimum = basesMinimum.map((b, i) => b + restesMinimum[i])
   // La place la moins chère du palier le plus haut (`seuilPlaces`) : ce
   // que vaut UNE place qu'un repos seul ou un bloc de 4 peut remplir.
   const hautes = placesHautes(
     p.creneaux,
     pl,
-    (c) =>
-      coutPlaceVide(
-        c,
-        presenceLaPlusChere,
-        c.place !== null ? besoinDe(c.place) : undefined,
-        R,
-      ),
+    prixPlace,
     comptent,
-    comptent.map((cs) => rangDe(cs.filter((c) => !c.ferme))),
+    rangsMinimum,
     coutsMinimum,
   )
   const seuil = hautes.size ? Math.min(...hautes.values()) : 0
@@ -1969,15 +1972,10 @@ export function construire(
   const releves = relevesAccueil(m, p, termesDe)
   const passations = passationsVeilleur(
     m,
-    p,
+    passationsZones,
     termesDe,
     borneDe,
-    // Même clé que `zones` (relecture du 2026-11-10 : une zone autre que la
-    // première n'était jamais trouvée, sa passation tombait à 300 000).
-    (z) =>
-      placePassation.get(
-        `${z.zone === premiereZone ? '' : `${z.zone}|`}${z.jour}|${z.cote}`,
-      ),
+    (z) => placePassation.get(clePassation(z, premiereZone)),
   )
   equipesSynchro(m, p, termesDe, borneDe)
 
@@ -4424,12 +4422,10 @@ function relevesDeZone(
  */
 function passationsVeilleur(
   m: Modele,
-  p: Probleme,
+  zonesP: ZonePassation[],
   termesDe: (c: Creneau, quoi: 'autonomes') => Terme[],
   borne: (c: Creneau) => number,
-  placeDe: (
-    z: ZonePassation,
-  ) => { base: number; reste: number } | undefined = () => undefined,
+  placeDe: (z: ZonePassation) => { base: number; reste: number } | undefined,
 ): Array<Passation & { v: string }> {
   const r: Array<Passation & { v: string }> = []
   const tenu = new Map<string, Terme[]>()
@@ -4450,7 +4446,7 @@ function passationsVeilleur(
   }
   const moins = (cs: Creneau[]): Terme[] =>
     cs.flatMap((c) => negatifs(termesDe(c, 'autonomes')))
-  for (const z of zonesPassation(p)) {
+  for (const z of zonesP) {
     // manque >= tenu - relais - nuits d'avant ; tenu = 1 pour la veille.
     const lignes: Array<{ termes: Terme[]; tenue: number }> = []
     if (z.veille !== null)
@@ -4503,6 +4499,13 @@ export interface ZonePassation {
  * comme la relève : un soir non demandé n'est pas ajouté pour elle. Le
  * dernier matin (lendemain dans la semaine suivante) n'est pas cherché ; le
  * lundi matin l'est, face à `Probleme.veilleDuLundi`. */
+/** La clé du prix d'une passation : la même pour le calcul du prix et pour
+ * sa pose (relecture du 2026-11-10 : une zone autre que la première n'était
+ * jamais trouvée). Sans préfixe pour la première zone. */
+function clePassation(z: ZonePassation, premiereZone: string): string {
+  return `${z.zone === premiereZone ? '' : `${z.zone}|`}${z.jour}|${z.cote}`
+}
+
 export function zonesPassation(
   p: Pick<Probleme, 'creneaux' | 'nbJours' | 'consignes' | 'veilleDuLundi'> &
     Partial<Pick<Probleme, 'regles'>>,

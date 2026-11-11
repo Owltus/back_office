@@ -5,15 +5,11 @@ import { periodeLibre } from '#/lib/planning/presence.ts'
 import {
   CHANGEMENTS_MOMENT_MAX,
   CONGE_LONG,
-  CONTRAT_35H,
-  CONTRAT_39H,
   ECOLE_LENDEMAIN_DEBUT,
   ECOLE_VEILLE_FIN,
   EQUIPE_TOLERANCE,
-  JOURNEE_COURTE,
   JOURNEE_ETOILE_MIN,
   JOURNEE_PLEINE,
-  JOURNEES_COURTES_MAX,
   JOURS_AFFILES_CONSEILLES,
   JOURS_AFFILES_MAX,
   MOMENT_ARRIERE_JOURS,
@@ -21,8 +17,6 @@ import {
   RELEVE_MINUTES,
   REPOS_APRES_NUITS,
   REPOS_CONFORT,
-  RYTHME_CONTRAT_MIN,
-  SEMAINES_EN_PLUS_ALERTE,
 } from '#/lib/planning/regles.ts'
 import {
   journeesDuContrat,
@@ -41,7 +35,11 @@ describe('REGLES_PAR_DEFAUT : l’hôtel d’aujourd’hui, chiffre pour chiffre
   it.each([
     ['JOURS_AFFILES_MAX', JOURS_AFFILES_MAX, 6],
     ['JOURS_AFFILES_CONSEILLES', JOURS_AFFILES_CONSEILLES, 5],
-    ['RYTHME_CONTRAT_MIN', RYTHME_CONTRAT_MIN, 35 * H],
+    [
+      'repos.rythmeContratMin',
+      REGLES_PAR_DEFAUT.repos.rythmeContratMin,
+      35 * H,
+    ],
     ['REPOS_CONFORT', REPOS_CONFORT, 12 * H],
     ['EQUIPE_TOLERANCE', EQUIPE_TOLERANCE, 30],
     ['RELEVE_MINUTES', RELEVE_MINUTES, 30],
@@ -52,13 +50,29 @@ describe('REGLES_PAR_DEFAUT : l’hôtel d’aujourd’hui, chiffre pour chiffre
     ['CONGE_LONG', CONGE_LONG, 5],
     ['ECOLE_VEILLE_FIN', ECOLE_VEILLE_FIN, 21 * H],
     ['ECOLE_LENDEMAIN_DEBUT', ECOLE_LENDEMAIN_DEBUT, 8 * H],
-    ['SEMAINES_EN_PLUS_ALERTE', SEMAINES_EN_PLUS_ALERTE, 3],
+    [
+      'heures.semainesEnPlusAlerte',
+      REGLES_PAR_DEFAUT.heures.semainesEnPlusAlerte,
+      3,
+    ],
     ['JOURNEE_PLEINE', JOURNEE_PLEINE, 8 * H],
-    ['JOURNEES_COURTES_MAX', JOURNEES_COURTES_MAX, 1],
+    [
+      'contrats.journeesCourtesMax',
+      REGLES_PAR_DEFAUT.contrats.journeesCourtesMax,
+      1,
+    ],
     ['JOURNEE_ETOILE_MIN', JOURNEE_ETOILE_MIN, 7 * H],
-    ['JOURNEE_COURTE', JOURNEE_COURTE, 7 * H],
-    ['CONTRAT_35H', CONTRAT_35H, 35 * H],
-    ['CONTRAT_39H', CONTRAT_39H, 39 * H],
+    ['contrats.journeeCourte', REGLES_PAR_DEFAUT.contrats.journeeCourte, 7 * H],
+    [
+      'contrats.journees[0]',
+      REGLES_PAR_DEFAUT.contrats.journees[0].minutesHebdo,
+      35 * H,
+    ],
+    [
+      'contrats.journees[1]',
+      REGLES_PAR_DEFAUT.contrats.journees[1].minutesHebdo,
+      39 * H,
+    ],
   ])('%s', (_nom, valeur, attendu) => {
     expect(valeur).toBe(attendu)
   })
