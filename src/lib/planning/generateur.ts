@@ -368,7 +368,9 @@ export const POIDS_JOUR_ISOLE = 4_000
  * décembre : la semaine d'avant comptait sur un lundi que la suivante n'a
  * pas donné). Il ne peut plus changer : le lundi est poussé, au-dessus de
  * la fatigue et d'une heure en plus, sous les places. SOUPLE : un lundi
- * impossible (congé, repos de 11 h) ne rend jamais le modèle impossible. */
+ * impossible (congé, repos de 11 h) ne rend jamais le modèle impossible.
+ * Régime humain seulement (`regimeRythme`) : au rythme 5 et 2, c'est le
+ * bloc court « r T r », déjà payé (2026-11-11). */
 export const POIDS_DIMANCHE_SEUL = 50_000
 /** LES HEURES AVANT LA FATIGUE (décision utilisateur du 2026-11-04, qui
  * renverse celle du 2026-11-03 : « le respect du nombre d'heures est très
@@ -2515,10 +2517,16 @@ export function construire(
 
       // Le dimanche d'avant, seul s'il n'y a pas de lundi
       // (`POIDS_DIMANCHE_SEUL`) : travaillé (série de 1), samedi d'avant
-      // libre, lundi possible et pas déjà posé.
+      // libre, lundi possible et pas déjà posé. Au régime humain seulement :
+      // au rythme 5 et 2, ce dimanche seul est un bloc d'un jour (« r T r »,
+      // `rythmeStrictModele`), payé au prix `fort` aux priorités, bien
+      // au-dessus de cette prime ; le compter ici le payait deux fois
+      // (chantier « une seule suite des jours », 2026-11-11). Lu avec SES
+      // jours (une absence courte le samedi y est du travail, une longue un
+      // jour neutre, où un bloc court est permis).
       if (
         k === 0 &&
-        regimeRythme(s, R) !== 'libre' &&
+        regimeRythme(s, R) === 'humain' &&
         !voisinConnuLibre(s, -1, p.nbJours) &&
         voisinConnuLibre(s, -2, p.nbJours) &&
         !s.joursHorsSite.has(0) &&
