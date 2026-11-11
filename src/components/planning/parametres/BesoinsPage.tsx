@@ -101,7 +101,6 @@ import { estIndispensable } from '#/lib/planning/modele.ts'
 import { estPosteAccueil } from '#/lib/planning/presence.ts'
 import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
 import { zoneDuPoste } from '#/lib/planning/zones.ts'
-import { SectionZones } from '#/components/planning/parametres/besoins/SectionZones.tsx'
 import { reglerBesoin, reglerConsigne } from '#/lib/planning/service.ts'
 import { JOURS } from '#/lib/planning/types.ts'
 import type { Consigne, Poste, Referentiel } from '#/lib/planning/types.ts'
@@ -501,7 +500,6 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
         Entre deux équipes, la suivante arrive au plus tard quand la précédente
         part, nuit comprise. Le planning préfère qu'elles se croisent un moment.
       </p>
-      <SectionZones referentiel={data} modifiable={modifiable} />
     </div>
   )
 

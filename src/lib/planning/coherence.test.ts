@@ -1548,7 +1548,7 @@ describe("verifierReglages, tableau de l'accueil", () => {
       gravite: 'a-voir',
       ecran: 'besoins',
       texte:
-        'Le tableau demande du monde, mais aucun poste n’a de zone. Dans Postes, choisissez la zone des postes qui le tiennent.',
+        'Le tableau demande du monde, mais aucun poste n’est indispensable. Dans Postes, cochez Indispensable au fonctionnement sur les postes qui le tiennent.',
       lien: { page: '/planning/postes' },
     })
     r.consignes = r.consignes.map((c) => ({ ...c, minimum: 0, maximum: 0 }))

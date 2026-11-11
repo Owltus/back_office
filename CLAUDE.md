@@ -3144,6 +3144,21 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   (`arriveesMatin`, semaine.ts) = l'ouverture, ou dans une zone continue le
   début du premier horaire du matin permis au poste (07:00 ici). Une zone
   NON continue et les postes hors zone gardent leurs heures.
+  Textes (même jour) : pas de liste à puces, pas de nom de poste, pas de
+  point-virgule ; le tableau s'appelle « Personnel » (« ne fais pas mention
+  d'accueil ») : « Le nombre minimum de personnes qui doivent être
+  présentes, jour par jour. » ; plus de phrase d'en-tête ni de titre
+  « Postes indispensables » à l'écran.
+  Module 3, ZONES EN DUR (décision utilisateur : « je préférerais l'avoir en
+  dur… c'est des postes polyvalents ») : migration
+  `20261111110000_planning_zone_fixe` (`--avec-donnees`) — UNE zone,
+  « Personnel », toujours en continu ; `planning_postes.zone_id` posé PAR
+  TRIGGER d'après `indispensable` (un poste indispensable entre dans le
+  tableau ; ne pas remettre de choix de zone) ; zone figée (PL409 : ni
+  ajout, ni retrait, ni renommage). Retirés : section Zones de Besoins
+  (`SectionZones.tsx`), choix Zone de Postes, `ajouterZone`,
+  `enregistrerZone`, `supprimerZone`. Le calcul est inchangé (il lit
+  toujours `zone_id`, multi-zones compris dans ses tests).
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

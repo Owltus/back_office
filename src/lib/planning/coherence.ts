@@ -937,7 +937,7 @@ export function verifierReglages(
       'accueil-sans-poste',
       'a-voir',
       'besoins',
-      'Le tableau demande du monde, mais aucun poste n’a de zone. Dans Postes, choisissez la zone des postes qui le tiennent.',
+      'Le tableau demande du monde, mais aucun poste n’est indispensable. Dans Postes, cochez Indispensable au fonctionnement sur les postes qui le tiennent.',
       undefined,
       PAGE_ECRAN.postes,
     )

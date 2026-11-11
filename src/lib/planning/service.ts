@@ -704,33 +704,6 @@ export async function enregistrerMoments(
   )
 }
 
-/** Une zone : ses réglages (gestion). */
-export async function enregistrerZone(
-  id: number,
-  champs: Partial<Omit<Zone, 'id'>>,
-): Promise<void> {
-  auMoinsUne(
-    await supabase
-      .from('planning_zones')
-      .update(champs)
-      .eq('id', id)
-      .select('id'),
-  )
-}
-
-/** Une zone neuve (nom, ordre, tenue en continu). */
-export async function ajouterZone(z: Omit<Zone, 'id'>): Promise<void> {
-  auMoinsUne(await supabase.from('planning_zones').insert(z).select('id'))
-}
-
-/** Retire une zone (gestion) : ses postes n'ont plus de zone, ses chiffres
- * partent avec elle. */
-export async function supprimerZone(id: number): Promise<void> {
-  auMoinsUne(
-    await supabase.from('planning_zones').delete().eq('id', id).select('id'),
-  )
-}
-
 /** Retire un moment (gestion) : refusé par la base s'il sert encore. */
 export async function supprimerMoment(id: string): Promise<void> {
   auMoinsUne(

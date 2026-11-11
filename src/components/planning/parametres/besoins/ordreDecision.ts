@@ -15,10 +15,13 @@ import { accueilActif, estPosteAccueil } from '#/lib/planning/presence.ts'
 import type { Poste } from '#/lib/planning/types.ts'
 
 /** Ce que le réglage change, en une phrase (Postes). */
+/** Un poste indispensable entre dans le tableau du personnel (décision
+ * utilisateur du 2026-11-11, plus de zones à régler : la base pose
+ * `zone_id` d'après `indispensable`). */
 export const AIDE_INDISPENSABLE =
-  "Si ce poste manque, l'hôtel ne peut pas tourner. Le planning le remplit en premier."
+  'Compte dans le tableau du personnel de la page Besoins, tenu sans interruption, jour et nuit. Le planning le remplit en premier.'
 export const AIDE_NON_INDISPENSABLE =
-  "L'hôtel tourne sans lui quelques jours. Le planning le remplit s'il reste du monde."
+  "A sa propre grille dans la page Besoins. Le planning le remplit s'il reste du monde."
 
 /** Les postes ouverts, indispensables ou non (l'ancienne valeur
  * « important » se lit non). */

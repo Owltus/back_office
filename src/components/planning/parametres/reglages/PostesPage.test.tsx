@@ -126,9 +126,9 @@ describe('Postes', () => {
     monter(<PostesPage />)
     const r = carte('Réception')
     fireEvent.click(r.getByRole('button', { name: '23:00–07:45' }))
-    // Une zone (2026-11-06) : Aucune, puis Accueil.
-    fireEvent.click(r.getByRole('radio', { name: 'Aucune' }))
-    fireEvent.click(r.getByRole('radio', { name: 'Accueil' }))
+    // Plus de choix de zone (2026-11-11) : la base la pose d'après
+    // « Indispensable au fonctionnement ».
+    expect(r.queryByRole('radiogroup', { name: 'Zone' })).toBeNull()
     fireEvent.click(r.getByRole('switch', { name: 'Poste fermé' }))
     // Jours fériés chômés le jour même (encadrement, 2026-11-04).
     fireEvent.click(
@@ -144,7 +144,7 @@ describe('Postes', () => {
     fireEvent.click(indispensable)
     expect(
       r.getByText(
-        "Si ce poste manque, l'hôtel ne peut pas tourner. Le planning le remplit en premier.",
+        'Compte dans le tableau du personnel de la page Besoins, tenu sans interruption, jour et nuit. Le planning le remplit en premier.',
       ),
     ).toBeTruthy()
     // Ouverture et fermeture : un seul endroit, la page Besoins.
@@ -162,7 +162,8 @@ describe('Postes', () => {
           couleur: '#000000',
           // M, MI, AM, leurs versions étoile (2026-11-02), puis N ajouté.
           horaires_autorises: [1, 2, 3, 8, 9, 10, 4],
-          zone_id: 1,
+          // Inchangée : la base la remet d'après `indispensable`.
+          zone_id: null,
           ferme: true,
           ouverture: null,
           feries_chomes: true,

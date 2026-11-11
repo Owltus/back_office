@@ -61,8 +61,6 @@ import {
   SelectValue,
 } from '#/components/ui/select.tsx'
 import { Switch } from '#/components/ui/switch.tsx'
-import { Segmente } from '#/components/planning/parametres/equipe/Segmente.tsx'
-import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
 import { dureeHoraire, heures } from '#/lib/planning/affichage.ts'
 import {
   JOUR_MAX_LOI,
@@ -95,15 +93,6 @@ const saisieDe = (p: Poste): SaisiePoste => ({
   indispensable: estIndispensable(p),
   fermeture: p.fermeture ?? null,
 })
-
-/** La zone d'un poste (2026-11-06, remplace le choix Accueil non / matin et
- * soir / nuit) : aucune, ou une zone de l'établissement. Le poste compte
- * dans chaque moment du tableau de sa zone que touchent ses horaires. */
-const AUCUNE_ZONE = 'aucune'
-const nomZone = (r: Referentiel, id: number | null | undefined) =>
-  id == null
-    ? undefined
-    : lireRegles(r).zones.find((z) => z.id === String(id))?.nom
 
 export function PostesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
   const droits = useDroitsPlanning()
@@ -244,12 +233,8 @@ export function PostesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
                     <span className="flex min-w-0 items-center gap-2">
                       <span className="truncate font-medium">{p.nom}</span>
                       {p.ferme && <Etiquette>fermé</Etiquette>}
-                      {!p.ferme && nomZone(ref.data, p.zone_id) && (
-                        <Etiquette>
-                          {nomZone(ref.data, p.zone_id)?.toLocaleLowerCase(
-                            'fr-FR',
-                          )}
-                        </Etiquette>
+                      {!p.ferme && estIndispensable(p) && (
+                        <Etiquette>indispensable</Etiquette>
                       )}
                     </span>
                   }
@@ -472,30 +457,6 @@ function CartePoste({
           etiquette="Couleur du poste"
           onChange={(couleur) => changer({ couleur })}
         />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium">Zone</span>
-        <Segmente<string>
-          label="Zone"
-          valeur={p.zone_id == null ? AUCUNE_ZONE : String(p.zone_id)}
-          options={[
-            { valeur: AUCUNE_ZONE, libelle: 'Aucune' },
-            ...lireRegles(referentiel).zones.map((z) => ({
-              valeur: z.id,
-              libelle: z.nom,
-            })),
-          ]}
-          disabled={!modifiable}
-          onChange={(v) =>
-            changer({ zone_id: v === AUCUNE_ZONE ? null : Number(v) })
-          }
-        />
-        <span className="text-xs text-muted-foreground">
-          {p.zone_id == null
-            ? 'Poste à part : il a sa propre grille dans la page Besoins.'
-            : `Compte dans le tableau ${nomZone(referentiel, p.zone_id) ?? ''} de la page Besoins, à chaque moment que touchent ses horaires, le jour comme la nuit.`}
-        </span>
       </div>
 
       <label className="flex items-start gap-2 text-sm">

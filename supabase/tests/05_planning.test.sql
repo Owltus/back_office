@@ -584,15 +584,15 @@ select is(pg_temp.essai('gestion', array[
   'err=23514', 'moments : un article inconnu est refusé');
 
 -- -------------------------------- zones de l'établissement (2026-11-06) ---
-select is((select nom || ':' || continue from public.planning_zones where id = 1),
-  'Accueil:true', 'zones : l''accueil est la zone 1, tenue en continu');
+-- Zone FIXE depuis le 2026-11-11 : une seule, « Personnel », en continu ; un
+-- poste y entre quand il est indispensable.
+select is((select string_agg(nom || ':' || continue, ',') from public.planning_zones),
+  'Personnel:true', 'zones : une seule, Personnel, tenue en continu');
 select is(pg_temp.essai('gestion', array[
-  'insert into public.planning_zones (id, nom, ordre) values (2, ''Room service'', 1)',
-  'delete from public.planning_consignes',
-  'insert into public.planning_consignes (zone_id, jour, periode, minimum, maximum) values (1, 0, ''matin'', 2, 2)',
-  'insert into public.planning_consignes (zone_id, jour, periode, minimum, maximum) values (2, 0, ''matin'', 1, 1)',
-  'select string_agg(zone_id || ''-'' || minimum, '','' order by zone_id) from public.planning_consignes']),
-  '1-2,2-1', 'zones : une seconde zone a son chiffre, le même matin que l''accueil');
+  'update public.planning_postes set indispensable = true, zone_id = null where id = (select min(id) from public.planning_postes where not indispensable)',
+  'update public.planning_postes set indispensable = false where id = (select min(id) from public.planning_postes where indispensable and zone_id is not null and id <> (select max(id) from public.planning_postes where indispensable))',
+  'select bool_and((zone_id is not null) = indispensable)::text from public.planning_postes']),
+  'true', 'zones : un poste est dans la zone si et seulement s''il est indispensable');
 select is(pg_temp.essai('gestion', array[
   'delete from public.planning_consignes',
   'insert into public.planning_consignes (zone_id, jour, periode, minimum, maximum) values (1, 0, ''matin'', 2, 2)',
@@ -600,7 +600,7 @@ select is(pg_temp.essai('gestion', array[
   'err=23505', 'zones : un seul chiffre par zone, jour et moment');
 select is(pg_temp.essai('ecriture', array[
   'insert into public.planning_zones (nom) values (''Essai'')']),
-  'err=42501', 'zones : l''écriture ne les règle pas');
+  'err=PL409', 'zones : nul n''en ajoute (zone fixe)');
 select is(pg_temp.essai('aucun', array['select count(*) from public.planning_zones']),
   '0', 'zones : aucun ne les lit');
 

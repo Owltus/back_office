@@ -112,7 +112,7 @@ export function TableauAccueil({
         {/* Court et sans nom de poste (demande utilisateur du 2026-11-11). */}
         <p className="text-sm text-muted-foreground">
           {sansJour &&
-            `Aucun poste de jour : rattachez-en un à la zone ${zone.nom} dans Postes. `}
+            'Aucun poste de jour : dans Postes, cochez Indispensable au fonctionnement. '}
           Le nombre minimum de personnes qui doivent être présentes, jour par
           jour.
           {modifiable && ' Cliquez sur une case pour la modifier.'}
