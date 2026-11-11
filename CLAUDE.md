@@ -3103,6 +3103,21 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   temps max 9-10 s → 17-18 s par semaine (mois 31 → 65 s). Banc des 80 scénarios : places 481 →
   464, trous 8 490 → 8 415 min, heures, infractions et fautes de rythme identiques, déplacements
   sans gain 0, temps max 12,2 → 14,9 s. Tests de calcul sur l'hôtel de démo à 30 s.
+- **PREMIER JOUR AU NIVEAU DU RYTHME (2026-11-11, signalement utilisateur : « le premier jour
+  d'un contrat, on est présent et pas en repos »)** : deux stagiaires entrés le lundi 30/11
+  (ids 235 et 236) ; l'un commençait par deux repos, avant comme après le calcul par niveaux (la
+  prime de confort 10 000 perdait contre un déplacement : « rr TTTTT » évite un bloc de 4).
+  `premierJourSurPlace` (`modele.ts`, une définition pour le calcul et le vérificateur) est
+  désormais demandé au niveau du rythme, `POIDS_PREMIER_JOUR` = 1, sous un bloc court (2) : il ne
+  crée jamais de faute de rythme. Pas en dur (un stagiaire sans salarié confirmé possible rendrait
+  le modèle impossible), pas un niveau à part (20 à 40 % de temps en plus). Jours pris (absence,
+  école, repos fixe) sautés ; sans horaire possible, rien demandé ; premier jour déjà passé, plus
+  demandé (`Probleme.depuis`). Vérificateur : alerte `PREMIER-JOUR` (organisation, jamais pour
+  juger une place). Banc de décembre : les deux travaillent le 30/11, places, heures, infractions
+  et fautes de rythme identiques, un bloc de 4 de plus ; banc des 80 identique ; empreintes
+  inchangées. Test : `premierJour.test.ts`. Temps : 97 % chez HiGHS (construction du modèle
+  0,5 s le mois) ; regagner du temps demanderait moins de niveaux ou un modèle plus petit, donc
+  d'autres départages.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 
