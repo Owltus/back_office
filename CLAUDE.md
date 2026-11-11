@@ -3212,6 +3212,18 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   sans poste, la zone comme avant (empreintes inchangées). Pastilles des
   vues : `parMoment` réunit les postes d'un moment (le manque passe devant).
   Test `consignesParPoste.test.ts`.
+  Même jour, suite : tableau en COLONNES Moment | Poste | jours (le moment
+  sur la hauteur de ses postes), sans total ni icône (décisions
+  utilisateur). Pastille « À vérifier » et fenêtre « N points à vérifier »
+  avant le calcul RETIRÉES de toutes les pages (« ça m'intéresse pas » ;
+  `ControleReglages`, `DonneesARanger`, `ConfirmationGeneration` supprimés,
+  seul un réglage bloquant arrête le calcul). Page Horaires : un TABLEAU par
+  moment, l'un sous l'autre ; COULEURS EN DUR (`couleurHoraire`, cycles.ts,
+  calculée à la lecture et à l'enregistrement, plus de nuancier pour un
+  horaire) : nuit bleu, court (< 7 h de travail) violet, puis matin jaune,
+  middle orange, soir vert ; le rose (12:00-20:45) devient orange. Règles
+  des moments gardées (soir = fin APRÈS 21 h, pas 22 h : à 22 h, cinq
+  soirs réels passaient en middle, hors du tableau).
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

@@ -36,6 +36,37 @@ import type { Horaire, Periode } from '#/lib/planning/types.ts'
  * d'après son début) ; sa LONGUEUR reste une règle des remplaçants : un
  * horaire court ne remplace qu'un court, et n'est remplacé que par un court
  * (comme quand « court » était son propre cycle). */
+/** Les couleurs d'un horaire, EN DUR (décision utilisateur du 2026-11-11 :
+ * « violet pour les shifts assez courts, orange en middle, bleu la nuit,
+ * vert le soir », le matin garde son jaune ; le rose disparaît). */
+export const COULEURS_HORAIRE = {
+  court: '#a78bfa',
+  matin: '#facc15',
+  middle: '#fb923c',
+  soir: '#22c55e',
+  nuit: '#3b82f6',
+} as const
+
+/** La couleur d'un horaire d'après son moment et sa longueur : la nuit en
+ * bleu, sinon un horaire court en violet, sinon la couleur de son moment.
+ * Calculée à la lecture et à l'enregistrement, jamais choisie. */
+export function couleurHoraire(
+  h: Pick<Horaire, 'debut' | 'fin' | 'pause' | 'periode'>,
+): string {
+  if (estNuit(MOMENTS_HOTEL, h.periode)) return COULEURS_HORAIRE.nuit
+  if (estCourt(h)) return COULEURS_HORAIRE.court
+  const par: Record<string, string> = COULEURS_HORAIRE
+  return (h.periode && par[h.periode]) || COULEURS_HORAIRE.middle
+}
+
+/** L'horaire avec sa couleur calculée (`couleurHoraire`). */
+export function avecCouleurCalculee<
+  T extends Pick<Horaire, 'debut' | 'fin' | 'pause' | 'periode' | 'couleur'>,
+>(h: T): T {
+  const couleur = couleurHoraire(h)
+  return h.couleur === couleur ? h : { ...h, couleur }
+}
+
 export function estCourt(
   h: Pick<Horaire, 'debut' | 'fin' | 'pause'>,
   /** La journée courte de l'établissement (7 h à l'hôtel). */

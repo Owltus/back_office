@@ -12,6 +12,7 @@
 import { partielle, refusDroits } from '#/lib/planning/erreurs.ts'
 import { SEMAINES_EQUITE } from '#/lib/planning/modele.ts'
 import { avecMomentCalcule } from '#/lib/planning/moment.ts'
+import { avecCouleurCalculee } from '#/lib/planning/cycles.ts'
 import { triConsignes } from '#/lib/planning/presence.ts'
 import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
@@ -236,7 +237,7 @@ export async function fetchReferentiel(): Promise<Referentiel> {
     // Le moment se déduit des heures (2026-11-05), quoi que dise la base,
     // aux limites de l'établissement.
     horaires: (verifier(horaires) as Horaire[]).map((h) =>
-      avecMomentCalcule(h, moments),
+      avecCouleurCalculee(avecMomentCalcule(h, moments)),
     ),
     motifs: verifier(motifs),
     postes: (verifier(postes) as Poste[]).map((p) => ({
@@ -654,7 +655,11 @@ export const enregistrerHoraire = (
   /** Limites des moments de l'établissement (`lireRegles(...).moments`). */
   moments?: RegleEtablissement['moments'],
 ) =>
-  enregistrer<Horaire>('planning_horaires', avecMomentCalcule(v, moments), id)
+  enregistrer<Horaire>(
+    'planning_horaires',
+    avecCouleurCalculee(avecMomentCalcule(v, moments)),
+    id,
+  )
 
 /** Le moment rangé en base de chaque horaire qui en change (limites des
  * moments modifiées, page Horaires). La lecture le recalcule de toute façon

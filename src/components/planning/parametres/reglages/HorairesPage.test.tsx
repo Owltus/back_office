@@ -156,7 +156,8 @@ describe('Horaires et absences', () => {
     expect(
       screen.queryByRole('button', { name: /Nouveau|Supprimer|Enregistrer/ }),
     ).toBeNull()
-    for (const b of screen.getAllByRole('button', { name: /^Couleur/ })) {
+    // Couleur des motifs en lecture ; celle d'un horaire ne se choisit plus.
+    for (const b of screen.queryAllByRole('button', { name: /^Couleur/ })) {
       expect((b as HTMLButtonElement).disabled).toBe(true)
     }
   })
@@ -257,17 +258,17 @@ describe('Horaires et absences', () => {
   it('un horaire de 7 h dit de quel horaire il est la journée étoile', () => {
     monter(<HorairesPage />)
     // Sa ligne le dit, et son aperçu nomme l'horaire de 8 h.
+    // Un tableau par moment (2026-11-11) : la ligne de l'horaire.
     const ligne = (libelle: string) =>
-      screen.getByRole('button', { name: `Régler l'horaire ${libelle}` })
-    expect(
-      within(ligne('07:00–14:45')).getByText(
-        '7h · pause 45 min · journée étoile',
-      ),
-    ).toBeTruthy()
+      screen
+        .getByRole('button', { name: `Régler l'horaire ${libelle}` })
+        .closest('tr') as HTMLElement
+    expect(ligne('07:00–14:45').textContent).toContain('7h')
+    expect(ligne('07:00–14:45').textContent).toContain('45 min')
+    expect(ligne('07:00–14:45').textContent).toContain('journée étoile')
     // L'horaire de 8 h, lui, n'est la journée étoile d'aucun autre.
-    expect(
-      within(ligne('07:00–15:45')).getByText('8h · pause 45 min'),
-    ).toBeTruthy()
+    expect(ligne('07:00–15:45').textContent).toContain('8h')
+    expect(ligne('07:00–15:45').textContent).not.toContain('journée étoile')
     ouvrir(/^Régler l'horaire 07:00–14:45$/)
     const apercu = within(
       within(

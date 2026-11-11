@@ -93,6 +93,7 @@ import {
   supprimerHoraire,
   supprimerMotif,
 } from '#/lib/planning/service.ts'
+import { couleurHoraire } from '#/lib/planning/cycles.ts'
 import { horairesNormaux, versionsEtoile } from '#/lib/planning/etoile.ts'
 import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
 import { leMoment, momentDe } from '#/lib/planning/moment.ts'
@@ -261,7 +262,10 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
     const heuresNeuves = { ...heuresLibres(data.horaires), pause: 45 }
     setNouvelHoraire({
       ...heuresNeuves,
-      couleur: PALETTE[data.horaires.length % PALETTE.length],
+      couleur: couleurHoraire({
+        ...heuresNeuves,
+        periode: momentPropose(heuresNeuves, lireRegles(data).moments),
+      }),
       periode: momentPropose(heuresNeuves, lireRegles(data).moments),
     })
   }
@@ -318,28 +322,21 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
                 }
               />
             </div>
-            <div className={COLONNES_LISTES}>
+            {/* Un tableau par moment, l'un sous l'autre (demande utilisateur
+                du 2026-11-11 : plus de colonnes côte à côte). */}
+            <div className="flex max-w-3xl flex-col gap-6">
               {grouperHoraires(data.horaires, lireRegles(data).moments).map(
                 (g) => (
-                  <ListeCompacte
+                  <TableauHoraires
                     key={g.libelle}
                     titre={g.libelle}
-                    nombre={g.horaires.length}
-                  >
-                    {g.horaires.map((h) => (
-                      <LigneHoraire
-                        key={h.id}
-                        h={h}
-                        etoile={
-                          horairesNormaux(h, data.horaires, lireRegles(data))
-                            .length > 0
-                        }
-                        onOuvrir={() =>
-                          setOuvert({ type: 'horaire', id: h.id })
-                        }
-                      />
-                    ))}
-                  </ListeCompacte>
+                    horaires={g.horaires}
+                    etoile={(h) =>
+                      horairesNormaux(h, data.horaires, lireRegles(data))
+                        .length > 0
+                    }
+                    onOuvrir={(h) => setOuvert({ type: 'horaire', id: h.id })}
+                  />
                 ),
               )}
             </div>
@@ -505,31 +502,87 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
 
 /** Une ligne : la couleur, les heures, puis le temps
  * de travail et la pause. */
-function LigneHoraire({
-  h,
+/** Les horaires d'un moment en tableau (2026-11-11) : une ligne par
+ * horaire, un clic ouvre son réglage. */
+function TableauHoraires({
+  titre,
+  horaires,
   etoile,
   onOuvrir,
 }: {
-  h: Horaire
+  titre: string
+  horaires: readonly Horaire[]
   /** Version étoile d'un autre horaire (`etoile.ts`) : dit sur la ligne. */
-  etoile: boolean
-  onOuvrir: () => void
+  etoile: (h: Horaire) => boolean
+  onOuvrir: (h: Horaire) => void
 }) {
-  const libelle = libelleHoraire(h)
+  if (!horaires.length) return null
   return (
-    <LigneCompacte
-      etiquette={`Régler l'horaire ${libelle}`}
-      pastille={
-        <span
-          aria-hidden
-          className="size-3 shrink-0 rounded-full"
-          style={{ background: h.couleur }}
-        />
-      }
-      libelle={<span className="font-medium tabular-nums">{libelle}</span>}
-      detail={`${heures(dureeHoraire(h.debut, h.fin) - h.pause)}${h.pause > 0 ? ` · pause ${h.pause} min` : ''}${etoile ? ' · journée étoile' : ''}`}
-      onOuvrir={onOuvrir}
-    />
+    <section aria-label={titre} className="flex flex-col gap-2">
+      <h3 className="text-sm font-semibold">
+        {titre}{' '}
+        <span className="font-normal text-muted-foreground tabular-nums">
+          ({horaires.length})
+        </span>
+      </h3>
+      <div className="overflow-x-auto rounded-xl border bg-card">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/50 text-xs text-muted-foreground">
+            <tr>
+              <th className="w-8 px-3 py-2" aria-label="Couleur" />
+              <th className="px-3 py-2 text-left font-medium">Horaire</th>
+              <th className="px-3 py-2 text-left font-medium">Travail</th>
+              <th className="px-3 py-2 text-left font-medium">Pause</th>
+              <th className="px-3 py-2 text-left font-medium">
+                <span className="sr-only">Journée étoile</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {horaires.map((h) => {
+              const libelle = libelleHoraire(h)
+              return (
+                <tr
+                  key={h.id}
+                  className="cursor-pointer border-t hover:bg-muted/40"
+                  onClick={() => onOuvrir(h)}
+                >
+                  <td className="px-3 py-2">
+                    <span
+                      aria-hidden
+                      className="block size-3 rounded-full"
+                      style={{ background: h.couleur }}
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <button
+                      type="button"
+                      aria-label={`Régler l'horaire ${libelle}`}
+                      className="font-medium tabular-nums outline-none focus-visible:underline"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onOuvrir(h)
+                      }}
+                    >
+                      {libelle}
+                    </button>
+                  </td>
+                  <td className="px-3 py-2 tabular-nums">
+                    {heures(dureeHoraire(h.debut, h.fin) - h.pause)}
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground tabular-nums">
+                    {h.pause > 0 ? `${h.pause} min` : '–'}
+                  </td>
+                  <td className="px-3 py-2 text-xs text-muted-foreground">
+                    {etoile(h) ? 'journée étoile' : ''}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
   )
 }
 
@@ -893,14 +946,24 @@ function CarteHoraire({
         </span>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium">Couleur</span>
-        <Nuancier
-          valeur={h.couleur}
-          disabled={desactive}
-          etiquette="Couleur de l'horaire"
-          onChange={(couleur) => changer({ couleur })}
+      {/* Couleur EN DUR depuis le 2026-11-11 (`couleurHoraire`) : elle suit
+          le moment et la longueur, elle ne se choisit plus. */}
+      <div className="flex items-center gap-2 text-sm">
+        <span className="text-muted-foreground">Couleur</span>
+        <span
+          aria-hidden
+          className="size-3 rounded-full"
+          style={{
+            background: couleurHoraire({
+              ...h,
+              periode: momentDeLaSaisie(h, regles.moments),
+            }),
+          }}
         />
+        <span className="text-xs text-muted-foreground">
+          Violet si l'horaire est court, sinon jaune le matin, orange en middle,
+          vert le soir, bleu la nuit.
+        </span>
       </div>
 
       <ErreursSaisie erreurs={modifiable ? erreurs : []} />
