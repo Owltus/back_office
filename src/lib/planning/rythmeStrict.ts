@@ -69,6 +69,10 @@
  */
 
 import type { SalarieSolveur } from '#/lib/planning/modele.ts'
+import {
+  JOURS_TRAVAILLES_PREFERES,
+  REPOS_SEMAINE,
+} from '#/lib/planning/regles.ts'
 
 /** Un jour : T travaillé, r repos, n neutre, u inconnu. */
 export type EtatRythme = 'T' | 'r' | 'n' | 'u'
@@ -80,12 +84,12 @@ export type StatutRythme = EtatRythme | 'a' | 'f'
 
 /** Une suite d'absences décomptées de PLUS de 5 jours est neutre ; de 1 à 5
  * jours, elle compte comme du travail. */
-export const ABSENCE_LONGUE = 5
+export const ABSENCE_LONGUE = JOURS_TRAVAILLES_PREFERES
 
 /** Jours de travail d'un bloc. */
-export const RYTHME_TRAVAIL = 5
+export const RYTHME_TRAVAIL = JOURS_TRAVAILLES_PREFERES
 /** Jours de repos entre deux blocs. */
-export const RYTHME_REPOS = 2
+export const RYTHME_REPOS = REPOS_SEMAINE
 
 export type GenreFaute =
   'repos-seul' | 'repos-long' | 'travail-court' | 'travail-long'
@@ -379,7 +383,7 @@ export function nomJourRythme(d: number, nbJours: number): string {
 }
 
 /** Début commun des messages (vérificateur, raisons d'une place). */
-export const RYTHME_NON_TENU = 'rythme 5 et 2 non tenu'
+export const RYTHME_NON_TENU = `rythme ${RYTHME_TRAVAIL} et ${RYTHME_REPOS} non tenu`
 
 /** Le message d'une faute, avec ses jours (indices de la période). Sans
  * `nbJours` : le message court, sans les jours (raisons d'une place : deux
@@ -399,11 +403,11 @@ export function messageFaute(
     case 'repos-seul':
       return `${RYTHME_NON_TENU} : repos seul${jours}`
     case 'repos-long':
-      return `${RYTHME_NON_TENU} : ${nbJours === undefined ? 'plus de 2' : n} jours de repos${jours} entre deux blocs de travail (${RYTHME_REPOS} attendus)`
+      return `${RYTHME_NON_TENU} : ${nbJours === undefined ? `plus de ${RYTHME_REPOS}` : n} jours de repos${jours} entre deux blocs de travail (${RYTHME_REPOS} attendus)`
     case 'travail-court':
-      return `${RYTHME_NON_TENU} : ${nbJours === undefined ? 'moins de 5' : n} jours de travail${jours} (${RYTHME_TRAVAIL} attendus)`
+      return `${RYTHME_NON_TENU} : ${nbJours === undefined ? `moins de ${RYTHME_TRAVAIL}` : n} jours de travail${jours} (${RYTHME_TRAVAIL} attendus)`
     case 'travail-long':
-      return `${RYTHME_NON_TENU} : ${nbJours === undefined ? 'plus de 5' : n} jours de travail d'affilée${jours} (${RYTHME_TRAVAIL} au plus)`
+      return `${RYTHME_NON_TENU} : ${nbJours === undefined ? `plus de ${RYTHME_TRAVAIL}` : n} jours de travail d'affilée${jours} (${RYTHME_TRAVAIL} au plus)`
   }
 }
 

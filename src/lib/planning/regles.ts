@@ -36,8 +36,14 @@ export const REPOS_QUOTIDIEN = 11 * H // R-REPOS-QUOTIDIEN
 export const REPOS_HEBDO_MIN = 35 * H // R-REPOS-HEBDO-35H : 24 h + 11 h
 export const JOURS_TRAVAILLES_MAX = 6 // R-SIX-JOURS-MAX
 /** R-REPOS-HEBDO-HCR : 5 jours de préférence, 6 en cas de besoin, et au
- * moins 3 jours de repos sur deux semaines consécutives. */
+ * moins 3 jours de repos sur deux semaines consécutives. SEULE source du
+ * chiffre 5 de la semaine (chantier « une seule suite des jours »,
+ * 2026-11-11) : jours de contrat (`JOURS_CONTRAT`), bloc du rythme 5 et 2
+ * et absence longue (`rythmeStrict.ts`). Pas un réglage de l'établissement. */
 export const JOURS_TRAVAILLES_PREFERES = 5
+/** Les repos d'une semaine de `JOURS_TRAVAILLES_PREFERES` jours : 2, ceux du
+ * rythme 5 et 2 et les repos dus d'une semaine civile. */
+export const REPOS_SEMAINE = 7 - JOURS_TRAVAILLES_PREFERES
 /** Jours de travail d'affilée, semaines voisines comprises (demande
  * utilisateur du 2026-11-02 : « 9 jours d'affilée sans pause… il faut les
  * laisser se reposer »). Le générateur l'évite (`POIDS_JOUR_AFFILE`), le
@@ -204,7 +210,7 @@ export const JOURNEE_PLEINE = REGLES_PAR_DEFAUT.contrats.journeePleine
  * court (3 h, 5 h) n'est pas proposé comme journée étoile. */
 export const JOURNEE_ETOILE_MIN = REGLES_PAR_DEFAUT.contrats.journeeEtoileMin
 /** R-ABSENCE-HEURES : un jour d'absence compté vaut une journée ; 5 au plus. */
-export const JOURS_CONTRAT = 5
+export const JOURS_CONTRAT = JOURS_TRAVAILLES_PREFERES
 /** R-CADRE-FJ : seuls le repos de 11 h et le repos hebdo, soit 13 h d'amplitude. */
 export const FORFAIT_JOUR_MAX = 13 * H
 export const FORFAIT_SEMAINE_MAX = JOURS_TRAVAILLES_PREFERES * FORFAIT_JOUR_MAX

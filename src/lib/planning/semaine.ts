@@ -98,6 +98,7 @@ import type {
 } from '#/lib/planning/modele.ts'
 import {
   JOURS_CONTRAT,
+  REPOS_SEMAINE,
   alerteBesoin,
   droitAuRattrapage,
   presenceMaxPoste,
@@ -857,7 +858,7 @@ export function joursHorsContrat(x: Salarie, lundi: string): Set<number> {
  * semaine : 5 jours de contrat sur 7, donc les 2 premiers jours hors contrat
  * ne coûtent rien (départ le jeudi, 3 jours hors contrat : 1). */
 export function joursContratManquants(hors: number): number {
-  return Math.max(0, hors - (7 - JOURS_CONTRAT))
+  return Math.max(0, hors - REPOS_SEMAINE)
 }
 
 /** R2, deux repos par semaine même en congé (décisions utilisateur du
@@ -866,7 +867,7 @@ export function joursContratManquants(hors: number): number {
  * hors contrat au-delà de 2 (`joursContratManquants`). Repos fixes compris :
  * une personne qui n'en a qu'un en reçoit un de plus. */
 export function reposDusSemaine(hors: number): number {
-  return Math.min(2, Math.max(0, 7 - hors - JOURS_CONTRAT))
+  return Math.min(REPOS_SEMAINE, Math.max(0, 7 - hors - JOURS_CONTRAT))
 }
 
 /** R2 : jours d'absence DÉCOMPTÉE au plus dans une semaine civile, `7 - 2

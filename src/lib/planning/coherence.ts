@@ -84,6 +84,7 @@ import {
   fautesRythme,
   messageFaute,
   resoudreAbsences,
+  RYTHME_REPOS,
   RYTHME_TRAVAIL,
   statutAbsence,
 } from '#/lib/planning/rythmeStrict.ts'
@@ -1352,7 +1353,7 @@ function pointsDesRegles(
         'rythme-strict-affiles',
         'bloquant',
         'equipe',
-        `Le rythme de 5 jours puis 2 repos demande 5 jours de travail d'affilée, mais ${regles.repos.joursAffilesConseilles} au plus sont conseillés : le planning automatique ne peut placer aucun contrat de ${heuresLisibles(regles.repos.rythmeContratMin)} et plus. Conseillez 5 jours d'affilée, ou retirez le rythme strict.`,
+        `Le rythme de ${RYTHME_TRAVAIL} jours puis ${RYTHME_REPOS} repos demande ${RYTHME_TRAVAIL} jours de travail d'affilée, mais ${regles.repos.joursAffilesConseilles} au plus sont conseillés : le planning automatique ne peut placer aucun contrat de ${heuresLisibles(regles.repos.rythmeContratMin)} et plus. Conseillez ${RYTHME_TRAVAIL} jours d'affilée, ou retirez le rythme strict.`,
         'regles',
       )
     for (const s of equipe) {
