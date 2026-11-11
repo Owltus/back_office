@@ -18,7 +18,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { ChevronRight, Redo2, Undo2 } from 'lucide-react'
+import { Redo2, Undo2 } from 'lucide-react'
 
 import {
   useDroitsPlanning,
@@ -41,7 +41,7 @@ import type {
 } from '#/components/planning/parametres/besoins/historique.ts'
 import { TableauAccueil } from '#/components/planning/parametres/besoins/TableauAccueil.tsx'
 import { HeuresAccueil } from '#/components/planning/parametres/besoins/HeuresAccueil.tsx'
-import { phrasesOrdreDecision } from '#/components/planning/parametres/besoins/ordreDecision.ts'
+import { AideBesoins } from '#/components/planning/parametres/besoins/AideBesoins.tsx'
 import { useOuvrirCible } from '#/components/planning/parametres/reglages/ouvrirCible.ts'
 import type { PropsOuvrir } from '#/components/planning/parametres/reglages/ouvrirCible.ts'
 import { CadreReglages } from '#/components/planning/parametres/reglages/cadre.tsx'
@@ -262,8 +262,11 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
                 </Button>
               </span>
             </Tip>
+            <AideBesoins />
           </div>
-        ) : undefined
+        ) : (
+          <AideBesoins />
+        )
       }
     >
       {data && regles && (
@@ -313,24 +316,8 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
             </p>
           </section>
 
-          <details className="group border-t pt-4 text-sm text-muted-foreground">
-            <summary className="flex cursor-pointer items-center gap-1.5 font-medium text-foreground select-none">
-              <ChevronRight
-                aria-hidden
-                className="size-4 text-muted-foreground transition-transform group-open:rotate-90"
-              />
-              Dans quel ordre le planning décide
-            </summary>
-            {/* Écrit d'après le réglage des postes (D11, oui / non). */}
-            <ol
-              data-ordre-decision
-              className="mt-2 ml-5 flex max-w-3xl list-decimal flex-col gap-1.5"
-            >
-              {phrasesOrdreDecision(data.postes).map((phrase) => (
-                <li key={phrase}>{phrase}</li>
-              ))}
-            </ol>
-          </details>
+          {/* « Dans quel ordre le planning décide » : dans l'aide « ? »
+              (`AideBesoins`, 2026-11-11). */}
         </div>
       )}
     </CadreReglages>

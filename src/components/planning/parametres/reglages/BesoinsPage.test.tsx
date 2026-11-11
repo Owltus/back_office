@@ -195,23 +195,36 @@ describe('Besoins', () => {
   })
 
   describe('obligatoire ou souhaité, niveau demandé, importance (étape 7, 2026-11-05)', () => {
-    it('l’ordre de décision est écrit d’après le réglage indispensable', () => {
-      // Oracle : décision utilisateur du 2026-11-05, « soit un poste est
-      // important, soit il ne l'est pas » ; le texte n'est plus figé.
-      const ref = etat.referentiel as Referentiel
-      const texte = () =>
-        document.querySelector('[data-ordre-decision]')?.textContent ?? ''
+    it('l’ordre de décision est dans l’aide « ? », plus en bas de page (2026-11-11)', () => {
+      // Oracle : « crée un petit bouton point d'interrogation… et explique
+      // comment cette page fonctionne ».
       monter(<BesoinsPage />)
-      expect(texte()).toContain("Aucun poste n'est plus indispensable")
-      cleanup()
-      for (const p of ref.postes) p.indispensable = p.nom === 'Réception'
+      expect(
+        screen.queryByText('Dans quel ordre le planning décide'),
+      ).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: 'Comment ça marche' }))
+      const aide = within(screen.getByRole('dialog'))
+      for (const titre of [
+        'À quoi sert cette page',
+        'Le tableau du personnel',
+        'Qui compte dans le tableau',
+        'Les autres postes',
+        'Matin, middle, soir et nuit',
+        'Dans quel ordre le planning décide',
+      ])
+        expect(aide.getByText(titre)).toBeTruthy()
+      // Du texte, pas de liste ; aucun nom de poste ; ni tiret cadratin ni « ».
+      const dialogue = screen.getByRole('dialog')
+      expect(dialogue.querySelector('ul, ol')).toBeNull()
+      expect(dialogue.textContent).not.toMatch(/Réception|Club|Veille de nuit/)
+      expect(dialogue.textContent).not.toMatch(/[«»—]/)
+    })
+
+    it('l’aide s’ouvre aussi en lecture seule', () => {
+      etat.droits = { pret: true, lire: true, ecrire: true, gerer: false }
       monter(<BesoinsPage />)
-      expect(texte()).toMatch(
-        /d'abord les besoins souhaités, puis les autres postes \([^)]*Direction[^)]*\), et les postes indispensables \(Réception\) en dernier\./,
-      )
-      expect(texte()).not.toMatch(/[«»—]/)
-      // Plus aucun rappel de trois niveaux.
-      expect(document.body.textContent).not.toMatch(/Si possible|Important\b/)
+      fireEvent.click(screen.getByRole('button', { name: 'Comment ça marche' }))
+      expect(screen.getByRole('dialog')).toBeTruthy()
     })
 
     it('accueil tenu en continu : ni ouverture ni fermeture à régler (2026-11-11)', () => {

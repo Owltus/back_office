@@ -3186,6 +3186,15 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   `reglages/moments.ts`), lien de Horaires, point « moment inatteignable »
   de « À vérifier » ; l'aide écrit les quatre règles. Ne pas remettre de
   réglage des moments.
+  Module 6, « Dans quel ordre le planning décide » QUITTE la page (demande
+  utilisateur : « un petit bouton point d'interrogation comme sur les autres
+  pages, et explique comment cette page fonctionne ») : bouton « ? » de
+  l'en-tête (aussi en lecture seule), `besoins/AideBesoins.tsx`, texte suivi
+  sans liste ni nom de poste (à quoi sert la page, le tableau, qui compte,
+  les autres postes, les quatre moments, l'ordre de décision). Retirés :
+  `phrasesOrdreDecision`, `sectionsBesoins`, `postesParImportance` et leur
+  test ; `ordreDecision.ts` ne garde que les deux phrases de la case
+  Indispensable (Postes). À tenir à jour si une règle de la page change.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 
