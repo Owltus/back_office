@@ -43,15 +43,13 @@ export function AideBesoinsContenu() {
 
       <Partie titre="Le tableau du personnel">
         <p>
-          Le tableau a un bloc par moment. Sa première ligne donne le total du
-          moment, qui se calcule tout seul. En dessous, une ligne par poste : le
-          matin et le soir pour chaque poste de jour, la nuit pour chaque poste
-          de nuit. Chaque case donne le nombre de personnes sur ce poste, pour
-          un jour et un moment. Une personne qui tient plusieurs postes compte
-          là où le planning la place. Cliquez sur une case, puis réglez le
-          nombre avec les boutons plus et moins. Le changement est enregistré
-          tout de suite. Un tiret orange veut dire que personne n’est demandé à
-          ce moment-là.
+          Le tableau a un bloc par moment : le matin et le soir avec chaque
+          poste de jour, la nuit avec chaque poste de nuit. Chaque case donne le
+          nombre de personnes sur ce poste, pour un jour et un moment. Une
+          personne qui tient plusieurs postes compte là où le planning la place.
+          Cliquez sur une case, puis réglez le nombre avec les boutons plus et
+          moins. Le changement est enregistré tout de suite. Un tiret orange
+          veut dire que personne n’est demandé à ce moment-là.
         </p>
         <p>
           Le matin et le soir, le nombre est un minimum : le planning peut

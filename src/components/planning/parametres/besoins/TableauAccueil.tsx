@@ -165,8 +165,11 @@ export function TableauAccueil({
         >
           <thead className="bg-muted/50 text-xs text-muted-foreground">
             <tr>
-              <th className="sticky left-0 z-[1] w-[11.5rem] bg-muted px-3 py-2 text-left font-medium">
+              <th className="w-[6.5rem] bg-muted px-3 py-2 text-left font-medium">
                 Moment
+              </th>
+              <th className="w-[10rem] bg-muted px-3 py-2 text-left font-medium">
+                Poste
               </th>
               {JOURS.map((j) => (
                 <th key={j} className="px-1 py-2 text-center font-medium">
@@ -176,55 +179,38 @@ export function TableauAccueil({
               ))}
             </tr>
           </thead>
-          {/* SOUS-TABLEAUX (demande utilisateur du 2026-11-11) : pour chaque
-              moment, une ligne de TOTAL (la somme des postes, en lecture),
-              puis une ligne par poste, où se règle le chiffre. */}
+          {/* Un bloc par moment (demande utilisateur du 2026-11-11) : le
+              moment dans sa propre colonne, sur la hauteur de ses postes,
+              une ligne par poste où se règle le chiffre. Pas de total : « on
+              n'est pas assez pour faire un grand calcul ». */}
           {periodesDuTableau(moments).map((m) => {
             const siennes = lignes.filter((l) => l.periode === m.periode)
             if (!siennes.length) return null
-            const { periode, libelle, Icone } = m
+            const { periode, libelle } = m
             return (
               <tbody key={periode} className="border-t-2 first:border-t-0">
-                <tr className="bg-muted/40" data-total={periode}>
-                  <th
-                    scope="row"
-                    className="sticky left-0 z-[1] bg-muted px-3 py-2 text-left font-semibold"
-                  >
-                    <span className="inline-flex items-center gap-1.5">
-                      <Icone
-                        aria-hidden
-                        className="size-4 shrink-0 text-muted-foreground"
-                      />
-                      {libelle}
-                    </span>
-                  </th>
-                  {JOURS.map((nomJour, j) => {
-                    const total = siennes.reduce(
-                      (n, l) => n + affiche(l.poste, j, periode).minimum,
-                      0,
-                    )
-                    return (
-                      <td
-                        key={j}
-                        className="px-1 py-2 text-center font-semibold tabular-nums"
-                        aria-label={`${libelle}, ${nomJour.toLowerCase()} : ${total} personne${total > 1 ? 's' : ''} au total.`}
-                      >
-                        {total || (
-                          <span className="text-muted-foreground">0</span>
-                        )}
-                      </td>
-                    )
-                  })}
-                </tr>
-                {siennes.map(({ poste, nomPoste, nuit: deNuit }) => {
+                {siennes.map(({ poste, nomPoste, nuit: deNuit }, k) => {
                   const nom = nomPoste
                     ? `${libelle} · ${nomPoste}`
                     : `${libelle} · tous les postes`
                   return (
-                    <tr key={`${periode}|${poste ?? ''}`} className="border-t">
+                    <tr
+                      key={`${periode}|${poste ?? ''}`}
+                      className={cn(k > 0 && 'border-t')}
+                    >
+                      {k === 0 && (
+                        <th
+                          scope="rowgroup"
+                          rowSpan={siennes.length}
+                          className="bg-muted/40 px-3 py-2 text-left align-middle font-semibold"
+                        >
+                          {/* Sans icône (2026-11-11 : « un peu de trop »). */}
+                          {libelle}
+                        </th>
+                      )}
                       <th
                         scope="row"
-                        className="sticky left-0 z-[1] bg-card py-1 pr-3 pl-9 text-left font-normal text-muted-foreground"
+                        className="px-3 py-1 text-left font-normal"
                       >
                         <span className="block truncate">
                           {nomPoste ?? 'Tous les postes'}

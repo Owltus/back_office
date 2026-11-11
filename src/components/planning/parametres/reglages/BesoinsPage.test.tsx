@@ -159,12 +159,17 @@ describe('Besoins', () => {
         'Matin · Réception, samedi : au moins 3 personnes.',
       )
       expect(caseAccueil('5:matin', club)?.textContent).toBe('–')
-      // Sous-tableaux (2026-11-11) : une ligne de total par moment, en
-      // lecture, la somme de ses postes.
-      const totalMatin = document.querySelector('[data-total="matin"]')
-      expect(totalMatin?.querySelectorAll('td')[5]?.textContent).toBe('3')
-      expect(totalMatin?.querySelector('button')).toBeNull()
-      expect(document.querySelectorAll('[data-total]')).toHaveLength(3)
+      // Un bloc par moment (2026-11-11) : le moment dans sa colonne, sur la
+      // hauteur de ses postes ; aucune ligne de total.
+      const blocs = [
+        ...document.querySelectorAll('th[scope="rowgroup"]'),
+      ] as HTMLTableCellElement[]
+      expect(blocs.map((b) => [b.textContent, b.rowSpan])).toEqual([
+        ['Matin', 2],
+        ['Soir', 2],
+        ['Nuit', 1],
+      ])
+      expect(document.querySelector('[data-total]')).toBeNull()
       expect(caseAccueil('0:soir', club)).toBeTruthy()
       expect(caseAccueil('0:nuit', veille)?.getAttribute('aria-label')).toBe(
         'Nuit · Veille de nuit, lundi : exactement 1 personne.',
