@@ -715,12 +715,28 @@ describe('Besoins', () => {
       )
     })
 
-    it('ouverture et fermeture de l’accueil : réglées ici, par Enregistrer', async () => {
+    it('accueil tenu en continu : ni ouverture ni fermeture à régler (2026-11-11)', () => {
       const ref = etat.referentiel as Referentiel
       for (const p of ref.postes)
         p.zone_id = ['Réception', 'Club', 'Veille de nuit'].includes(p.nom)
           ? 1
           : null
+      ref.zones = [{ id: 1, nom: 'Accueil', ordre: 0, continue: true }]
+      monter(<BesoinsPage />)
+      // Oracle : « tu peux les retirer… le bloc disparaît ».
+      expect(
+        screen.queryByRole('region', { name: 'Ouverture et fermeture' }),
+      ).toBeNull()
+      expect(screen.queryByLabelText('Fermeture du poste Club')).toBeNull()
+    })
+
+    it('ouverture et fermeture d’une zone non continue : réglées ici, par Enregistrer', async () => {
+      const ref = etat.referentiel as Referentiel
+      for (const p of ref.postes)
+        p.zone_id = ['Réception', 'Club', 'Veille de nuit'].includes(p.nom)
+          ? 1
+          : null
+      ref.zones = [{ id: 1, nom: 'Accueil', ordre: 0, continue: false }]
       monter(<BesoinsPage />)
       const region = within(
         screen.getByRole('region', { name: 'Ouverture et fermeture' }),

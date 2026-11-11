@@ -479,13 +479,17 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
               affiche={(j, p) => afficheConsigne(id, j, p)}
               regler={(j, p, b) => reglerAccueil(id, z.nom, j, p, b)}
             />
-            <div className="grid gap-8 lg:grid-cols-2">
-              <HeuresAccueil
-                postes={siens}
-                modifiable={modifiable}
-                duree={regles.passations.dureeOuverture}
-              />
-            </div>
+            {/* Zone tenue en continu : ni ouverture ni fermeture à régler
+                (décision utilisateur du 2026-11-11, `aOuvertureFermeture`). */}
+            {!z.continue && (
+              <div className="grid gap-8 lg:grid-cols-2">
+                <HeuresAccueil
+                  postes={siens}
+                  modifiable={modifiable}
+                  duree={regles.passations.dureeOuverture}
+                />
+              </div>
+            )}
           </div>
         )
       })}

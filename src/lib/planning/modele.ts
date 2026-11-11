@@ -592,6 +592,11 @@ export interface Probleme {
     debut: number
     fin: number
   }>
+  /** L'heure où l'équipe du matin d'un poste de l'accueil arrive, jour par
+   * jour (minutes réelles ; `POIDS_ARRIVEE_MATIN_MINUTE`) : son ouverture,
+   * ou, dans une zone tenue en continu, le premier horaire du matin du poste
+   * (2026-11-11). Absent : les débuts de `ouvertures`. */
+  arriveesMatin?: Array<{ poste: string; jour: number; debut: number }>
   /** Fermeture (2026-11-05, symétrique de l'ouverture) : la dernière heure
    * d'un poste de l'accueil qui a une heure de fermeture, jour par jour
    * (minutes réelles). Absent ou vide : aucune. */

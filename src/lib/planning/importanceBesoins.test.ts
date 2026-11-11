@@ -378,6 +378,9 @@ const donnees = (
   affectations: Affectation[],
   salaries: Salarie[],
   postes: Poste[] = POSTES,
+  /** Zone de l'accueil tenue en continu (défaut de l'hôtel) ; non : son
+   * ouverture et sa fermeture se lisent (2026-11-11). */
+  continu = true,
 ): DonneesSemaine => ({
   lundi: LUNDI,
   referentiel: {
@@ -404,6 +407,7 @@ const donnees = (
       },
     ]),
     verrous: [],
+    zones: [{ id: 1, nom: 'Accueil', ordre: 0, continue: continu }],
   },
   absences: [],
   affectations,
@@ -440,7 +444,11 @@ describe('analyse de la semaine', () => {
     ).toBe(10)
   })
   it('fermeture : la dernière heure du soir, comptée comme une ouverture', () => {
-    const ctx = contexte(donnees([], [], []))
+    // Zone tenue en continu : ni ouverture ni fermeture lues (2026-11-11,
+    // la continuité et la passation le disent déjà).
+    expect(fermeturesPostes(contexte(donnees([], [], [])))).toEqual([])
+    expect(ouverturesPostes(contexte(donnees([], [], [])))).toEqual([])
+    const ctx = contexte(donnees([], [], [], POSTES, false))
     const f = fermeturesPostes(ctx) ?? []
     expect(f).toHaveLength(7)
     expect(f[0]).toMatchObject({ poste: String(ACCUEIL), jour: 0 })
@@ -448,19 +456,31 @@ describe('analyse de la semaine', () => {
     expect(f[0].fin).toBe(23 * H)
     // Après minuit : appartient au soir de la veille.
     const tard = contexte(
-      donnees([], [], [], [{ ...POSTES[0], fermeture: '00:30' }, POSTES[1]]),
+      donnees(
+        [],
+        [],
+        [],
+        [{ ...POSTES[0], fermeture: '00:30' }, POSTES[1]],
+        false,
+      ),
     )
     const g = (fermeturesPostes(tard) ?? [])[0]
     expect([g.debut, g.fin]).toEqual([23.5 * H, 24.5 * H])
     // Sans fermeture : rien.
     const sans = contexte(
-      donnees([], [], [], [{ ...POSTES[0], fermeture: null }, POSTES[1]]),
+      donnees(
+        [],
+        [],
+        [],
+        [{ ...POSTES[0], fermeture: null }, POSTES[1]],
+        false,
+      ),
     )
     expect(fermeturesPostes(sans)).toEqual([])
     // Le vérificateur la dit vide, et la semaine aussi.
     const p = probleme({ creneaux: [], salaries: [], graine: 1, fermetures: f })
     expect(ouverturesManquees(p, [])).toHaveLength(7)
-    const sem = analyser(donnees([], [], []))
+    const sem = analyser(donnees([], [], [], POSTES, false))
     expect(
       sem.trous.filter((t) => t.poste_id === ACCUEIL && t.fin === '23:00'),
     ).toHaveLength(7)
@@ -537,18 +557,23 @@ describe('À vérifier : ce que les réglages rendent impossible', () => {
   it('fermeture sans horaire qui y va ; tenue sinon', () => {
     const ok = donnees([], [], [salarie(7, 'titulaire')]).referentiel
     expect(ids(ok)).not.toContain(`fermeture-impossible:${ACCUEIL}`)
-    const tard = donnees(
-      [],
-      [],
-      [salarie(7, 'titulaire')],
-      [{ ...POSTES[0], fermeture: '23:30' }, POSTES[1]],
-    ).referentiel
-    expect(ids(tard)).toContain(`fermeture-impossible:${ACCUEIL}`)
+    const tard = (continu: boolean) =>
+      donnees(
+        [],
+        [],
+        [salarie(7, 'titulaire')],
+        [{ ...POSTES[0], fermeture: '23:30' }, POSTES[1]],
+        continu,
+      ).referentiel
+    expect(ids(tard(false))).toContain(`fermeture-impossible:${ACCUEIL}`)
+    // Tenue en continu : l'heure en base est ignorée, rien à dire.
+    expect(ids(tard(true))).not.toContain(`fermeture-impossible:${ACCUEIL}`)
     const tot = donnees(
       [],
       [],
       [salarie(7, 'titulaire')],
       [{ ...POSTES[0], ouverture: '06:00' }, POSTES[1]],
+      false,
     ).referentiel
     expect(ids(tot)).toContain(`ouverture-impossible:${ACCUEIL}`)
   })

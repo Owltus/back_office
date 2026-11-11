@@ -54,6 +54,21 @@ export function zoneDuPoste(
   return String(poste.zone_id)
 }
 
+/** Le poste a-t-il une ouverture et une fermeture à régler ? Non dans une
+ * zone tenue en continu (décision utilisateur du 2026-11-11, page Besoins :
+ * « tu sais à quelle heure les journées commencent… l'hôtel ne doit jamais
+ * rester vide ») : la continuité d'une équipe à l'autre et la passation avec
+ * la nuit le disent déjà, une heure à part les redoublait. Les heures déjà en
+ * base y sont ignorées, par le calcul comme par « À vérifier ». */
+export function aOuvertureFermeture(
+  poste: Pick<Poste, 'zone_id' | 'ferme'> | undefined,
+  zones: readonly Pick<ZoneRegle, 'id' | 'continue'>[],
+): boolean {
+  const z = zoneDuPoste(poste)
+  if (z === null) return !poste?.ferme
+  return !(zones.find((x) => x.id === z) ?? zoneParDefaut()).continue
+}
+
 /** Les zones en service : celles qui ont au moins un poste ouvert. */
 export function zonesEnService(
   postes: Iterable<Pick<Poste, 'zone_id' | 'ferme'>>,

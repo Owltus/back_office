@@ -3132,6 +3132,18 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   de l'écran (une case écrit minimum = maximum) ; (c) textes en liste
   (postes comptés, apprentis jamais sans titulaire ou dépannage), légende du
   tiret seulement s'il y en a un, colonne vide retirée.
+  Module 2, ouverture et fermeture (« une aberration d'incompréhension ») :
+  RETIRÉES pour une zone tenue en continu (décision utilisateur : « tu sais
+  à quelle heure les journées commencent… l'hôtel ne doit jamais rester
+  vide ») — la continuité et la passation avec la nuit les disaient déjà.
+  UNE source, `aOuvertureFermeture` (zones.ts), lue par le calcul
+  (`aDesHeures`), « À vérifier » et l'écran (bloc et « Tenue pendant »
+  masqués) ; les heures déjà en base (07:00 de l'Hôtelier polyvalent) sont
+  ignorées, rien n'est réécrit. L'arrivée du matin ensemble
+  (`coutArriveeMatin`) ne perd rien : `Probleme.arriveesMatin`
+  (`arriveesMatin`, semaine.ts) = l'ouverture, ou dans une zone continue le
+  début du premier horaire du matin permis au poste (07:00 ici). Une zone
+  NON continue et les postes hors zone gardent leurs heures.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

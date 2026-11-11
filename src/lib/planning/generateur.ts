@@ -2403,7 +2403,7 @@ export function construire(
   }
   // L'équipe du matin arrive à l'ouverture (`POIDS_ARRIVEE_MATIN_MINUTE`).
   const ouvertureDe = new Map<string, number>()
-  for (const o of p.ouvertures ?? [])
+  for (const o of p.arriveesMatin ?? p.ouvertures ?? [])
     ouvertureDe.set(`${o.poste}|${o.jour}`, o.debut)
   if (ouvertureDe.size) {
     for (const [k, v] of x) {

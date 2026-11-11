@@ -30,6 +30,7 @@ import {
 } from '#/lib/planning/moment.ts'
 import type { Moments } from '#/lib/planning/moment.ts'
 import {
+  aOuvertureFermeture,
   posteIdZone,
   rangZone,
   seulementLaNuit,
@@ -1535,14 +1536,38 @@ function joursOuverts(
   return jours
 }
 
-/** Un poste qui compte pour l'ouverture et la fermeture : ouvert, et pas
- * la nuit de l'accueil (le veilleur a ses passations). */
+/** Un poste qui compte pour l'ouverture et la fermeture : ouvert, hors
+ * d'une zone tenue en continu en service (2026-11-11 : la continuité et la
+ * passation le disent déjà, `aOuvertureFermeture`). */
 const aDesHeures = (ctx: Contexte, p: Poste) =>
   !p.ferme &&
-  !(
-    accueilEnService(ctx) &&
-    seulementLaNuit(p, ctx.horaires.values(), ctx.regles.moments)
-  )
+  (!accueilEnService(ctx) || aOuvertureFermeture(p, ctx.regles.zones))
+
+/** L'heure où l'équipe du matin arrive, poste par poste et jour par jour
+ * (`Probleme.arriveesMatin`) : l'ouverture du poste quand il en a une ; dans
+ * une zone tenue en continu (2026-11-11, plus d'ouverture à régler : « tu
+ * sais à quelle heure les journées commencent »), le début du premier
+ * horaire du matin permis au poste, les jours où le matin est demandé. */
+export function arriveesMatin(ctx: Contexte): Probleme['arriveesMatin'] {
+  const r: NonNullable<Probleme['arriveesMatin']> = (
+    ouverturesPostes(ctx) ?? []
+  ).map(({ poste, jour, debut }) => ({ poste, jour, debut }))
+  if (!accueilEnService(ctx)) return r
+  const matin = premierMoment(ctx.regles.moments)
+  const horaires = [...ctx.horaires.values()]
+  for (const poste of [...ctx.postes.values()].sort((a, b) => a.id - b.id)) {
+    if (poste.ferme || aOuvertureFermeture(poste, ctx.regles.zones)) continue
+    const premier = codesDuPoste(poste, horaires)
+      .filter((h) => h.periode === matin)
+      .sort((a, b) => minutes(a.debut) - minutes(b.debut))[0]
+    if (!premier) continue
+    for (const jour of joursOuverts(ctx, poste, matin)) {
+      const [debut] = bornes(ctx.lundi, jour, premier.debut, premier.fin)
+      r.push({ poste: String(poste.id), jour, debut })
+    }
+  }
+  return r
+}
 
 /** L'ouverture de chaque poste qui a une heure d'ouverture (2026-11-01,
  * « à 7 h, quelqu'un en réception et quelqu'un au club » ; tout poste
@@ -3912,6 +3937,7 @@ export function preparerGeneration(
     aEviter,
     consignes: chiffresAccueil(ctx),
     ouvertures: ouverturesPostes(ctx),
+    arriveesMatin: arriveesMatin(ctx),
     fermetures: fermeturesPostes(ctx),
     // Un premier jour de contrat déjà passé n'est plus à travailler.
     ...(depuis > 0 ? { depuis } : {}),

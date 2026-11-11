@@ -89,7 +89,11 @@ import {
   statutAbsence,
 } from '#/lib/planning/rythmeStrict.ts'
 import type { StatutRythme } from '#/lib/planning/rythmeStrict.ts'
-import { seulementLaNuit, zoneDuPoste } from '#/lib/planning/zones.ts'
+import {
+  aOuvertureFermeture,
+  seulementLaNuit,
+  zoneDuPoste,
+} from '#/lib/planning/zones.ts'
 import { estIndispensable } from '#/lib/planning/modele.ts'
 import {
   dureesImposees,
@@ -1079,9 +1083,9 @@ export function verifierReglages(
   // calcul ne la rend jamais dure (D3), la case reste vide.
   const duree = regles.passations.dureeOuverture
   for (const p of r.postes) {
-    // Tout poste (2026-11-06), sauf la nuit de l'accueil (ses passations).
-    if (p.ferme || (accueil && seulementLaNuit(p, r.horaires, regles.moments)))
-      continue
+    // Tout poste (2026-11-06), sauf ceux d'une zone tenue en continu
+    // (2026-11-11 : la continuité et la passation le disent déjà).
+    if (p.ferme || (accueil && !aOuvertureFermeture(p, regles.zones))) continue
     const permis = codesDuPoste(p, r.horaires)
     const bornesH = (h: Horaire) => {
       const d = minutesDe(h.debut)
