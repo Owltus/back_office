@@ -2268,11 +2268,11 @@ export function construire(
       }
       // Rythme de 5 jours (2026-11-01) : un contrat de 35 h ou plus se fait
       // en `joursPreferesSemaine` jours, absences et jours hors contrat
-      // décomptés (l'école compte déjà comme un jour, `nbJours`).
-      if (
-        !s.contratIndicatif &&
-        s.minutesHebdoContrat >= R.repos.rythmeContratMin
-      ) {
+      // décomptés (l'école compte déjà comme un jour, `nbJours`). Le CONTRAT,
+      // jamais les heures dues de la semaine (`rythmeHumain`, comme
+      // l'esquisse de la semaine d'après) : un 39 h avec deux jours de congé
+      // n'en doit plus que 32 h, sa règle reste (relecture du 2026-11-11).
+      if (rythmeHumain(s, R)) {
         // Jours de présence (2026-11-02) : un départ le jeudi laisse 4 jours.
         const enContrat = jours.filter((j) => !s.horsContrat.has(j))
         const absents = enContrat.filter((j) =>

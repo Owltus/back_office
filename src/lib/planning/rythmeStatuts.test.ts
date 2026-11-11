@@ -652,17 +652,27 @@ describe('le calcul et le vérificateur', () => {
     expect(tenus(r)).toEqual([1, 2, 3, 4])
   })
   it('début de contrat le mercredi : 3 jours contre l’arrivée ; refusé : 5 jours collés à la semaine d’après', () => {
+    // Heures dues d'un début le mercredi (2 jours hors contrat, aucune
+    // journée de contrat perdue, `joursContratManquants`) : 35 h. Le rythme
+    // de 5 jours lit le CONTRAT (`rythmeHumain`, relecture du 2026-11-11) ;
+    // 5 jours feraient 10 jours d'affilée avec la semaine d'après : le calcul
+    // en fait 4 contre l'arrivée, puis un repos seul (aucun jour perdu).
     const s = personne({
       horsContrat: new Set([0, 1]),
       indisponibilites: new Set([0, 1]),
       joursNeutres: new Set([0, 1]),
       etatsApres: 'TTTTTrr',
-      minutesHebdoContrat: 21 * H,
       minutesContrat: 35 * H,
     })
     const { p, r } = resoudre(s)
-    expect(tenus(r)).toEqual([2, 3, 4])
+    expect(tenus(r)).toEqual([2, 3, 4, 5])
     expect(rythmeDit(p, r.affectations)).toEqual([])
+    // 3 jours contre l'arrivée : lus sans faute.
+    const trois = [2, 3, 4].map((j) => ({
+      salarieId: 'a',
+      creneauId: `j${j}`,
+    }))
+    expect(rythmeDit(p, trois)).toEqual([])
     const affs = [2, 3, 4, 5, 6].map((j) => ({
       salarieId: 'a',
       creneauId: `j${j}`,

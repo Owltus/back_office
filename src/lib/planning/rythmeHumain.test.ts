@@ -1,7 +1,11 @@
 import highsLoader from 'highs'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import { generer } from '#/lib/planning/generateur.ts'
+import {
+  construire,
+  generer,
+  POIDS_JOUR_MANQUANT,
+} from '#/lib/planning/generateur.ts'
 import type { Highs } from '#/lib/planning/generateur.ts'
 import {
   creneau as creneauModele,
@@ -258,5 +262,33 @@ describe('jamais plus de 5 jours d’affilée, semaines voisines comprises', () 
     expect(affiles(35, 2)).toEqual([])
     expect(affiles(24, 3)).toEqual([])
     expect(affiles(24, 4)).toHaveLength(1)
+  })
+})
+
+describe('le rythme de 5 jours lit le contrat, pas les heures dues (relecture du 2026-11-11)', () => {
+  // Un jour manquant au rythme (`POIDS_JOUR_MANQUANT`) : une variable propre,
+  // payée à ce seul prix. On compte celles du modèle de la semaine.
+  const joursManquants = (s: SalarieSolveur) =>
+    [
+      ...construire(
+        probleme({
+          salaries: [s],
+          creneaux: [2, 3, 4, 5, 6].map((j) => cr(j)),
+          graine: 1,
+          regles: SANS_RYTHME_STRICT,
+        }),
+      ).modele.objectif.values(),
+    ].filter((c) => c === POIDS_JOUR_MANQUANT).length
+  const conge = { indisponibilites: new Set([0, 1]) }
+
+  it('accepté : 39 h et deux jours de congé, 32 h dues, la règle demande encore 3 jours', () => {
+    const s = personne(32, { minutesContrat: 39 * H, ...conge })
+    expect(rythmeHumain(s)).toBe(true)
+    expect(joursManquants(s)).toBe(1)
+  })
+  it('refusé : un contrat de 30 h n’a pas de rythme de 5 jours', () => {
+    const s = personne(30, { minutesContrat: 30 * H, ...conge })
+    expect(rythmeHumain(s)).toBe(false)
+    expect(joursManquants(s)).toBe(0)
   })
 })
