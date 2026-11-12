@@ -151,10 +151,8 @@ export function HorairesParMoment({
       onDragCancel={() => setTenu(null)}
     >
       <div className="flex w-full flex-col gap-6">
-        <div className="grid items-start gap-6 lg:grid-cols-3">
-          {deJour.map(rendre)}
-        </div>
-        <div className="grid items-start gap-6 lg:grid-cols-2">
+        <div className="grid gap-6 lg:grid-cols-3">{deJour.map(rendre)}</div>
+        <div className="grid gap-6 lg:grid-cols-2">
           {nuits.map(rendre)}
           {(extra.horaires.length > 0 || modifiable) && rendre(extra)}
         </div>
@@ -198,7 +196,7 @@ function TableauHoraires({
     (h) => h.id === (active?.data.current?.id as number | undefined),
   )
   return (
-    <section aria-label={titre} className="flex flex-col gap-2">
+    <section aria-label={titre} className="flex h-full flex-col gap-2">
       <h3 className="text-sm font-semibold">
         {titre}{' '}
         <span className="font-normal text-muted-foreground tabular-nums">
@@ -209,7 +207,7 @@ function TableauHoraires({
         ref={setNodeRef}
         data-moment={groupe}
         className={cn(
-          'overflow-x-auto rounded-xl border bg-card transition-colors',
+          'flex-1 overflow-x-auto rounded-xl border bg-card transition-colors',
           isOver &&
             !vientDIci &&
             'border-primary bg-primary/5 ring-2 ring-primary/40',
