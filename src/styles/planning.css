@@ -368,24 +368,18 @@
   opacity: 0.15;
 }
 
-/* Barre de couverture du mois survolée (2026-11-13) : les jours qui ont
- * des places à pourvoir ressortent, avec leur nombre ; le reste s'estompe. */
-.planning-manque {
-  display: none;
-}
-[data-planning-focus='manques'] .planning-manque {
-  display: block;
-}
+/* Barre de couverture du mois survolée (2026-11-13) : seul l'arrière-plan
+ * des jours qui ont des places à pourvoir change (ni bordure ni contenu en
+ * plus : rien ne bouge, demande utilisateur), le reste s'estompe. */
 [data-planning-focus='manques'] .planning-mois-pastille {
   opacity: 0.15;
 }
 [data-planning-focus='manques'] th[data-manque] {
   background-color: color-mix(
     in oklab,
-    var(--color-amber-500) 22%,
-    transparent
+    var(--color-amber-500) 35%,
+    var(--color-muted)
   );
-  box-shadow: inset 0 0 0 2px var(--color-amber-500);
 }
 
 /* ------------------------------------------------------ Fenêtre du calcul

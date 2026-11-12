@@ -475,11 +475,6 @@ export function GrilleMois({
                         </span>
                       )}
                     </span>
-                    {manque > 0 && (
-                      <span className="planning-manque mx-auto mt-0.5 w-fit rounded-full bg-amber-500 px-1.5 text-[10px] leading-4 font-semibold text-white tabular-nums">
-                        {manque}
-                      </span>
-                    )}
                     <PointsPresence
                       presence={semaine?.presence.filter(
                         (p) => p.jour === jour,
