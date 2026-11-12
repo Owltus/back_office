@@ -7,14 +7,7 @@
  * Lisible par tous ; ajouter et modifier : gestion seule.
  */
 
-import {
-  estPrefere,
-  NIVEAU_DEPANNAGE,
-  NIVEAU_SOUTIEN,
-  NIVEAU_TITULAIRE,
-  NIVEAUX,
-  nomNiveau,
-} from '#/lib/planning/niveaux.ts'
+import { estPrefere, NIVEAUX, nomNiveau } from '#/lib/planning/niveaux.ts'
 import type { Niveaux } from '#/lib/planning/niveaux.ts'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
@@ -394,14 +387,6 @@ export function texteSuivant(
   return `Nouveau contrat le ${quand}`
 }
 
-/** Style du niveau : le titulaire en plein, le dépannage encadré, le
- * soutien en pointillés (jamais seul). */
-const STYLE_NIVEAU: Record<string, string> = {
-  [NIVEAU_TITULAIRE]: 'bg-muted text-foreground',
-  [NIVEAU_DEPANNAGE]: 'border border-border text-muted-foreground',
-  [NIVEAU_SOUTIEN]: 'border border-dashed border-border text-muted-foreground',
-}
-
 /** Postes d'une personne, une ligne chacun, rangés par niveau puis dans
  * l'ordre des postes ; le niveau toujours écrit à droite. */
 function PostesDuMembre({
@@ -441,12 +426,7 @@ function PostesDuMembre({
           />
           <span className="min-w-0 flex-1 truncate">{p.nom}</span>
           <Tip label={n ? aideNiveau(n) : c.niveau}>
-            <span
-              className={cn(
-                'w-[5.5rem] shrink-0 rounded-full px-2 py-0.5 text-center',
-                STYLE_NIVEAU[c.niveau] ?? 'text-muted-foreground',
-              )}
-            >
+            <span className="w-[5.5rem] shrink-0 rounded-full bg-muted px-2 py-0.5 text-center text-muted-foreground">
               {nomNiveau(regles.niveaux, c.niveau)}
             </span>
           </Tip>
