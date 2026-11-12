@@ -72,6 +72,18 @@ describe('FenetreCalcul (demande utilisateur du 2026-11-03)', () => {
     expect(rempli()).toBe('0%')
   })
 
+  it('au-delà d’une minute, dit que le calcul continue', () => {
+    render(
+      <FenetreCalcul calcul={mois} onArreter={() => {}} maintenant={horloge} />,
+    )
+    expect(screen.queryByRole('status')).toBeNull()
+    act(() => {
+      t = 75_000
+      vi.advanceTimersByTime(500)
+    })
+    expect(screen.getByRole('status').textContent).toMatch(/continue/)
+  })
+
   it('avec l’horloge par défaut, la barre avance aussi', () => {
     // Une horloge neuve à chaque rendu remettait le compte à zéro.
     vi.setSystemTime(0)

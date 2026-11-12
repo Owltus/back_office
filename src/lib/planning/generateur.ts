@@ -4762,7 +4762,7 @@ function resoudreUneFois(
  */
 export const AFFINAGE_TOLERANCE = 600
 /** Temps au plus de l'affinage (secondes), et jamais plus du quart du budget. */
-export const AFFINAGE_PLAFOND_S = 10
+export const AFFINAGE_PLAFOND_S = 120
 export const POIDS_AFFINAGE_HORAIRE = 100
 function affiner(
   p: Probleme,

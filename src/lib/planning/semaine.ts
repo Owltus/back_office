@@ -187,6 +187,10 @@ import type { Transmissions, Violation } from '#/lib/planning/verificateur.ts'
 
 // ----------------------------------------------------------------- sorties
 
+/** Limite du calcul d'une semaine, en secondes (cas aberrant seulement :
+ * le calcul rend la main dès qu'il a prouvé le meilleur planning). */
+export const LIMITE_CALCUL_SECONDES = 600
+
 export interface AlerteOut {
   regle: string
   message: string
@@ -3973,7 +3977,12 @@ export function preparerGeneration(
     // places vides alors que des extras étaient libres) ; avec les règles
     // morales, quelques vraies semaines touchaient les 40 s. Il rend la main
     // dès qu'il a l'optimum.
-    tempsMaxSecondes: o.tempsMaxSecondes ?? 60,
+    // 10 min au plus depuis le 2026-11-12 (demande utilisateur : sur un PC
+    // plus lent, une semaine butait sur les 60 s et rendait un planning non
+    // prouvé, différent de celui d'un PC rapide). Le calcul s'arrête dès
+    // qu'il a fini : la limite ne sert qu'au cas aberrant. Même moteur
+    // (WebAssembly) partout : sans limite atteinte, même résultat partout.
+    tempsMaxSecondes: o.tempsMaxSecondes ?? LIMITE_CALCUL_SECONDES,
   })
   const parId = new Map(besoins.map((b) => [`b${b.id}`, b]))
   const traduire = (r: Resultat): NouveauShift[] => {

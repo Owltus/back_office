@@ -218,6 +218,9 @@ export class PlanningMemoire {
     const l = lundiDe(lundi)
     const g = preparerGeneration(this.donnees(l), {
       aujourdhui: this.aujourdhui,
+      // Les tests gardent l'ancienne limite de 60 s par semaine : l'app a
+      // 10 min (PC lents, 2026-11-12), trop long pour un test sous charge.
+      tempsMaxSecondes: 60,
       ...o,
     })
     const nouveaux = g.traduire(generer(g.probleme, this.highs))

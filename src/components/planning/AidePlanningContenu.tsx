@@ -1127,8 +1127,10 @@ export function AidePlanningContenu({
             Un premier calcul n’utilise que les horaires demandés et leurs
             versions étoile. S’il reste une place vide, un manque à l’accueil,
             un trou ou un dépannage évitable, un second calcul essaie aussi les
-            autres horaires. Chaque semaine a au plus 60 secondes de calcul. Un
-            nouveau clic sur Compléter le mois arrête le calcul.
+            autres horaires. Une semaine se calcule en général en moins d’une
+            minute. Sur un ordinateur plus lent, le calcul continue jusqu’au
+            bout (10 minutes au plus par semaine) pour donner le même résultat.
+            Le bouton Arrêter le calcul l’interrompt.
           </p>
         </Sous>
         <Sous titre="Un calcul différent à chaque clic">

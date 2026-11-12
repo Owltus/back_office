@@ -18,8 +18,10 @@ import { momentsDuTableau } from '#/lib/planning/moment.ts'
  * fin du calcul, ou après « Arrêter le calcul ».
  *
  * Le solveur ne dit pas où il en est : la barre compte les SEMAINES faites,
- * et la semaine en cours se remplit avec son temps écoulé face à la limite
- * du calcul (`LIMITE_SECONDES`), jamais un faux pourcentage.
+ * et la semaine en cours se remplit avec son temps écoulé face à la durée
+ * habituelle d'une semaine (`DUREE_HABITUELLE`), jamais un faux
+ * pourcentage. Au-delà (PC plus lent, 2026-11-12 : la limite est passée à
+ * 10 minutes), une ligne dit que le calcul continue.
  *
  * SOBRE (demande utilisateur du 2026-11-03) : plus de titre « Compléter le
  * mois », ni « Semaine 2 sur 5 » avec la date, ni compteur « Cette
@@ -27,8 +29,9 @@ import { momentsDuTableau } from '#/lib/planning/moment.ts'
  * le dessin, la barre et le bouton d'arrêt.
  */
 
-/** Limite du calcul d'une semaine (`tempsMaxSecondes` de semaine.ts). */
-export const LIMITE_SECONDES = 60
+/** Durée habituelle du calcul d'une semaine, en secondes (la limite réelle,
+ * `LIMITE_CALCUL_SECONDES` de semaine.ts, n'est qu'un garde-fou). */
+export const DUREE_HABITUELLE = 60
 
 const JOURS = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
 
@@ -87,7 +90,8 @@ export function FenetreCalcul({
     onArreter()
   }
 
-  const part = Math.min(1, ecoule / LIMITE_SECONDES)
+  const part = Math.min(1, ecoule / DUREE_HABITUELLE)
+  const long = ecoule > DUREE_HABITUELLE
 
   return (
     <DialogPrimitive.Root open={ouverte}>
@@ -150,6 +154,16 @@ export function FenetreCalcul({
                   </div>
                 ))}
               </div>
+
+              {long && !arret && (
+                <p
+                  role="status"
+                  className="text-center text-sm text-muted-foreground"
+                >
+                  Ce calcul prend plus de temps que d'habitude. Il continue
+                  jusqu'au bout pour garder le même résultat.
+                </p>
+              )}
 
               <Button
                 ref={bouton}
