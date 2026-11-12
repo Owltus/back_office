@@ -73,7 +73,9 @@ export function listeOu(l: readonly string[]): string {
 export function heures(total: number): string {
   const h = Math.floor(total / 60)
   const m = total % 60
-  return m ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`
+  // Toujours les minutes : « 3h00 », jamais « 3h » (demande utilisateur
+  // du 2026-11-12).
+  return `${h}h${String(m).padStart(2, '0')}`
 }
 
 /** Durée de debut à fin, en minutes (fin <= debut : le lendemain). */

@@ -498,7 +498,7 @@ describe('VueMois', { timeout: 20_000 }, () => {
       screen.getByRole('button', { name: /^Lucas Petit, .*18.* : Congés/ }),
     )
     fireEvent.click(
-      await screen.findByRole('menuitem', { name: '07:00–15:45, 8h' }),
+      await screen.findByRole('menuitem', { name: '07:00–15:45, 8h00' }),
     )
     await waitFor(() => expect(service.poserAbsences).toHaveBeenCalledTimes(2))
     expect(service.poserAbsences).toHaveBeenNthCalledWith(
@@ -544,17 +544,17 @@ describe('VueMois', { timeout: 20_000 }, () => {
     // ligne ; le vérificateur signalera l'infraction sur le shift posé.
     // Une seule liste : chaque code une fois, posé sur le métier habituel.
     const matin = await screen.findByRole('menuitem', {
-      name: '07:00–15:45, 8h, -11 h de repos',
+      name: '07:00–15:45, 8h00, -11 h de repos',
     })
     expect(matin.getAttribute('aria-disabled')).toBeNull()
     expect(
       screen.getByRole('menuitem', {
-        name: '09:00–17:45, 8h, -11 h de repos',
+        name: '09:00–17:45, 8h00, -11 h de repos',
       }),
     ).toBeTruthy()
     // L'après-midi reste proposé sans alerte, une seule fois.
     expect(
-      screen.getAllByRole('menuitem', { name: '15:00–23:45, 8h' }),
+      screen.getAllByRole('menuitem', { name: '15:00–23:45, 8h00' }),
     ).toHaveLength(1)
     fireEvent.click(matin)
     await waitFor(() =>

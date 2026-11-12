@@ -240,7 +240,7 @@ describe('Horaires et absences', () => {
     expect(carte.queryByLabelText('Minutes retirées au début')).toBeNull()
     const apercu = within(carte.getByLabelText('Aperçu des heures'))
     expect(apercu.getByText('Journée normale')).toBeTruthy()
-    expect(apercu.getByText(/07:00 → 15:45 · 8h de travail/)).toBeTruthy()
+    expect(apercu.getByText(/07:00 → 15:45 · 8h00 de travail/)).toBeTruthy()
     // Ses versions étoile, des horaires qui existent (`versionsEtoile`).
     expect(apercu.getByText('Journée étoile')).toBeTruthy()
     expect(apercu.getByText('08:00–15:45, 07:00–14:45')).toBeTruthy()
@@ -264,11 +264,11 @@ describe('Horaires et absences', () => {
       screen
         .getByRole('button', { name: `Régler l'horaire ${libelle}` })
         .closest('tr') as HTMLElement
-    expect(ligne('07:00–14:45').textContent).toContain('7h')
+    expect(ligne('07:00–14:45').textContent).toContain('7h00')
     expect(ligne('07:00–14:45').textContent).toContain('45 min')
     expect(ligne('07:00–14:45').textContent).toContain('★')
     // L'horaire de 8 h, lui, n'est la journée étoile d'aucun autre.
-    expect(ligne('07:00–15:45').textContent).toContain('8h')
+    expect(ligne('07:00–15:45').textContent).toContain('8h00')
     expect(ligne('07:00–15:45').textContent).not.toContain('★')
     ouvrir(/^Régler l'horaire 07:00–14:45$/)
     const apercu = within(

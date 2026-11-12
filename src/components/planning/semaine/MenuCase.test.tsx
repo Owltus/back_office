@@ -117,7 +117,7 @@ describe('MenuCase : journée étoile', () => {
     ).toHaveLength(0)
     fireEvent.click(
       within(groupe).getByRole('menuitem', {
-        name: 'Journée étoile, 07:00–14:45, 7h',
+        name: 'Journée étoile, 07:00–14:45, 7h00',
       }),
     )
     expect(onHoraire).toHaveBeenCalledWith(
@@ -133,7 +133,7 @@ describe('MenuCase : journée étoile', () => {
     const groupe = screen.getByRole('group', { name: 'Journée étoile' })
     fireEvent.click(
       within(groupe).getByRole('menuitem', {
-        name: 'Journée normale, 07:00–15:45, 8h',
+        name: 'Journée normale, 07:00–15:45, 8h00',
       }),
     )
     expect(onHoraire).toHaveBeenCalledWith(
@@ -164,7 +164,7 @@ describe('MenuCase : journée étoile', () => {
     )
     expect(screen.queryByRole('group', { name: 'Journée étoile' })).toBeNull()
     expect(
-      screen.getByRole('menuitem', { name: '07:00–14:45, 7h' }),
+      screen.getByRole('menuitem', { name: '07:00–14:45, 7h00' }),
     ).toBeTruthy()
   })
 })

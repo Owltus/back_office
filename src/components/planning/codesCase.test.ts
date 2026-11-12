@@ -394,9 +394,9 @@ describe('codesUniques : chaque code une fois, poste déduit', () => {
     expect(nomLigneCode(m)).toContain(texteChangementPoste(m.changePoste!))
     // Plus de code depuis le 2026-10-31 : la ligne se lit par ses heures.
     expect(nomLigneCode(m)).toBe(
-      `07:00–15:45, 8h, ${texteChangementPoste(m.changePoste!)}`,
+      `07:00–15:45, 8h00, ${texteChangementPoste(m.changePoste!)}`,
     )
-    expect(heuresEtDuree(m.horaire)).toBe('07:00–15:45 · 8h')
+    expect(heuresEtDuree(m.horaire)).toBe('07:00–15:45 · 8h00')
     // Aucun shift (case vide) : rien à prévenir.
     const vide = codesUniques(rubriquesDe(p), p, referentiel.postes)
     expect(vide.codes.every((c) => c.changePoste === null)).toBe(true)

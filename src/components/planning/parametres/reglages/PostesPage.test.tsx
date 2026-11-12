@@ -114,7 +114,7 @@ describe('Postes', () => {
     const r = carte('Réception')
     expect(
       r.getByText(
-        'Un service dure au plus 12h sur ce poste, pause comprise. La loi ne permet jamais plus de 12h.',
+        'Un service dure au plus 12h00 sur ce poste, pause comprise. La loi ne permet jamais plus de 12h00.',
       ),
     ).toBeTruthy()
     expect(

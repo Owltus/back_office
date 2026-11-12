@@ -569,7 +569,7 @@ describe('EditeurShift : journée étoile (2026-11-02)', () => {
     expect(screen.queryByRole('switch', { name: /étoile/i })).toBeNull()
     const sept = boutons(/^07:00–14:45/)
     expect(sept).toHaveLength(1)
-    expect(sept[0].textContent).toContain('journée étoile · 7h de travail')
+    expect(sept[0].textContent).toContain('journée étoile · 7h00 de travail')
     fireEvent.click(sept[0])
     // Choisi : il passe dans la liste, et l'horaire de 8 h dans la rubrique.
     expect(boutons(/^07:00–14:45/)[0].getAttribute('aria-pressed')).toBe('true')

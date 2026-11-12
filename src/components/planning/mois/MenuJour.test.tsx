@@ -106,7 +106,7 @@ describe('MenuJour : code actuel non permis', () => {
   it('place à pourvoir : le code choisi est posé sur le poste de la place', () => {
     // Personne 3 : titulaire Réception (2, métier habituel) et Club (3).
     const { onHoraire } = rendre(referentiel, { posteId: 3 })
-    fireEvent.click(screen.getByRole('menuitem', { name: '15:00–23:45, 8h' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '15:00–23:45, 8h00' }))
     expect(onHoraire).toHaveBeenCalledWith(
       expect.objectContaining({
         id: horaireTest(referentiel.horaires, 'AM').id,
@@ -124,7 +124,7 @@ describe('MenuJour : code actuel non permis', () => {
     const groupe = screen.getByRole('group', { name: 'Place à pourvoir' })
     const items = screen.getAllByRole('menuitem')
     // Premier élément du menu : l'horaire de la place, focalisé à l'ouverture.
-    expect(items[0].getAttribute('aria-label')).toBe('15:00–23:45, 8h')
+    expect(items[0].getAttribute('aria-label')).toBe('15:00–23:45, 8h00')
     expect(groupe.contains(items[0])).toBe(true)
     expect(
       screen.getAllByRole('menuitem', { name: /^15:00–23:45,/ }),
@@ -182,7 +182,7 @@ describe('MenuJour : code actuel non permis', () => {
     rendre(referentiel)
     expect(screen.queryByRole('menuitem', { name: /actuel/ })).toBeNull()
     expect(
-      screen.getByRole('menuitem', { name: '07:00–15:45, 8h' }),
+      screen.getByRole('menuitem', { name: '07:00–15:45, 8h00' }),
     ).toBeTruthy()
   })
 })
@@ -206,14 +206,14 @@ describe('MenuJour : une seule liste, poste déduit (mode manuel)', () => {
   it('poste du shift existant s’il permet le code, jamais affiché', () => {
     // Shift de la personne 3 sur le Club : ses codes y restent.
     const { onHoraire } = rendre(referentiel, undefined, 3, 3)
-    expect(etiquettes()).toContain('15:00–23:45, 8h')
+    expect(etiquettes()).toContain('15:00–23:45, 8h00')
     // Heures seulement : aucun nom de poste dans le menu.
     expect(
       screen
         .getAllByRole('menuitem')
         .every((m) => !/Club|Réception/.test(m.textContent ?? '')),
     ).toBe(true)
-    fireEvent.click(screen.getByRole('menuitem', { name: '15:00–23:45, 8h' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '15:00–23:45, 8h00' }))
     expect(onHoraire).toHaveBeenCalledWith(
       expect.objectContaining({
         id: horaireTest(referentiel.horaires, 'AM').id,
@@ -226,7 +226,7 @@ describe('MenuJour : une seule liste, poste déduit (mode manuel)', () => {
     // Personne 2 : titulaire Réception, dépannage Club.
     const { onHoraire } = rendre(referentiel, undefined, 2)
     expect(etiquettes().every((n) => !n.includes('Club'))).toBe(true)
-    fireEvent.click(screen.getByRole('menuitem', { name: '07:00–15:45, 8h' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '07:00–15:45, 8h00' }))
     expect(onHoraire).toHaveBeenCalledWith(
       expect.objectContaining({
         id: horaireTest(referentiel.horaires, 'M').id,
@@ -241,10 +241,10 @@ describe('MenuJour : un horaire se lit par ses heures (2026-10-31)', () => {
     // Oracle : décisions utilisateur du 2026-10-31 (plus de code, plus
     // d'« heures écrites en rouge »).
     rendre(referentiel)
-    const ligne = screen.getByRole('menuitem', { name: '15:00–23:45, 8h' })
+    const ligne = screen.getByRole('menuitem', { name: '15:00–23:45, 8h00' })
     // Aucun badge de code : le texte de la ligne n'est que ses heures.
-    expect(ligne.textContent).toBe('15:00–23:45 · 8h')
-    expect(within(ligne).getByText('15:00–23:45 · 8h').style.color).toBe('')
+    expect(ligne.textContent).toBe('15:00–23:45 · 8h00')
+    expect(within(ligne).getByText('15:00–23:45 · 8h00').style.color).toBe('')
   })
 })
 
@@ -343,7 +343,7 @@ describe('MenuJour : journée étoile (2026-11-02)', () => {
     ).toHaveLength(0)
     fireEvent.click(
       within(groupe).getByRole('menuitem', {
-        name: 'Journée étoile, 07:00–14:45, 7h',
+        name: 'Journée étoile, 07:00–14:45, 7h00',
       }),
     )
     expect(onHoraire).toHaveBeenCalledWith(
@@ -394,7 +394,7 @@ describe('MenuJour : journée étoile (2026-11-02)', () => {
     const groupe = screen.getByRole('group', { name: 'Journée étoile' })
     fireEvent.click(
       within(groupe).getByRole('menuitem', {
-        name: 'Journée normale, 07:00–15:45, 8h',
+        name: 'Journée normale, 07:00–15:45, 8h00',
       }),
     )
     expect(onHoraire).toHaveBeenCalledWith(
@@ -412,7 +412,7 @@ describe('MenuJour : journée étoile (2026-11-02)', () => {
     })
     expect(screen.queryByRole('group', { name: 'Journée étoile' })).toBeNull()
     expect(
-      screen.getByRole('menuitem', { name: '07:00–14:45, 7h' }),
+      screen.getByRole('menuitem', { name: '07:00–14:45, 7h00' }),
     ).toBeTruthy()
     cleanup()
     rendre(referentiel, { posteId: 2 })

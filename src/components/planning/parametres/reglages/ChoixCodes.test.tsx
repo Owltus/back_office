@@ -48,10 +48,10 @@ describe('ChoixCodes', () => {
     const texte = (debut: RegExp) =>
       screen.getByRole('button', { name: debut }).textContent
     // 8 h 45 de présence moins 45 min de pause.
-    expect(texte(/^07:00–15:45/)).toContain('(8h)')
+    expect(texte(/^07:00–15:45/)).toContain('(8h00)')
     // Une nuit sans pause : toute la présence.
-    expect(texte(/^23:00–07:00/)).toContain('(8h)')
+    expect(texte(/^23:00–07:00/)).toContain('(8h00)')
     // 7 h 45 de présence moins 45 min.
-    expect(texte(/^07:00–14:45/)).toContain('(7h)')
+    expect(texte(/^07:00–14:45/)).toContain('(7h00)')
   })
 })

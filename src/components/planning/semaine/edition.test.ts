@@ -375,10 +375,10 @@ describe('colonne Heures et compteurs', () => {
       'Pile les heures du contrat',
     )
     expect(titreHeures(salarie(), bilan({ minutes: 37 * 60 }))).toBe(
-      '2h de moins que le contrat',
+      '2h00 de moins que le contrat',
     )
     expect(titreHeures(salarie(), bilan({ minutes: 50 * 60 }))).toBe(
-      'Au-delà du maximum de 48h',
+      'Au-delà du maximum de 48h00',
     )
     expect(
       titreHeures(salarie({ forfait_jours: true }), bilan({ jours: 4 })),
