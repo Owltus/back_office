@@ -396,11 +396,16 @@ function DatesContrat({ s }: { s: Salarie }) {
     ['Fin', s.date_sortie ? dateFr(s.date_sortie) : 'Aucune', !s.date_sortie],
   ]
   return (
-    <dl className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1.5 text-xs">
+    <dl className="grid grid-cols-[auto_5rem] items-center gap-x-3 gap-y-1.5 text-xs">
       {lignes.map(([libelle, date, vide]) => (
         <div key={libelle} className="contents">
           <dt className="text-[11px] text-muted-foreground">{libelle}</dt>
-          <dd className={cn('tabular-nums', vide && 'text-muted-foreground')}>
+          <dd
+            className={cn(
+              'text-center tabular-nums',
+              vide && 'text-muted-foreground',
+            )}
+          >
             {date}
           </dd>
         </div>
