@@ -997,7 +997,7 @@ describe('encadrement : jours fériés chômés le jour même', () => {
     expect(absenceDu11(d)).toBeUndefined()
   })
 
-  it('jamais de JFR : un 11/11 travaillé (posé à la main) ne se rattrape pas', () => {
+  it('un 11/11 travaillé quand même (posé à la main) se rattrape (2026-11-12)', () => {
     const avec = encadrement((x) => {
       x.semaine_type = jours([0, 1, 3, 4, 5])
     })
@@ -1017,7 +1017,7 @@ describe('encadrement : jours fériés chômés le jour même', () => {
       pause: 0,
     } as unknown as Affectation
     const ctx = contexte({ ...avec, affectations: [shift] })
-    expect(feriesEnAttente(ctx, [shift]).has(ID)).toBe(false)
+    expect(feriesEnAttente(ctx, [shift]).has(ID)).toBe(true)
     // Le même shift, poste sans la case : le jour férié est à rattraper.
     const sans = encadrement((x) => {
       x.semaine_type = jours([0, 1, 3, 4, 5])

@@ -42,6 +42,9 @@ export interface ContenuStatut {
   /** Jour férié rattrapé (motif JFR, 2026-11-02) : se valide comme un repos
    * posé ; en proposition quand la génération l'a placé. */
   jfr?: boolean
+  /** Jour férié pris le jour même, en proposition (2026-11-12) : se valide
+   * comme un repos posé. */
+  jfPropose?: boolean
   /** Le jour férié que ce JFR rattrape (2026-11-12). */
   rattrape?: JourFerie
   /** Repos obligé (2026-11-04) : pourquoi ce jour ne peut pas être travaillé. */
@@ -142,6 +145,12 @@ export function statutDuJour(
       }
     const fixe = bilan.absences_semaine_type.includes(jour)
     const jfr = !!m && estJfr(m)
+    // Jour férié pris le jour même, posé par le calcul (2026-11-12).
+    const jfPropose =
+      m?.role === 'ferie_chome' &&
+      !verrouillee &&
+      !fixe &&
+      (bilan.jfr_proposes ?? []).includes(jour)
     return {
       nom: m?.nom ?? 'Absent',
       couleur: m?.couleur ?? NEUTRE,
@@ -159,6 +168,7 @@ export function statutDuJour(
               (bilan.jfr_proposes ?? []).includes(jour),
           }
         : {}),
+      ...(jfPropose ? { proposition: true, jfPropose: true } : {}),
       genre: m && estEcole(m) ? 'ecole' : 'absence',
     }
   }
@@ -201,7 +211,8 @@ export function validationRepos(
 ): { valide: boolean; deduit: boolean } | null {
   const st = statutDuJour(bilan, jour, motifs)
   if (!st || st.fixe) return null
-  if (st.reposPose || st.jfr) return { valide: !st.proposition, deduit: false }
+  if (st.reposPose || st.jfr || st.jfPropose)
+    return { valide: !st.proposition, deduit: false }
   if (st.genre === 'repos') return { valide: false, deduit: true }
   return null
 }

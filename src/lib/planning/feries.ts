@@ -237,14 +237,20 @@ export function imputationJfr(args: ArgsImputation): {
   )
   const rattrape = new Map<string, JourFerie>()
   if (!droits.length) return { restants: [], rattrape }
+  // Un JFR peut aussi être posé AVANT son jour férié, dans la même semaine
+  // (2026-11-12, décision utilisateur : « soit avant, soit après, pour que
+  // tout s'emboîte »).
   const poses = [...new Set(args.jfrPoses)]
-    .filter((d) => d > droits[0].date && d <= args.au)
+    .filter((d) => d >= lundiDe(droits[0].date) && d <= args.au)
     .sort()
   const pris = new Array<boolean>(poses.length).fill(false)
   const restants: JourFerie[] = []
   for (const f of droits) {
     const limite = ajouterJours(f.date, delai)
-    const k = poses.findIndex((d, i) => !pris[i] && d > f.date && d <= limite)
+    const debut = lundiDe(f.date)
+    const k = poses.findIndex(
+      (d, i) => !pris[i] && d >= debut && d !== f.date && d <= limite,
+    )
     if (k >= 0) {
       pris[k] = true
       rattrape.set(poses[k], f)

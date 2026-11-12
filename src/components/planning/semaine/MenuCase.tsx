@@ -226,7 +226,7 @@ export function MenuCase({
               {validation.active
                 ? 'Remettre en proposition'
                 : validation.jfr
-                  ? 'Valider ce jour férié rattrapé'
+                  ? 'Valider ce jour férié'
                   : validation.repos
                     ? 'Valider ce repos'
                     : 'Valider ce shift'}

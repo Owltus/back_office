@@ -322,6 +322,11 @@ export const POIDS_JFR_EN_ATTENTE = 20_000
 /** R-FERIE-RATTRAPE : le JFR collé à un jour sans travail (repos, congé),
  * pour une coupure plus longue. Confort, sous les repos accolés. */
 export const POIDS_JFR_COLLE = 1_000
+/** Jour férié pris LE JOUR MÊME par un hôtelier qui y a droit (2026-11-12,
+ * décision utilisateur : « ceux qui peuvent le prennent, sinon c'est
+ * décalé ») : un peu plus que le rattrapage, sous les heures dues et les
+ * places (confort : une place à tenir passe toujours avant). */
+export const POIDS_FERIE_JOUR_MEME = 25_000
 /** Ouverture d'un poste de l'accueil (07:00 Réception et Club, réglage du
  * poste) : un quart d'heure sans personne sur ce poste dans la première
  * heure. « Obligatoire » (2026-11-01) : au-dessus des contrats d'un jour de
@@ -1028,7 +1033,7 @@ interface Construit {
   sousContrat: Array<[string, string, string]>
   /** Jours fériés rattrapés possibles (R-FERIE-RATTRAPE), une variable par
    * personne et par jour permis. */
-  jfrs: Array<{ salarieId: string; jour: number; v: string }>
+  jfrs: Array<{ salarieId: string; jour: number; v: string; ferie?: boolean }>
 }
 
 /** Réglages internes de la construction (tests et mesures seulement). */
@@ -1539,7 +1544,12 @@ export function construire(
   const semainesJours = new Map<string, Expr>()
   const figes = new Map<string, number>()
   const travailleDe = new Map<string, Map<number, string>>()
-  const jfrs: Array<{ salarieId: string; jour: number; v: string }> = []
+  const jfrs: Array<{
+    salarieId: string
+    jour: number
+    v: string
+    ferie?: boolean
+  }> = []
   // Rythme 5 et 2 strict : les fautes payées, leur prix posé à la fin
   // (chacune à son niveau, `construire`, fin).
   const excesRythme: ExcesRythme = {
@@ -1607,11 +1617,18 @@ export function construire(
     // un gain sur chaque variable). Collé à un jour sans travail :
     // POIDS_JFR_COLLE de mieux.
     const jfrDuJour = new Map<number, string>()
+    // Toutes les absences possibles d'un jour (JFR en attente, jour férié
+    // pris le jour même, JFR de la semaine) : une seule à la fois.
+    const jfrParJour = new Map<number, string[]>()
+    const ajouterJfr = (d: number, v: string) =>
+      jfrParJour.set(d, [...(jfrParJour.get(d) ?? []), v])
+    const enAttente: string[] = []
     if (s.jfr) {
       for (const d of [...s.jfr.jours].sort((a, b) => a - b)) {
         if (d < 0 || d >= p.nbJours) continue
         const v = m.bool()
-        jfrDuJour.set(d, v)
+        ajouterJfr(d, v)
+        enAttente.push(v)
         jfrs.push({ salarieId: s.id, jour: d, v })
         const t = travaille.get(d)
         if (t)
@@ -1652,12 +1669,78 @@ export function construire(
         m.ajoute([[1, colle], ...voisins], '<=', 2 - constante)
         m.cout(-POIDS_JFR_COLLE, colle)
       }
-      if (jfrDuJour.size > 1)
+      if (enAttente.length > 1)
         m.ajoute(
-          [...jfrDuJour.values()].map((v) => [1, v] as Terme),
+          enAttente.map((v) => [1, v] as Terme),
           '<=',
           1,
         )
+      // Jour férié de la semaine (2026-11-12) : pris le jour même (sans
+      // travail ce jour-là), ou travaillé et rattrapé un autre jour de la
+      // semaine, avant ou après (`autres`, seulement s'il est travaillé).
+      const f = s.jfr.ferie
+      if (f && f.jour >= 0 && f.jour < p.nbJours) {
+        const tF = travaille.get(f.jour)
+        const pris = m.bool()
+        ajouterJfr(f.jour, pris)
+        jfrs.push({ salarieId: s.id, jour: f.jour, v: pris, ferie: true })
+        if (tF)
+          m.ajoute(
+            [
+              [1, pris],
+              [1, tF],
+            ],
+            '<=',
+            1,
+          )
+        m.cout(-POIDS_FERIE_JOUR_MEME, pris)
+        const decales: string[] = []
+        for (const d of [...f.autres].sort((a, b) => a - b)) {
+          if (!tF || d === f.jour || d < 0 || d >= p.nbJours) continue
+          const v = m.bool()
+          const t = travaille.get(d)
+          if (t)
+            m.ajoute(
+              [
+                [1, v],
+                [1, t],
+              ],
+              '<=',
+              1,
+            )
+          m.ajoute(
+            [
+              [1, v],
+              [-1, tF],
+            ],
+            '<=',
+            0,
+          )
+          ajouterJfr(d, v)
+          decales.push(v)
+          jfrs.push({ salarieId: s.id, jour: d, v })
+          m.cout(-POIDS_JFR_EN_ATTENTE, v)
+        }
+        if (decales.length > 1)
+          m.ajoute(
+            decales.map((v) => [1, v] as Terme),
+            '<=',
+            1,
+          )
+      }
+      for (const [d, vs] of jfrParJour) {
+        if (vs.length === 1) {
+          jfrDuJour.set(d, vs[0])
+          continue
+        }
+        const une = m.bool()
+        m.ajoute(
+          [[1, une] as Terme, ...vs.map((v) => [-1, v] as Terme)],
+          '=',
+          0,
+        )
+        jfrDuJour.set(d, une)
+      }
     }
     const jfrTermes = (jours: number[], coef: number): Terme[] =>
       jours.flatMap((j) => {
@@ -4725,7 +4808,11 @@ function resoudreUneFois(
     ouvertures: reunir(ouvertures),
     jfr: jfrs
       .filter(({ v }) => valeur(v) === 1)
-      .map(({ salarieId, jour }) => ({ salarieId, jour })),
+      .map(({ salarieId, jour, ferie }) => ({
+        salarieId,
+        jour,
+        ...(ferie ? { ferie: true } : {}),
+      })),
     relevesManquantes: releves
       .filter(({ v }) => valeur(v) > 0.5)
       .map(({ jour }) => jour),

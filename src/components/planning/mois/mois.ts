@@ -173,8 +173,13 @@ export function validationDeCase(
   if (!c || c.fixe) return null
   if (c.type === 'shift') return { valide: c.shift.epinglee, deduit: false }
   if (c.type === 'repos') return { valide: false, deduit: true }
-  // Il ne reste qu'une absence posée : un repos posé ou un JFR se valident.
-  if (c.motif?.nature === 'repos' || (c.motif && estJfr(c.motif)))
+  // Il ne reste qu'une absence posée : un repos posé, un JFR ou un jour
+  // férié pris le jour même (proposé par le calcul, 2026-11-12) se valident.
+  if (
+    c.motif?.nature === 'repos' ||
+    (c.motif && estJfr(c.motif)) ||
+    (c.motif?.role === 'ferie_chome' && c.proposition)
+  )
     return { valide: !c.proposition, deduit: false }
   return null
 }

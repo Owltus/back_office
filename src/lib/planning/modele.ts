@@ -261,7 +261,16 @@ export interface SalarieSolveur {
   /** R-FERIE-RATTRAPE : un jour férié rattrapé (JFR) à placer cette
    * semaine, sur l'un de ces `jours` ; il retire `reduction` minutes aux
    * heures dues et un jour au rythme de 5 jours. null : rien à placer. */
-  jfr: { jours: ReadonlySet<number>; reduction: number } | null
+  jfr: {
+    jours: ReadonlySet<number>
+    reduction: number
+    /** Jour férié de la semaine (2026-11-12, décision utilisateur : « ceux
+     * qui peuvent le prennent, sinon c'est décalé ») : soit pris LE JOUR
+     * MÊME (absence au rôle ferie_chome), soit travaillé et rattrapé un
+     * autre jour de la semaine (`autres`, avant ou après), sinon plus tard
+     * (`jours` des semaines suivantes). */
+    ferie?: { jour: number; autres: ReadonlySet<number> }
+  } | null
   /** Jours fériés travaillés encore à rattraper (AAAA-MM-JJ), pour l'alerte
    * du vérificateur (JOUR-FERIE). */
   feriesARattraper: readonly string[]
@@ -735,7 +744,7 @@ export interface Resultat {
   ecartTotalMinutes: number | null
   /** Jours fériés rattrapés placés (R-FERIE-RATTRAPE) : au plus un par
    * personne. Absent : aucun. */
-  jfr?: Array<{ salarieId: string; jour: number }>
+  jfr?: Array<{ salarieId: string; jour: number; ferie?: boolean }>
 }
 
 /** PREMIER JOUR DU CONTRAT (demande d'une responsable du 2026-11-04 : « mes

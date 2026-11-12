@@ -778,7 +778,7 @@ export function VueSemaine({
           ? {
               active: reposValidable.valide,
               repos: true,
-              jfr: !!st?.jfr,
+              jfr: !!st?.jfr || !!st?.jfPropose,
               onBasculer: () =>
                 siOuverte(
                   () =>

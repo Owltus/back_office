@@ -512,6 +512,11 @@ export function contexte(d: DonneesSemaine): Contexte {
   const motifsJfr = new Set(
     d.referentiel.motifs.filter(estJfr).map((m) => m.id),
   )
+  const motifsFerie = new Set(
+    d.referentiel.motifs
+      .filter((m) => m.role === 'ferie_chome')
+      .map((m) => m.id),
+  )
   const horaires = new Map(d.referentiel.horaires.map((h) => [h.id, h]))
   const regles = lireRegles(d.referentiel)
   // Postes non indispensables : une place facultative par horaire et par
@@ -562,9 +567,15 @@ export function contexte(d: DonneesSemaine): Contexte {
         .map((a) => `${a.salarie_id}|${a.jour}`),
     ),
     motifsJfr,
+    // Jours fériés en proposition : rattrapés (JFR) ou pris le jour même
+    // par un hôtelier (rôle ferie_chome, 2026-11-12).
     jfrProposes: new Set(
       d.absences
-        .filter((a) => a.epinglee === false && motifsJfr.has(a.motif_id))
+        .filter(
+          (a) =>
+            a.epinglee === false &&
+            (motifsJfr.has(a.motif_id) || motifsFerie.has(a.motif_id)),
+        )
         .map((a) => `${a.salarie_id}|${a.jour}`),
     ),
     regles,
@@ -658,12 +669,9 @@ export function imputationsFeries(
   for (const x of ctx.staff) {
     const siens = travailles.get(x.id)
     if (!siens) continue
-    // Encadrement : le jour férié se prend le jour même, jamais rattrapé.
-    if (
-      ctx.postes &&
-      feriesChomes(x, ctx.postes, (ctx.regles ?? REGLES_PAR_DEFAUT).niveaux)
-    )
-      continue
+    // Encadrement et postes non indispensables : le jour férié se prend le
+    // jour même ; s'il est quand même travaillé (posé à la main), il est
+    // rattrapé comme pour tout le monde (2026-11-12).
     const poses = [...(ctx.absences.get(x.id) ?? [])]
       .filter(([, m]) => ctx.motifsJfr.has(m))
       .map(([date]) => date)
@@ -688,11 +696,19 @@ export function imputationsFeries(
  * (`Poste.feries_chomes`). */
 export function feriesChomes(
   x: Pick<Salarie, 'competences'>,
-  postes: ReadonlyMap<number, Pick<Poste, 'feries_chomes'>>,
+  postes: ReadonlyMap<
+    number,
+    Pick<Poste, 'feries_chomes'> & Partial<Pick<Poste, 'indispensable'>>
+  >,
   niveaux: Niveaux = NIVEAUX,
 ): boolean {
   const principal = x.competences.find((c) => estPrefere(niveaux, c.niveau))
-  return !!principal && !!postes.get(principal.poste_id)?.feries_chomes
+  if (!principal) return false
+  const p = postes.get(principal.poste_id)
+  // Un poste NON indispensable prend ses jours fériés le jour même, sans
+  // case à cocher (décision utilisateur du 2026-11-12 : « il doit prendre
+  // ces jours impérativement le jour »).
+  return !!p && (!!p.feries_chomes || p.indispensable === false)
 }
 
 /** Un jour férié pris le jour même par l'encadrement : après un an
@@ -3819,47 +3835,82 @@ export function preparerGeneration(
   const motifJfr = Math.min(...ctx.motifsJfr)
   if (Number.isFinite(motifJfr) && o.seulement == null) {
     const attente = feriesEnAttente(ctx, shiftsConnus(d2, ctx.affectations))
+    const feriesSemaine = feriesEntre(
+      ajouterJours(lundi, depuis),
+      ajouterJours(lundi, 6),
+      ctx.regles.feries.ajoutes,
+    )
     for (const x of ctx.staff) {
       const liste = attente.get(x.id)
       const sol = salaries.get(x.id)
-      if (!liste || !sol || exclus.has(x.id)) continue
+      if (!sol || exclus.has(x.id)) continue
       // Un JFR par semaine : celui du cadre est déjà posé.
       if (jfrCadres.some((a) => a.salarie_id === x.id)) continue
-      const apres = liste[0].date
-      const jours = new Set<number>()
-      for (let j = depuis; j < 7; j++) {
-        if (ajouterJours(lundi, j) <= apres) continue
-        // Jamais sur un autre jour férié (2026-11-12 : un JFR posé le 1er
-        // janvier rendait un jour férié sur un jour férié).
-        if (ferieDe(ajouterJours(lundi, j), ctx.regles.feries.ajoutes)) continue
+      // Un jour où la personne pourrait prendre une absence de la semaine.
+      const libre = (j: number) =>
+        !ferieDe(ajouterJours(lundi, j), ctx.regles.feries.ajoutes) &&
         // Un jour « Travaille » de la semaine type est permis (relecture du
         // 2026-11-03) : un JFR rend justement un jour qu'on aurait
         // travaillé. Sans cela, une semaine type entièrement fixée n'avait
         // jamais de jour où le poser, et le droit se perdait en silence. Le
         // jour habituel garde sa prime (`POIDS_JOUR_FIXE`) : un jour libre
         // de la fiche passe d'abord.
-        if (
-          sol.indisponibilites.has(j) ||
-          sol.horsContrat.has(j) ||
-          sol.joursHorsSite.has(j) ||
-          sol.reposFixes.has(j) ||
-          // 39 h : la journée étoile saute avec le JFR, quel que soit son
-          // jour (2026-11-04). Sinon, jamais le jour de l'étoile fixée.
-          (sol.etoileFixe.has(j) &&
-            !aJourneeCourteImposee(
-              ctx.regles,
-              sol.minutesContrat ?? sol.minutesHebdoContrat,
-            ))
+        !sol.indisponibilites.has(j) &&
+        !sol.horsContrat.has(j) &&
+        !sol.joursHorsSite.has(j) &&
+        !sol.reposFixes.has(j) &&
+        // 39 h : la journée étoile saute avec le JFR, quel que soit son
+        // jour (2026-11-04). Sinon, jamais le jour de l'étoile fixée.
+        !(
+          sol.etoileFixe.has(j) &&
+          !aJourneeCourteImposee(
+            ctx.regles,
+            sol.minutesContrat ?? sol.minutesHebdoContrat,
+          )
         )
-          continue
-        jours.add(j)
+      const jours = new Set<number>()
+      if (liste) {
+        const apres = liste[0].date
+        for (let j = depuis; j < 7; j++) {
+          // Jamais sur un autre jour férié (2026-11-12 : un JFR posé le 1er
+          // janvier rendait un jour férié sur un jour férié).
+          if (ajouterJours(lundi, j) > apres && libre(j)) jours.add(j)
+        }
       }
-      if (!jours.size) continue
+      // Jour férié de la semaine (2026-11-12, décision utilisateur) : un
+      // hôtelier qui y a droit le prend le jour même s'il peut, sinon il le
+      // travaille et le rattrape un autre jour de la semaine, avant ou
+      // après, ou plus tard. Pas l'encadrement ni les postes non
+      // indispensables (le jour même, `avecFeriesDuJour`), ni un jour où la
+      // personne ne travaille pas de toute façon (repos fixe, absence, hors
+      // contrat : il est perdu, décision du même jour).
+      let ferie: { jour: number; autres: Set<number> } | undefined
+      const f = feriesSemaine.find(
+        (k) =>
+          droitAuRattrapage(x, k.date, ctx.regles) &&
+          !feriesChomes(x, ctx.postes, ctx.regles.niveaux),
+      )
+      if (f) {
+        const jf = ecartJours(lundi, f.date)
+        if (
+          !sol.indisponibilites.has(jf) &&
+          !sol.horsContrat.has(jf) &&
+          !sol.joursHorsSite.has(jf) &&
+          !sol.reposFixes.has(jf)
+        ) {
+          const autres = new Set<number>()
+          for (let j = depuis; j < 7; j++)
+            if (j !== jf && libre(j)) autres.add(j)
+          ferie = { jour: jf, autres }
+        }
+      }
+      if (!jours.size && !ferie) continue
       salaries.set(x.id, {
         ...sol,
         jfr: {
           jours,
           reduction: reductionJourFerie(fiche(x, lundi, ctx)),
+          ...(ferie ? { ferie } : {}),
         },
       })
     }
@@ -4066,13 +4117,18 @@ export function preparerGeneration(
     }
     return nouveaux
   }
+  // Le motif d'un jour férié pris le jour même (rôle ferie_chome).
+  const motifFerie = d.referentiel.motifs.find(
+    (m) => m.role === 'ferie_chome',
+  )?.id
   const absencesJfr = (r: Resultat): NouvelleAbsence[] => [
     ...jfrCadres,
-    ...(r.jfr ?? []).map((a) => ({
-      salarie_id: Number(a.salarieId),
-      jour: a.jour,
-      motif_id: motifJfr,
-    })),
+    ...(r.jfr ?? []).flatMap((a) => {
+      const motif = a.ferie ? motifFerie : motifJfr
+      return motif === undefined
+        ? []
+        : [{ salarie_id: Number(a.salarieId), jour: a.jour, motif_id: motif }]
+    }),
   ]
   return { probleme: p, traduire, absences: absencesJfr, depuis }
 }
