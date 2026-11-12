@@ -7,7 +7,14 @@
  * Lisible par tous ; ajouter et modifier : gestion seule.
  */
 
-import { estPrefere, NIVEAUX, nomNiveau } from '#/lib/planning/niveaux.ts'
+import {
+  estPrefere,
+  NIVEAU_DEPANNAGE,
+  NIVEAU_SOUTIEN,
+  NIVEAU_TITULAIRE,
+  NIVEAUX,
+  nomNiveau,
+} from '#/lib/planning/niveaux.ts'
 import type { Niveaux } from '#/lib/planning/niveaux.ts'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
@@ -387,6 +394,68 @@ export function texteSuivant(
   return `Nouveau contrat le ${quand}`
 }
 
+/** Style du niveau : le titulaire en plein, le dépannage encadré, le
+ * soutien en pointillés (jamais seul). */
+const STYLE_NIVEAU: Record<string, string> = {
+  [NIVEAU_TITULAIRE]: 'bg-muted text-foreground',
+  [NIVEAU_DEPANNAGE]: 'border border-border text-muted-foreground',
+  [NIVEAU_SOUTIEN]: 'border border-dashed border-border text-muted-foreground',
+}
+
+/** Postes d'une personne, une ligne chacun, rangés par niveau puis dans
+ * l'ordre des postes ; le niveau toujours écrit à droite. */
+function PostesDuMembre({
+  s,
+  postes,
+  regles,
+}: {
+  s: Salarie
+  postes: Poste[]
+  regles: RegleEtablissement
+}) {
+  const lignes = s.competences
+    .map((c) => ({
+      c,
+      p: postes.find((x) => x.id === c.poste_id),
+      n: regles.niveaux.parId.get(c.niveau),
+    }))
+    .filter((l): l is typeof l & { p: Poste } => !!l.p)
+    .sort(
+      (a, b) =>
+        (a.n?.position ?? 99) - (b.n?.position ?? 99) ||
+        postes.indexOf(a.p) - postes.indexOf(b.p),
+    )
+  if (lignes.length === 0)
+    return <span className="text-xs text-muted-foreground">Aucun poste</span>
+  return (
+    <ul className="flex flex-col gap-1">
+      {lignes.map(({ c, p, n }) => (
+        <li
+          key={c.poste_id}
+          className="flex min-w-0 items-center gap-2 text-xs"
+        >
+          <span
+            className="inline-block size-2 shrink-0 rounded-full"
+            style={{ background: p.couleur }}
+            aria-hidden
+          />
+          <span className="min-w-0 flex-1 truncate">{p.nom}</span>
+          <Tip label={n ? aideNiveau(n) : c.niveau}>
+            <span
+              className={cn(
+                'w-[5.5rem] shrink-0 rounded-full px-2 py-0.5 text-center',
+                STYLE_NIVEAU[c.niveau] ?? 'text-muted-foreground',
+              )}
+            >
+              {nomNiveau(regles.niveaux, c.niveau)}
+            </span>
+          </Tip>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 function LigneMembre({
   s,
   parcours: p,
@@ -454,38 +523,7 @@ function LigneMembre({
         {heures}
       </td>
       <td className="px-3 py-2">
-        {s.competences.length > 0 ? (
-          <div className="flex flex-wrap gap-1">
-            {s.competences.map((c) => {
-              const p = postes.find((x) => x.id === c.poste_id)
-              if (!p) return null
-              return (
-                <Tip
-                  key={c.poste_id}
-                  label={(() => {
-                    const n = regles.niveaux.parId.get(c.niveau)
-                    return n ? aideNiveau(n) : c.niveau
-                  })()}
-                >
-                  <span className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5 text-xs">
-                    <span
-                      className="inline-block size-2 rounded-full"
-                      style={{ background: p.couleur }}
-                    />
-                    {p.nom}
-                    {!estPrefere(regles.niveaux, c.niveau) && (
-                      <span className="text-muted-foreground">
-                        · {nomNiveau(regles.niveaux, c.niveau)}
-                      </span>
-                    )}
-                  </span>
-                </Tip>
-              )
-            })}
-          </div>
-        ) : (
-          <span className="text-xs text-muted-foreground">Aucun poste</span>
-        )}
+        <PostesDuMembre s={s} postes={postes} regles={regles} />
       </td>
       <td className="px-3 py-2">
         <div className="flex flex-wrap gap-1">
