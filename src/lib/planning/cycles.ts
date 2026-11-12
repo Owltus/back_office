@@ -47,21 +47,47 @@ export const COULEURS_HORAIRE = {
   nuit: '#3b82f6',
 } as const
 
-/** La couleur d'un horaire d'après son moment et sa longueur : la nuit en
- * bleu, sinon un horaire court en violet, sinon la couleur de son moment.
- * Calculée à la lecture et à l'enregistrement, jamais choisie. */
+/** Moins que ce travail, en minutes : l'horaire va de lui-même dans le
+ * tableau Extra de la page Horaires. */
+export const EXTRA_TRAVAIL_MAX = 6 * 60
+
+/** Moins de 6 h de travail. */
+export function estExtra(h: Pick<Horaire, 'debut' | 'fin' | 'pause'>): boolean {
+  let duree = minutes(h.fin) - minutes(h.debut)
+  if (duree <= 0) duree += 24 * 60
+  return duree - h.pause < EXTRA_TRAVAIL_MAX
+}
+
+/** Rangé dans le tableau Extra de la page Horaires : posé là à la main, ou
+ * de moins de 6 h sans avoir été posé dans un moment. */
+export function dansExtra(
+  h: Pick<Horaire, 'debut' | 'fin' | 'pause' | 'moment_force' | 'extra'>,
+): boolean {
+  return !!h.extra || (estExtra(h) && !h.moment_force)
+}
+
+/** La couleur d'un horaire, celle du tableau où il est rangé (décision
+ * utilisateur du 2026-11-12 : « garder la cohérence ») : violet dans Extra,
+ * sinon la couleur de son moment (bleu la nuit). Calculée à la lecture et à
+ * l'enregistrement, jamais choisie. */
 export function couleurHoraire(
-  h: Pick<Horaire, 'debut' | 'fin' | 'pause' | 'periode'>,
+  h: Pick<
+    Horaire,
+    'debut' | 'fin' | 'pause' | 'periode' | 'moment_force' | 'extra'
+  >,
 ): string {
+  if (dansExtra(h)) return COULEURS_HORAIRE.court
   if (estNuit(MOMENTS_HOTEL, h.periode)) return COULEURS_HORAIRE.nuit
-  if (estCourt(h)) return COULEURS_HORAIRE.court
   const par: Record<string, string> = COULEURS_HORAIRE
   return (h.periode && par[h.periode]) || COULEURS_HORAIRE.middle
 }
 
 /** L'horaire avec sa couleur calculée (`couleurHoraire`). */
 export function avecCouleurCalculee<
-  T extends Pick<Horaire, 'debut' | 'fin' | 'pause' | 'periode' | 'couleur'>,
+  T extends Pick<
+    Horaire,
+    'debut' | 'fin' | 'pause' | 'periode' | 'couleur' | 'moment_force' | 'extra'
+  >,
 >(h: T): T {
   const couleur = couleurHoraire(h)
   return h.couleur === couleur ? h : { ...h, couleur }

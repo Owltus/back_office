@@ -69,6 +69,8 @@ describe('horaire rangé à la main', () => {
     // Posé dans son propre moment : il quitte Extra, donc marqué.
     const ch = deplacementHoraire(court, 'matin')
     expect(ch?.moment_force).toBe(true)
+    // Sorti d'Extra : la couleur du matin, plus le violet.
+    expect(ch?.couleur).toBe(COULEURS_HORAIRE.matin)
     expect(groupeHoraire({ ...court, ...ch })).toBe('matin')
     // Reposé dans Extra : il revient au calcul.
     const retour = deplacementHoraire({ ...court, ...ch }, EXTRA)
@@ -95,6 +97,8 @@ describe('horaire rangé à la main', () => {
     })
     const range = { ...six, ...ch }
     expect(groupeHoraire(range)).toBe(EXTRA)
+    // La couleur suit le tableau (2026-11-12) : violet dans Extra.
+    expect(ch?.couleur).toBe(COULEURS_HORAIRE.court)
     expect(deplacementHoraire(range, EXTRA)).toBeNull()
     // Reposé dans son moment : la marque part.
     const retour = deplacementHoraire(range, 'matin')

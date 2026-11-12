@@ -1,12 +1,11 @@
 import { nomHoraire } from '#/lib/planning/affichage.ts'
-import { couleurHoraire } from '#/lib/planning/cycles.ts'
+import { couleurHoraire, dansExtra, estExtra } from '#/lib/planning/cycles.ts'
 import {
   MOMENTS_HOTEL,
   momentDeLHoraire,
   momentPropose,
 } from '#/lib/planning/moment.ts'
 import type { Moments } from '#/lib/planning/moment.ts'
-import { minutes } from '#/lib/planning/temps.ts'
 import type { Horaire, Periode } from '#/lib/planning/types.ts'
 
 /*
@@ -27,8 +26,7 @@ import type { Horaire, Periode } from '#/lib/planning/types.ts'
 
 /** Le tableau Extra (pas un moment du calcul). */
 export const EXTRA = 'extra'
-/** Moins que ce travail, en minutes : l'horaire va dans Extra. */
-export const EXTRA_TRAVAIL_MAX = 6 * 60
+export { EXTRA_TRAVAIL_MAX, estExtra } from '#/lib/planning/cycles.ts'
 
 export type Groupe = Periode | typeof EXTRA
 
@@ -42,19 +40,12 @@ export type ChangementMoment = Pick<
   'periode' | 'moment_force' | 'extra' | 'nom' | 'couleur'
 >
 
-/** Moins de 6 h de travail. */
-export function estExtra(h: Pick<Horaire, 'debut' | 'fin' | 'pause'>): boolean {
-  let duree = minutes(h.fin) - minutes(h.debut)
-  if (duree <= 0) duree += 24 * 60
-  return duree - h.pause < EXTRA_TRAVAIL_MAX
-}
-
 /** Le tableau où l'horaire s'affiche. */
 export function groupeHoraire(
   h: HoraireRange,
   l: Moments = MOMENTS_HOTEL,
 ): Groupe {
-  if (h.extra || (estExtra(h) && !h.moment_force)) return EXTRA
+  if (dansExtra(h)) return EXTRA
   return momentDeLHoraire(h, l)
 }
 
@@ -80,7 +71,7 @@ function changement(
   extra: boolean,
   l: Moments,
 ): ChangementMoment {
-  const suite = { ...h, periode }
+  const suite = { ...h, periode, moment_force, extra }
   return {
     periode,
     moment_force,

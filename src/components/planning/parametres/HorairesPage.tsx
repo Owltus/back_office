@@ -923,8 +923,8 @@ function CarteHoraire({
           }}
         />
         <span className="text-xs text-muted-foreground">
-          Violet si l'horaire est court, sinon jaune le matin, orange en middle,
-          vert le soir, bleu la nuit.
+          Violet dans Extra, sinon jaune le matin, orange en middle, vert le
+          soir, bleu la nuit.
         </span>
       </div>
 

@@ -59,12 +59,13 @@ begin
     into v_realises, v_avenir
     from public.planning_affectations a where a.horaire_id = p_id;
   if v_realises > 0 and not coalesce(p_passer_en_manuel, false) then
-    raise exception 'L''horaire % a servi dans % shift% de semaines verrouillées. Pour le supprimer, ces shifts gardent leurs heures et passent en horaire spécifique.%',
-      v_heures, v_realises, case when v_realises > 1 then 's' else '' end,
-      case when v_avenir > 0
-           then format(' Les %s autre%s shift%s de semaines ouvertes aussi.', v_avenir,
-                       case when v_avenir > 1 then 's' else '' end,
-                       case when v_avenir > 1 then 's' else '' end)
+    raise exception 'L''horaire % a servi dans % de semaines verrouillées. Pour le supprimer, % en horaire spécifique%.',
+      v_heures,
+      case when v_realises > 1 then v_realises || ' shifts' else '1 shift' end,
+      case when v_realises > 1 then 'ces shifts gardent leurs heures et passent'
+           else 'ce shift garde ses heures et passe' end,
+      case when v_avenir > 1 then ', comme les ' || v_avenir || ' shifts des semaines ouvertes'
+           when v_avenir = 1 then ', comme le shift des semaines ouvertes'
            else '' end
       using errcode = 'PL409', hint = 'passer_en_manuel';
   end if;
