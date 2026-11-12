@@ -306,7 +306,7 @@ function LigneHoraire({
         >
           {libelle}
           {etoile && (
-            <span title="Journée étoile" className="ml-1 text-muted-foreground">
+            <span title="Journée étoile" className="ml-1 text-yellow-400">
               ★
             </span>
           )}
