@@ -146,7 +146,12 @@ export function changerHeures(
   const suite = { ...h, ...maj }
   if (!heuresCompletes(suite) || !Number.isFinite(suite.pause)) return maj
   // Des heures changées : le moment repart du calcul (plus « à la main »).
-  return { ...maj, periode: momentPropose(suite, l), moment_force: false }
+  return {
+    ...maj,
+    periode: momentPropose(suite, l),
+    moment_force: false,
+    extra: false,
+  }
 }
 
 /** Le moment montré dans le volet : celui des heures dès qu'elles sont
@@ -224,6 +229,7 @@ export function nettoyerHoraire(
     ...h,
     periode,
     moment_force: !!h.moment_force,
+    extra: !!h.extra,
     nom: nomHoraire({ ...h, periode }, l ?? MOMENTS_HOTEL),
   }
 }

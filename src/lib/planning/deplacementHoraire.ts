@@ -18,8 +18,11 @@ import type { Horaire, Periode } from '#/lib/planning/types.ts'
  * un autre moment le marque `moment_force` ; le remettre dans le moment de
  * ses heures retire la marque. Un horaire de moins de 6 h va de lui-même dans
  * Extra ; le poser dans un moment l'en sort (marqué), le reposer dans Extra
- * l'y ramène. Extra est un rangement de la page : le calcul compte toujours
- * l'horaire dans son moment. Le nom et la couleur suivent le moment.
+ * l'y ramène. Un horaire plus long peut aussi être posé dans Extra (marque
+ * `extra`, retours de la RH du 2026-11-12 : 07:00–13:00 et 08:00–14:00) ;
+ * le reposer dans un moment retire la marque. Extra est un rangement de la
+ * page : le calcul compte toujours l'horaire dans son moment. Le nom et la
+ * couleur suivent le moment.
  */
 
 /** Le tableau Extra (pas un moment du calcul). */
@@ -31,12 +34,12 @@ export type Groupe = Periode | typeof EXTRA
 
 type HoraireRange = Pick<
   Horaire,
-  'debut' | 'fin' | 'pause' | 'periode' | 'moment_force'
+  'debut' | 'fin' | 'pause' | 'periode' | 'moment_force' | 'extra'
 >
 
 export type ChangementMoment = Pick<
   Horaire,
-  'periode' | 'moment_force' | 'nom' | 'couleur'
+  'periode' | 'moment_force' | 'extra' | 'nom' | 'couleur'
 >
 
 /** Moins de 6 h de travail. */
@@ -51,12 +54,12 @@ export function groupeHoraire(
   h: HoraireRange,
   l: Moments = MOMENTS_HOTEL,
 ): Groupe {
-  if (estExtra(h) && !h.moment_force) return EXTRA
+  if (h.extra || (estExtra(h) && !h.moment_force)) return EXTRA
   return momentDeLHoraire(h, l)
 }
 
 /** Ce qu'il faut écrire pour poser `h` dans le tableau `vers`, ou null s'il
- * y est déjà ou n'y a pas sa place (Extra : moins de 6 h seulement). */
+ * y est déjà. */
 export function deplacementHoraire(
   h: HoraireRange,
   vers: Groupe,
@@ -64,23 +67,24 @@ export function deplacementHoraire(
 ): ChangementMoment | null {
   if (groupeHoraire(h, l) === vers) return null
   const calcule = momentPropose(h, l)
-  if (vers === EXTRA) {
-    if (!estExtra(h)) return null
-    return changement(h, calcule, false, l)
-  }
-  return changement(h, vers, estExtra(h) || vers !== calcule, l)
+  // Extra : son moment repart du calcul ; seul un horaire de 6 h ou plus a
+  // besoin de la marque pour y rester.
+  if (vers === EXTRA) return changement(h, calcule, false, !estExtra(h), l)
+  return changement(h, vers, estExtra(h) || vers !== calcule, false, l)
 }
 
 function changement(
   h: HoraireRange,
   periode: Periode,
   moment_force: boolean,
+  extra: boolean,
   l: Moments,
 ): ChangementMoment {
   const suite = { ...h, periode }
   return {
     periode,
     moment_force,
+    extra,
     nom: nomHoraire(suite, l),
     couleur: couleurHoraire(suite),
   }

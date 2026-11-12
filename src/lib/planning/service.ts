@@ -40,7 +40,8 @@ import type {
 } from '#/lib/planning/types.ts'
 import { supabase } from '#/lib/supabase.ts'
 
-const COL_HORAIRE = 'id, nom, debut, fin, couleur, pause, periode, moment_force'
+const COL_HORAIRE =
+  'id, nom, debut, fin, couleur, pause, periode, moment_force, extra'
 const COL_MOTIF =
   'id, code, nom, couleur, decompte, nature, libre_weekend, reserve_forfait, rythme_travail, role, icone'
 const COL_POSTE =
@@ -768,8 +769,20 @@ async function rpcSuppression(fonction: string, id: number): Promise<void> {
   verifier(await supabase.rpc(fonction, { p_id: id }))
 }
 
-export const supprimerHoraire = (id: number) =>
-  rpcSuppression('planning_supprimer_horaire', id)
+/** Supprime un horaire. Refusé (PL409, indice `passer_en_manuel`) s'il a
+ * servi dans des semaines verrouillées ; avec `passerEnManuel`, ces shifts
+ * gardent leurs heures et passent en horaire spécifique (2026-11-12). */
+export async function supprimerHoraire(
+  id: number,
+  passerEnManuel = false,
+): Promise<void> {
+  verifier(
+    await supabase.rpc('planning_supprimer_horaire', {
+      p_id: id,
+      p_passer_en_manuel: passerEnManuel,
+    }),
+  )
+}
 export const supprimerPoste = (id: number) =>
   rpcSuppression('planning_supprimer_poste', id)
 export const supprimerMotif = (id: number) =>

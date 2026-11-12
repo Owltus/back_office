@@ -62,6 +62,7 @@ import type {
   SaisieMotif,
 } from '#/components/planning/parametres/reglages/validation.ts'
 import { ConfirmDialog } from '#/components/shared/ConfirmDialog.tsx'
+import { indiceErreur, messageErreur } from '#/lib/planning/erreurs.ts'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
@@ -146,6 +147,7 @@ const saisieHoraire = (h: Horaire): SaisieHoraire => ({
   pause: h.pause,
   periode: h.periode,
   moment_force: !!h.moment_force,
+  extra: !!h.extra,
 })
 
 /** Ce que fait le moment d'un horaire, lu sur ses cases. */
@@ -698,6 +700,9 @@ function CarteHoraire({
   } = useBrouillon(enregistre)
   const [envoi, setEnvoi] = useState(false)
   const [suppression, setSuppression] = useState(false)
+  // Suppression refusée parce que l'horaire a servi dans des semaines
+  // verrouillées : la raison, et la proposition de garder les heures.
+  const [enManuel, setEnManuel] = useState<string | null>(null)
   // Le moment suit toujours les heures (décision du 2026-11-05) : il n'y a
   // plus rien à choisir.
   const neuf = id === null
@@ -738,14 +743,27 @@ function CarteHoraire({
     onFin?.()
   }
 
-  const supprimer = async () => {
+  const supprimer = async (passerEnManuel = false) => {
     if (id === null) return
     setEnvoi(true)
+    let proposition: string | null = null
     const r = await ecrire(
-      () => supprimerHoraire(id),
+      async () => {
+        try {
+          await supprimerHoraire(id, passerEnManuel)
+        } catch (err) {
+          if (indiceErreur(err) === 'passer_en_manuel')
+            proposition = messageErreur(err)
+          throw err
+        }
+      },
       `L'horaire ${libelleHoraire(enregistre)} n'a pas pu être supprimé.`,
     )
     setEnvoi(false)
+    if (proposition !== null) {
+      setEnManuel(proposition)
+      return
+    }
     notifier(
       r.ok ? `Horaire ${libelleHoraire(enregistre)} supprimé.` : r.message,
       r.ok ? 'info' : 'danger',
@@ -939,10 +957,27 @@ function CarteHoraire({
         open={suppression}
         onOpenChange={setSuppression}
         title={`Supprimer l'horaire ${libelleHoraire(enregistre)} ?`}
-        description="Ses besoins sont supprimés. Les shifts déjà posés gardent leurs heures. Il est retiré des fiches et des postes. Impossible s'il figure dans un planning réalisé, ou s'il est le seul horaire permis d'une fiche ou d'un poste."
+        description="Ses besoins sont supprimés. Les shifts déjà posés gardent leurs heures. Il est retiré des fiches et des postes. Impossible s'il est le seul horaire permis d'une fiche ou d'un poste."
         confirmLabel="Supprimer"
         destructive
         onConfirm={() => void supprimer()}
+      />
+      <ConfirmDialog
+        open={enManuel !== null}
+        onOpenChange={(o) => !o && setEnManuel(null)}
+        title={`L'horaire ${libelleHoraire(enregistre)} a servi dans des plannings réalisés`}
+        description={
+          <>
+            {enManuel}
+            <br />
+            <br />
+            Les plannings ne changent pas : chaque shift garde ses heures et sa
+            pause, il n'est simplement plus relié à cet horaire.
+          </>
+        }
+        confirmLabel="Garder les heures et supprimer"
+        destructive
+        onConfirm={() => void supprimer(true)}
       />
     </CarteReglage>
   )

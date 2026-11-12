@@ -24,6 +24,7 @@ describe('horaire rangé à la main', () => {
     expect(ch).toEqual({
       periode: 'matin',
       moment_force: true,
+      extra: false,
       nom: 'Matin de 9 h à 17 h 45',
       couleur: COULEURS_HORAIRE.matin,
     })
@@ -75,10 +76,36 @@ describe('horaire rangé à la main', () => {
     expect(deplacementHoraire(court, EXTRA)).toBeNull()
   })
 
-  it('6 h de travail ou plus : jamais dans Extra', () => {
+  it('6 h de travail ou plus : dans Extra seulement posé à la main', () => {
     expect(estExtra({ debut: '07:00', fin: '13:00', pause: 0 })).toBe(false)
     expect(estExtra({ debut: '07:00', fin: '12:59', pause: 0 })).toBe(true)
-    expect(deplacementHoraire(middle, EXTRA)).toBeNull()
+    const six = {
+      debut: '07:00',
+      fin: '13:00',
+      pause: 0,
+      periode: 'matin' as const,
+    }
+    expect(groupeHoraire(six)).toBe('matin')
+    // Posé dans Extra (retours de la RH du 2026-11-12) : marqué, il y reste.
+    const ch = deplacementHoraire(six, EXTRA)
+    expect(ch).toMatchObject({
+      periode: 'matin',
+      moment_force: false,
+      extra: true,
+    })
+    const range = { ...six, ...ch }
+    expect(groupeHoraire(range)).toBe(EXTRA)
+    expect(deplacementHoraire(range, EXTRA)).toBeNull()
+    // Reposé dans son moment : la marque part.
+    const retour = deplacementHoraire(range, 'matin')
+    expect(retour).toMatchObject({ moment_force: false, extra: false })
+    expect(groupeHoraire({ ...range, ...retour })).toBe('matin')
+    // Reposé dans un autre moment : marqué comme tout déplacement.
+    expect(deplacementHoraire(range, 'middle')).toMatchObject({
+      periode: 'middle',
+      moment_force: true,
+      extra: false,
+    })
   })
 
   it('un moment inconnu rangé à la main retombe sur le calcul', () => {

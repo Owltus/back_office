@@ -143,7 +143,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':J', (select j from t_ids)::text);
 $$;
 
-select plan(195);
+select plan(197);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -265,6 +265,17 @@ select is(pg_temp.essai('gestion', array[
 select is(pg_temp.essai('gestion', array[
   'select public.planning_supprimer_horaire((select id from public.planning_horaires where nom = ''Matin test''))']),
   'err=PL409', 'horaire seul permis d''un poste : ne se supprime pas');
+-- Horaire d'un planning réalisé (2026-11-12) : refusé sans accord, puis, sur
+-- accord, ses shifts verrouillés gardent leurs heures en horaire spécifique.
+select is(pg_temp.essai('gestion', array[
+  pg_temp.q('update public.planning_postes set horaires_autorises = horaires_autorises || (select id from public.planning_horaires where nom = ''Nuit test'') where id = :PA'),
+  'select public.planning_supprimer_horaire((select id from public.planning_horaires where nom = ''Matin test''))']),
+  'err=PL409', 'horaire d''un planning réalisé : refusé sans accord');
+select is(pg_temp.essai('gestion', array[
+  pg_temp.q('update public.planning_postes set horaires_autorises = horaires_autorises || (select id from public.planning_horaires where nom = ''Nuit test'') where id = :PA'),
+  'select public.planning_supprimer_horaire((select id from public.planning_horaires where nom = ''Matin test''), true)',
+  pg_temp.q('select count(*) || '' '' || string_agg(debut || ''-'' || fin || ''/'' || pause, '','') from public.planning_affectations where lundi = :L and salarie_id = :S1 and horaire_id is null')]),
+  '1 05:05-13:50/45', 'horaire d''un planning réalisé : sur accord, le shift garde ses heures sans horaire');
 
 -- ------------------------------------- aucune porte dérobée sur le réalisé ---
 -- Contexte sans utilisateur (comme une fonction serveur à la clé service_role) :

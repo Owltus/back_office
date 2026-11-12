@@ -203,6 +203,7 @@ describe('Horaires et absences', () => {
         pause: 30,
         periode: 'matin',
         moment_force: false,
+        extra: false,
       },
       1,
       // Les limites des moments de l'établissement (défauts ici).
@@ -382,13 +383,37 @@ describe('Horaires et absences', () => {
     )
     fireEvent.click(await screen.findByRole('button', { name: 'Supprimer' }))
     await waitFor(() =>
-      expect(service.supprimerHoraire).toHaveBeenCalledWith(1),
+      expect(service.supprimerHoraire).toHaveBeenCalledWith(1, false),
     )
     expect(
       await screen.findByText(
         'Cet horaire est le seul permis pour le poste Accueil.',
       ),
     ).toBeTruthy()
+  })
+
+  it('horaire d un planning réalisé : la raison, puis garder les heures', async () => {
+    service.supprimerHoraire
+      .mockRejectedValueOnce({
+        code: 'PL409',
+        hint: 'passer_en_manuel',
+        message: 'L horaire a servi dans 3 shifts de semaines verrouillées.',
+      })
+      .mockResolvedValueOnce(undefined)
+    monter(<HorairesPage />)
+    fireEvent.click(
+      within(carteMatin()).getByRole('button', { name: 'Supprimer' }),
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Supprimer' }))
+    expect(
+      await screen.findByText(/servi dans 3 shifts de semaines verrouillées/),
+    ).toBeTruthy()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Garder les heures et supprimer' }),
+    )
+    await waitFor(() =>
+      expect(service.supprimerHoraire).toHaveBeenLastCalledWith(1, true),
+    )
   })
 
   it('motif : nature et compté dans les heures, envoyés à Enregistrer', async () => {

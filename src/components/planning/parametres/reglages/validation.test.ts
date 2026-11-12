@@ -95,6 +95,7 @@ describe('contrôles de saisie (miroir des contraintes de la base)', () => {
       fin: '07:45',
       periode: 'nuit',
       moment_force: false,
+      extra: false,
     })
     expect(momentEstPropose({ ...matin, ...nuit })).toBe(true)
     // Un moment ancien, choisi à la main, ne survit pas aux heures.
@@ -108,6 +109,7 @@ describe('contrôles de saisie (miroir des contraintes de la base)', () => {
       fin: '07:45',
       periode: 'nuit',
       moment_force: false,
+      extra: false,
     })
     // Heure en cours de frappe : rien à calculer.
     expect(changerHeures(matin, { fin: '15:4' })).toEqual({

@@ -18,6 +18,14 @@ export function codeErreur(err: unknown): string | undefined {
     : undefined
 }
 
+/** L'indice joint par la base à un refus (`hint`), qui dit ce que l'écran
+ * peut proposer (« passer_en_manuel » : suppression d'un horaire réalisé). */
+export function indiceErreur(err: unknown): string | undefined {
+  return typeof err === 'object' && err !== null
+    ? ((err as { hint?: string }).hint ?? undefined)
+    : undefined
+}
+
 /** Une écriture en plusieurs temps qui a échoué APRÈS un premier temps
  * réussi (relecture du 2026-11-06) : le message le dit. */
 export function partielle(err: unknown): unknown {

@@ -92,6 +92,10 @@ export interface Horaire {
   /** Moment placé À LA MAIN (glisser-déposer de la page Horaires,
    * 2026-11-12) : `periode` fait foi au lieu du calcul. Absent : faux. */
   moment_force?: boolean
+  /** Rangé À LA MAIN dans le tableau Extra de la page Horaires, quelle
+   * que soit sa durée (2026-11-12). Rangement de la page seulement : le
+   * calcul le compte dans son moment. Absent : faux. */
+  extra?: boolean
 }
 
 export interface Motif {
