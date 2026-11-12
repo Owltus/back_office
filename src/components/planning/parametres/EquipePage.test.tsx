@@ -119,9 +119,8 @@ describe('EquipePage', () => {
       screen.getByRole('button', { name: nom }).closest('tr')!
     const lucas = ligne(/Lucas Petit/)
     expect(lucas.getAttribute('data-parti')).toBe('true')
-    expect(lucas.textContent).toContain('Parti(e) le 31/01/2020')
-    expect(ligne(/Nadia Haddad/).textContent).toContain('Désactivé')
-    expect(ligne(/Emma Durand/).textContent).toContain('Arrive le 01/03/2099')
+    expect(lucas.textContent).toContain('Fin31/01/2020')
+    expect(ligne(/Emma Durand/).textContent).toContain('Début01/03/2099')
     expect(ligne(/Claire Martin/).textContent).toContain('Forfait jours')
     expect(ligne(/Léa Fontaine/).textContent).toContain('Stagiaire')
   })

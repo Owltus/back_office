@@ -10,7 +10,6 @@
 import { estPrefere, NIVEAUX, nomNiveau } from '#/lib/planning/niveaux.ts'
 import type { Niveaux } from '#/lib/planning/niveaux.ts'
 import { useState } from 'react'
-import type { ReactNode } from 'react'
 import { ChevronRight, Layers, Scale, UserPlus } from 'lucide-react'
 
 import {
@@ -51,12 +50,10 @@ import {
   deNom,
 } from '#/lib/planning/affichage.ts'
 import { dansLEquipe, parcours } from '#/lib/planning/parcours.ts'
-import type { Parcours } from '#/lib/planning/parcours.ts'
 import {
   lireRegles,
   modeleDe,
   nomContrat,
-  REGLES_PAR_DEFAUT,
 } from '#/lib/planning/reglesEtablissement.ts'
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import type { Poste, Salarie } from '#/lib/planning/types.ts'
@@ -127,8 +124,6 @@ export function EquipePage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
   // parties vont dans une section repliée en bas : la page montre d'abord
   // l'équipe actuelle.
   const tous = parcours(salaries, aujourdhui)
-  const deLaLigne = new Map(tous.map((p) => [p.courant.id, p]))
-  const parcoursDe = (s: Salarie) => deLaLigne.get(s.id)
   const actifs = tous
     .filter((p) => dansLEquipe(p, aujourdhui))
     .map((p) => p.courant)
@@ -230,7 +225,6 @@ export function EquipePage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
                 postes={ref.data.postes}
                 regles={lireRegles(ref.data)}
                 aujourdhui={aujourdhui}
-                parcoursDe={parcoursDe}
                 onOuvrir={(s) => setFiche({ id: s.id, groupeId: s.groupe_id })}
               />
             </section>
@@ -251,7 +245,6 @@ export function EquipePage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
                   postes={ref.data.postes}
                   regles={lireRegles(ref.data)}
                   aujourdhui={aujourdhui}
-                  parcoursDe={parcoursDe}
                   onOuvrir={(s) =>
                     setFiche({ id: s.id, groupeId: s.groupe_id })
                   }
@@ -290,28 +283,6 @@ export function EquipePage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
   )
 }
 
-function Puce({
-  children,
-  ton,
-}: {
-  children: ReactNode
-  ton?: 'depart' | 'arrivee' | 'fin'
-}) {
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs',
-        !ton && 'border-border text-muted-foreground',
-        ton === 'depart' && 'border-destructive/40 text-destructive',
-        ton === 'arrivee' && 'border-primary/40 text-primary',
-        ton === 'fin' && 'border-amber-500/40 text-amber-500',
-      )}
-    >
-      {children}
-    </span>
-  )
-}
-
 /*
  * Colonnes FIGÉES (`table-fixed`, largeurs sur l'en-tête) : les tableaux de chaque
  * catégorie s'alignent. Sous 52 rem de large (requête de conteneur), contrat
@@ -324,14 +295,12 @@ function TableauMembres({
   postes,
   regles,
   aujourdhui,
-  parcoursDe,
   onOuvrir,
 }: {
   membres: Salarie[]
   postes: Poste[]
   regles: RegleEtablissement
   aujourdhui: string
-  parcoursDe: (s: Salarie) => Parcours | undefined
   onOuvrir: (s: Salarie) => void
 }) {
   return (
@@ -355,7 +324,6 @@ function TableauMembres({
             <LigneMembre
               key={s.id}
               s={s}
-              parcours={parcoursDe(s)}
               postes={postes}
               regles={regles}
               aujourdhui={aujourdhui}
@@ -366,25 +334,6 @@ function TableauMembres({
       </table>
     </div>
   )
-}
-
-/** Ce que change le contrat suivant : poste, type de contrat, ou rien de
- * plus qu'un nouveau contrat. */
-export function texteSuivant(
-  courant: Salarie,
-  suivant: Salarie,
-  postes: Poste[],
-  regles: RegleEtablissement = REGLES_PAR_DEFAUT,
-): string {
-  const quand = dateFr(suivant.date_entree as string)
-  if (
-    postePrincipal(courant, postes, regles.niveaux)?.id !==
-    postePrincipal(suivant, postes, regles.niveaux)?.id
-  )
-    return `Nouveau poste le ${quand}`
-  if (courant.type_contrat !== suivant.type_contrat)
-    return `${nomContrat(regles, suivant.type_contrat)} le ${quand}`
-  return `Nouveau contrat le ${quand}`
 }
 
 /** Postes d'une personne, une ligne chacun, rangés par niveau puis dans
@@ -413,20 +362,19 @@ function PostesDuMembre({
   if (lignes.length === 0)
     return <span className="text-xs text-muted-foreground">Aucun poste</span>
   return (
-    <ul className="flex flex-col gap-1">
+    // Nom sur une largeur fixe : les niveaux forment une colonne, alignée
+    // d'une ligne à l'autre et d'un tableau à l'autre.
+    <ul className="grid grid-cols-[0.5rem_10rem_auto] justify-start items-center gap-x-2 gap-y-1.5 text-xs">
       {lignes.map(({ c, p, n }) => (
-        <li
-          key={c.poste_id}
-          className="flex min-w-0 items-center gap-2 text-xs"
-        >
+        <li key={c.poste_id} className="contents">
           <span
-            className="inline-block size-2 shrink-0 rounded-full"
+            className="size-2 rounded-full"
             style={{ background: p.couleur }}
             aria-hidden
           />
-          <span className="min-w-0 flex-1 truncate">{p.nom}</span>
+          <span className="truncate">{p.nom}</span>
           <Tip label={n ? aideNiveau(n) : c.niveau}>
-            <span className="w-[5.5rem] shrink-0 rounded-full bg-muted px-2 py-0.5 text-center text-muted-foreground">
+            <span className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
               {nomNiveau(regles.niveaux, c.niveau)}
             </span>
           </Tip>
@@ -436,9 +384,33 @@ function PostesDuMembre({
   )
 }
 
+/** Début et fin du contrat du moment, l'un sous l'autre, libellés et dates
+ * alignés. Sans date de fin : « Aucune ». */
+function DatesContrat({ s }: { s: Salarie }) {
+  const lignes: [string, string, boolean][] = [
+    [
+      'Début',
+      s.date_entree ? dateFr(s.date_entree) : 'Inconnue',
+      !s.date_entree,
+    ],
+    ['Fin', s.date_sortie ? dateFr(s.date_sortie) : 'Aucune', !s.date_sortie],
+  ]
+  return (
+    <dl className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1.5 text-xs">
+      {lignes.map(([libelle, date, vide]) => (
+        <div key={libelle} className="contents">
+          <dt className="text-[11px] text-muted-foreground">{libelle}</dt>
+          <dd className={cn('tabular-nums', vide && 'text-muted-foreground')}>
+            {date}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
 function LigneMembre({
   s,
-  parcours: p,
   postes,
   regles,
   aujourdhui,
@@ -446,7 +418,6 @@ function LigneMembre({
 }: {
   regles: RegleEtablissement
   s: Salarie
-  parcours?: Parcours
   postes: Poste[]
   aujourdhui: string
   onOuvrir: () => void
@@ -506,32 +477,7 @@ function LigneMembre({
         <PostesDuMembre s={s} postes={postes} regles={regles} />
       </td>
       <td className="px-3 py-2">
-        <div className="flex flex-wrap gap-1">
-          {s.mineur && <Puce>Mineur</Puce>}
-          {!s.actif && <Puce ton="depart">Désactivé</Puce>}
-          {s.date_entree && s.date_entree > aujourdhui && (
-            <Puce ton="arrivee">Arrive le {dateFr(s.date_entree)}</Puce>
-          )}
-          {/* Un contrat qui en suit un autre : le changement, pas une fin. */}
-          {p?.suivant ? (
-            <Puce ton="arrivee">
-              {texteSuivant(s, p.suivant, postes, regles)}
-            </Puce>
-          ) : (
-            s.date_sortie && (
-              <Puce ton={sorti ? 'depart' : 'fin'}>
-                {sorti ? 'Parti(e) le' : 'Fin le'} {dateFr(s.date_sortie)}
-              </Puce>
-            )
-          )}
-          {p && p.contrats.length > 1 && (
-            <Tip label="Contrats successifs de la même personne : la fiche les liste.">
-              <span>
-                <Puce>{p.contrats.length} contrats</Puce>
-              </span>
-            </Tip>
-          )}
-        </div>
+        <DatesContrat s={s} />
       </td>
     </tr>
   )
