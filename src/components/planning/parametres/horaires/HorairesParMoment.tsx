@@ -15,35 +15,42 @@ import { GripVertical } from 'lucide-react'
 
 import { useEcriture } from '#/components/planning/hooks/usePlanning.ts'
 import { useNotifier } from '#/components/planning/Messages.tsx'
-import { Tip } from '#/components/shared/Tip.tsx'
 import {
   dureeHoraire,
-  familles,
   grouperHoraires,
   heures,
   libelleHoraire,
-  libelleMoment,
 } from '#/lib/planning/affichage.ts'
-import { deplacementHoraire } from '#/lib/planning/deplacementHoraire.ts'
-import { estNuit, momentPropose } from '#/lib/planning/moment.ts'
+import {
+  EXTRA,
+  deplacementHoraire,
+  groupeHoraire,
+} from '#/lib/planning/deplacementHoraire.ts'
+import type { Groupe } from '#/lib/planning/deplacementHoraire.ts'
+import { estNuit } from '#/lib/planning/moment.ts'
 import type { Moments } from '#/lib/planning/moment.ts'
 import { deplacerHoraire } from '#/lib/planning/service.ts'
-import type { Horaire, Periode } from '#/lib/planning/types.ts'
+import type { Horaire } from '#/lib/planning/types.ts'
 import { cn } from '#/lib/utils.ts'
 
 /*
- * Les horaires de la page Horaires, un tableau par moment, l'un sous l'autre
- * (2026-11-11). Depuis le 2026-11-12 (demande utilisateur : « déplacer les
- * horaires de matin, middle, soir et nuit avec un glisser-déposer… qu'elle
- * les déplace au bon endroit »), la gestion GLISSE une ligne dans un autre
- * moment : l'horaire y est rangé à la main (`deplacementHoraire`), sa couleur
- * et son nom suivent, et le calcul du planning le compte dans ce moment. Le
- * remettre dans le moment de ses heures retire la marque « à la main ».
+ * Les horaires de la page Horaires, un tableau par moment (2026-11-11) :
+ * matin, middle, soir en colonnes, la nuit dessous avec, à sa droite, le
+ * tableau Extra des horaires de moins de 6 h de travail (2026-11-12).
  *
- * Souris : glisser dès 5 px (un clic simple ouvre toujours le réglage).
- * Doigt : appui long, comme le Classeur. Les quatre moments restent affichés
- * pendant la gestion, même vides, pour pouvoir y déposer.
+ * La gestion GLISSE une ligne dans un autre tableau (`deplacementHoraire`) :
+ * sa couleur et son nom suivent, sans autre message (demande utilisateur :
+ * « on déplace et c'est ok »). Souris : dès 5 px (un clic ouvre le
+ * réglage). Doigt : appui long. Les tableaux restent affichés, même vides,
+ * pour pouvoir y déposer.
  */
+
+type Tableau = {
+  cle: string
+  titre: string
+  groupe: Groupe
+  horaires: Horaire[]
+}
 
 export function HorairesParMoment({
   horaires,
@@ -55,16 +62,14 @@ export function HorairesParMoment({
   horaires: readonly Horaire[]
   moments: Moments
   modifiable: boolean
-  /** Version étoile d'un autre horaire (`etoile.ts`) : dit sur la ligne. */
+  /** Version étoile d'un autre horaire (`etoile.ts`) : ★ sur la ligne. */
   etoile: (h: Horaire) => boolean
   onOuvrir: (h: Horaire) => void
 }) {
   const ecrire = useEcriture()
   const notifier = useNotifier()
   // Déplacements en cours d'écriture : montrés tout de suite à leur place.
-  const [enCours, setEnCours] = useState<ReadonlyMap<number, Periode>>(
-    new Map(),
-  )
+  const [enCours, setEnCours] = useState<ReadonlyMap<number, Groupe>>(new Map())
   const [tenu, setTenu] = useState<Horaire | null>(null)
   const capteurs = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
@@ -79,12 +84,28 @@ export function HorairesParMoment({
     const ch = vers === undefined ? null : deplacementHoraire(h, vers, moments)
     return ch ? { ...h, ...ch } : h
   })
-  const parMoment = new Map(
-    grouperHoraires(vus, moments).map((g) => [g.periode, g.horaires]),
+  // Ordre de lecture des moments, puis répartition par tableau affiché.
+  const ranges = grouperHoraires(vus, moments).flatMap((g) => g.horaires)
+  // Le moment est toujours connu à la lecture (`avecMomentCalcule`).
+  const dans = (g: Groupe) =>
+    ranges.filter((h) => groupeHoraire(h, moments) === g)
+  const tableaux: Tableau[] = moments.liste.map((m) => ({
+    cle: m.id,
+    titre: m.nom,
+    groupe: m.id,
+    horaires: dans(m.id),
+  }))
+  const visible = (t: Tableau) => t.horaires.length > 0 || modifiable
+  const deJour = tableaux.filter(
+    (t) => !estNuit(moments, t.groupe) && visible(t),
   )
-  const groupes = familles(moments)
-    .map((f) => ({ ...f, horaires: parMoment.get(f.periode) ?? [] }))
-    .filter((g) => g.horaires.length > 0 || (modifiable && g.periode !== null))
+  const nuits = tableaux.filter((t) => estNuit(moments, t.groupe) && visible(t))
+  const extra: Tableau = {
+    cle: EXTRA,
+    titre: 'Extra',
+    groupe: EXTRA,
+    horaires: dans(EXTRA),
+  }
 
   const commencer = (e: DragStartEvent) => {
     const id = e.active.data.current?.id as number | undefined
@@ -94,7 +115,7 @@ export function HorairesParMoment({
   const deposer = async (e: DragEndEvent) => {
     setTenu(null)
     const id = e.active.data.current?.id as number | undefined
-    const vers = e.over?.data.current?.periode as Periode | undefined
+    const vers = e.over?.data.current?.groupe as Groupe | undefined
     const h = horaires.find((x) => x.id === id)
     if (!h || !vers) return
     const ch = deplacementHoraire(h, vers, moments)
@@ -109,17 +130,18 @@ export function HorairesParMoment({
       suite.delete(h.id)
       return suite
     })
-    if (!r.ok) {
-      notifier(r.message, 'danger')
-      return
-    }
-    const nom = libelleMoment(vers, moments).toLowerCase()
-    notifier(
-      ch.moment_force
-        ? `Horaire ${libelleHoraire(h)} rangé en ${nom}.`
-        : `Horaire ${libelleHoraire(h)} revenu en ${nom}, le moment de ses heures.`,
-    )
+    if (!r.ok) notifier(r.message, 'danger')
   }
+
+  const rendre = (t: Tableau) => (
+    <TableauHoraires
+      key={t.cle}
+      tableau={t}
+      modifiable={modifiable}
+      etoile={etoile}
+      onOuvrir={onOuvrir}
+    />
+  )
 
   return (
     <DndContext
@@ -128,40 +150,14 @@ export function HorairesParMoment({
       onDragEnd={(e) => void deposer(e)}
       onDragCancel={() => setTenu(null)}
     >
-      {/* Les moments de jour en colonnes côte à côte, la nuit (et ce qui est
-          à part) dessous sur toute la largeur (demande du 2026-11-12). */}
       <div className="flex w-full flex-col gap-6">
         <div className="grid items-start gap-6 lg:grid-cols-3">
-          {groupes
-            .filter((g) => g.periode !== null && !estNuit(moments, g.periode))
-            .map((g) => (
-              <TableauHoraires
-                key={g.libelle}
-                titre={g.libelle}
-                periode={g.periode}
-                horaires={g.horaires}
-                moments={moments}
-                modifiable={modifiable}
-                compact
-                etoile={etoile}
-                onOuvrir={onOuvrir}
-              />
-            ))}
+          {deJour.map(rendre)}
         </div>
-        {groupes
-          .filter((g) => g.periode === null || estNuit(moments, g.periode))
-          .map((g) => (
-            <TableauHoraires
-              key={g.libelle}
-              titre={g.libelle}
-              periode={g.periode}
-              horaires={g.horaires}
-              moments={moments}
-              modifiable={modifiable}
-              etoile={etoile}
-              onOuvrir={onOuvrir}
-            />
-          ))}
+        <div className="grid items-start gap-6 lg:grid-cols-2">
+          {nuits.map(rendre)}
+          {(extra.horaires.length > 0 || modifiable) && rendre(extra)}
+        </div>
       </div>
       <DragOverlay dropAnimation={null}>
         {tenu && (
@@ -179,32 +175,23 @@ export function HorairesParMoment({
   )
 }
 
-/** Les horaires d'un moment en tableau : une ligne par horaire, un clic
- * ouvre son réglage ; la gestion y dépose un horaire d'un autre moment. */
+/** Les horaires d'un tableau : une ligne par horaire, un clic ouvre son
+ * réglage ; la gestion y dépose un horaire d'un autre tableau. */
 function TableauHoraires({
-  titre,
-  periode,
-  horaires,
-  moments,
+  tableau: { cle, titre, groupe, horaires },
   modifiable,
-  compact = false,
   etoile,
   onOuvrir,
 }: {
-  titre: string
-  periode: Periode | null
-  horaires: readonly Horaire[]
-  moments: Moments
+  tableau: Tableau
   modifiable: boolean
-  /** Dans une colonne étroite : la journée étoile passe sous l'horaire. */
-  compact?: boolean
   etoile: (h: Horaire) => boolean
   onOuvrir: (h: Horaire) => void
 }) {
   const { setNodeRef, isOver, active } = useDroppable({
-    id: `moment-${periode ?? 'a-part'}`,
-    data: { periode },
-    disabled: !modifiable || periode === null,
+    id: `tableau-${cle}`,
+    data: { groupe },
+    disabled: !modifiable,
   })
   // Une ligne de ce tableau tenue au-dessus de lui-même : pas de surbrillance.
   const vientDIci = horaires.some(
@@ -220,7 +207,7 @@ function TableauHoraires({
       </h3>
       <div
         ref={setNodeRef}
-        data-moment={periode ?? ''}
+        data-moment={groupe}
         className={cn(
           'overflow-x-auto rounded-xl border bg-card transition-colors',
           isOver &&
@@ -230,38 +217,18 @@ function TableauHoraires({
       >
         {horaires.length === 0 ? (
           <p className="px-3 py-4 text-sm text-muted-foreground">
-            Aucun horaire. Glissez-en un ici pour le ranger dans ce moment.
+            Aucun horaire.
           </p>
         ) : (
           <table className="w-full table-fixed text-sm">
             <thead className="bg-muted/50 text-xs text-muted-foreground">
               <tr>
-                <th
-                  className={cn('px-3 py-2', compact ? 'w-10 pr-0' : 'w-12')}
-                  aria-label="Couleur"
-                />
+                <th className="w-10 px-3 py-2 pr-0" aria-label="Couleur" />
                 <th className="px-3 py-2 text-left font-medium">Horaire</th>
-                <th
-                  className={cn(
-                    'px-3 py-2 text-left font-medium',
-                    compact ? 'w-14' : 'w-28',
-                  )}
-                >
+                <th className="w-14 px-3 py-2 text-left font-medium">
                   Travail
                 </th>
-                <th
-                  className={cn(
-                    'px-3 py-2 text-left font-medium',
-                    compact ? 'w-20' : 'w-28',
-                  )}
-                >
-                  Pause
-                </th>
-                {!compact && (
-                  <th className="w-40 px-3 py-2 text-left font-medium">
-                    <span className="sr-only">Journée étoile</span>
-                  </th>
-                )}
+                <th className="w-20 px-3 py-2 text-left font-medium">Pause</th>
               </tr>
             </thead>
             <tbody>
@@ -269,9 +236,7 @@ function TableauHoraires({
                 <LigneHoraire
                   key={h.id}
                   horaire={h}
-                  moments={moments}
                   modifiable={modifiable}
-                  compact={compact}
                   etoile={etoile(h)}
                   onOuvrir={onOuvrir}
                 />
@@ -286,16 +251,12 @@ function TableauHoraires({
 
 function LigneHoraire({
   horaire: h,
-  moments,
   modifiable,
-  compact,
   etoile,
   onOuvrir,
 }: {
   horaire: Horaire
-  moments: Moments
   modifiable: boolean
-  compact: boolean
   etoile: boolean
   onOuvrir: (h: Horaire) => void
 }) {
@@ -305,7 +266,6 @@ function LigneHoraire({
     disabled: !modifiable,
   })
   const libelle = libelleHoraire(h)
-  const calcule = h.moment_force ? momentPropose(h, moments) : null
   return (
     <tr
       ref={setNodeRef}
@@ -319,7 +279,7 @@ function LigneHoraire({
       )}
       onClick={() => onOuvrir(h)}
     >
-      <td className={cn('px-3 py-2', compact && 'pr-0')}>
+      <td className="px-3 py-2 pr-0">
         <span className="flex items-center gap-1">
           {modifiable && (
             <GripVertical
@@ -334,7 +294,7 @@ function LigneHoraire({
           />
         </span>
       </td>
-      <td className="px-3 py-2">
+      <td className="px-3 py-2 whitespace-nowrap">
         <button
           type="button"
           aria-label={`Régler l'horaire ${libelle}`}
@@ -345,21 +305,12 @@ function LigneHoraire({
           }}
         >
           {libelle}
-        </button>
-        {calcule && (
-          <Tip
-            label={`Rangé à la main. D'après ses heures, il serait en ${libelleMoment(calcule, moments).toLowerCase()}.`}
-          >
-            <span className="ml-2 inline-block rounded-full border px-1.5 py-0.5 text-[11px] whitespace-nowrap text-muted-foreground">
-              à la main
+          {etoile && (
+            <span title="Journée étoile" className="ml-1 text-muted-foreground">
+              ★
             </span>
-          </Tip>
-        )}
-        {compact && etoile && (
-          <span className="block text-xs text-muted-foreground">
-            journée étoile
-          </span>
-        )}
+          )}
+        </button>
       </td>
       <td className="px-3 py-2 tabular-nums">
         {heures(dureeHoraire(h.debut, h.fin) - h.pause)}
@@ -367,11 +318,6 @@ function LigneHoraire({
       <td className="px-3 py-2 whitespace-nowrap text-muted-foreground tabular-nums">
         {h.pause > 0 ? `${h.pause} min` : '–'}
       </td>
-      {!compact && (
-        <td className="px-3 py-2 text-xs text-muted-foreground">
-          {etoile ? 'journée étoile' : ''}
-        </td>
-      )}
     </tr>
   )
 }

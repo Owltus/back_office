@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import { COULEURS_HORAIRE } from '#/lib/planning/cycles.ts'
-import { deplacementHoraire } from '#/lib/planning/deplacementHoraire.ts'
+import {
+  EXTRA,
+  deplacementHoraire,
+  estExtra,
+  groupeHoraire,
+} from '#/lib/planning/deplacementHoraire.ts'
 import { avecMomentCalcule, momentDeLHoraire } from '#/lib/planning/moment.ts'
 
 // 09:00-17:45, pause 45 : 8 h de travail, middle d'après ses heures.
@@ -48,6 +53,32 @@ describe('horaire rangé à la main', () => {
     expect(avecMomentCalcule({ ...range, moment_force: false }).periode).toBe(
       'middle',
     )
+  })
+
+  it('moins de 6 h de travail : dans Extra, sauf posé dans un moment', () => {
+    const court = {
+      ...middle,
+      debut: '07:00',
+      fin: '12:45',
+      pause: 0,
+      periode: 'matin',
+    }
+    expect(groupeHoraire(court)).toBe(EXTRA)
+    expect(groupeHoraire(middle)).toBe('middle')
+    // Posé dans son propre moment : il quitte Extra, donc marqué.
+    const ch = deplacementHoraire(court, 'matin')
+    expect(ch?.moment_force).toBe(true)
+    expect(groupeHoraire({ ...court, ...ch })).toBe('matin')
+    // Reposé dans Extra : il revient au calcul.
+    const retour = deplacementHoraire({ ...court, ...ch }, EXTRA)
+    expect(retour).toMatchObject({ periode: 'matin', moment_force: false })
+    expect(deplacementHoraire(court, EXTRA)).toBeNull()
+  })
+
+  it('6 h de travail ou plus : jamais dans Extra', () => {
+    expect(estExtra({ debut: '07:00', fin: '13:00', pause: 0 })).toBe(false)
+    expect(estExtra({ debut: '07:00', fin: '12:59', pause: 0 })).toBe(true)
+    expect(deplacementHoraire(middle, EXTRA)).toBeNull()
   })
 
   it('un moment inconnu rangé à la main retombe sur le calcul', () => {

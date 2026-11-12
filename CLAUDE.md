@@ -3230,12 +3230,17 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   Vraie : `periode` fait foi au lieu de `momentFixe`, pour le calcul et les
   écrans (`momentDeLHoraire`, seule lecture, via `avecMomentCalcule`) ; nom
   et couleur suivent (`deplacementHoraire`, `deplacerHoraire`). Le remettre
-  dans le moment de ses heures, ou changer ses heures, retire la marque ;
-  bouton « Revenir au moment des heures » dans le volet ; badge « à la
-  main » sur la ligne. Un horaire court reste violet où qu'il soit. Page
-  Horaires : matin, middle, soir en TROIS COLONNES côte à côte, la nuit
-  dessous sur toute la largeur (`HorairesParMoment.tsx`) ; les moments
-  vides restent affichés pour la gestion (cible de dépôt).
+  dans le moment de ses heures, ou changer ses heures, retire la marque.
+  AUCUNE mention à l'écran (décision utilisateur : « on déplace et c'est
+  ok, pas besoin de dire un truc ») : ni badge, ni message de réussite, ni
+  bouton dans le volet. Un horaire court reste violet où qu'il soit. Page
+  Horaires : matin, middle, soir en TROIS COLONNES côte à côte, dessous la
+  nuit et, à sa droite, le tableau EXTRA (`HorairesParMoment.tsx`) : les
+  horaires de moins de 6 h de travail (`estExtra`, `groupeHoraire`) y vont
+  d'eux-mêmes, en sortent si on les pose dans un moment (marqués), y
+  reviennent si on les y repose ; Extra est un rangement de la page, le
+  calcul les compte toujours dans leur moment. Journée étoile = « ★ » juste
+  après les heures. Les tableaux vides restent affichés pour la gestion.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 

@@ -337,7 +337,7 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
             2 h du matin, soir s'il finit après 21 h, matin s'il commence à 8 h
             ou avant, middle sinon.
             {modifiable &&
-              ' Pour ranger un horaire ailleurs, glissez sa ligne dans un autre moment. Sa couleur suit, et le planning le compte dans ce moment. Le remettre dans le moment de ses heures annule le rangement à la main.'}
+              ' Pour ranger un horaire ailleurs, glissez sa ligne dans un autre tableau. Les horaires de moins de 6 h de travail vont dans Extra.'}
           </p>
 
           <section
@@ -891,26 +891,9 @@ function CarteHoraire({
           </span>
         </div>
         <span className="text-xs text-muted-foreground">
-          {aideMoment(regles.moments, momentDeLaSaisie(h, regles.moments))}.{' '}
-          {h.moment_force
-            ? `Rangé à la main. D'après les heures, ce serait ${libelleMoment(momentPropose(h, regles.moments), regles.moments).toLowerCase()}.`
-            : "Calculé d'après les heures."}
+          {aideMoment(regles.moments, momentDeLaSaisie(h, regles.moments))}.
+          Calculé d'après les heures.
         </span>
-        {h.moment_force && modifiable && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="self-start"
-            onClick={() =>
-              changer({
-                moment_force: false,
-                periode: momentPropose(h, regles.moments),
-              })
-            }
-          >
-            Revenir au moment des heures
-          </Button>
-        )}
       </div>
 
       {/* Couleur EN DUR depuis le 2026-11-11 (`couleurHoraire`) : elle suit
