@@ -90,7 +90,12 @@ describe('contrôles de saisie (miroir des contraintes de la base)', () => {
 
   it('le moment suit TOUJOURS les heures (2026-11-05)', () => {
     const nuit = changerHeures(matin, { debut: '23:00', fin: '07:45' })
-    expect(nuit).toEqual({ debut: '23:00', fin: '07:45', periode: 'nuit' })
+    expect(nuit).toEqual({
+      debut: '23:00',
+      fin: '07:45',
+      periode: 'nuit',
+      moment_force: false,
+    })
     expect(momentEstPropose({ ...matin, ...nuit })).toBe(true)
     // Un moment ancien, choisi à la main, ne survit pas aux heures.
     expect(
@@ -98,7 +103,12 @@ describe('contrôles de saisie (miroir des contraintes de la base)', () => {
         { ...matin, periode: 'middle' },
         { debut: '23:00', fin: '07:45' },
       ),
-    ).toEqual({ debut: '23:00', fin: '07:45', periode: 'nuit' })
+    ).toEqual({
+      debut: '23:00',
+      fin: '07:45',
+      periode: 'nuit',
+      moment_force: false,
+    })
     // Heure en cours de frappe : rien à calculer.
     expect(changerHeures(matin, { fin: '15:4' })).toEqual({
       fin: '15:4',

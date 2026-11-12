@@ -202,6 +202,7 @@ describe('Horaires et absences', () => {
         couleur: '#000000',
         pause: 30,
         periode: 'matin',
+        moment_force: false,
       },
       1,
       // Les limites des moments de l'établissement (défauts ici).

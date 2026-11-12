@@ -13,6 +13,7 @@ import { partielle, refusDroits } from '#/lib/planning/erreurs.ts'
 import { SEMAINES_EQUITE } from '#/lib/planning/modele.ts'
 import { avecMomentCalcule } from '#/lib/planning/moment.ts'
 import { avecCouleurCalculee } from '#/lib/planning/cycles.ts'
+import type { ChangementMoment } from '#/lib/planning/deplacementHoraire.ts'
 import { triConsignes } from '#/lib/planning/presence.ts'
 import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
@@ -40,7 +41,7 @@ import type {
 } from '#/lib/planning/types.ts'
 import { supabase } from '#/lib/supabase.ts'
 
-const COL_HORAIRE = 'id, nom, debut, fin, couleur, pause, periode'
+const COL_HORAIRE = 'id, nom, debut, fin, couleur, pause, periode, moment_force'
 const COL_MOTIF =
   'id, code, nom, couleur, decompte, nature, libre_weekend, reserve_forfait, rythme_travail, role, icone'
 const COL_POSTE =
@@ -660,6 +661,22 @@ export const enregistrerHoraire = (
     avecCouleurCalculee(avecMomentCalcule(v, moments)),
     id,
   )
+
+/** Un horaire posé dans un autre moment (glisser-déposer de la page
+ * Horaires, `deplacementHoraire`) : moment, marque « à la main », nom et
+ * couleur, les heures ne bougent pas. */
+export async function deplacerHoraire(
+  id: number,
+  changement: ChangementMoment,
+): Promise<void> {
+  auMoinsUne(
+    await supabase
+      .from('planning_horaires')
+      .update(changement)
+      .eq('id', id)
+      .select('id'),
+  )
+}
 
 /** Le moment rangé en base de chaque horaire qui en change (limites des
  * moments modifiées, page Horaires). La lecture le recalcule de toute façon

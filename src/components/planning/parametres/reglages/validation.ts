@@ -7,7 +7,7 @@
 
 import { COULEUR_VALIDE } from '#/components/planning/parametres/reglages/controles.tsx'
 import { momentPropose, nomHoraire } from '#/lib/planning/affichage.ts'
-import { MOMENTS_HOTEL } from '#/lib/planning/moment.ts'
+import { MOMENTS_HOTEL, momentDeLHoraire } from '#/lib/planning/moment.ts'
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
 import { JOUR_MAX_LOI } from '#/lib/planning/regles.ts'
 import { heuresLisibles, minutes, presence } from '#/lib/planning/temps.ts'
@@ -145,7 +145,8 @@ export function changerHeures(
 ): Partial<SaisieHoraire> {
   const suite = { ...h, ...maj }
   if (!heuresCompletes(suite) || !Number.isFinite(suite.pause)) return maj
-  return { ...maj, periode: momentPropose(suite, l) }
+  // Des heures changées : le moment repart du calcul (plus « à la main »).
+  return { ...maj, periode: momentPropose(suite, l), moment_force: false }
 }
 
 /** Le moment montré dans le volet : celui des heures dès qu'elles sont
@@ -155,7 +156,7 @@ export function momentDeLaSaisie(
   l?: RegleEtablissement['moments'],
 ): SaisieHoraire['periode'] {
   return heuresCompletes(h) && Number.isFinite(h.pause)
-    ? momentPropose(h, l)
+    ? momentDeLHoraire(h, l)
     : h.periode
 }
 
@@ -218,10 +219,12 @@ export function nettoyerHoraire(
   h: SaisieHoraire,
   l?: RegleEtablissement['moments'],
 ): Omit<Horaire, 'id'> {
+  const periode = momentDeLHoraire(h, l)
   return {
     ...h,
-    periode: momentPropose(h, l),
-    nom: nomHoraire(h, l ?? MOMENTS_HOTEL),
+    periode,
+    moment_force: !!h.moment_force,
+    nom: nomHoraire({ ...h, periode }, l ?? MOMENTS_HOTEL),
   }
 }
 

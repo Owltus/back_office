@@ -88,7 +88,10 @@ export interface Horaire {
   fin: string // fin <= debut : le lendemain
   couleur: string
   pause: number // minutes comprises dans la présence, hors temps de travail
-  periode: Periode | null // proposé d'après les heures, modifiable
+  periode: Periode | null // calculé d'après les heures, sauf placé à la main
+  /** Moment placé À LA MAIN (glisser-déposer de la page Horaires,
+   * 2026-11-12) : `periode` fait foi au lieu du calcul. Absent : faux. */
+  moment_force?: boolean
 }
 
 export interface Motif {

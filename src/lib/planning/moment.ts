@@ -218,12 +218,26 @@ export function momentFixe(h: Pick<Horaire, 'debut' | 'fin'>): Periode {
   return 'middle'
 }
 
+/** Le moment d'un horaire : celui placé à la main (`moment_force`,
+ * glisser-déposer de la page Horaires, 2026-11-12), sinon celui de ses
+ * heures. SEULE lecture du moment pour le calcul et les écrans. */
+export function momentDeLHoraire(
+  h: Pick<Horaire, 'debut' | 'fin' | 'pause' | 'periode' | 'moment_force'>,
+  l: Moments = MOMENTS_HOTEL,
+): Periode {
+  if (h.moment_force && h.periode && momentDe(l, h.periode)) return h.periode
+  return momentPropose(h, l)
+}
+
 /** L'horaire avec son moment recalculé d'après ses heures (lecture de la
- * base, enregistrement) : un moment ancien ne survit pas. */
+ * base, enregistrement) : un moment ancien ne survit pas, sauf placé à la
+ * main (`momentDeLHoraire`). */
 export function avecMomentCalcule<
-  T extends Pick<Horaire, 'debut' | 'fin' | 'pause' | 'periode'>,
+  T extends Pick<Horaire, 'debut' | 'fin' | 'pause' | 'periode'> & {
+    moment_force?: boolean
+  },
 >(h: T, l: Moments = MOMENTS_HOTEL): T {
-  const periode = momentPropose(h, l)
+  const periode = momentDeLHoraire(h, l)
 
   return h.periode === periode ? h : { ...h, periode }
 }

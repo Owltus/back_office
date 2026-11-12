@@ -74,8 +74,6 @@ import {
 } from '#/components/ui/sheet.tsx'
 import { Switch } from '#/components/ui/switch.tsx'
 import {
-  dureeHoraire,
-  grouperHoraires,
   heures,
   libelleHoraire,
   libelleMoment,
@@ -111,6 +109,7 @@ import type {
 import { cn } from '#/lib/utils.ts'
 import { ICONES_MOTIF, iconeMotif } from '#/components/planning/iconeMotif.ts'
 import { FeriesAjoutes } from '#/components/planning/parametres/reglages/FeriesAjoutes.tsx'
+import { HorairesParMoment } from '#/components/planning/parametres/horaires/HorairesParMoment.tsx'
 import type { LucideIcon } from 'lucide-react'
 
 const NATURES: ReadonlyArray<{
@@ -147,6 +146,7 @@ const saisieHoraire = (h: Horaire): SaisieHoraire => ({
   couleur: h.couleur,
   pause: h.pause,
   periode: h.periode,
+  moment_force: !!h.moment_force,
 })
 
 /** Ce que fait le moment d'un horaire, lu sur ses cases. */
@@ -317,31 +317,27 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
                 }
               />
             </div>
-            {/* Un tableau par moment, l'un sous l'autre (demande utilisateur
-                du 2026-11-11 : plus de colonnes côte à côte). */}
-            <div className="flex w-full flex-col gap-6">
-              {grouperHoraires(data.horaires, lireRegles(data).moments).map(
-                (g) => (
-                  <TableauHoraires
-                    key={g.libelle}
-                    titre={g.libelle}
-                    horaires={g.horaires}
-                    etoile={(h) =>
-                      horairesNormaux(h, data.horaires, lireRegles(data))
-                        .length > 0
-                    }
-                    onOuvrir={(h) => setOuvert({ type: 'horaire', id: h.id })}
-                  />
-                ),
-              )}
-            </div>
+            {/* Un tableau par moment, l'un sous l'autre (2026-11-11), et
+                glisser-déposer d'un moment à l'autre (2026-11-12). */}
+            <HorairesParMoment
+              horaires={data.horaires}
+              moments={lireRegles(data).moments}
+              modifiable={modifiable}
+              etoile={(h) =>
+                horairesNormaux(h, data.horaires, lireRegles(data)).length > 0
+              }
+              onOuvrir={(h) => setOuvert({ type: 'horaire', id: h.id })}
+            />
           </section>
 
-          {/* Moments en dur depuis le 2026-11-11 (`momentFixe`). */}
+          {/* Moments en dur depuis le 2026-11-11 (`momentFixe`), rangés à la
+              main par glisser-déposer depuis le 2026-11-12. */}
           <p data-moments className="-mt-2 text-sm text-muted-foreground">
             Le moment se calcule d'après les heures : nuit si l'horaire contient
             2 h du matin, soir s'il finit après 21 h, matin s'il commence à 8 h
             ou avant, middle sinon.
+            {modifiable &&
+              ' Pour ranger un horaire ailleurs, glissez sa ligne dans un autre moment. Sa couleur suit, et le planning le compte dans ce moment. Le remettre dans le moment de ses heures annule le rangement à la main.'}
           </p>
 
           <section
@@ -484,92 +480,6 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
 }
 
 // ------------------------------------------------------- listes compactes
-
-/** Une ligne : la couleur, les heures, puis le temps
- * de travail et la pause. */
-/** Les horaires d'un moment en tableau (2026-11-11) : une ligne par
- * horaire, un clic ouvre son réglage. */
-function TableauHoraires({
-  titre,
-  horaires,
-  etoile,
-  onOuvrir,
-}: {
-  titre: string
-  horaires: readonly Horaire[]
-  /** Version étoile d'un autre horaire (`etoile.ts`) : dit sur la ligne. */
-  etoile: (h: Horaire) => boolean
-  onOuvrir: (h: Horaire) => void
-}) {
-  if (!horaires.length) return null
-  return (
-    <section aria-label={titre} className="flex flex-col gap-2">
-      <h3 className="text-sm font-semibold">
-        {titre}{' '}
-        <span className="font-normal text-muted-foreground tabular-nums">
-          ({horaires.length})
-        </span>
-      </h3>
-      <div className="overflow-x-auto rounded-xl border bg-card">
-        <table className="w-full table-fixed text-sm">
-          <thead className="bg-muted/50 text-xs text-muted-foreground">
-            <tr>
-              <th className="w-8 px-3 py-2" aria-label="Couleur" />
-              <th className="px-3 py-2 text-left font-medium">Horaire</th>
-              <th className="w-28 px-3 py-2 text-left font-medium">Travail</th>
-              <th className="w-28 px-3 py-2 text-left font-medium">Pause</th>
-              <th className="w-40 px-3 py-2 text-left font-medium">
-                <span className="sr-only">Journée étoile</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {horaires.map((h) => {
-              const libelle = libelleHoraire(h)
-              return (
-                <tr
-                  key={h.id}
-                  className="cursor-pointer border-t hover:bg-muted/40"
-                  onClick={() => onOuvrir(h)}
-                >
-                  <td className="px-3 py-2">
-                    <span
-                      aria-hidden
-                      className="block size-3 rounded-full"
-                      style={{ background: h.couleur }}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <button
-                      type="button"
-                      aria-label={`Régler l'horaire ${libelle}`}
-                      className="font-medium tabular-nums outline-none focus-visible:underline"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onOuvrir(h)
-                      }}
-                    >
-                      {libelle}
-                    </button>
-                  </td>
-                  <td className="px-3 py-2 tabular-nums">
-                    {heures(dureeHoraire(h.debut, h.fin) - h.pause)}
-                  </td>
-                  <td className="px-3 py-2 text-muted-foreground tabular-nums">
-                    {h.pause > 0 ? `${h.pause} min` : '–'}
-                  </td>
-                  <td className="px-3 py-2 text-xs text-muted-foreground">
-                    {etoile(h) ? 'journée étoile' : ''}
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  )
-}
 
 /** Les motifs d'un groupe en tableau (2026-11-12) : une ligne par motif, un
  * clic ouvre son réglage. */
@@ -981,9 +891,26 @@ function CarteHoraire({
           </span>
         </div>
         <span className="text-xs text-muted-foreground">
-          {aideMoment(regles.moments, momentDeLaSaisie(h, regles.moments))}.
-          Calculé d'après les heures.
+          {aideMoment(regles.moments, momentDeLaSaisie(h, regles.moments))}.{' '}
+          {h.moment_force
+            ? `Rangé à la main. D'après les heures, ce serait ${libelleMoment(momentPropose(h, regles.moments), regles.moments).toLowerCase()}.`
+            : "Calculé d'après les heures."}
         </span>
+        {h.moment_force && modifiable && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="self-start"
+            onClick={() =>
+              changer({
+                moment_force: false,
+                periode: momentPropose(h, regles.moments),
+              })
+            }
+          >
+            Revenir au moment des heures
+          </Button>
+        )}
       </div>
 
       {/* Couleur EN DUR depuis le 2026-11-11 (`couleurHoraire`) : elle suit

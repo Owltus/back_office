@@ -3224,6 +3224,18 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   middle orange, soir vert ; le rose (12:00-20:45) devient orange. Règles
   des moments gardées (soir = fin APRÈS 21 h, pas 22 h : à 22 h, cinq
   soirs réels passaient en middle, hors du tableau).
+  HORAIRE RANGÉ À LA MAIN (2026-11-12, demande utilisateur : « que ma RH
+  les déplace au bon endroit », glisser-déposer) : colonne
+  `planning_horaires.moment_force` (migration `20261112100000`, ajout seul).
+  Vraie : `periode` fait foi au lieu de `momentFixe`, pour le calcul et les
+  écrans (`momentDeLHoraire`, seule lecture, via `avecMomentCalcule`) ; nom
+  et couleur suivent (`deplacementHoraire`, `deplacerHoraire`). Le remettre
+  dans le moment de ses heures, ou changer ses heures, retire la marque ;
+  bouton « Revenir au moment des heures » dans le volet ; badge « à la
+  main » sur la ligne. Un horaire court reste violet où qu'il soit. Page
+  Horaires : matin, middle, soir en TROIS COLONNES côte à côte, la nuit
+  dessous sur toute la largeur (`HorairesParMoment.tsx`) ; les moments
+  vides restent affichés pour la gestion (cible de dépôt).
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), scénario « exclus » à l'écran (retiré du prototype aussi).
 
