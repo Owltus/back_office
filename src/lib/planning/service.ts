@@ -26,7 +26,6 @@ import type {
   Affectation,
   Besoin,
   Consigne,
-  FerieAjoute,
   Groupe,
   Horaire,
   ModeleContrat,
@@ -167,7 +166,6 @@ export async function fetchReferentiel(): Promise<Referentiel> {
     verrous,
     reglages,
     modeles,
-    feries,
     lignesMoments,
     lignesZones,
   ] = await Promise.all([
@@ -214,10 +212,6 @@ export async function fetchReferentiel(): Promise<Referentiel> {
       .order('ordre')
       .order('type_contrat'),
     supabase
-      .from('planning_feries')
-      .select('id, jour, nom, recurrent')
-      .order('jour'),
-    supabase
       .from('planning_moments')
       .select(COL_MOMENT)
       .order('ordre')
@@ -259,7 +253,6 @@ export async function fetchReferentiel(): Promise<Referentiel> {
     ),
     reglages: lesReglages,
     modelesContrat: verifier(modeles) as unknown as ModeleContrat[],
-    feriesAjoutes: verifier(feries) as FerieAjoute[],
     moments: lesMoments,
     zones: (verifier(lignesZones) as unknown as Zone[]).map((z) => ({
       ...z,
@@ -764,15 +757,6 @@ export async function enregistrerMotif(
   }
 }
 
-/** Les jours fériés en plus (gestion). */
-export const enregistrerFerie = (v: SansId<FerieAjoute>, id: number | null) =>
-  enregistrer<FerieAjoute>('planning_feries', v, id)
-
-export async function supprimerFerie(id: number): Promise<void> {
-  auMoinsUne(
-    await supabase.from('planning_feries').delete().eq('id', id).select('id'),
-  )
-}
 export const enregistrerPoste = (v: SansId<Poste>, id: number | null) =>
   enregistrer<Poste>('planning_postes', v, id)
 export const enregistrerGroupe = (v: SansId<Groupe>, id: number | null) =>

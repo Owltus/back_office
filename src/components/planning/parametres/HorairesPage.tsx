@@ -108,7 +108,6 @@ import type {
 } from '#/lib/planning/types.ts'
 import { cn } from '#/lib/utils.ts'
 import { ICONES_MOTIF, iconeMotif } from '#/components/planning/iconeMotif.ts'
-import { FeriesAjoutes } from '#/components/planning/parametres/reglages/FeriesAjoutes.tsx'
 import { HorairesParMoment } from '#/components/planning/parametres/horaires/HorairesParMoment.tsx'
 import type { LucideIcon } from 'lucide-react'
 
@@ -388,11 +387,6 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
               ))}
             </div>
           </section>
-
-          <FeriesAjoutes
-            feries={data.feriesAjoutes ?? []}
-            modifiable={modifiable}
-          />
 
           <Sheet
             open={

@@ -2810,8 +2810,10 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   `importance` plus lue). Tableau de l'accueil : au moins / au plus (`plafondAccueil`).
   Ouverture et fermeture de TOUT poste (`ouverturesPostes`, `fermeturesPostes` : hors
   accueil, les jours où le poste a un besoin obligatoire ; réglées sous sa grille).
-  `planning_feries` (jours fériés en plus, récurrents ou non, `regles.feries.ajoutes`,
-  section de Horaires et absences). Libellés : noms des postes (`nomsPostesAccueil`),
+  ~~`planning_feries` (jours fériés en plus)~~ RETIRÉ le 2026-11-12 (décision
+  utilisateur : « les jours fériés officiels de la France, pas plus ni moins ») :
+  section de Horaires et service retirés, table gardée en base et plus lue,
+  `regles.feries.ajoutes` toujours vide ; ne pas la remettre. Libellés : noms des postes (`nomsPostesAccueil`),
   `NOM_ZONE_ACCUEIL` seul mot écrit. Empreinte 8874c146 et banc de décembre identiques.
   `contratsPostesReglables.test.ts` refuse aussi codes de motif, noms de postes,
   `.importance` et jours du week-end écrits.

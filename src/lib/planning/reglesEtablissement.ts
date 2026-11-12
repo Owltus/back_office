@@ -312,10 +312,7 @@ export const REGLES_PAR_DEFAUT: RegleEtablissement = {
  * valeur par défaut. */
 export function lireRegles(
   referentiel?: Partial<
-    Pick<
-      Referentiel,
-      'reglages' | 'modelesContrat' | 'feriesAjoutes' | 'moments' | 'zones'
-    >
+    Pick<Referentiel, 'reglages' | 'modelesContrat' | 'moments' | 'zones'>
   > | null,
 ): RegleEtablissement {
   const r: Partial<Reglages> = referentiel?.reglages ?? {}
@@ -376,7 +373,9 @@ export function lireRegles(
     feries: {
       ancienneteMois: r.ferie_anciennete_mois ?? d.feries.ancienneteMois,
       rattrapageJours: r.ferie_rattrapage_jours ?? d.feries.rattrapageJours,
-      ajoutes: referentiel?.feriesAjoutes ?? d.feries.ajoutes,
+      // Les 11 jours fériés officiels seulement (décision utilisateur du
+      // 2026-11-12) : la table `planning_feries` n'est plus lue.
+      ajoutes: d.feries.ajoutes,
     },
     equite: {
       weekendJours: r.weekend_jours?.length
