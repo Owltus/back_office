@@ -504,7 +504,15 @@ export function indexerAbsences(
   return r
 }
 
-export function contexte(d: DonneesSemaine): Contexte {
+export function contexte(donnees: DonneesSemaine): Contexte {
+  // L'ancienneté cumulée sur tous les contrats (jours fériés, 2026-11-12).
+  const d: DonneesSemaine = {
+    ...donnees,
+    referentiel: {
+      ...donnees.referentiel,
+      salaries: avecAnciennete(donnees.referentiel.salaries),
+    },
+  }
   const lundi = lundiDe(d.lundi)
   const motifsRepos = new Set(
     d.referentiel.motifs.filter((m) => m.nature === 'repos').map((m) => m.id),
@@ -2085,6 +2093,57 @@ export function personnes(salaries: Salarie[]): Map<number, string> {
     if (membres.length > 1) for (const i of membres) cles.set(i, `p${r}`)
   }
   return cles
+}
+
+/**
+ * Ancienneté CUMULÉE de chaque contrat (décision utilisateur du 2026-11-12 :
+ * « plus d'un an cumulé sur tous leurs contrats ; n'analyse pas que leur
+ * dernier contrat en cours »). Les contrats d'une même personne sont liés
+ * par `suite_de` (`personnes`). Le début d'ancienneté d'un contrat est la
+ * date d'entrée du premier, avancée des jours SANS contrat entre deux
+ * contrats d'avant lui : douze mois après ce début, la personne a douze mois
+ * de contrat cumulés. Un contrat sans date d'entrée ne compte pas. Rien
+ * n'est écrit en base.
+ */
+export function avecAnciennete(salaries: Salarie[]): Salarie[] {
+  const cles = personnes(salaries)
+  const groupes = new Map<string, Salarie[]>()
+  for (const x of salaries) {
+    const cle = cles.get(x.id)
+    if (cle) groupes.set(cle, [...(groupes.get(cle) ?? []), x])
+  }
+  if (!groupes.size) return salaries
+  const calcule = new Map<number, string>()
+  for (const liste of groupes.values()) {
+    const dates = liste
+      .filter((x) => !!x.date_entree)
+      .sort((a, b) =>
+        (a.date_entree as string).localeCompare(b.date_entree as string),
+      )
+    let debut: string | null = null
+    let finAvant: string | null = null
+    for (const x of dates) {
+      const entree = x.date_entree as string
+      if (debut === null) debut = entree
+      else if (finAvant !== null) {
+        // Les jours sans contrat entre la fin d'avant et cette entrée.
+        const trou = ecartJours(ajouterJours(finAvant, 1), entree)
+        if (trou > 0) debut = ajouterJours(debut, trou)
+      }
+      calcule.set(x.id, debut)
+      // Un contrat sans fin couvre jusqu'au suivant.
+      const fin = finAvant as string | null
+      finAvant =
+        x.date_sortie === null
+          ? null
+          : fin === null || x.date_sortie > fin
+            ? x.date_sortie
+            : fin
+    }
+  }
+  return salaries.map((x) =>
+    calcule.has(x.id) ? { ...x, anciennete: calcule.get(x.id) } : x,
+  )
 }
 
 /** Ajoute à chaque salarié ses services voisins (repos de 11 h d'une

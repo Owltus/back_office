@@ -453,20 +453,26 @@ export function heuresDues(f: Fiche): number {
  * ça fait moins d'un an »).
  */
 export function droitAuRattrapage(
-  x: { type_contrat: TypeContrat; date_entree: string | null },
+  x: {
+    type_contrat: TypeContrat
+    date_entree: string | null
+    anciennete?: string | null
+  },
   ferie: string,
   regles: RegleEtablissement = REGLES_PAR_DEFAUT,
 ): boolean {
   if (!modeleDe(regles, x.type_contrat).ferieRattrape) return false
-  if (!x.date_entree) return false
+  // L'ancienneté cumulée sur tous les contrats de la personne
+  // (`avecAnciennete`), sinon la date d'entrée de ce contrat.
+  const depuis = x.anciennete ?? x.date_entree
+  if (!depuis) return false
   // L'ancienneté des règles (12 mois à l'hôtel), ajoutée mois par mois.
-  const mois =
-    Number(x.date_entree.slice(5, 7)) - 1 + regles.feries.ancienneteMois
-  const annee = Number(x.date_entree.slice(0, 4)) + Math.floor(mois / 12)
+  const mois = Number(depuis.slice(5, 7)) - 1 + regles.feries.ancienneteMois
+  const annee = Number(depuis.slice(0, 4)) + Math.floor(mois / 12)
   const mm = String((mois % 12) + 1).padStart(2, '0')
   // Comparaison de textes AAAA-MM-JJ : une entrée un 29 février ouvre droit
   // le 1er mars suivant.
-  return ferie >= `${annee}-${mm}${x.date_entree.slice(7, 10)}`
+  return ferie >= `${annee}-${mm}${depuis.slice(7, 10)}`
 }
 
 /** R-FERIE-RATTRAPE : un jour férié travaillé reste DÛ, avec son alerte

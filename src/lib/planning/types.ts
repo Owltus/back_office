@@ -304,6 +304,11 @@ export interface Salarie {
   date_sortie: string | null
   actif: boolean
   suite_de: number | null
+  /** Début de l'ancienneté, CALCULÉ par le moteur (`avecAnciennete`),
+   * jamais lu ni écrit en base : la date d'entrée du premier contrat de la
+   * personne, reculée de rien et avancée des jours sans contrat entre ses
+   * contrats (ancienneté cumulée, décision utilisateur du 2026-11-12). */
+  anciennete?: string | null
 }
 
 /** Moment d'une consigne : un moment du tableau
