@@ -22,7 +22,10 @@ import {
 import { MenuParametres } from '#/components/planning/EnTeteParametres.tsx'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
-import { CompteursValidation } from '#/components/planning/CompteursValidation.tsx'
+import {
+  CompteursValidation,
+  poserFocus,
+} from '#/components/planning/CompteursValidation.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
@@ -79,9 +82,16 @@ export function Indicateurs({ c }: { c: Compteurs }) {
         verrouilles={c.verrouilles}
       />
       <Tip
-        label={`Couverture du mois : ${c.pourvues} places pourvues sur ${c.places}`}
+        label={`Couverture du mois : ${c.pourvues} places pourvues sur ${c.places}${c.pourvues < c.places ? '. Survoler pour voir les jours à compléter.' : ''}`}
       >
-        <span tabIndex={0} className="inline-flex items-center gap-1.5">
+        <span
+          tabIndex={0}
+          className="inline-flex cursor-default items-center gap-1.5 rounded-md px-1 py-1 outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+          onMouseEnter={() => poserFocus('manques')}
+          onMouseLeave={() => poserFocus(null)}
+          onFocus={() => poserFocus('manques')}
+          onBlur={() => poserFocus(null)}
+        >
           <span className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
             <span
               className={cn(

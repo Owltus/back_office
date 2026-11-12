@@ -368,6 +368,26 @@
   opacity: 0.15;
 }
 
+/* Barre de couverture du mois survolée (2026-11-13) : les jours qui ont
+ * des places à pourvoir ressortent, avec leur nombre ; le reste s'estompe. */
+.planning-manque {
+  display: none;
+}
+[data-planning-focus='manques'] .planning-manque {
+  display: block;
+}
+[data-planning-focus='manques'] .planning-mois-pastille {
+  opacity: 0.15;
+}
+[data-planning-focus='manques'] th[data-manque] {
+  background-color: color-mix(
+    in oklab,
+    var(--color-amber-500) 22%,
+    transparent
+  );
+  box-shadow: inset 0 0 0 2px var(--color-amber-500);
+}
+
 /* ------------------------------------------------------ Fenêtre du calcul
  * (components/planning/FenetreCalcul.tsx). Une semaine de 7 jours × matin,
  * soir, nuit : les points s'allument de jour en jour et se relient, puis
