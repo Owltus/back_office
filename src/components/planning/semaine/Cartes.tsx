@@ -40,6 +40,7 @@ import type { Horaire, Poste } from '#/lib/planning/types.ts'
 import { cn } from '#/lib/utils.ts'
 import { NEUTRE } from '#/components/planning/semaine/edition.ts'
 import type { ContenuStatut } from '#/components/planning/semaine/edition.ts'
+import { jourMois } from '#/lib/planning/feries.ts'
 import { clicOuDoubleClic } from '#/components/planning/doubleClic.ts'
 
 export interface ContenuCarte {
@@ -240,6 +241,12 @@ export function texteStatut(s: ContenuStatut, actif: boolean): string {
     return `${s.nom} : jour fixe de la semaine type, à changer dans la fiche`
   if (s.raison)
     return `Repos obligé : ${s.raison}${actif ? '. Cliquer pour changer' : ''}`
+  if (s.rattrape) {
+    const r = `${s.nom} : rattrape ${s.rattrape.nom} du ${jourMois(s.rattrape.date)}`
+    return actif ? `${r}. Glisser pour déplacer, cliquer pour changer` : r
+  }
+  if (s.jfr && !s.fixe)
+    return `${s.nom} : ne rattrape aucun jour férié travaillé${actif ? '. Cliquer pour changer' : ''}`
   return actif
     ? `${s.nom} : glisser pour déplacer, cliquer pour changer`
     : s.nom
@@ -268,6 +275,11 @@ export function CarteStatut({
       <span className="planning-statut-nom">
         <Icone className="size-3.5" aria-hidden />
         <span className="truncate">{s.nom}</span>
+        {s.rattrape && (
+          <span className="shrink-0 tabular-nums opacity-80">
+            {jourMois(s.rattrape.date)}
+          </span>
+        )}
       </span>
       {/* Le repos fixe ressemble à tout repos : pas de cadenas. */}
       {s.fixe && s.genre !== 'repos' && (

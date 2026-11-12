@@ -11,6 +11,7 @@ import { estPrefere, NIVEAUX } from '#/lib/planning/niveaux.ts'
 import type { Niveaux } from '#/lib/planning/niveaux.ts'
 import { dureeHoraire, heures, jourDeRepos } from '#/lib/planning/affichage.ts'
 import { estJfr } from '#/lib/planning/feries.ts'
+import type { JourFerie } from '#/lib/planning/feries.ts'
 import { estEcole } from '#/lib/planning/semaine.ts'
 import type { BilanOut, SemaineOut, ShiftOut } from '#/lib/planning/semaine.ts'
 import * as service from '#/lib/planning/service.ts'
@@ -41,6 +42,8 @@ export interface ContenuStatut {
   /** Jour férié rattrapé (motif JFR, 2026-11-02) : se valide comme un repos
    * posé ; en proposition quand la génération l'a placé. */
   jfr?: boolean
+  /** Le jour férié que ce JFR rattrape (2026-11-12). */
+  rattrape?: JourFerie
   /** Repos obligé (2026-11-04) : pourquoi ce jour ne peut pas être travaillé. */
   raison?: string
   genre: 'repos' | 'ecole' | 'absence' | 'hors'
@@ -147,6 +150,9 @@ export function statutDuJour(
       ...(jfr
         ? {
             jfr: true,
+            ...(bilan.jfr_rattrape?.[jour]
+              ? { rattrape: bilan.jfr_rattrape[jour] }
+              : {}),
             proposition:
               !verrouillee &&
               !fixe &&

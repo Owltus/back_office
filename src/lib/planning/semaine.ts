@@ -57,8 +57,8 @@ import { codeDeLaFiche } from '#/lib/planning/eligibilite.ts'
 import {
   estJfr,
   ferieDe,
-  feriesARattraper,
   feriesEntre,
+  imputationJfr,
   premierLundiLu,
 } from '#/lib/planning/feries.ts'
 import type { JourFerie } from '#/lib/planning/feries.ts'
@@ -343,6 +343,10 @@ export interface BilanOut {
    * (R-FERIE-RATTRAPE, 2026-11-02) : la génération les efface et les
    * repropose, « Valider » les valide. Absent : données d'avant. */
   jfr_proposes?: number[]
+  /** Le jour férié que rattrape chaque JFR posé de la semaine (jour →
+   * jour férié, 2026-11-12, demande utilisateur : « dire de quel jour
+   * férié il s'agit »). Absent : données d'avant. */
+  jfr_rattrape?: Record<number, JourFerie>
   /** Repos OBLIGÉS (2026-11-04, décision utilisateur) : un jour à venir sans
    * shift où travailler enfreindrait une règle stricte (plus de 6 jours
    * d'affilée, semaines voisines comprises, ou moins que le repos quotidien
@@ -612,11 +616,29 @@ export function shiftsConnus(
  * stagiaire) : rien.
  */
 export function feriesEnAttente(
-  ctx: Pick<Contexte, 'lundi' | 'staff' | 'absences' | 'motifsJfr'> & {
-    postes?: ReadonlyMap<number, Pick<Poste, 'feries_chomes'>>
-  } & Partial<Pick<Contexte, 'regles'>>,
+  ctx: CtxFeries,
   shifts: readonly Affectation[],
 ): Map<number, JourFerie[]> {
+  const r = new Map<number, JourFerie[]>()
+  for (const [id, { restants }] of imputationsFeries(ctx, shifts))
+    if (restants.length) r.set(id, restants)
+  return r
+}
+
+type CtxFeries = Pick<
+  Contexte,
+  'lundi' | 'staff' | 'absences' | 'motifsJfr'
+> & {
+  postes?: ReadonlyMap<number, Pick<Poste, 'feries_chomes'>>
+} & Partial<Pick<Contexte, 'regles'>>
+
+/** Pour chaque personne : les jours fériés encore à rattraper et ce que
+ * rattrape chaque JFR posé (`imputationJfr`), sur la fenêtre de
+ * `feriesEnAttente`. */
+export function imputationsFeries(
+  ctx: CtxFeries,
+  shifts: readonly Affectation[],
+): Map<number, ReturnType<typeof imputationJfr>> {
   const fenetre = (ctx.regles ?? REGLES_PAR_DEFAUT).feries.rattrapageJours
   const du = ajouterJours(ctx.lundi, -fenetre)
   const depuis = ajouterJours(du, -fenetre)
@@ -632,7 +654,7 @@ export function feriesEnAttente(
     }
     t.add(date)
   }
-  const r = new Map<number, JourFerie[]>()
+  const r = new Map<number, ReturnType<typeof imputationJfr>>()
   for (const x of ctx.staff) {
     const siens = travailles.get(x.id)
     if (!siens) continue
@@ -645,16 +667,18 @@ export function feriesEnAttente(
     const poses = [...(ctx.absences.get(x.id) ?? [])]
       .filter(([, m]) => ctx.motifsJfr.has(m))
       .map(([date]) => date)
-    const liste = feriesARattraper({
-      salarie: x,
-      du,
-      au,
-      depuis,
-      travailles: siens,
-      jfrPoses: poses,
-      regles: ctx.regles,
-    })
-    if (liste.length) r.set(x.id, liste)
+    r.set(
+      x.id,
+      imputationJfr({
+        salarie: x,
+        du,
+        au,
+        depuis,
+        travailles: siens,
+        jfrPoses: poses,
+        regles: ctx.regles,
+      }),
+    )
   }
   return r
 }
@@ -3045,12 +3069,10 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
   salaries = avecHistoire(d, ctx, salaries)
   // R-FERIE-RATTRAPE : les jours fériés travaillés encore à rattraper
   // deviennent une alerte du vérificateur (JOUR-FERIE).
-  for (const [id, liste] of feriesEnAttente(
-    ctx,
-    shiftsConnus(d, ctx.affectations),
-  )) {
+  const imputations = imputationsFeries(ctx, shiftsConnus(d, ctx.affectations))
+  for (const [id, { restants: liste }] of imputations) {
     const sol = salaries.get(id)
-    if (sol)
+    if (sol && liste.length)
       salaries.set(id, {
         ...sol,
         feriesARattraper: liste.map((f) => f.date),
@@ -3280,6 +3302,12 @@ export function analyser(d: DonneesSemaine, aujourdhui?: string): SemaineOut {
       ),
       jfr_proposes: [0, 1, 2, 3, 4, 5, 6].filter((j) =>
         ctx.jfrProposes.has(`${x.id}|${ajouterJours(lundi, j)}`),
+      ),
+      jfr_rattrape: Object.fromEntries(
+        [0, 1, 2, 3, 4, 5, 6].flatMap((j) => {
+          const f = imputations.get(x.id)?.rattrape.get(ajouterJours(lundi, j))
+          return f ? [[j, f]] : []
+        }),
       ),
       repos_obliges: reposObliges(
         x,
@@ -3801,6 +3829,9 @@ export function preparerGeneration(
       const jours = new Set<number>()
       for (let j = depuis; j < 7; j++) {
         if (ajouterJours(lundi, j) <= apres) continue
+        // Jamais sur un autre jour férié (2026-11-12 : un JFR posé le 1er
+        // janvier rendait un jour férié sur un jour férié).
+        if (ferieDe(ajouterJours(lundi, j), ctx.regles.feries.ajoutes)) continue
         // Un jour « Travaille » de la semaine type est permis (relecture du
         // 2026-11-03) : un JFR rend justement un jour qu'on aurait
         // travaillé. Sans cela, une semaine type entièrement fixée n'avait

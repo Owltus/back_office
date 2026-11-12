@@ -4,6 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import {
   estJfr,
   feriesARattraper,
+  imputationJfr,
   feriesEntre,
   ferieDe,
   joursFeries,
@@ -229,6 +230,24 @@ describe('solde des jours fériés', () => {
       feriesARattraper({ ...novembre, du: '2026-11-02', au: '2026-12-06' }),
     ).toEqual([])
     expect(vuLe('2026-11-30')).not.toEqual([])
+  })
+
+  it('refusé : un jour férié jamais rattrapé à temps ne prend pas un JFR plus tardif', () => {
+    // Cas réel du 2026-11-12 : 14/07, 1/11 et 11/11 travaillés, JFR le 3 et
+    // le 10/12. Le 14/07 (délai passé le 13/10) prenait le JFR du 3/12, et le
+    // 11/11 en réclamait un troisième.
+    const ete = {
+      salarie,
+      travailles: new Set(['2026-07-14', '2026-11-01', '2026-11-11']),
+      jfrPoses: ['2026-12-03', '2026-12-10'],
+      du: '2026-09-28',
+      au: '2027-01-03',
+      depuis: '2026-06-29',
+    }
+    expect(feriesARattraper(ete)).toEqual([])
+    expect(
+      [...imputationJfr(ete).rattrape].map(([d, f]) => `${d}:${f.date}`),
+    ).toEqual(['2026-12-03:2026-11-01', '2026-12-10:2026-11-11'])
   })
 
   it('sans shift ce jour-là, ou sans droit : rien', () => {

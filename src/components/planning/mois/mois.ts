@@ -15,6 +15,7 @@ import type { BilanOut, ShiftOut, SemaineOut } from '#/lib/planning/semaine.ts'
 import { ajouterJours, ecartJours, lundiDe } from '#/lib/planning/temps.ts'
 import { jourDeRepos } from '#/lib/planning/affichage.ts'
 import { estJfr } from '#/lib/planning/feries.ts'
+import type { JourFerie } from '#/lib/planning/feries.ts'
 import {
   raisonOblige,
   reposProposesParJour,
@@ -96,6 +97,8 @@ export type CaseMois =
       proposition: boolean
       /** Repos posé qui est aussi un repos obligé : sa raison. */
       raison?: string
+      /** JFR : le jour férié qu'il rattrape (2026-11-12). */
+      rattrape?: JourFerie
     }
   | {
       type: 'repos'
@@ -139,6 +142,9 @@ export function caseDe(
       motifId,
       fixe,
       ...(raison ? { raison } : {}),
+      ...(bilan.jfr_rattrape?.[jour]
+        ? { rattrape: bilan.jfr_rattrape[jour] }
+        : {}),
       proposition:
         !fixe &&
         !sem.verrouillee &&
@@ -180,7 +186,8 @@ export function cleBandeau(c: CaseMois | null): string | null {
   if (!c || c.type === 'shift') return null
   if (c.type === 'hors') return 'hors'
   if (c.type === 'absence' && c.motif?.nature !== 'repos')
-    return `motif-${c.motifId ?? 0}-${c.fixe ? 'fixe' : 'pose'}${c.proposition ? '-proposition' : ''}`
+    // Deux JFR de suite rattrapent deux jours fériés : jamais réunis.
+    return `motif-${c.motifId ?? 0}-${c.fixe ? 'fixe' : 'pose'}${c.proposition ? '-proposition' : ''}${c.rattrape ? `-${c.rattrape.date}` : ''}`
   return c.proposition ? 'repos-proposition' : 'repos'
 }
 

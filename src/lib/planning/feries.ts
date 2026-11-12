@@ -186,16 +186,13 @@ export function jourMois(date: string): string {
 
 /**
  * Jours fériés de [du, au] qu'une personne doit encore rattraper, du plus
- * ancien au plus récent. Un jour férié compte s'il ouvre droit
- * (`droitAuRattrapage`) ET si la personne y a un shift (`travailles`, dates
- * des shifts, proposés ou validés). Chaque JFR posé (`jfrPoses`, dates)
- * rattrape UN jour férié d'avant lui, le plus ancien d'abord ; un JFR ne sert
- * qu'une fois. L'imputation part de `depuis` (défaut : `du`) : les jours
- * fériés de [depuis, du[ prennent leurs JFR avant ceux de la fenêtre, sinon
- * le JFR d'un jour férié sorti de la fenêtre passerait au suivant (1er puis
- * 11 novembre). `travailles` doit couvrir [depuis, au].
+ * ancien au plus récent (`imputationJfr`).
  */
-export function feriesARattraper(args: {
+export function feriesARattraper(args: ArgsImputation): JourFerie[] {
+  return imputationJfr(args).restants
+}
+
+interface ArgsImputation {
   salarie: Pick<Salarie, 'type_contrat' | 'date_entree'>
   du: string
   au: string
@@ -204,7 +201,29 @@ export function feriesARattraper(args: {
   jfrPoses: Iterable<string>
   /** Règles de l'établissement (modèle du contrat) ; absent : défauts. */
   regles?: RegleEtablissement
-}): JourFerie[] {
+}
+
+/**
+ * Ce que rattrape chaque JFR posé, et les jours fériés encore à rattraper.
+ * Un jour férié compte s'il ouvre droit (`droitAuRattrapage`) ET si la
+ * personne y a un shift (`travailles`, dates des shifts, proposés ou
+ * validés). Chaque JFR posé (`jfrPoses`, dates) rattrape UN jour férié
+ * d'avant lui, le plus ancien d'abord, et seulement dans le délai de
+ * rattrapage de ce jour férié (`feries.rattrapageJours` après lui ;
+ * correctif du 2026-11-12 : un jour férié jamais rattrapé à temps, le
+ * 14/07, prenait le JFR du 1er novembre, qui en reprenait un autre, et une
+ * personne recevait trois JFR pour deux jours fériés). Un JFR ne sert
+ * qu'une fois. L'imputation part de `depuis` (défaut : `du`) : les jours
+ * fériés de [depuis, du[ prennent leurs JFR avant ceux de la fenêtre, sinon
+ * le JFR d'un jour férié sorti de la fenêtre passerait au suivant (1er puis
+ * 11 novembre). `travailles` doit couvrir [depuis, au].
+ */
+export function imputationJfr(args: ArgsImputation): {
+  restants: JourFerie[]
+  /** Date du JFR → le jour férié qu'il rattrape. */
+  rattrape: Map<string, JourFerie>
+} {
+  const delai = args.regles?.feries.rattrapageJours ?? FERIE_RATTRAPAGE_JOURS
   const depuis =
     args.depuis !== undefined && args.depuis < args.du ? args.depuis : args.du
   const droits = feriesEntre(
@@ -216,16 +235,20 @@ export function feriesARattraper(args: {
       droitAuRattrapage(args.salarie, f.date, args.regles) &&
       args.travailles.has(f.date),
   )
-  if (!droits.length) return []
-  const poses = [...args.jfrPoses]
+  const rattrape = new Map<string, JourFerie>()
+  if (!droits.length) return { restants: [], rattrape }
+  const poses = [...new Set(args.jfrPoses)]
     .filter((d) => d > droits[0].date && d <= args.au)
     .sort()
   const pris = new Array<boolean>(poses.length).fill(false)
   const restants: JourFerie[] = []
   for (const f of droits) {
-    const k = poses.findIndex((d, i) => !pris[i] && d > f.date)
-    if (k >= 0) pris[k] = true
-    else if (f.date >= args.du) restants.push(f)
+    const limite = ajouterJours(f.date, delai)
+    const k = poses.findIndex((d, i) => !pris[i] && d > f.date && d <= limite)
+    if (k >= 0) {
+      pris[k] = true
+      rattrape.set(poses[k], f)
+    } else if (f.date >= args.du) restants.push(f)
   }
-  return restants
+  return { restants, rattrape }
 }
