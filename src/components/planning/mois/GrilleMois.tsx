@@ -50,7 +50,8 @@ import {
 } from '#/lib/planning/affichage.ts'
 import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
 import type { RegleEtablissement } from '#/lib/planning/reglesEtablissement.ts'
-import { estEcole } from '#/lib/planning/semaine.ts'
+import { estEcole, personnes } from '#/lib/planning/semaine.ts'
+import { couvre } from '#/lib/planning/parcours.ts'
 import type { AlerteOut, SemaineOut, ShiftOut } from '#/lib/planning/semaine.ts'
 import { ajouterJours, heureAffichee } from '#/lib/planning/temps.ts'
 import type { Horaire, Referentiel, Salarie } from '#/lib/planning/types.ts'
@@ -203,6 +204,36 @@ export function GrilleMois({
       regles.moments,
     )
   const verrouillee = (lundi: string) => !!etats.get(lundi)?.verrouillee
+
+  // Une ligne par PERSONNE (2026-11-13, demande utilisateur : « si les deux
+  // contrats se suivent, sur la même ligne, pas de doublon ») : ses contrats
+  // liés (`personnes`), le plus récent du mois pour le nom et le rangement.
+  const lignes = useMemo(() => {
+    const cles = personnes(presents)
+    const parPersonne = new Map<string, Salarie[]>()
+    for (const s of presents) {
+      const cle = cles.get(s.id) ?? `s${s.id}`
+      parPersonne.set(cle, [...(parPersonne.get(cle) ?? []), s])
+    }
+    const fin = jours[jours.length - 1]
+    const contratsDe = new Map<number, Salarie[]>()
+    const representants: Salarie[] = []
+    for (const liste of parPersonne.values()) {
+      const tries = [...liste].sort((a, b) =>
+        (a.date_entree ?? '').localeCompare(b.date_entree ?? ''),
+      )
+      const rep =
+        [...tries]
+          .reverse()
+          .find((c) => !c.date_entree || c.date_entree <= fin) ?? tries[0]
+      contratsDe.set(rep.id, tries)
+      representants.push(rep)
+    }
+    // L'ordre reçu (organigramme) : celui du représentant.
+    const rang = new Map(presents.map((s, i) => [s.id, i]))
+    representants.sort((a, b) => (rang.get(a.id) ?? 0) - (rang.get(b.id) ?? 0))
+    return { representants, contratsDe }
+  }, [presents, jours])
 
   const alertesDe = (sid: number): AlerteOut[] => {
     const vues = new Map<string, AlerteOut>()
@@ -449,39 +480,44 @@ export function GrilleMois({
             </tr>
           </thead>
           <tbody>
-            {parGroupe(presents, groupes, referentiel.postes).map((g) => [
-              <tr key={`g-${g.id}`}>
-                <td
-                  colSpan={nbColonnes}
-                  className="border-b bg-muted/50 px-3 py-1 text-xs font-semibold"
-                >
-                  {g.nom}{' '}
-                  <span className="font-normal text-muted-foreground">
-                    {g.membres.length}
-                  </span>
-                </td>
-              </tr>,
-              ...g.membres.map((s) => (
-                <LigneMois
-                  key={`s-${s.id}`}
-                  personne={s}
-                  regles={regles}
-                  mois={mois}
-                  jours={jours}
-                  lire={lire}
-                  alertes={alertesDe(s.id)}
-                  horaireDe={horaireDe}
-                  couleurDe={couleurDe}
-                  verrouillee={verrouillee}
-                  aujourdhui={aujourdhui}
-                  glisser={glisser}
-                  indice={indice}
-                  onFiche={onFiche}
-                  onJour={onJour}
-                  onDouble={onDouble}
-                />
-              )),
-            ])}
+            {parGroupe(lignes.representants, groupes, referentiel.postes).map(
+              (g) => [
+                <tr key={`g-${g.id}`}>
+                  <td
+                    colSpan={nbColonnes}
+                    className="border-b bg-muted/50 px-3 py-1 text-xs font-semibold"
+                  >
+                    {g.nom}{' '}
+                    <span className="font-normal text-muted-foreground">
+                      {g.membres.length}
+                    </span>
+                  </td>
+                </tr>,
+                ...g.membres.map((s) => (
+                  <LigneMois
+                    key={`s-${s.id}`}
+                    personne={s}
+                    contrats={lignes.contratsDe.get(s.id) ?? [s]}
+                    regles={regles}
+                    mois={mois}
+                    jours={jours}
+                    lire={lire}
+                    alertes={(lignes.contratsDe.get(s.id) ?? [s]).flatMap((c) =>
+                      alertesDe(c.id),
+                    )}
+                    horaireDe={horaireDe}
+                    couleurDe={couleurDe}
+                    verrouillee={verrouillee}
+                    aujourdhui={aujourdhui}
+                    glisser={glisser}
+                    indice={indice}
+                    onFiche={onFiche}
+                    onJour={onJour}
+                    onDouble={onDouble}
+                  />
+                )),
+              ],
+            )}
           </tbody>
         </table>
       </div>
@@ -521,6 +557,7 @@ const classesIndice: Record<Exclude<Indice, null>, string> = {
 
 function LigneMois({
   personne: s,
+  contrats,
   regles,
   mois,
   jours,
@@ -537,6 +574,9 @@ function LigneMois({
   onDouble,
 }: {
   personne: Salarie
+  /** Les contrats de la personne affichés sur cette ligne (2026-11-13 : un
+   * changement de contrat ne crée plus une deuxième ligne). */
+  contrats: Salarie[]
   regles: RegleEtablissement
   mois: string
   jours: string[]
@@ -559,10 +599,19 @@ function LigneMois({
   onDouble?: (salarieId: number, date: string) => void
 }) {
   const moments = useMoments()
+  // Le contrat de la personne ce jour-là : celui qui le couvre, sinon le
+  // dernier commencé avant, sinon le premier.
+  const contrat = (date: string): Salarie =>
+    contrats.find((c) => couvre(c, date)) ??
+    [...contrats]
+      .reverse()
+      .find((c) => !c.date_entree || c.date_entree <= date) ??
+    contrats[0]
+  const sid = (date: string) => contrat(date).id
   const nom = `${s.prenom} ${s.nom}`.trim()
   const shifts = jours
     .filter((d) => d.startsWith(mois))
-    .map((d) => lire(s.id, d))
+    .map((d) => lire(sid(d), d))
     .filter(
       (c): c is Extract<CaseMois, { type: 'shift' }> => c?.type === 'shift',
     )
@@ -572,15 +621,15 @@ function LigneMois({
     const { clientX, clientY } = e
     if (clicDroit) {
       e.preventDefault()
-      onJour(s.id, date, clientX, clientY, true)
+      onJour(sid(date), date, clientX, clientY, true)
       return
     }
     // Double-clic : bascule la validation d'un shift ou d'un repos.
     clicOuDoubleClic(
       e,
-      () => onJour(s.id, date, clientX, clientY, false),
-      onDouble && validationDeCase(lire(s.id, date))
-        ? () => onDouble(s.id, date)
+      () => onJour(sid(date), date, clientX, clientY, false),
+      onDouble && validationDeCase(lire(sid(date), date))
+        ? () => onDouble(sid(date), date)
         : null,
     )
   }
@@ -594,14 +643,14 @@ function LigneMois({
   const cellules: ReactNode[] = []
   for (let k = 0; k < jours.length; k++) {
     const date = jours[k]
-    const c = lire(s.id, date)
+    const c = lire(sid(date), date)
     const cle = cleBandeau(c)
     const lundiCase = reperer(date).jour === 0
     if (cle && c && c.type !== 'shift') {
       let longueur = 1
       while (
         k + longueur < jours.length &&
-        cleBandeau(lire(s.id, jours[k + longueur])) === cle
+        cleBandeau(lire(sid(jours[k + longueur]), jours[k + longueur])) === cle
       )
         longueur++
       const couverts = jours.slice(k, k + longueur)
@@ -635,7 +684,7 @@ function LigneMois({
           ? `${dateLongue(couverts[0])} → ${dateLongue(couverts[longueur - 1])}`
           : dateLongue(couverts[0])
       const precision = (d: string) => {
-        const x = lire(s.id, d)
+        const x = lire(sid(d), d)
         if (x && (x.type === 'repos' || x.type === 'absence') && x.raison)
           return ` obligé : ${x.raison}`
         if (x?.type === 'absence' && x.rattrape)
@@ -707,14 +756,14 @@ function LigneMois({
               {couverts.map((d) => (
                 <Segment
                   key={d}
-                  idDepot={`case:${s.id}:${d}`}
-                  idGlisser={`statut:${s.id}:${d}`}
+                  idDepot={`case:${sid(d)}:${d}`}
+                  idGlisser={`statut:${sid(d)}:${d}`}
                   actif={
                     glisser &&
                     !verrouillee(reperer(d).lundi) &&
-                    !lire(s.id, d)?.fixe
+                    !lire(sid(d), d)?.fixe
                   }
-                  indice={indice(s, d)}
+                  indice={indice(contrat(d), d)}
                   classe={fondJour(d)}
                   tip={`${periode} · ${libelle}${precision(d)}\n${glisser ? 'Cliquer pour modifier ce jour' : 'Cliquer pour ouvrir la semaine'}`}
                   etiquette={`${nom}, ${dateLongue(d)} : ${libelle}${precision(d)}`}
@@ -745,17 +794,17 @@ function LigneMois({
     cellules.push(
       <CaseJour
         key={date}
-        idDepot={`case:${s.id}:${date}`}
+        idDepot={`case:${sid(date)}:${date}`}
         classe={cn(
           lundiCase && 'border-l border-l-foreground/25',
           fondJour(date),
         )}
-        indice={indice(s, date)}
+        indice={indice(contrat(date), date)}
         onMenu={ouvrir(date, true)}
       >
         <Pastille
           idGlisser={
-            shift ? `shift:${shift.id}:${date}` : `statut:${s.id}:${date}`
+            shift ? `shift:${shift.id}:${date}` : `statut:${sid(date)}:${date}`
           }
           actif={glisser && !!shift && !verrouillee(reperer(date).lundi)}
           couleur={shift ? couleurDe(shift) : GRIS}
