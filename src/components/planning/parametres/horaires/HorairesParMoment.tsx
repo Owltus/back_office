@@ -195,6 +195,8 @@ function TableauHoraires({
   const vientDIci = horaires.some(
     (h) => h.id === (active?.data.current?.id as number | undefined),
   )
+  // Colonne Pause seulement si un horaire du tableau en a une.
+  const avecPause = horaires.some((h) => h.pause > 0)
   return (
     <section aria-label={titre} className="flex h-full flex-col gap-2">
       <h3 className="text-sm font-semibold">
@@ -226,7 +228,11 @@ function TableauHoraires({
                 <th className="w-14 px-3 py-2 text-left font-medium">
                   Travail
                 </th>
-                <th className="w-20 px-3 py-2 text-left font-medium">Pause</th>
+                {avecPause && (
+                  <th className="w-20 px-3 py-2 text-left font-medium">
+                    Pause
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -236,6 +242,7 @@ function TableauHoraires({
                   horaire={h}
                   modifiable={modifiable}
                   etoile={etoile(h)}
+                  avecPause={avecPause}
                   onOuvrir={onOuvrir}
                 />
               ))}
@@ -251,11 +258,13 @@ function LigneHoraire({
   horaire: h,
   modifiable,
   etoile,
+  avecPause,
   onOuvrir,
 }: {
   horaire: Horaire
   modifiable: boolean
   etoile: boolean
+  avecPause: boolean
   onOuvrir: (h: Horaire) => void
 }) {
   const { setNodeRef, attributes, listeners, isDragging } = useDraggable({
@@ -313,9 +322,11 @@ function LigneHoraire({
       <td className="px-3 py-2 tabular-nums">
         {heures(dureeHoraire(h.debut, h.fin) - h.pause)}
       </td>
-      <td className="px-3 py-2 whitespace-nowrap text-muted-foreground tabular-nums">
-        {h.pause > 0 ? `${h.pause} min` : '–'}
-      </td>
+      {avecPause && (
+        <td className="px-3 py-2 whitespace-nowrap text-muted-foreground tabular-nums">
+          {h.pause > 0 ? `${h.pause} min` : '–'}
+        </td>
+      )}
     </tr>
   )
 }
