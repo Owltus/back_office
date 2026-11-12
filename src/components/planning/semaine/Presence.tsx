@@ -113,9 +113,10 @@ export function PastillesPresence({
 /** Le trait entre deux formes, posé en PROPORTION de la case (`place`) :
  * plein vert quand la transmission est assurée, pointillé rouge quand
  * personne n'est là pour la faire, gris pâle quand une des deux équipes est
- * absente (le fil continue, rien n'est à transmettre). Fin (1 px) et centré
- * sur le milieu des formes (retour utilisateur du 2026-11-03 : « trop gros
- * et mal alignés »). Il court d'un centre de forme à l'autre, sous elles. */
+ * absente (le fil continue, rien n'est à transmettre). 2 px depuis le
+ * 2026-11-13 (demande utilisateur : « plus épais, pour voir l'affiliation
+ * entre les shifts qui se suivent » ; 1 px avant), centré sur le milieu des
+ * formes. Il court d'un centre de forme à l'autre, sous elles. */
 function Lien({
   etat,
   de,
@@ -133,11 +134,11 @@ function Lien({
       data-transmission={etat ?? 'aucune'}
       style={p.style}
       className={cn(
-        'absolute top-1/2 h-0 -translate-y-1/2 border-t',
+        'absolute top-1/2 h-0 -translate-y-1/2 border-t-2',
         p.className,
-        etat === 'ok' && 'border-emerald-500/70',
+        etat === 'ok' && 'border-emerald-500',
         etat === 'manque' && 'border-dashed border-red-500/90',
-        !etat && 'border-foreground/10',
+        !etat && 'border-foreground/15',
       )}
     />
   )

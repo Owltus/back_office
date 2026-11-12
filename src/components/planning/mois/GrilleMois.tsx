@@ -437,20 +437,9 @@ export function GrilleMois({
                       .get(avant.lundi)
                       ?.presence.filter((p) => p.jour === avant.jour)
                   : undefined
-                // Places encore à pourvoir ce jour-là (barre de couverture
-                // survolée, 2026-11-13) : même compte que la barre.
-                const manque =
-                  semaine && d.startsWith(mois)
-                    ? Math.max(
-                        0,
-                        (semaine.stats.places_jour?.[jour] ?? 0) -
-                          (semaine.stats.pourvues_jour?.[jour] ?? 0),
-                      )
-                    : 0
                 return (
                   <th
                     key={d}
-                    data-manque={manque > 0 ? '' : undefined}
                     className={cn(
                       'sticky top-7 z-20 border-b bg-muted py-1 text-center font-normal leading-tight',
                       jour === 0 && 'border-l border-l-foreground/25',

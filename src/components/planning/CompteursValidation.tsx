@@ -14,11 +14,9 @@ import { BadgeCheck, Lock, SquareDashed } from 'lucide-react'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { cn } from '#/lib/utils.ts'
 
-/** `manques` : la barre de couverture du mois (2026-11-13) révèle les jours
- * qui ont des places à pourvoir. */
-export type Focus = 'propositions' | 'valides' | 'verrouilles' | 'manques'
+type Focus = 'propositions' | 'valides' | 'verrouilles'
 
-export const poserFocus = (f: Focus | null) => {
+const poser = (f: Focus | null) => {
   const html = document.documentElement
   if (f) html.dataset.planningFocus = f
   else delete html.dataset.planningFocus
@@ -39,10 +37,10 @@ function Pastille({
     <Tip label={tip}>
       <span
         tabIndex={0}
-        onMouseEnter={() => poserFocus(focus)}
-        onMouseLeave={() => poserFocus(null)}
-        onFocus={() => poserFocus(focus)}
-        onBlur={() => poserFocus(null)}
+        onMouseEnter={() => poser(focus)}
+        onMouseLeave={() => poser(null)}
+        onFocus={() => poser(focus)}
+        onBlur={() => poser(null)}
         className={cn(
           'inline-flex cursor-default items-center gap-1 rounded-md border px-2 py-1 text-xs tabular-nums transition-colors outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring',
           classe,
@@ -64,7 +62,7 @@ export function CompteursValidation({
   verrouilles: number
 }) {
   // Un en-tête démonté ne laisse jamais la grille estompée.
-  useEffect(() => () => poserFocus(null), [])
+  useEffect(() => () => poser(null), [])
   return (
     <div className="flex items-center gap-1.5">
       <Pastille

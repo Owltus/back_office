@@ -368,20 +368,6 @@
   opacity: 0.15;
 }
 
-/* Barre de couverture du mois survolée (2026-11-13) : seul l'arrière-plan
- * des jours qui ont des places à pourvoir change (ni bordure ni contenu en
- * plus : rien ne bouge, demande utilisateur), le reste s'estompe. */
-[data-planning-focus='manques'] .planning-mois-pastille {
-  opacity: 0.15;
-}
-[data-planning-focus='manques'] th[data-manque] {
-  background-color: color-mix(
-    in oklab,
-    var(--color-amber-500) 35%,
-    var(--color-muted)
-  );
-}
-
 /* ------------------------------------------------------ Fenêtre du calcul
  * (components/planning/FenetreCalcul.tsx). Une semaine de 7 jours × matin,
  * soir, nuit : les points s'allument de jour en jour et se relient, puis
