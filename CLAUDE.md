@@ -1841,7 +1841,20 @@ group-hover:` étaient INVISIBLES mais CLIQUABLES au doigt →
     (étape 5) **RETIRÉE le 2026-10-04 à la demande de l'utilisateur (trop
     complexe à utiliser), ne pas reproposer** — carte, dialogue,
     `modifiesDepuis`, `fetchVersionsDepuis`, clé `['classeur','modifies']`
-    supprimés, aucun SQL n'avait été créé ; nom de fichier PDF « Classeur - Titre »
+    supprimés, aucun SQL n'avait été créé ⚠ REVENU le 2026-11-13 À LA
+    DEMANDE de l'utilisateur sous une forme SANS DATE : « Documents
+    modifiés » (accueil du classeur, barre et menu d'un chapitre) imprime ce
+    dont l'EMPREINTE imprimée a changé depuis la dernière impression sur ce
+    poste et ce compte (`impressionsSuivies.ts`, `useImpressionsSuivies`,
+    `localStorage`, jamais `updated_at` qui bouge au réordonnancement) ;
+    toute impression d'un chapitre, d'une sélection, d'un élément ou du
+    classeur complet la retient (`PrintPreview onImprime`), « Déjà à jour,
+    ne pas imprimer » aussi. Même jour : export Markdown EN UN SEUL FICHIER
+    (`classeurEnMarkdown`, ZIP avec `images/`) et images ajoutées aux ZIP
+    par chapitres (`../images/`). Fabriquer de VRAIS fichiers PDF (ZIP de
+    PDF par dossiers) a été ABANDONNÉ par l'utilisateur le même jour
+    (« si trop chiant, abandonne ») : l'impression du navigateur reste la
+    seule sortie PDF ; nom de fichier PDF « Classeur - Titre »
     (`nomFichierImpression`, noms réservés Windows avec extension).
     ⚠ **« Télécharger le PDF » RETIRÉ le 2026-10-08 à la demande de
     l'utilisateur (« trop complexe »)** : bouton de l'aperçu, accès directs

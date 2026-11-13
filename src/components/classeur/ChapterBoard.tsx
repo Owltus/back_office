@@ -23,6 +23,7 @@ import {
   Pencil,
   Plus,
   Printer,
+  FilePenLine,
   Search,
   Trash2,
   X,
@@ -105,6 +106,11 @@ import { cleRef, deplacer, parseCleRef, refsDe } from '#/lib/classeur/ordre.ts'
 import type { ItemRef } from '#/lib/classeur/ordre.ts'
 import { nomFichierImpression } from '#/lib/classeur/print/nomFichierImpression.ts'
 import { elementsAImprimer } from '#/lib/classeur/selectionImpression.ts'
+import {
+  elementsModifies,
+  jamaisImprime,
+} from '#/lib/classeur/impressionsSuivies.ts'
+import { useImpressionsSuivies } from '#/components/classeur/hooks/useImpressionsSuivies.ts'
 import { createItem } from '#/lib/classeur/service.ts'
 import { contientSansAccents, stripAccents } from '#/lib/classeur/slug.ts'
 import type { ModeTransfert } from '#/lib/classeur/transfert.ts'
@@ -124,6 +130,7 @@ type Apercu =
   | { type: 'item'; item: ChapterItem }
   | { type: 'tout' }
   | { type: 'selection' }
+  | { type: 'modifies'; items: ChapterItem[] }
   | null
 
 /**
@@ -197,6 +204,17 @@ export function ChapterBoard({
     () => elementsAImprimer(items, selection.selected),
     [items, selection.selected],
   )
+  // Ce qui a changé depuis la dernière impression (ce poste, ce compte).
+  const suivi = useImpressionsSuivies(classeurId)
+  const modifies = useMemo(
+    () => elementsModifies(items, suivi.empreintes),
+    [items, suivi.empreintes],
+  )
+  const libelleModifies = jamaisImprime(suivi.empreintes)
+    ? 'Imprimer les documents modifiés (jamais imprimé sur ce poste : tout le chapitre)'
+    : modifies.length === 0
+      ? 'Documents modifiés : tout est à jour'
+      : `Imprimer les ${String(modifies.length)} document${modifies.length > 1 ? 's' : ''} modifié${modifies.length > 1 ? 's' : ''} depuis la dernière impression`
 
   // Dialogues
   const [createOpen, setCreateOpen] = useState(false)
@@ -581,6 +599,14 @@ export function ChapterBoard({
                         disabled={!chapter || items.length === 0}
                       />
                       <IconAction
+                        label={libelleModifies}
+                        icon={<FilePenLine />}
+                        onClick={() =>
+                          setApercu({ type: 'modifies', items: modifies })
+                        }
+                        disabled={!chapter || modifies.length === 0}
+                      />
+                      <IconAction
                         label="Exporter le chapitre en Markdown (ZIP)"
                         icon={<Archive />}
                         onClick={() => exportZip.mutate()}
@@ -646,6 +672,17 @@ export function ChapterBoard({
                         >
                           <Printer />
                           Imprimer ou PDF
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          disabled={!chapter || modifies.length === 0}
+                          onSelect={() =>
+                            setApercu({ type: 'modifies', items: modifies })
+                          }
+                        >
+                          <FilePenLine />
+                          Documents modifiés
+                          {modifies.length > 0 &&
+                            ` (${String(modifies.length)})`}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           disabled={!chapter || !contenu}
@@ -874,20 +911,63 @@ export function ChapterBoard({
           titre:
             apercu?.type === 'selection'
               ? `${chapter?.label ?? 'Chapitre'} - sélection`
-              : apercu?.type === 'item'
-                ? apercu.item.data.title || 'Sans titre'
-                : chapter?.label,
+              : apercu?.type === 'modifies'
+                ? `${chapter?.label ?? 'Chapitre'} - modifiés`
+                : apercu?.type === 'item'
+                  ? apercu.item.data.title || 'Sans titre'
+                  : chapter?.label,
         })}
         title={
           apercu?.type === 'tout'
             ? `${chapter?.label ?? 'Chapitre'} : chapitre complet`
             : apercu?.type === 'selection'
               ? `${chapter?.label ?? 'Chapitre'} : ${aImprimer.length} élément${aImprimer.length > 1 ? 's' : ''} sélectionné${aImprimer.length > 1 ? 's' : ''}`
-              : apercu?.type === 'item'
-                ? apercu.item.data.title || 'Sans titre'
-                : undefined
+              : apercu?.type === 'modifies'
+                ? `${chapter?.label ?? 'Chapitre'} : ${String(apercu.items.length)} document${apercu.items.length > 1 ? 's' : ''} modifié${apercu.items.length > 1 ? 's' : ''}`
+                : apercu?.type === 'item'
+                  ? apercu.item.data.title || 'Sans titre'
+                  : undefined
+        }
+        onImprime={() =>
+          suivi.retenir(
+            apercu?.type === 'tout'
+              ? items
+              : apercu?.type === 'selection'
+                ? aImprimer
+                : apercu?.type === 'modifies'
+                  ? apercu.items
+                  : apercu?.type === 'item'
+                    ? [apercu.item]
+                    : [],
+          )
+        }
+        actions={
+          apercu?.type === 'modifies' && apercu.items.length > 0 ? (
+            <Button
+              size="sm"
+              variant="outline"
+              className="pointer-coarse:h-11"
+              onClick={() => {
+                suivi.retenir(apercu.items)
+                setApercu(null)
+              }}
+            >
+              Déjà à jour, ne pas imprimer
+            </Button>
+          ) : null
         }
       >
+        {apercu?.type === 'modifies' &&
+          apercu.items.map((it) => (
+            <ItemPages
+              key={cleRef(it.kind, it.data.id)}
+              item={it}
+              chapterName={chapter?.label}
+              classeurName={classeurName}
+              establishment={establishment}
+              periodicites={periodicites}
+            />
+          ))}
         {/* Sélection : chaque élément avec sa propre numérotation, sans
             page de garde ni sommaire. */}
         {apercu?.type === 'selection' &&

@@ -23,6 +23,7 @@
  */
 
 import { telechargerBlob, telechargerTexte } from '#/lib/classeur/download.ts'
+import { imagesReferencees, telechargerImage } from '#/lib/classeur/images.ts'
 import { sanitizeFilename, stripAccents } from '#/lib/classeur/slug.ts'
 import { flattenItems } from '#/lib/classeur/types.ts'
 import type {
@@ -172,6 +173,84 @@ export interface OptionsArchive {
    * `sort_order` (export d'un seul chapitre, qui garde son rang réel).
    */
   numerotation?: 'position' | 'sort_order'
+  /**
+   * Lecture d'une image du classeur (`telechargerImage` dans l'app). Donnée,
+   * les images des documents sont mises dans un dossier `images/` à la
+   * racine de l'archive et les chemins réécrits vers lui ; absente, le
+   * texte garde les chemins de l'app (comme avant le 2026-11-13).
+   */
+  lireImage?: (chemin: string) => Promise<Blob>
+}
+
+/** Dossier des images à la racine d'une archive. */
+export const DOSSIER_IMAGES = 'images'
+
+/** Le nom de fichier d'une image dans l'archive (`<uuid>.webp`). */
+function nomImage(chemin: string): string {
+  return chemin.slice(chemin.indexOf('/') + 1).toLowerCase()
+}
+
+const RE_LIEN_IMAGE =
+  /(!\[[^\]]*\]\(\s*<?)([0-9]{1,12}\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.webp)/gi
+
+/**
+ * Réécrit les chemins d'images connus (`<classeur>/<uuid>.webp`) vers
+ * `<prefixe><uuid>.webp`. Les autres (emplacement à insérer, image non
+ * lue) restent tels quels.
+ */
+export function redirigerImages(
+  markdown: string,
+  connues: ReadonlySet<string>,
+  prefixe: string,
+): string {
+  return markdown.replace(
+    RE_LIEN_IMAGE,
+    (tout: string, debut: string, chemin: string) =>
+      connues.has(chemin.toLowerCase())
+        ? `${debut}${prefixe}${nomImage(chemin)}`
+        : tout,
+  )
+}
+
+interface DossierZip {
+  file: (nom: string, donnees: Uint8Array | string) => unknown
+}
+
+/**
+ * Lit les images référencées par les documents et les range dans le
+ * dossier `images/` de l'archive. Rend les chemins effectivement mis : une
+ * image illisible (supprimée, réseau) est sautée, son lien reste.
+ */
+async function ajouterImages(
+  zip: { folder: (nom: string) => DossierZip | null },
+  documents: readonly { content: string; deleted_at: string | null }[],
+  lireImage: (chemin: string) => Promise<Blob>,
+): Promise<Set<string>> {
+  const chemins = new Set<string>()
+  for (const d of documents) {
+    if (d.deleted_at !== null) continue
+    for (const c of imagesReferencees(d.content)) chemins.add(c)
+  }
+  const mises = new Set<string>()
+  if (chemins.size === 0) return mises
+  const dossier = zip.folder(DOSSIER_IMAGES)
+  if (!dossier) return mises
+  // Quatre à la fois : assez pour aller vite, sans noyer la base.
+  const liste = [...chemins]
+  for (let i = 0; i < liste.length; i += 4) {
+    await Promise.all(
+      liste.slice(i, i + 4).map(async (c) => {
+        try {
+          const blob = await lireImage(c)
+          dossier.file(nomImage(c), new Uint8Array(await blob.arrayBuffer()))
+          mises.add(c)
+        } catch {
+          // Image illisible : le lien reste, rien ne casse.
+        }
+      }),
+    )
+  }
+  return mises
 }
 
 /**
@@ -195,6 +274,14 @@ export async function construireArchiveMarkdown(
   const tries = [...chapters].sort(
     (a, b) => a.sort_order - b.sort_order || a.id - b.id,
   )
+  const idsChapitres = new Set(tries.map((c) => c.id))
+  const images = options.lireImage
+    ? await ajouterImages(
+        zip,
+        content.documents.filter((d) => idsChapitres.has(d.chapter_id)),
+        options.lireImage,
+      )
+    : new Set<string>()
 
   tries.forEach((ch, index) => {
     const numero = numerotation === 'sort_order' ? ch.sort_order : index + 1
@@ -203,9 +290,12 @@ export async function construireArchiveMarkdown(
 
     const items = flattenItems(contenuDuChapitre(content, ch.id))
     items.forEach((item, i) => {
+      const texte = elementEnMarkdown(item, periodicites)
       dossier.file(
         nomFichierElement(i + 1, item.data.title),
-        elementEnMarkdown(item, periodicites),
+        images.size > 0
+          ? redirigerImages(texte, images, `../${DOSSIER_IMAGES}/`)
+          : texte,
       )
     })
   })
@@ -236,6 +326,120 @@ function contenuDuChapitre(
 }
 
 // ---------------------------------------------------------------------------
+// Un seul fichier (2026-11-13, demande utilisateur : « tout dans un seul
+// fichier MD », images gérées : le .md et un dossier images/ dans un ZIP)
+// ---------------------------------------------------------------------------
+
+/**
+ * Décale les titres Markdown de `n` niveaux (plafond `######`), hors des
+ * blocs de code : un document rangé sous son chapitre garde sa hiérarchie.
+ */
+export function decalerTitres(markdown: string, n: number): string {
+  let dansCode = false
+  return markdown
+    .split('\n')
+    .map((ligne) => {
+      if (/^\s*(```|~~~)/.test(ligne)) {
+        dansCode = !dansCode
+        return ligne
+      }
+      if (dansCode) return ligne
+      const m = /^(#{1,6})(\s.*|$)/.exec(ligne)
+      if (!m) return ligne
+      return `${'#'.repeat(Math.min(6, m[1].length + n))}${m[2]}`
+    })
+    .join('\n')
+}
+
+/**
+ * Le classeur entier en UN texte Markdown : nom du classeur en `#`, chaque
+ * chapitre en `##` (numéroté, avec sa description), chaque élément en `###`
+ * et le contenu des documents décalé de deux niveaux.
+ */
+export function classeurEnMarkdown(
+  classeurName: string,
+  chapters: readonly DbChapter[],
+  content: ChapterContent,
+  periodicites: readonly DbPeriodicite[] = [],
+): string {
+  const nom = classeurName.trim() || NOM_CLASSEUR_REPLI
+  const tries = [...chapters].sort(
+    (a, b) => a.sort_order - b.sort_order || a.id - b.id,
+  )
+  const blocs: string[] = [`# ${nom}`]
+  tries.forEach((ch, index) => {
+    const desc = ch.description.trim()
+    blocs.push(
+      `## ${String(index + 1)}. ${ch.label.trim() || SANS_TITRE}${desc === '' ? '' : `\n\n${desc}`}`,
+    )
+    for (const item of flattenItems(contenuDuChapitre(content, ch.id))) {
+      if (item.data.deleted_at !== null) continue
+      // Chaque rendu commence par `# titre` : décalé de deux, il devient
+      // `### titre` sous le chapitre.
+      blocs.push(decalerTitres(elementEnMarkdown(item, periodicites).trim(), 2))
+    }
+  })
+  return `${blocs.join('\n\n')}\n`
+}
+
+/**
+ * L'archive du fichier unique : `<classeur>.md` à la racine et, s'il y a
+ * des images lisibles, le dossier `images/` à côté.
+ */
+export async function construireMarkdownUnique(
+  classeurName: string,
+  chapters: readonly DbChapter[],
+  content: ChapterContent,
+  options: Omit<OptionsArchive, 'numerotation'> = {},
+): Promise<Blob> {
+  const { default: JSZip } = await import('jszip')
+  const zip = new JSZip()
+  const ids = new Set(chapters.map((c) => c.id))
+  const images = options.lireImage
+    ? await ajouterImages(
+        zip,
+        content.documents.filter((d) => ids.has(d.chapter_id)),
+        options.lireImage,
+      )
+    : new Set<string>()
+  const texte = classeurEnMarkdown(
+    classeurName,
+    chapters,
+    content,
+    options.periodicites ?? [],
+  )
+  zip.file(
+    `${nomBase(classeurName)}.md`,
+    images.size > 0
+      ? redirigerImages(texte, images, `${DOSSIER_IMAGES}/`)
+      : texte,
+  )
+  const octets = await zip.generateAsync({ type: 'uint8array' })
+  return new Blob([octets as BlobPart], { type: 'application/zip' })
+}
+
+function nomBase(classeurName: string): string {
+  return (
+    sanitizeFilename(classeurName.trim() || NOM_CLASSEUR_REPLI) ||
+    NOM_CLASSEUR_REPLI
+  )
+}
+
+/** Le classeur en un seul .md avec ses images → `<classeur> (un fichier).zip`. */
+export async function exporterClasseurMarkdownUnique(
+  classeurName: string,
+  chapters: readonly DbChapter[],
+  content: ChapterContent,
+  periodicites: readonly DbPeriodicite[] = [],
+): Promise<void> {
+  const blob = await construireMarkdownUnique(classeurName, chapters, content, {
+    periodicites,
+    lireImage: telechargerImage,
+  })
+  telechargerBlob(`${nomBase(classeurName)} (un fichier).zip`, blob)
+}
+
+// ---------------------------------------------------------------------------
 // Points d'entrée (téléchargement)
 // ---------------------------------------------------------------------------
 
@@ -256,6 +460,7 @@ export async function exporterClasseurZip(
   const blob = await construireArchiveMarkdown(chapters, content, {
     periodicites,
     numerotation: 'position',
+    lireImage: telechargerImage,
   })
   telechargerBlob(nom, blob)
 }
@@ -275,6 +480,7 @@ export async function exporterChapitreZip(
   const blob = await construireArchiveMarkdown([chapter], content, {
     periodicites,
     numerotation: 'sort_order',
+    lireImage: telechargerImage,
   })
   telechargerBlob(nom, blob)
 }

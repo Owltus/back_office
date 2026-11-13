@@ -736,16 +736,19 @@ export function LigneActionSquelette() {
  */
 const SECTIONS_ACCUEIL: { cle: string; lignes: string[] }[] = [
   { cle: 'contenu', lignes: ['nouveau', 'images'] },
-  { cle: 'imprimer', lignes: ['pdf', 'sommaire'] },
-  { cle: 'echanger', lignes: ['json', 'import', 'markdown'] },
+  { cle: 'imprimer', lignes: ['pdf', 'modifies', 'sommaire'] },
+  {
+    cle: 'echanger',
+    lignes: ['json', 'import', 'markdown-unique', 'markdown'],
+  },
   { cle: 'historique', lignes: ['historique', 'corbeille'] },
 ]
 
 /**
  * /classeur/$id (accueil) : champ de recherche pleine largeur puis LE
  * panneau, relevé sur le DOM de l'accueil : quatre sections (intitulé puis
- * lignes) Contenu (2), Imprimer (2), Échanger et sauvegarder (3),
- * Historique et sécurité (2). Neuf lignes.
+ * lignes) Contenu (2), Imprimer (3), Échanger et sauvegarder (4),
+ * Historique et sécurité (2). Onze lignes.
  */
 export function FormeClasseurDashboard() {
   return (

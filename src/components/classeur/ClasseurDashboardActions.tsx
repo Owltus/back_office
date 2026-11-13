@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AlertCircle, CheckCircle2 } from 'lucide-react'
 
@@ -6,6 +7,7 @@ import { ClasseurDashboard } from '#/components/classeur/ClasseurDashboard.tsx'
 import type {
   DashboardBusy,
   DashboardContexte,
+  EtatModifies,
 } from '#/components/classeur/ClasseurDashboard.tsx'
 import { CorbeilleDialog } from '#/components/classeur/dialogs/CorbeilleDialog.tsx'
 import { ExportJsonClasseurDialog } from '#/components/classeur/dialogs/ExportJsonClasseurDialog.tsx'
@@ -14,13 +16,27 @@ import { ImagesDialog } from '#/components/classeur/dialogs/ImagesDialog.tsx'
 import { MergePreviewDialog } from '#/components/classeur/dialogs/MergePreviewDialog.tsx'
 import { ClasseurCoverPage } from '#/components/classeur/print/ClasseurCoverPage.tsx'
 import { useDroitsClasseur } from '#/components/classeur/hooks/useDroitsClasseur.ts'
-import { ChapterPrintPages } from '#/components/classeur/print/ItemPages.tsx'
+import {
+  ChapterPrintPages,
+  ItemPages,
+} from '#/components/classeur/print/ItemPages.tsx'
+import { useImpressionsSuivies } from '#/components/classeur/hooks/useImpressionsSuivies.ts'
+import { Button } from '#/components/ui/button.tsx'
 import { nomFichierImpression } from '#/lib/classeur/print/nomFichierImpression.ts'
 import { PrintPreview } from '#/components/classeur/print/PrintPreview.tsx'
 import { TableOfContentsPage } from '#/components/classeur/print/TableOfContentsPage.tsx'
 import { Alert, AlertDescription } from '#/components/ui/alert.tsx'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
-import { exporterClasseurZip } from '#/lib/classeur/exportMarkdown.ts'
+import {
+  exporterClasseurMarkdownUnique,
+  exporterClasseurZip,
+} from '#/lib/classeur/exportMarkdown.ts'
+import {
+  elementsModifies,
+  jamaisImprime,
+} from '#/lib/classeur/impressionsSuivies.ts'
+import type { Empreintes } from '#/lib/classeur/impressionsSuivies.ts'
+import { cleRef } from '#/lib/classeur/ordre.ts'
 import { classeurKeys } from '#/lib/classeur/keys.ts'
 import type { ResultatFusion } from '#/lib/classeur/merge/apply.ts'
 import { buildEstablishment } from '#/lib/classeur/naming.ts'
@@ -31,19 +47,49 @@ import {
   trierChapitres,
 } from '#/lib/classeur/sommaire.ts'
 import { flattenItems } from '#/lib/classeur/types.ts'
-import type { DbPeriodicite } from '#/lib/classeur/types.ts'
+import type { ChapterItem, DbPeriodicite } from '#/lib/classeur/types.ts'
 import { MAX_JSON_BYTES, fileTooLarge } from '#/lib/shared/files.ts'
 
 /** Ce que montre l'aperçu avant impression du tableau de bord. */
 type Apercu =
   | { type: 'sommaire'; ctx: DashboardContexte }
   | { type: 'pdf'; ctx: DashboardContexte }
+  | { type: 'modifies'; ctx: DashboardContexte; items: ChapterItem[] }
   | null
 
 /** Un export à télécharger (Markdown ZIP ; le JSON passe par son dialogue). */
 interface Export {
-  type: 'markdown'
+  type: 'markdown' | 'markdown-unique'
   ctx: DashboardContexte
+}
+
+/** Tous les éléments du classeur, chapitre par chapitre, dans l'ordre. */
+function elementsDuClasseur(ctx: DashboardContexte): ChapterItem[] {
+  return trierChapitres(ctx.chapters).flatMap((ch) =>
+    flattenItems(contenuDuChapitre(ctx.content, ch.id)),
+  )
+}
+
+/** Phrase de la ligne « Documents modifiés ». */
+export function decrireModifies(
+  items: readonly ChapterItem[],
+  empreintes: Empreintes,
+): EtatModifies {
+  if (jamaisImprime(empreintes))
+    return {
+      description: 'Jamais imprimé sur ce poste : tout le classeur',
+      aucun: items.length === 0,
+    }
+  const n = elementsModifies(items, empreintes).length
+  if (n === 0)
+    return {
+      description: 'Tout est à jour depuis votre dernière impression',
+      aucun: true,
+    }
+  return {
+    description: `${String(n)} document${n > 1 ? 's' : ''} à réimprimer`,
+    aucun: false,
+  }
 }
 
 /** Phrase de bilan d'une fusion, au pluriel simple. */
@@ -99,6 +145,7 @@ export function ClasseurDashboardActions({
   // Export JSON du classeur complet : son dialogue (Copier / Télécharger).
   const [exportJson, setExportJson] = useState<DashboardContexte | null>(null)
   const { canWrite } = useDroitsClasseur(classeurId)
+  const suivi = useImpressionsSuivies(classeurId)
   const [bilan, setBilan] = useState<string | null>(null)
   const [erreurFichier, setErreurFichier] = useState<string | null>(null)
 
@@ -110,14 +157,13 @@ export function ClasseurDashboardActions({
     })
 
   const exporter = useMutation({
-    mutationFn: async ({ ctx }: Export) => {
+    mutationFn: async ({ type, ctx }: Export) => {
       const perios = await lirePeriodicites()
-      await exporterClasseurZip(
-        ctx.classeur.name,
-        ctx.chapters,
-        ctx.content,
-        perios,
-      )
+      const exporterVers =
+        type === 'markdown-unique'
+          ? exporterClasseurMarkdownUnique
+          : exporterClasseurZip
+      await exporterVers(ctx.classeur.name, ctx.chapters, ctx.content, perios)
     },
   })
 
@@ -162,6 +208,29 @@ export function ClasseurDashboardActions({
   const classeurName = ctx?.classeur.name
   const establishment = ctx ? buildEstablishment(ctx.classeur) : undefined
   const sommaire = ctx ? construireSommaire(ctx.chapters, ctx.content) : []
+  // Ce qui part à l'impression : retenu une fois imprimé (« Documents
+  // modifiés » ne repropose alors que ce qui change ensuite).
+  const imprimes: ChapterItem[] = !ctx
+    ? []
+    : apercu?.type === 'pdf'
+      ? elementsDuClasseur(ctx)
+      : apercu?.type === 'modifies'
+        ? apercu.items
+        : []
+  let pagesModifies: ReactNode = null
+  if (apercu?.type === 'modifies' && ctx) {
+    const parChapitre = new Map(ctx.chapters.map((c) => [c.id, c.label]))
+    pagesModifies = imprimes.map((it) => (
+      <ItemPages
+        key={cleRef(it.kind, it.data.id)}
+        item={it}
+        chapterName={parChapitre.get(it.data.chapter_id) ?? ''}
+        classeurName={classeurName}
+        establishment={establishment}
+        periodicites={periodicites}
+      />
+    ))
+  }
 
   return (
     <>
@@ -196,6 +265,21 @@ export function ClasseurDashboardActions({
         onExporterPdf={(c) => ouvrirApercu.mutate({ type: 'pdf', ctx: c })}
         onExporterMarkdown={(c) =>
           exporter.mutate({ type: 'markdown', ctx: c })
+        }
+        onExporterMarkdownUnique={(c) =>
+          exporter.mutate({ type: 'markdown-unique', ctx: c })
+        }
+        onImprimerModifies={(c) =>
+          ouvrirApercu.mutate({
+            type: 'modifies',
+            ctx: c,
+            items: elementsModifies(elementsDuClasseur(c), suivi.empreintes),
+          })
+        }
+        etatModifies={
+          suivi.pret
+            ? (c) => decrireModifies(elementsDuClasseur(c), suivi.empreintes)
+            : undefined
         }
         onExporterJson={setExportJson}
         onImporter={ouvrirImport}
@@ -253,16 +337,40 @@ export function ClasseurDashboardActions({
         }}
         nomFichier={nomFichierImpression({
           classeur: classeurName,
-          titre: apercu?.type === 'sommaire' ? 'Sommaire' : undefined,
+          titre:
+            apercu?.type === 'sommaire'
+              ? 'Sommaire'
+              : apercu?.type === 'modifies'
+                ? 'Documents modifiés'
+                : undefined,
         })}
         title={
           apercu?.type === 'sommaire'
             ? `${classeurName} : sommaire`
             : apercu?.type === 'pdf'
               ? `${classeurName} : classeur complet`
-              : undefined
+              : apercu?.type === 'modifies'
+                ? `${classeurName} : ${String(imprimes.length)} document${imprimes.length > 1 ? 's' : ''} modifié${imprimes.length > 1 ? 's' : ''}`
+                : undefined
+        }
+        onImprime={() => suivi.retenir(imprimes)}
+        actions={
+          apercu?.type === 'modifies' && imprimes.length > 0 ? (
+            <Button
+              size="sm"
+              variant="outline"
+              className="pointer-coarse:h-11"
+              onClick={() => {
+                suivi.retenir(imprimes)
+                setApercu(null)
+              }}
+            >
+              Déjà à jour, ne pas imprimer
+            </Button>
+          ) : null
         }
       >
+        {pagesModifies}
         {apercu?.type === 'sommaire' && ctx && (
           <TableOfContentsPage
             chapters={sommaire}

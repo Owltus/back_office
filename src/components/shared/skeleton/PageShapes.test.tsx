@@ -243,7 +243,7 @@ describe('Classeur — quatre silhouettes relevées sur les boards', () => {
     ).toBe(3)
   })
 
-  it('l’accueil dessine la recherche puis UN panneau de 4 sections : 2, 2, 3, 2 lignes (9)', () => {
+  it('l’accueil dessine la recherche puis UN panneau de 4 sections : 2, 3, 4, 2 lignes (11)', () => {
     const { container } = render(<FormeClasseurDashboard />)
     expect(container.querySelectorAll('.h-9.w-full').length).toBe(1)
     // Disposition du 2026-10-04 (panneau en liste) : Contenu (Nouveau
@@ -259,7 +259,7 @@ describe('Classeur — quatre silhouettes relevées sur les boards', () => {
     const sections = Array.from(panneau.children)
     expect(
       sections.map((s) => s.querySelectorAll('[data-ligne-squelette]').length),
-    ).toEqual([2, 2, 3, 2])
+    ).toEqual([2, 3, 4, 2])
     for (const s of sections) {
       expect(s.hasAttribute('data-section-actions')).toBe(true)
       // Un intitulé (UNE barre), puis la liste des lignes.

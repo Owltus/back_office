@@ -16,6 +16,13 @@ import { TooltipProvider } from '#/components/ui/tooltip.tsx'
 const etatTest = vi.hoisted(() => ({ ordreEnErreur: false }))
 
 vi.mock('#/lib/supabase.ts', () => ({ supabase: {} }))
+vi.mock('#/components/classeur/hooks/useImpressionsSuivies.ts', () => ({
+  useImpressionsSuivies: () => ({
+    empreintes: {},
+    pret: true,
+    retenir: vi.fn(),
+  }),
+}))
 vi.mock('#/lib/classeur/service.ts', () => ({ createItem: vi.fn() }))
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children }: { children: unknown }) => children,

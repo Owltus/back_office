@@ -7,6 +7,7 @@ import {
   Bookmark,
   ChevronRight,
   FileDown,
+  FilePenLine,
   FileText,
   FileUp,
   History,
@@ -86,7 +87,21 @@ export interface ClasseurSearchResult {
 
 /** Action en cours, pour l'état de la carte concernée (Loader2). */
 export type DashboardBusy =
-  'pdf' | 'markdown' | 'json' | 'import' | 'sommaire' | null
+  | 'pdf'
+  | 'markdown'
+  | 'markdown-unique'
+  | 'json'
+  | 'import'
+  | 'sommaire'
+  | 'modifies'
+  | null
+
+/** Ce que dit la ligne « Documents modifiés » (calculé par l'appelant). */
+export interface EtatModifies {
+  description: string
+  /** Rien à réimprimer : la ligne est grisée. */
+  aucun: boolean
+}
 
 const ICONE_KIND: Record<ItemKind, LucideIcon> = {
   document: FileText,
@@ -122,6 +137,9 @@ export function ClasseurDashboard({
   onSommaire,
   onExporterPdf,
   onExporterMarkdown,
+  onExporterMarkdownUnique,
+  onImprimerModifies,
+  etatModifies,
   onExporterJson,
   onImporter,
   onFichierDepose,
@@ -136,6 +154,11 @@ export function ClasseurDashboard({
   onSommaire?: (ctx: DashboardContexte) => void
   onExporterPdf?: (ctx: DashboardContexte) => void
   onExporterMarkdown?: (ctx: DashboardContexte) => void
+  /** Tout le classeur dans un seul .md, livré en ZIP avec ses images. */
+  onExporterMarkdownUnique?: (ctx: DashboardContexte) => void
+  /** Imprimer ce qui a changé depuis la dernière impression. */
+  onImprimerModifies?: (ctx: DashboardContexte) => void
+  etatModifies?: (ctx: DashboardContexte) => EtatModifies
   onExporterJson?: (ctx: DashboardContexte) => void
   onImporter?: (ctx: DashboardContexte) => void
   /** Fichier .json DÉPOSÉ sur la carte Importer (Registre acceptait le
@@ -264,10 +287,13 @@ export function ClasseurDashboard({
         ? contenuQ.error
         : null
 
-  const sectionImprimer = onExporterPdf || onSommaire
+  const sectionImprimer = onExporterPdf || onSommaire || onImprimerModifies
+  const modifies =
+    contexte !== null && etatModifies ? etatModifies(contexte) : null
   const sectionEchanger =
     onExporterJson ||
     onExporterMarkdown ||
+    onExporterMarkdownUnique ||
     ((canWrite || reserverEcriture) && onImporter)
   const sectionHistorique =
     onHistorique || ((canWrite || reserverEcriture) && onCorbeille)
@@ -451,6 +477,19 @@ export function ClasseurDashboard({
                     busy={busy === 'pdf'}
                   />
                 )}
+                {onImprimerModifies && (
+                  <LigneAction
+                    icon={FilePenLine}
+                    title="Documents modifiés"
+                    description={
+                      modifies?.description ??
+                      'Depuis votre dernière impression'
+                    }
+                    onClick={action(onImprimerModifies)}
+                    disabled={!pret || modifies?.aucun === true}
+                    busy={busy === 'modifies'}
+                  />
+                )}
                 {onSommaire && (
                   <LigneAction
                     icon={List}
@@ -496,11 +535,22 @@ export function ClasseurDashboard({
                 {!canWrite && reserverEcriture && onImporter && (
                   <LigneActionSquelette />
                 )}
+                {onExporterMarkdownUnique && (
+                  <LigneAction
+                    icon={FileText}
+                    title="Markdown en un seul fichier"
+                    description="Tout le classeur et ses images, en ZIP"
+                    titreOccupe="Export en cours..."
+                    onClick={action(onExporterMarkdownUnique)}
+                    disabled={!pret || busy !== null}
+                    busy={busy === 'markdown-unique'}
+                  />
+                )}
                 {onExporterMarkdown && (
                   <LigneAction
                     icon={Archive}
-                    title="Exporter en Markdown"
-                    description="Archive ZIP de tous les documents"
+                    title="Markdown par chapitres"
+                    description="Un dossier par chapitre et les images, en ZIP"
                     titreOccupe="Export en cours..."
                     onClick={action(onExporterMarkdown)}
                     disabled={!pret || busy !== null}

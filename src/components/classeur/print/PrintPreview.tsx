@@ -51,6 +51,10 @@ interface PrintPreviewProps {
    * le bouton du dialogue s'en charge déjà.
    */
   containerRef?: RefObject<HTMLDivElement | null>
+  /** Appelé après l'envoi à l'imprimante (ou au PDF du navigateur). */
+  onImprime?: () => void
+  /** Boutons en plus, à gauche d'Imprimer. */
+  actions?: ReactNode
   /** Les pages A4 (`DocumentPages`, `TrackingSheetPage`, …). */
   children: ReactNode
 }
@@ -78,6 +82,8 @@ export function PrintPreview({
   title = 'Aperçu avant impression',
   nomFichier,
   containerRef,
+  onImprime,
+  actions,
   children,
 }: PrintPreviewProps) {
   const innerRef = useRef<HTMLDivElement | null>(null)
@@ -140,6 +146,7 @@ export function PrintPreview({
     setError(null)
     try {
       await printViaIframe(container, { nomFichier })
+      onImprime?.()
     } catch (err) {
       setError(
         err instanceof MiseEnPageEnCours
@@ -186,6 +193,7 @@ export function PrintPreview({
             </DialogClose>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
+            {actions}
             <Button
               size="sm"
               className="pointer-coarse:h-11"
