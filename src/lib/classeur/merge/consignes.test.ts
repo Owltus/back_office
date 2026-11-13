@@ -48,7 +48,7 @@ const PARTIES: Array<[string, string[]]> = [
   [
     '1. À QUI TU PARLES',
     [
-      "personnel d'hôtel",
+      'des personnes de terrain, pas des informaticiens',
       'Dans la conversation : mots simples, une chose à la fois',
       'Ne parle jamais de JSON',
       'commence par le lui demander',
@@ -408,4 +408,18 @@ describe("mode d'emploi — réponse courte (navigateur, 2026-10-22)", () => {
       "pour ajouter, supprimer ou déplacer un chapitre, il faut l'export du classeur entier",
     )
   })
+})
+
+describe("mode d'emploi — généraliste (décision utilisateur du 2026-11-13)", () => {
+  it.each(Object.entries(LES_TROIS))(
+    '%s : rien sur un établissement ni sur les classeurs réels',
+    (_nom, instructions) => {
+      // Le nom du classeur, du chapitre ou du document (la portée) vient de
+      // l'export : il est retiré avant le contrôle.
+      const t = texte(instructions?.slice(1))
+      expect(t).not.toMatch(
+        /okko|nantes|h[ôo]tel|r[ée]ception|chambre|r[ée]servation|petit-d[ée]jeuner|PMS/i,
+      )
+    },
+  )
 })

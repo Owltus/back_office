@@ -866,7 +866,11 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     sigle expliqué à sa première apparition, feuille de suivi PROPOSÉE pour
     un contrôle périodique, donnée personnelle signalée (remplacer par une
     fonction), un document = un sujet (couper, regrouper), photos à venir aux
-    étapes clés, titre vague signalé. Plafond relevé à 13 000 octets (12 502
+    étapes clés, titre vague signalé. GÉNÉRALISTE (décision utilisateur du
+    même jour : « tu es un outil généraliste, pas de trame en lien avec
+    l'hôtel ») : ni établissement, ni métier, ni logiciel, ni exemple tiré
+    des classeurs réels dans le mode d'emploi ; figé par le test
+    « généraliste » de `consignes.test.ts`. Plafond relevé à 13 000 octets (12 502
     mesurés). Miroir dans `relecture.ts` : gras → titre borné à `###`,
     « Élément de liste long » pour une puce (« Étape longue » pour `1.`),
     `alertesForme` (plus de 3 encadrés typés, tableau d'étapes numérotées,
