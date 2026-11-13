@@ -198,7 +198,7 @@ export function MergePreviewDialog({
         onOpenChange(o)
       }}
     >
-      <DialogContent className="flex h-[92dvh] flex-col gap-4 overflow-y-auto sm:max-w-6xl">
+      <DialogContent className="flex h-[92dvh] flex-col gap-4 overflow-y-auto sm:max-w-[min(96vw,1800px)]">
         <DialogHeader>
           <DialogTitle>Importer</DialogTitle>
           <DialogDescription>

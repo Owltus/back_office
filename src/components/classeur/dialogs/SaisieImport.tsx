@@ -184,7 +184,7 @@ export function SaisieImport({
       {...depot}
       data-saisie-import
       className={cn(
-        'grid flex-1 gap-4 sm:grid-cols-2',
+        'grid flex-1 gap-4 sm:grid-cols-[3fr_1fr]',
         disabled && 'opacity-60',
       )}
     >

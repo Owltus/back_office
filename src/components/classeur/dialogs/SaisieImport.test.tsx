@@ -91,7 +91,7 @@ describe('SaisieImport — deux zones', () => {
     const deposer = document.querySelector('[data-zone="deposer"]')
     expect(coller?.className).toContain('min-h-72')
     expect(deposer?.className).toContain('min-h-72')
-    expect(coller?.parentElement?.className).toContain('sm:grid-cols-2')
+    expect(coller?.parentElement?.className).toContain('sm:grid-cols-[3fr_1fr]')
     expect(coller?.parentElement).toBe(deposer?.parentElement)
   })
 })
