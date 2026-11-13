@@ -83,7 +83,7 @@ export function ExportJsonClasseurDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[90dvh] flex-col overflow-y-auto sm:max-w-lg">
+      <DialogContent className="flex max-h-[90dvh] flex-col gap-5 overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Exporter en JSON</DialogTitle>
           <DialogDescription>

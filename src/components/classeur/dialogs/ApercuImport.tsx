@@ -525,7 +525,7 @@ function LigneApercu({
               <DiffTexte
                 lignes={diff}
                 ouvertParDefaut={false}
-                className="max-h-80 overflow-auto"
+                className="max-h-[60vh] overflow-auto"
               />
             )
           )}

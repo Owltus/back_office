@@ -388,7 +388,7 @@ export function CorpsImport({
           )}
           <AvertissementsImport avertissements={apercu.plan.warnings} />
           {apercu.lignes.length > 0 && (
-            <div className="-mr-1 min-h-32 flex-1 overflow-y-auto pr-1">
+            <div className="-mr-1 min-h-48 flex-1 overflow-y-auto pr-1">
               <ApercuImport
                 lignes={apercu.lignes}
                 chapitres={groupeParChapitre ? apercu.chapitres : undefined}

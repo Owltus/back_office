@@ -31,7 +31,7 @@ const ATTENTE_FRAPPE_MS = 600
 const ACCEPTE = '.json,.txt,application/json,text/plain'
 
 /** Hauteur commune des deux zones. */
-const HAUTEUR_ZONE = 'min-h-56'
+const HAUTEUR_ZONE = 'min-h-72'
 
 function estChampSaisie(el: Element | null): boolean {
   if (el === null) return false
@@ -183,7 +183,10 @@ export function SaisieImport({
     <div
       {...depot}
       data-saisie-import
-      className={cn('grid gap-3 sm:grid-cols-2', disabled && 'opacity-60')}
+      className={cn(
+        'grid flex-1 gap-4 sm:grid-cols-2',
+        disabled && 'opacity-60',
+      )}
     >
       <input
         ref={inputRef}

@@ -63,7 +63,7 @@ export function RelectureImportDialog({
         if (!o && !enCours) onAnnuler()
       }}
     >
-      <DialogContent className="flex max-h-[90dvh] flex-col sm:max-w-xl">
+      <DialogContent className="flex h-[85dvh] flex-col sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>Avant d'importer</DialogTitle>
           <DialogDescription>

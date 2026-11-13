@@ -324,7 +324,7 @@ export function EchangeJsonDialog({
         onOpenChange(o)
       }}
     >
-      <DialogContent className="flex max-h-[90dvh] flex-col gap-4 overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="flex h-[92dvh] flex-col gap-4 overflow-y-auto sm:max-w-6xl">
         <DialogHeader>
           <DialogTitle>Échange avec un LLM</DialogTitle>
           <DialogDescription>
