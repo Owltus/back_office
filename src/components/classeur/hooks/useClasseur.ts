@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { QueryClient } from '@tanstack/react-query'
 
@@ -121,13 +121,23 @@ export function useClasseurContent(classeurId: number) {
   })
 }
 
-/** Référentiel des périodicités : ne change jamais en séance. */
-export function usePeriodicites() {
-  return useQuery({
+/**
+ * Référentiel des périodicités. Rarement changé : gardé en cache, sauf
+ * pour un export (`relire` : relu à chaque ouverture, demande utilisateur
+ * du 2026-11-13 : « tiens à jour les périodicités dans les métadonnées »).
+ * `aJour` est faux tant que cette relecture n'est pas revenue.
+ */
+export function usePeriodicites(relire = false) {
+  const q = useQuery({
     queryKey: classeurKeys.periodicites(),
     queryFn: fetchPeriodicites,
     staleTime: Infinity,
   })
+  const { refetch } = q
+  useEffect(() => {
+    if (relire) void refetch()
+  }, [relire, refetch])
+  return { ...q, aJour: q.data !== undefined && !(relire && q.isFetching) }
 }
 
 /**

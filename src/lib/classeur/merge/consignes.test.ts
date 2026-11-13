@@ -49,7 +49,7 @@ const PARTIES: Array<[string, string[]]> = [
     '1. À QUI TU PARLES',
     [
       "personnel d'hôtel",
-      'Mots simples, une chose à la fois',
+      'Dans la conversation : mots simples, une chose à la fois',
       'Ne parle jamais de JSON',
       'commence par le lui demander',
       'poser une question sur le contenu',
@@ -169,6 +169,24 @@ const PARTIES: Array<[string, string[]]> = [
       'jamais une ligne en gras seule',
       'pas de niveau de titre sauté',
       "chaque image a une légende qui dit ce qu'elle montre",
+      // Forme des documents (audit du 2026-11-13) : le mode d'emploi des
+      // formes, pas seulement leur syntaxe.
+      'Le style court de la conversation ne vaut pas ici',
+      "`#` = grande partie d'un long document",
+      'jamais par un titre',
+      'CHOISIS LA FORME selon le contenu',
+      'un ou deux éléments = une phrase',
+      'tableau, cinq colonnes au plus',
+      'Gras rare',
+      'Un ou deux encadrés par document, trois au plus',
+      'ne recopie pas la même structure partout',
+      "(danger pour une personne, un bien, de l'argent ; AVANT l'action)",
+      "s'imprime dans une case",
+      // Les quatre natures et leurs réglages.
+      "à choisir selon l'usage",
+      'fixe le nombre de lignes',
+      "sa `description` dit ce que l'on signe",
+      'jamais dans un tableau vide de document',
       // Essai à blanc du 2026-10-23 : la syntaxe de la taille n'était pas montrée.
       'entre guillemets après le chemin (`![légende](chemin "pleine")`)',
     ],
@@ -331,10 +349,10 @@ describe("mode d'emploi — changements balisés (décision du 2026-10-23)", () 
 })
 
 describe("mode d'emploi — taille", () => {
-  it('moins de 11 ko par export (JSON sérialisé)', () => {
+  it('moins de 12 ko par export (JSON sérialisé)', () => {
     for (const [nom, i] of Object.entries(LES_TROIS)) {
       const octets = new TextEncoder().encode(JSON.stringify(i)).length
-      expect(octets, nom).toBeLessThan(11000)
+      expect(octets, nom).toBeLessThan(12000)
     }
   })
 })

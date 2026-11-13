@@ -321,7 +321,8 @@ export const SCHEMA_DESCRIPTIF = {
       label: { type: 'string', description: 'Libellé de la périodicité.' },
       nombre: {
         type: 'integer',
-        description: 'Nombre de colonnes dans le tableau de suivi.',
+        description:
+          'Nombre de lignes du tableau de suivi (une par contrôle de la période imprimée).',
       },
     },
   },
@@ -748,8 +749,9 @@ export function construireExport(
       generated_at: horodatageExport(maintenant),
       note: pourIa ? NOTE_EXPORT : NOTE_INSTANTANE,
       schema: SCHEMA_DESCRIPTIF,
+      // Ordre du référentiel (Quotidien → Annuel), lisible par un LLM.
       periodicites: [...periodicites]
-        .sort((a, b) => a.id - b.id)
+        .sort((a, b) => a.sort_order - b.sort_order || a.id - b.id)
         .map((p) => ({ id: p.id, label: p.label, nombre: p.nombre })),
       ...(pourIa
         ? {

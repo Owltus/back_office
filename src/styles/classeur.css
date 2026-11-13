@@ -273,7 +273,7 @@
      #       case GRISE, chiffre noir, séparée du bandeau par un filet blanc ;
      ##      CARRÉ à bordures, ouvert en bas : le trait de la section, qui
              traverse la page, en forme le quatrième côté ;
-     ###     CARRÉ à bordure (l'étape de procédure), qui s'élargit en
+     ###     CARRÉ à bordure (sous-étape ; l'étape est un `##`), s'élargit en
              rectangle pour un numéro long (« 1.2 », « 1991 ») — le rond
              essayé a été refusé ;
      ####+   chiffre simple suivi d'un point, dans le style du titre. */

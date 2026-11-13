@@ -14,7 +14,13 @@ describe('AideMiseEnFormeDialog', () => {
   it('rend les exemples en vrais titres, listes, cases, tableau et encadré', () => {
     render(<AideMiseEnFormeDialog open onOpenChange={() => {}} />)
     const dialogue = screen.getByRole('dialog')
-    expect(dialogue.querySelector('.pdf-prose h2')?.textContent).toBe('Étapes')
+    // Grammaire des documents (2026-11-13) : `#` partie, `##` étape
+    // numérotée (numéro en case), `###` sous-partie.
+    expect(dialogue.querySelector('.pdf-prose h1')).not.toBeNull()
+    expect(dialogue.querySelector('.pdf-prose h2')?.textContent).toContain(
+      'Préparer la chambre',
+    )
+    expect(dialogue.querySelector('.pdf-prose h2 .etape-num')).not.toBeNull()
     expect(dialogue.querySelector('.pdf-prose strong')?.textContent).toBe(
       'important',
     )

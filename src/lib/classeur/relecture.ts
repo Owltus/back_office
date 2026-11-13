@@ -166,6 +166,13 @@ const REMPLISSAGE_MIN = 0.6
 // Miroir dans `merge/consignes.ts` (RÈGLES D'ÉCRITURE) : le LLM suit la même règle.
 const MOTS_PAR_ETAPE = 35
 
+/**
+ * Au-delà de ce nombre d'encadrés typés, un document est signalé : plus
+ * aucun ne ressort (audit du 2026-11-13 : jusqu'à 9 IMPORTANT dans un
+ * document). Miroir dans `merge/consignes.ts` (« trois au plus »).
+ */
+const ENCADRES_MAX = 3
+
 /** Pictogrammes et émojis (pas les flèches ni les signes typographiques). */
 const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B50}\u{2B55}]/u
 
@@ -286,6 +293,67 @@ function extrait(s: string, max = 40): string {
  *   `null` = pas de pagination (alertes de page non produites).
  * @param contexte voir `ContexteRelecture`.
  */
+/**
+ * Trois formes qui se lisent mal, relevées sur les documents réels : trop
+ * d'encadrés typés, un tableau d'étapes numérotées (« | 1 | 2 | 3 | », qui
+ * répète les titres), une section non numérotée réduite à une ligne.
+ * `utiles` = lignes hors blocs de code (les autres valent '').
+ */
+function alertesForme(utiles: readonly string[]): Alerte[] {
+  const sortie: Alerte[] = []
+
+  const encadres = utiles.flatMap((l, k) =>
+    /^\s*>\s*\[!(?:WARNING|IMPORTANT|TIP|NOTE|CAUTION)\]/i.test(l)
+      ? [k + 1]
+      : [],
+  )
+  if (encadres.length > ENCADRES_MAX) {
+    sortie.push({
+      ligne: encadres[ENCADRES_MAX],
+      message: `${String(encadres.length)} encadrés dans ce document : gardez-les pour l'essentiel (un ou deux, ${String(ENCADRES_MAX)} au plus), sinon plus aucun ne ressort.`,
+    })
+  }
+
+  utiles.forEach((l, k) => {
+    // En-tête de tableau fait seulement de numéros, suivi du séparateur.
+    const cases = /^\s*\|(.*)\|\s*$/
+      .exec(l)?.[1]
+      .split('|')
+      .map((c) => c.trim())
+    if (
+      cases !== undefined &&
+      cases.length >= 3 &&
+      cases.every((c) => /^\d{1,2}\.?$/.test(c)) &&
+      /^\s*\|?\s*:?-{3,}/.test(utiles[k + 1] ?? '')
+    ) {
+      sortie.push({
+        ligne: k + 1,
+        message:
+          "Tableau d'étapes numérotées : il répète les titres de la procédure. Retirez-le, les étapes suffisent.",
+      })
+    }
+
+    // Section `##` non numérotée qui ne contient qu'une ligne.
+    const titre = /^##\s+(\S.*)$/.exec(l)
+    if (titre && !/^\**\d/.test(titre[1])) {
+      let contenu = 0
+      let suite = k + 1
+      // Ses sous-parties `###` lui appartiennent : seul un `#` ou `##` la ferme.
+      while (suite < utiles.length && !/^#{1,2}\s/.test(utiles[suite])) {
+        if (utiles[suite].trim() !== '') contenu++
+        suite++
+      }
+      if (contenu === 1 && suite < utiles.length) {
+        sortie.push({
+          ligne: k + 1,
+          message: `Section d'une seule ligne : « ${extrait(titre[1])} ». Mettez cette ligne dans la phrase d'ouverture ou dans une autre section.`,
+        })
+      }
+    }
+  })
+  return sortie
+}
+
 export function alertesRelecture(
   markdown: string,
   imagesConnues: ReadonlyMap<string, InfoImage> | null,
@@ -487,7 +555,9 @@ export function alertesRelecture(
     // finie par « : » n'en est pas un).
     const faux = /^\s*(\*\*|__)([^*_]{1,80})\1\s*$/.exec(l)
     if (faux && !faux[2].trim().endsWith(':')) {
-      const niveau = Math.min(6, Math.max(2, niveauCorrige + 1))
+      // Jamais sous `###` : la grammaire des documents s'arrête là
+      // (consignes « rien en dessous »).
+      const niveau = Math.min(3, Math.max(2, niveauCorrige + 1))
       alertes.push({
         ligne,
         ...(bloc === null && {
@@ -495,21 +565,23 @@ export function alertesRelecture(
             `${'#'.repeat(niveau)} ${faux[2].trim()}`,
           ]),
         }),
-        message: `Ligne en gras utilisée comme titre : « ${extrait(faux[2])} ». Utilisez le bouton Sous-titre : un vrai titre ne reste jamais seul en bas de page.`,
+        message: `Ligne en gras utilisée comme titre : « ${extrait(faux[2])} ». Utilisez un bouton de titre : un vrai titre ne reste jamais seul en bas de page.`,
       })
     }
 
-    // Étape trop longue.
-    const etape = /^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?(.*)$/.exec(l)
+    // Étape (liste numérotée) ou élément de liste trop long.
+    const etape = /^\s*([-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?(.*)$/.exec(l)
     if (etape) {
-      const mots = etape[1]
+      const mots = etape[2]
         .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
         .split(/\s+/)
         .filter((m) => /[\p{L}\p{N}]/u.test(m)).length
       if (mots > MOTS_PAR_ETAPE) {
         alertes.push({
           ligne,
-          message: `Étape longue (${String(mots)} mots) : découpez-la en étapes plus courtes, une action par étape.`,
+          message: /\d/.test(etape[1])
+            ? `Étape longue (${String(mots)} mots) : découpez-la en étapes plus courtes, une action par étape.`
+            : `Élément de liste long (${String(mots)} mots) : une puce se lit d'un coup d'œil. Découpez-le, ou écrivez plutôt un paragraphe.`,
         })
       }
     }
@@ -575,6 +647,10 @@ export function alertesRelecture(
       niveauPrecedent = niveau
     }
   })
+
+  // Forme des documents (audit du 2026-11-13), mêmes règles que les
+  // consignes du LLM. Aucune correction : c'est une question de sens.
+  alertes.push(...alertesForme(utiles))
 
   // Blocs jamais fermés.
   for (const b of pile) {

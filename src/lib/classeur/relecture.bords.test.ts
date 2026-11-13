@@ -88,7 +88,7 @@ describe('relecture — blocs de code et directives', () => {
 describe('relecture — écriture', () => {
   it('ligne en gras seule : message exact, espaces tolérés', () => {
     expect(msgs('  **Accueil**  ')).toEqual([
-      'Ligne en gras utilisée comme titre : « Accueil ». Utilisez le bouton Sous-titre : un vrai titre ne reste jamais seul en bas de page.',
+      'Ligne en gras utilisée comme titre : « Accueil ». Utilisez un bouton de titre : un vrai titre ne reste jamais seul en bas de page.',
     ])
     expect(msgs('__Accueil__')).toHaveLength(1)
     expect(msgs('**Accueil** suite')).toEqual([])
@@ -97,8 +97,12 @@ describe('relecture — écriture', () => {
   })
   it('étape longue : message exact, puces, numéros, cases', () => {
     const mots = (n: number) => Array.from({ length: n }, () => 'mot').join(' ')
-    expect(msgs(`- ${mots(36)}`)).toEqual([
+    expect(msgs(`1. ${mots(36)}`)).toEqual([
       'Étape longue (36 mots) : découpez-la en étapes plus courtes, une action par étape.',
+    ])
+    // Une puce n'est pas une étape (audit du 2026-11-13).
+    expect(msgs(`- ${mots(36)}`)).toEqual([
+      "Élément de liste long (36 mots) : une puce se lit d'un coup d'œil. Découpez-le, ou écrivez plutôt un paragraphe.",
     ])
     expect(msgs(`- ${mots(35)}`)).toEqual([])
     expect(msgs(`  12. ${mots(36)}`)).toHaveLength(1)

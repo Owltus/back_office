@@ -848,6 +848,25 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     premier, jamais de consigne à écrire ; dès sa première réponse, le LLM
     compte les points à corriger et propose « tout corriger, voir la liste,
     ou plus tard », et après une modification ce qui reste (10 726 octets).
+    FORME DES DOCUMENTS (2026-11-13, audit multi-agents demandé par
+    l'utilisateur : « réponses pas jolies, jamais de grand titre, abus de
+    puces ») : les consignes excluaient `#` et ne donnaient que la syntaxe
+    (116 documents réels sans un `#`, moitié des lignes en puces, 77
+    IMPORTANT pour 11 WARNING, « Le principe » et un tableau-frise recopiés
+    dans 23 documents). Elles disent désormais ce que la page imprime et
+    QUAND choisir chaque forme et chaque nature d'élément (périodicité qui
+    fixe les lignes d'une feuille de suivi) ; GRAMMAIRE décidée par
+    l'assistant à la demande de l'utilisateur : ouverture en phrases (jamais
+    un titre), `#` grande partie d'un long document, `##` section ou étape
+    numérotée, `###` sous-partie, rien en dessous ; gras rare (bouton, mot
+    qui change l'action, pas les montants, décision utilisateur) ; un ou deux
+    encadrés, trois au plus. Plafond relevé à 12 000 octets (accord de
+    l'utilisateur). Miroir dans `relecture.ts` : gras → titre borné à `###`,
+    « Élément de liste long » pour une puce (« Étape longue » pour `1.`),
+    `alertesForme` (plus de 3 encadrés typés, tableau d'étapes numérotées,
+    section `##` non numérotée d'une ligne), et dans l'aide de mise en forme.
+    `_metadata.periodicites` trié par `sort_order` et RELU à chaque
+    ouverture d'un export (`usePeriodicites(open)`, `aJour`).
     Essai à blanc (sonnet, haiku ×
     placer / remettre en page) : 4 sur 4 importés sans avertissement, aucun
     mot perdu, aucun chemin inventé, rendu réel conforme (chaque étape a sa

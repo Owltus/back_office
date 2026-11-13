@@ -52,7 +52,7 @@ export function ExportJsonClasseurDialog({
   /** Classeur chargé au moment du clic ; `null` tant qu'il n'y en a pas. */
   sujet: SujetExportClasseur | null
 }) {
-  const periodicitesQ = usePeriodicites()
+  const periodicitesQ = usePeriodicites(open)
   const copie = useCopieExport()
   const { oublier } = copie
 
@@ -61,7 +61,7 @@ export function ExportJsonClasseurDialog({
   }, [open, oublier])
 
   // Les périodicités nomment les feuilles de suivi dans le fichier.
-  const pret = sujet !== null && periodicitesQ.data !== undefined
+  const pret = sujet !== null && periodicitesQ.aJour
 
   function construire(): { texte: string; nomFichier: string } | null {
     if (sujet === null || periodicitesQ.data === undefined) return null

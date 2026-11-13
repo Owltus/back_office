@@ -181,9 +181,17 @@ export function AideMiseEnFormeDialog({
               Placez le curseur sur la ligne et cliquez : le bouton reste
               enfoncé tant que la ligne est un titre.
             </p>
+            <p>
+              Le titre du document est déjà imprimé en tête de page : commencez
+              par une ou deux phrases, pas par un titre. Le{' '}
+              <Term>titre de partie</Term> sert aux sections et aux étapes d'une
+              procédure ; un numéro en tête (<code>## 1.</code>) s'imprime dans
+              une case. Le <Term>grand titre</Term> regroupe des étapes en
+              grandes parties, dans un long document seulement.
+            </p>
             <Exemple
               source={
-                '# Objectif\n\n## Étapes\n\n### Étape 1\n\nTexte de l’étape.'
+                'Ce document explique l’arrivée d’un client, du parking à la chambre.\n\n# Avant l’arrivée\n\n## 1. Préparer la chambre\n\nVérifier la propreté et le minibar.\n\n### Si la chambre n’est pas prête\n\nProposer un café au bar.'
               }
             />
           </Section>
@@ -214,6 +222,13 @@ export function AideMiseEnFormeDialog({
               termine la liste. <Kbd>Tab</Kbd> fait une sous-liste,{' '}
               <Kbd>Maj</Kbd> <KbdPlus /> <Kbd>Tab</Kbd> la ramène.
             </p>
+            <p>
+              Des <Term>numéros</Term> pour des actions dans l'ordre, des{' '}
+              <Term>puces</Term> à partir de trois éléments de même nature. Un
+              ou deux éléments s'écrivent en une phrase, une explication en
+              paragraphe. Quand la même information revient pour plusieurs cas
+              (qui, quand, combien), préférez un tableau.
+            </p>
             <Exemple
               source={
                 '1. Accueillir le client\n2. Vérifier la réservation\n   - nom\n   - dates\n\n- [ ] Clé remise'
@@ -237,8 +252,9 @@ export function AideMiseEnFormeDialog({
               }
             />
             <p>
-              Réservez <Term>Attention</Term> aux vrais dangers : un document où
-              tout est encadré n'attire plus l'œil sur rien.
+              Réservez <Term>Attention</Term> aux vrais dangers, placé avant le
+              geste. Un ou deux encadrés par document, trois au plus : un
+              document où tout est encadré n'attire plus l'œil sur rien.
             </p>
           </Section>
 

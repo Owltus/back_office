@@ -100,7 +100,7 @@ export function EchangeJsonDialog({
   sujet: SujetJson | null
   canWrite: boolean
 }) {
-  const periodicitesQ = usePeriodicites()
+  const periodicitesQ = usePeriodicites(open)
   // Médiathèque, lue à l'ouverture seulement : la relecture de l'aperçu
   // y cherche les images citées par le LLM.
   const { images: imagesConnues, etatImages } = useImagesRelecture(
@@ -213,7 +213,7 @@ export function EchangeJsonDialog({
 
   // Les périodicités nomment les feuilles de suivi et listent les `id` que
   // le LLM peut choisir : pas d'export sans elles.
-  const pret = classeur !== null && periodicitesQ.data !== undefined
+  const pret = classeur !== null && periodicitesQ.aJour
 
   /**
    * Le fichier JSON, mode d'emploi compris (`_metadata.instructions`) : le

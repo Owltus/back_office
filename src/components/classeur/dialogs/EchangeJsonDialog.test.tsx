@@ -83,7 +83,7 @@ vi.mock('#/lib/classeur/merge/apply.ts', async (original) => {
   }
 })
 vi.mock('#/components/classeur/hooks/useClasseur.ts', () => ({
-  usePeriodicites: () => ({ data: PERIODICITES }),
+  usePeriodicites: () => ({ data: PERIODICITES, aJour: true }),
   useInvaliderClasseur: () => () => Promise.resolve(),
 }))
 vi.mock('#/lib/supabase.ts', () => ({ supabase: {} }))

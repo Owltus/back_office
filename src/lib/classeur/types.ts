@@ -65,7 +65,7 @@ export interface DbChapter {
 export interface DbPeriodicite {
   id: number
   label: string
-  /** Nombre de colonnes du tableau de suivi imprimé. */
+  /** Nombre de LIGNES du tableau de suivi imprimé (une par contrôle). */
   nombre: number
   sort_order: number
 }

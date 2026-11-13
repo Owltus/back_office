@@ -27,7 +27,7 @@ import { construireExport } from '#/lib/classeur/merge/schema.ts'
  */
 
 vi.mock('#/components/classeur/hooks/useClasseur.ts', () => ({
-  usePeriodicites: () => ({ data: PERIODICITES, isError: false }),
+  usePeriodicites: () => ({ data: PERIODICITES, isError: false, aJour: true }),
 }))
 vi.mock('#/lib/supabase.ts', () => ({ supabase: {} }))
 const telecharge = vi.fn()

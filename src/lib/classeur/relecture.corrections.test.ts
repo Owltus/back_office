@@ -153,7 +153,7 @@ describe('corrections mécaniques', () => {
     ])
     const sans = relire(md, images).filter((a) => !a.correction)
     expect(sans.map((a) => a.message.split(' ')[0])).toEqual(
-      expect.arrayContaining(['Étape', 'Capture', '1', '1']),
+      expect.arrayContaining(['Élément', 'Capture', '1', '1']),
     )
     expect(relire(md, images).every((a) => !a.correction)).toBe(true)
   })
