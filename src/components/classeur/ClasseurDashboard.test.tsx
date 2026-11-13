@@ -209,7 +209,6 @@ describe('ClasseurDashboard — en-tête fixe et panneau', () => {
             onSommaire={() => {}}
             onExporterPdf={() => {}}
             onExporterMarkdown={() => {}}
-            onExporterMarkdownUnique={() => {}}
             onImprimerModifies={() => {}}
             onExporterJson={() => {}}
             onImporter={() => {}}
@@ -293,7 +292,7 @@ describe('ClasseurDashboard — en-tête fixe et panneau', () => {
     const lignes = Array.from(
       panneau.querySelectorAll<HTMLElement>('[data-ligne-action]'),
     )
-    expect(lignes.length).toBe(11)
+    expect(lignes.length).toBe(10)
     for (const l of lignes) {
       expect(l.className).toMatch(/(^| )h-14( |$)/)
       const d = l.querySelector('[data-testid="ligne-action-description"]')
@@ -318,7 +317,7 @@ describe('ClasseurDashboard — en-tête fixe et panneau', () => {
     expect(ligne.textContent).toContain("Réponse d'un LLM ou fichier")
   })
 
-  it('écriture : quatre sections, onze lignes, comme la silhouette', () => {
+  it('écriture : quatre sections, dix lignes, comme la silhouette', () => {
     const container = monterTout()
     expect(groupes(container)).toEqual([
       {
@@ -343,8 +342,7 @@ describe('ClasseurDashboard — en-tête fixe et panneau', () => {
         cartes: [
           expect.stringMatching(/Exporter en JSON.*À coller dans un LLM/),
           expect.stringMatching(/^Importer.*Réponse d'un LLM ou fichier/),
-          expect.stringContaining('Markdown en un seul fichier'),
-          expect.stringContaining('Markdown par chapitres'),
+          expect.stringContaining('Exporter en Markdown'),
         ],
         reservees: 0,
       },
@@ -363,7 +361,7 @@ describe('ClasseurDashboard — en-tête fixe et panneau', () => {
     Object.assign(droits, { canWrite: false, pret: true })
     const container = monterTout()
     const g = groupes(container)
-    expect(g.map((x) => x.cartes.length)).toEqual([1, 3, 3, 1])
+    expect(g.map((x) => x.cartes.length)).toEqual([1, 3, 2, 1])
     const tout = g.flatMap((x) => x.cartes).join(' | ')
     expect(tout).not.toMatch(/Nouveau chapitre|Importer|Corbeille/)
     expect(
@@ -377,6 +375,6 @@ describe('ClasseurDashboard — en-tête fixe et panneau', () => {
     expect(groupes(container).map((x) => x.reservees)).toEqual([1, 0, 1, 1])
     expect(
       groupes(container).map((x) => x.cartes.length + x.reservees),
-    ).toEqual([2, 3, 4, 2])
+    ).toEqual([2, 3, 3, 2])
   })
 })

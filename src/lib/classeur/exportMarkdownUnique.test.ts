@@ -6,7 +6,10 @@ import {
   construireArchiveMarkdown,
   construireMarkdownUnique,
   decalerTitres,
+  fichierExport,
+  nombreImages,
   redirigerImages,
+  retirerImages,
 } from '#/lib/classeur/exportMarkdown.ts'
 import type {
   ChapterContent,
@@ -150,5 +153,54 @@ describe('export Markdown en un seul fichier', () => {
       ).arrayBuffer(),
     )
     expect(Object.keys(zip.files)).toEqual(['X.md'])
+  })
+
+  it('sans les images : la légende reste en texte, sans légende rien', () => {
+    expect(
+      retirerImages(`a ![Le comptoir](${IMG} "moyenne") b ![](a-inserer) c`),
+    ).toBe('a *Image : Le comptoir* b  c')
+  })
+
+  it('archive par chapitres sans images : ni dossier images ni lien', async () => {
+    const zip = await JSZip.loadAsync(
+      await (
+        await construireArchiveMarkdown(CHAPITRES, CONTENU, {
+          avecImages: false,
+        })
+      ).arrayBuffer(),
+    )
+    expect(Object.keys(zip.files).some((k) => k.startsWith('images'))).toBe(
+      false,
+    )
+    const md = await zip.file('1 - Accueil/1 - Arrivée.md')!.async('string')
+    expect(md).toContain('*Image : Le comptoir*')
+  })
+
+  it('un seul fichier sans image à joindre : un .md, pas d archive', () => {
+    const portee = {
+      classeurName: 'Procédures',
+      chapters: CHAPITRES,
+      content: CONTENU,
+    }
+    expect(nombreImages(portee)).toBe(2)
+    expect(
+      fichierExport(portee, { forme: 'unique', avecImages: false }),
+    ).toEqual({ nom: 'Procédures.md', archive: false })
+    expect(
+      fichierExport(portee, { forme: 'unique', avecImages: true }),
+    ).toEqual({ nom: 'Procédures.zip', archive: true })
+    expect(
+      fichierExport(portee, { forme: 'dossiers', avecImages: false }).archive,
+    ).toBe(true)
+    const sansImage = { ...portee, content: { ...CONTENU, documents: [] } }
+    expect(
+      fichierExport(sansImage, { forme: 'unique', avecImages: true }),
+    ).toEqual({ nom: 'Procédures.md', archive: false })
+    expect(
+      fichierExport(
+        { ...portee, chapters: [CHAPITRES[1]], chapitre: CHAPITRES[1] },
+        { forme: 'unique', avecImages: false },
+      ).nom,
+    ).toBe('Procédures - Accueil.md')
   })
 })

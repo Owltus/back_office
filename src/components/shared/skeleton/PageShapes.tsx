@@ -739,7 +739,7 @@ const SECTIONS_ACCUEIL: { cle: string; lignes: string[] }[] = [
   { cle: 'imprimer', lignes: ['pdf', 'modifies', 'sommaire'] },
   {
     cle: 'echanger',
-    lignes: ['json', 'import', 'markdown-unique', 'markdown'],
+    lignes: ['json', 'import', 'markdown'],
   },
   { cle: 'historique', lignes: ['historique', 'corbeille'] },
 ]
@@ -747,8 +747,8 @@ const SECTIONS_ACCUEIL: { cle: string; lignes: string[] }[] = [
 /**
  * /classeur/$id (accueil) : champ de recherche pleine largeur puis LE
  * panneau, relevé sur le DOM de l'accueil : quatre sections (intitulé puis
- * lignes) Contenu (2), Imprimer (3), Échanger et sauvegarder (4),
- * Historique et sécurité (2). Onze lignes.
+ * lignes) Contenu (2), Imprimer (3), Échanger et sauvegarder (3),
+ * Historique et sécurité (2). Dix lignes.
  */
 export function FormeClasseurDashboard() {
   return (

@@ -180,6 +180,20 @@ export interface OptionsArchive {
    * texte garde les chemins de l'app (comme avant le 2026-11-13).
    */
   lireImage?: (chemin: string) => Promise<Blob>
+  /** `false` : chaque image devient sa légende en texte (`retirerImages`). */
+  avecImages?: boolean
+}
+
+/**
+ * Sans les images : chaque image devient sa légende en italique
+ * (« *Image : Le comptoir* »), une image sans légende disparaît. Les
+ * emplacements « à insérer » suivent la même règle.
+ */
+export function retirerImages(markdown: string): string {
+  return markdown.replace(/!\[([^\]]*)\]\([^)]*\)/g, (_t, legende: string) => {
+    const l = legende.trim()
+    return l === '' ? '' : `*Image : ${l}*`
+  })
 }
 
 /** Dossier des images à la racine d'une archive. */
@@ -290,7 +304,8 @@ export async function construireArchiveMarkdown(
 
     const items = flattenItems(contenuDuChapitre(content, ch.id))
     items.forEach((item, i) => {
-      const texte = elementEnMarkdown(item, periodicites)
+      const brut = elementEnMarkdown(item, periodicites)
+      const texte = options.avecImages === false ? retirerImages(brut) : brut
       dossier.file(
         nomFichierElement(i + 1, item.data.title),
         images.size > 0
@@ -361,6 +376,7 @@ export function classeurEnMarkdown(
   chapters: readonly DbChapter[],
   content: ChapterContent,
   periodicites: readonly DbPeriodicite[] = [],
+  numerotation: 'position' | 'sort_order' = 'position',
 ): string {
   const nom = classeurName.trim() || NOM_CLASSEUR_REPLI
   const tries = [...chapters].sort(
@@ -370,7 +386,7 @@ export function classeurEnMarkdown(
   tries.forEach((ch, index) => {
     const desc = ch.description.trim()
     blocs.push(
-      `## ${String(index + 1)}. ${ch.label.trim() || SANS_TITRE}${desc === '' ? '' : `\n\n${desc}`}`,
+      `## ${String(numerotation === 'sort_order' ? ch.sort_order : index + 1)}. ${ch.label.trim() || SANS_TITRE}${desc === '' ? '' : `\n\n${desc}`}`,
     )
     for (const item of flattenItems(contenuDuChapitre(content, ch.id))) {
       if (item.data.deleted_at !== null) continue
@@ -390,7 +406,7 @@ export async function construireMarkdownUnique(
   classeurName: string,
   chapters: readonly DbChapter[],
   content: ChapterContent,
-  options: Omit<OptionsArchive, 'numerotation'> = {},
+  options: OptionsArchive = {},
 ): Promise<Blob> {
   const { default: JSZip } = await import('jszip')
   const zip = new JSZip()
@@ -402,12 +418,14 @@ export async function construireMarkdownUnique(
         options.lireImage,
       )
     : new Set<string>()
-  const texte = classeurEnMarkdown(
+  const brut = classeurEnMarkdown(
     classeurName,
     chapters,
     content,
     options.periodicites ?? [],
+    options.numerotation,
   )
+  const texte = options.avecImages === false ? retirerImages(brut) : brut
   zip.file(
     `${nomBase(classeurName)}.md`,
     images.size > 0
@@ -425,18 +443,97 @@ function nomBase(classeurName: string): string {
   )
 }
 
-/** Le classeur en un seul .md avec ses images → `<classeur> (un fichier).zip`. */
-export async function exporterClasseurMarkdownUnique(
-  classeurName: string,
-  chapters: readonly DbChapter[],
-  content: ChapterContent,
+// ---------------------------------------------------------------------------
+// Export au choix (2026-11-13, demande utilisateur : « un seul bouton avec
+// une fenêtre de choix… si c'est que du Markdown, pas besoin d'archive »)
+// ---------------------------------------------------------------------------
+
+export type FormeExport = 'unique' | 'dossiers'
+
+export interface ChoixExport {
+  forme: FormeExport
+  avecImages: boolean
+}
+
+/** Ce qu'on exporte : tout le classeur, ou un seul chapitre. */
+export interface PorteeExport {
+  classeurName: string
+  chapters: readonly DbChapter[]
+  content: ChapterContent
+  /** Un seul chapitre : son nom entre dans celui du fichier. */
+  chapitre?: DbChapter
+}
+
+/** Nombre d'images (distinctes) référencées par les documents de la portée. */
+export function nombreImages(portee: PorteeExport): number {
+  const ids = new Set(portee.chapters.map((c) => c.id))
+  const chemins = new Set<string>()
+  for (const d of portee.content.documents) {
+    if (d.deleted_at !== null || !ids.has(d.chapter_id)) continue
+    for (const c of imagesReferencees(d.content)) chemins.add(c)
+  }
+  return chemins.size
+}
+
+/** Le fichier que l'on obtiendra, pour le dire avant de télécharger. */
+export function fichierExport(
+  portee: PorteeExport,
+  choix: ChoixExport,
+): { nom: string; archive: boolean } {
+  const base =
+    sanitizeFilename(
+      portee.chapitre
+        ? `${portee.classeurName.trim() || NOM_CLASSEUR_REPLI} - ${portee.chapitre.label}`
+        : portee.classeurName.trim() || NOM_CLASSEUR_REPLI,
+    ) || NOM_CLASSEUR_REPLI
+  const archive =
+    choix.forme === 'dossiers' || (choix.avecImages && nombreImages(portee) > 0)
+  return { nom: `${base}.${archive ? 'zip' : 'md'}`, archive }
+}
+
+/**
+ * Télécharge l'export choisi : un `.md` seul quand il n'y a qu'un fichier
+ * et aucune image à joindre, sinon une archive ZIP.
+ */
+export async function exporterMarkdown(
+  portee: PorteeExport,
+  choix: ChoixExport,
   periodicites: readonly DbPeriodicite[] = [],
+  lireImage: (chemin: string) => Promise<Blob> = telechargerImage,
 ): Promise<void> {
-  const blob = await construireMarkdownUnique(classeurName, chapters, content, {
+  const { nom, archive } = fichierExport(portee, choix)
+  const numerotation = portee.chapitre ? 'sort_order' : 'position'
+  if (!archive) {
+    const brut = classeurEnMarkdown(
+      portee.classeurName,
+      portee.chapters,
+      portee.content,
+      periodicites,
+      numerotation,
+    )
+    telechargerTexte(nom, choix.avecImages ? brut : retirerImages(brut))
+    return
+  }
+  const options: OptionsArchive = {
     periodicites,
-    lireImage: telechargerImage,
-  })
-  telechargerBlob(`${nomBase(classeurName)} (un fichier).zip`, blob)
+    numerotation,
+    avecImages: choix.avecImages,
+    lireImage: choix.avecImages ? lireImage : undefined,
+  }
+  const blob =
+    choix.forme === 'unique'
+      ? await construireMarkdownUnique(
+          portee.classeurName,
+          portee.chapters,
+          portee.content,
+          options,
+        )
+      : await construireArchiveMarkdown(
+          portee.chapters,
+          portee.content,
+          options,
+        )
+  telechargerBlob(nom, blob)
 }
 
 // ---------------------------------------------------------------------------
@@ -447,22 +544,6 @@ export async function exporterClasseurMarkdownUnique(
 export function exporterDocumentMarkdown(titre: string, contenu: string): void {
   const nom = `${sanitizeFilename(titre.trim() || SANS_TITRE) || SANS_TITRE}.md`
   telechargerTexte(nom, documentEnMarkdown(titre, contenu))
-}
-
-/** Un classeur entier → `<classeur>.zip`, dossiers numérotés par position. */
-export async function exporterClasseurZip(
-  classeurName: string,
-  chapters: readonly DbChapter[],
-  content: ChapterContent,
-  periodicites: readonly DbPeriodicite[] = [],
-): Promise<void> {
-  const nom = `${sanitizeFilename(classeurName.trim() || NOM_CLASSEUR_REPLI) || NOM_CLASSEUR_REPLI}.zip`
-  const blob = await construireArchiveMarkdown(chapters, content, {
-    periodicites,
-    numerotation: 'position',
-    lireImage: telechargerImage,
-  })
-  telechargerBlob(nom, blob)
 }
 
 /**

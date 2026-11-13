@@ -95,7 +95,7 @@ import { Input } from '#/components/ui/input.tsx'
 import { FormeChapitre } from '#/components/shared/skeleton/PageShapes.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
-import { exporterChapitreZip } from '#/lib/classeur/exportMarkdown.ts'
+import { ExportMarkdownDialog } from '#/components/classeur/dialogs/ExportMarkdownDialog.tsx'
 import type { FichierImporte } from '#/lib/classeur/importFichiers.ts'
 import {
   DEFAULT_REGISTRY_NAME,
@@ -267,12 +267,7 @@ export function ChapterBoard({
     onSettled: () => invalider(),
   })
 
-  const exportZip = useMutation({
-    mutationFn: async () => {
-      if (!chapter || !contenu) return
-      await exporterChapitreZip(classeurName, chapter, contenu, periodicites)
-    },
-  })
+  const [exportMdOuvert, setExportMdOuvert] = useState(false)
 
   // Dépôt de fichiers (droit `ecriture` seulement).
   const onImport = useCallback(
@@ -413,12 +408,6 @@ export function ChapterBoard({
       cle: 'import',
       err: importation.error,
       action: 'Import impossible',
-    })
-  if (exportZip.isError)
-    erreurs.push({
-      cle: 'export',
-      err: exportZip.error,
-      action: 'Export impossible',
     })
 
   return (
@@ -607,11 +596,10 @@ export function ChapterBoard({
                         disabled={!chapter || modifies.length === 0}
                       />
                       <IconAction
-                        label="Exporter le chapitre en Markdown (ZIP)"
+                        label="Exporter le chapitre en Markdown"
                         icon={<Archive />}
-                        onClick={() => exportZip.mutate()}
+                        onClick={() => setExportMdOuvert(true)}
                         disabled={!chapter || !contenu}
-                        busy={exportZip.isPending}
                       />
                       <IconAction
                         label="Échange avec un LLM : exporter, réimporter"
@@ -686,10 +674,10 @@ export function ChapterBoard({
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           disabled={!chapter || !contenu}
-                          onSelect={() => exportZip.mutate()}
+                          onSelect={() => setExportMdOuvert(true)}
                         >
                           <Archive />
-                          Exporter en Markdown (ZIP)
+                          Exporter en Markdown
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           disabled={!chapter || !contenu}
@@ -1000,6 +988,22 @@ export function ChapterBoard({
           />
         )}
       </PrintPreview>
+
+      <ExportMarkdownDialog
+        open={exportMdOuvert}
+        onOpenChange={setExportMdOuvert}
+        portee={
+          chapter && contenu
+            ? {
+                classeurName,
+                chapters: [chapter],
+                content: contenu,
+                chapitre: chapter,
+              }
+            : null
+        }
+        lirePeriodicites={() => Promise.resolve(periodicites)}
+      />
 
       <CreateItemDialog
         open={createOpen}

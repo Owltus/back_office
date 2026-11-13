@@ -87,14 +87,7 @@ export interface ClasseurSearchResult {
 
 /** Action en cours, pour l'état de la carte concernée (Loader2). */
 export type DashboardBusy =
-  | 'pdf'
-  | 'markdown'
-  | 'markdown-unique'
-  | 'json'
-  | 'import'
-  | 'sommaire'
-  | 'modifies'
-  | null
+  'pdf' | 'markdown' | 'json' | 'import' | 'sommaire' | 'modifies' | null
 
 /** Ce que dit la ligne « Documents modifiés » (calculé par l'appelant). */
 export interface EtatModifies {
@@ -137,7 +130,6 @@ export function ClasseurDashboard({
   onSommaire,
   onExporterPdf,
   onExporterMarkdown,
-  onExporterMarkdownUnique,
   onImprimerModifies,
   etatModifies,
   onExporterJson,
@@ -154,8 +146,6 @@ export function ClasseurDashboard({
   onSommaire?: (ctx: DashboardContexte) => void
   onExporterPdf?: (ctx: DashboardContexte) => void
   onExporterMarkdown?: (ctx: DashboardContexte) => void
-  /** Tout le classeur dans un seul .md, livré en ZIP avec ses images. */
-  onExporterMarkdownUnique?: (ctx: DashboardContexte) => void
   /** Imprimer ce qui a changé depuis la dernière impression. */
   onImprimerModifies?: (ctx: DashboardContexte) => void
   etatModifies?: (ctx: DashboardContexte) => EtatModifies
@@ -293,7 +283,6 @@ export function ClasseurDashboard({
   const sectionEchanger =
     onExporterJson ||
     onExporterMarkdown ||
-    onExporterMarkdownUnique ||
     ((canWrite || reserverEcriture) && onImporter)
   const sectionHistorique =
     onHistorique || ((canWrite || reserverEcriture) && onCorbeille)
@@ -535,22 +524,11 @@ export function ClasseurDashboard({
                 {!canWrite && reserverEcriture && onImporter && (
                   <LigneActionSquelette />
                 )}
-                {onExporterMarkdownUnique && (
-                  <LigneAction
-                    icon={FileText}
-                    title="Markdown en un seul fichier"
-                    description="Tout le classeur et ses images, en ZIP"
-                    titreOccupe="Export en cours..."
-                    onClick={action(onExporterMarkdownUnique)}
-                    disabled={!pret || busy !== null}
-                    busy={busy === 'markdown-unique'}
-                  />
-                )}
                 {onExporterMarkdown && (
                   <LigneAction
                     icon={Archive}
-                    title="Markdown par chapitres"
-                    description="Un dossier par chapitre et les images, en ZIP"
+                    title="Exporter en Markdown"
+                    description="Un ou plusieurs fichiers, avec ou sans images"
                     titreOccupe="Export en cours..."
                     onClick={action(onExporterMarkdown)}
                     disabled={!pret || busy !== null}

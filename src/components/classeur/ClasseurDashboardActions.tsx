@@ -10,6 +10,7 @@ import type {
   EtatModifies,
 } from '#/components/classeur/ClasseurDashboard.tsx'
 import { CorbeilleDialog } from '#/components/classeur/dialogs/CorbeilleDialog.tsx'
+import { ExportMarkdownDialog } from '#/components/classeur/dialogs/ExportMarkdownDialog.tsx'
 import { ExportJsonClasseurDialog } from '#/components/classeur/dialogs/ExportJsonClasseurDialog.tsx'
 import { HistoriqueDialog } from '#/components/classeur/dialogs/HistoriqueDialog.tsx'
 import { ImagesDialog } from '#/components/classeur/dialogs/ImagesDialog.tsx'
@@ -27,10 +28,6 @@ import { PrintPreview } from '#/components/classeur/print/PrintPreview.tsx'
 import { TableOfContentsPage } from '#/components/classeur/print/TableOfContentsPage.tsx'
 import { Alert, AlertDescription } from '#/components/ui/alert.tsx'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
-import {
-  exporterClasseurMarkdownUnique,
-  exporterClasseurZip,
-} from '#/lib/classeur/exportMarkdown.ts'
 import {
   elementsModifies,
   jamaisImprime,
@@ -56,12 +53,6 @@ type Apercu =
   | { type: 'pdf'; ctx: DashboardContexte }
   | { type: 'modifies'; ctx: DashboardContexte; items: ChapterItem[] }
   | null
-
-/** Un export à télécharger (Markdown ZIP ; le JSON passe par son dialogue). */
-interface Export {
-  type: 'markdown' | 'markdown-unique'
-  ctx: DashboardContexte
-}
 
 /** Tous les éléments du classeur, chapitre par chapitre, dans l'ordre. */
 function elementsDuClasseur(ctx: DashboardContexte): ChapterItem[] {
@@ -156,16 +147,9 @@ export function ClasseurDashboardActions({
       staleTime: Infinity,
     })
 
-  const exporter = useMutation({
-    mutationFn: async ({ type, ctx }: Export) => {
-      const perios = await lirePeriodicites()
-      const exporterVers =
-        type === 'markdown-unique'
-          ? exporterClasseurMarkdownUnique
-          : exporterClasseurZip
-      await exporterVers(ctx.classeur.name, ctx.chapters, ctx.content, perios)
-    },
-  })
+  // Export Markdown : sa fenêtre de choix (un ou plusieurs fichiers, avec
+  // ou sans images).
+  const [exportMd, setExportMd] = useState<DashboardContexte | null>(null)
 
   // L'aperçu a besoin des périodicités pour les feuilles de suivi : lues
   // avant l'ouverture, depuis le cache dans le cas courant.
@@ -196,13 +180,11 @@ export function ClasseurDashboardActions({
     setImportOuvert(true)
   }
 
-  const busy: DashboardBusy = exporter.isPending
-    ? exporter.variables.type
-    : ouvrirApercu.isPending
-      ? ouvrirApercu.variables.type
-      : null
+  const busy: DashboardBusy = ouvrirApercu.isPending
+    ? ouvrirApercu.variables.type
+    : null
 
-  const erreur = exporter.error ?? ouvrirApercu.error
+  const erreur = ouvrirApercu.error
 
   const ctx = apercu?.ctx
   const classeurName = ctx?.classeur.name
@@ -263,12 +245,7 @@ export function ClasseurDashboardActions({
         }
         onSommaire={(c) => ouvrirApercu.mutate({ type: 'sommaire', ctx: c })}
         onExporterPdf={(c) => ouvrirApercu.mutate({ type: 'pdf', ctx: c })}
-        onExporterMarkdown={(c) =>
-          exporter.mutate({ type: 'markdown', ctx: c })
-        }
-        onExporterMarkdownUnique={(c) =>
-          exporter.mutate({ type: 'markdown-unique', ctx: c })
-        }
+        onExporterMarkdown={setExportMd}
         onImprimerModifies={(c) =>
           ouvrirApercu.mutate({
             type: 'modifies',
@@ -303,6 +280,23 @@ export function ClasseurDashboardActions({
           setImportOuvert(false)
           setFichierImport(null)
         }}
+      />
+
+      <ExportMarkdownDialog
+        open={exportMd !== null}
+        onOpenChange={(open) => {
+          if (!open) setExportMd(null)
+        }}
+        portee={
+          exportMd === null
+            ? null
+            : {
+                classeurName: exportMd.classeur.name,
+                chapters: exportMd.chapters,
+                content: exportMd.content,
+              }
+        }
+        lirePeriodicites={lirePeriodicites}
       />
 
       <ExportJsonClasseurDialog

@@ -1849,9 +1849,12 @@ group-hover:` étaient INVISIBLES mais CLIQUABLES au doigt →
     `localStorage`, jamais `updated_at` qui bouge au réordonnancement) ;
     toute impression d'un chapitre, d'une sélection, d'un élément ou du
     classeur complet la retient (`PrintPreview onImprime`), « Déjà à jour,
-    ne pas imprimer » aussi. Même jour : export Markdown EN UN SEUL FICHIER
-    (`classeurEnMarkdown`, ZIP avec `images/`) et images ajoutées aux ZIP
-    par chapitres (`../images/`). Fabriquer de VRAIS fichiers PDF (ZIP de
+    ne pas imprimer » aussi. Même jour : UN SEUL export Markdown, par une
+    fenêtre de choix (`ExportMarkdownDialog`, accueil et chapitre) : un
+    seul fichier ou un par document, avec ou sans images ; `exporterMarkdown`
+    rend un `.md` nu quand il n'y a qu'un fichier sans image à joindre,
+    sinon un ZIP (`images/`, `../images/` par chapitres) ; sans images,
+    chaque image devient sa légende (`retirerImages`). Fabriquer de VRAIS fichiers PDF (ZIP de
     PDF par dossiers) a été ABANDONNÉ par l'utilisateur le même jour
     (« si trop chiant, abandonne ») : l'impression du navigateur reste la
     seule sortie PDF ; nom de fichier PDF « Classeur - Titre »
