@@ -123,6 +123,12 @@ const PARTIES: Array<[string, string[]]> = [
       'fais cet audit en entier',
       'le plus grave en premier',
       "une légende d'image qui ne correspond pas au texte",
+      // Points ajoutés par l'utilisateur le 2026-11-13.
+      'propose un titre qui dit le contenu',
+      'propose de le couper',
+      'propose de les regrouper',
+      'propose-la, à sa périodicité',
+      'propose de la remplacer par une fonction',
       "ce qui s'imprime mal (les règles d'écriture de la partie 6",
     ],
   ],
@@ -178,6 +184,9 @@ const PARTIES: Array<[string, string[]]> = [
       'un ou deux éléments = une phrase',
       'tableau, cinq colonnes au plus',
       'Gras rare',
+      "une action s'écrit à l'infinitif",
+      'expliqué à sa première apparition',
+      'à chaque étape clé',
       'Un ou deux encadrés par document, trois au plus',
       'ne recopie pas la même structure partout',
       "(danger pour une personne, un bien, de l'argent ; AVANT l'action)",
@@ -349,10 +358,10 @@ describe("mode d'emploi — changements balisés (décision du 2026-10-23)", () 
 })
 
 describe("mode d'emploi — taille", () => {
-  it('moins de 12 ko par export (JSON sérialisé)', () => {
+  it('moins de 13 ko par export (JSON sérialisé)', () => {
     for (const [nom, i] of Object.entries(LES_TROIS)) {
       const octets = new TextEncoder().encode(JSON.stringify(i)).length
-      expect(octets, nom).toBeLessThan(12000)
+      expect(octets, nom).toBeLessThan(13000)
     }
   })
 })

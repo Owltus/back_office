@@ -860,8 +860,14 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     un titre), `#` grande partie d'un long document, `##` section ou étape
     numérotée, `###` sous-partie, rien en dessous ; gras rare (bouton, mot
     qui change l'action, pas les montants, décision utilisateur) ; un ou deux
-    encadrés, trois au plus. Plafond relevé à 12 000 octets (accord de
-    l'utilisateur). Miroir dans `relecture.ts` : gras → titre borné à `###`,
+    encadrés, trois au plus. Remettre en forme = toutes les règles, titres et
+    tableaux compris (des rubriques répétées = un tableau récapitulatif).
+    Points ajoutés par l'utilisateur le même jour : actions à l'infinitif,
+    sigle expliqué à sa première apparition, feuille de suivi PROPOSÉE pour
+    un contrôle périodique, donnée personnelle signalée (remplacer par une
+    fonction), un document = un sujet (couper, regrouper), photos à venir aux
+    étapes clés, titre vague signalé. Plafond relevé à 13 000 octets (12 502
+    mesurés). Miroir dans `relecture.ts` : gras → titre borné à `###`,
     « Élément de liste long » pour une puce (« Étape longue » pour `1.`),
     `alertesForme` (plus de 3 encadrés typés, tableau d'étapes numérotées,
     section `##` non numérotée d'une ligne), et dans l'aide de mise en forme.
