@@ -870,7 +870,15 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     même jour : « tu es un outil généraliste, pas de trame en lien avec
     l'hôtel ») : ni établissement, ni métier, ni logiciel, ni exemple tiré
     des classeurs réels dans le mode d'emploi ; figé par le test
-    « généraliste » de `consignes.test.ts`. Plafond relevé à 13 000 octets (12 502
+    « généraliste » de `consignes.test.ts`. Audit suivant (même jour,
+    « un outil pour tous les sujets ») : plus de « procédures, registres »
+    ni de « geste de métier » ; « n'invente jamais un fait » vise les faits
+    PROPRES à la personne ou à son organisation, les connaissances
+    générales du sujet servent à rédiger ; classeur ou chapitre VIDE :
+    demander sujet, public, usage, proposer un plan, puis ajouter. Essais à
+    blanc (association de randonnée, classeur vide) : une question à choix
+    puis un plan ; avec « faites directement », 15 ajouts importables sans
+    avertissement. 12 833 octets. Plafond relevé à 13 000 octets (12 502
     mesurés). Miroir dans `relecture.ts` : gras → titre borné à `###`,
     « Élément de liste long » pour une puce (« Étape longue » pour `1.`),
     `alertesForme` (plus de 3 encadrés typés, tableau d'étapes numérotées,

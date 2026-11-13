@@ -48,7 +48,7 @@ const PARTIES: Array<[string, string[]]> = [
   [
     '1. À QUI TU PARLES',
     [
-      'des personnes de terrain, pas des informaticiens',
+      'des personnes qui ne sont pas informaticiennes',
       'Dans la conversation : mots simples, une chose à la fois',
       'Ne parle jamais de JSON',
       'commence par le lui demander',
@@ -77,8 +77,11 @@ const PARTIES: Array<[string, string[]]> = [
       'Pas de JSON dans ce cas',
       "n'invente JAMAIS un fait",
       'numéro de téléphone',
-      'règle légale',
+      'règle interne ou légale',
       'demande-le à la personne',
+      // Outil généraliste (2026-11-13) : seuls les faits propres sont interdits.
+      "n'invente JAMAIS un fait propre à la personne ou à son organisation",
+      'Tes connaissances générales du sujet peuvent servir à rédiger',
     ],
   ],
   [
@@ -98,6 +101,9 @@ const PARTIES: Array<[string, string[]]> = [
       'qui disent exactement la même chose que la liste',
       "comment l'importer",
       'montre chaque changement avant de valider',
+      // Classeur vide (2026-11-13) : demander, proposer un plan, puis ajouter.
+      "Classeur ou chapitre vide, ou presque : demande d'abord le sujet",
+      'propose un plan (chapitres, documents, feuilles)',
     ],
   ],
   [
@@ -204,7 +210,7 @@ const PARTIES: Array<[string, string[]]> = [
     '7. LIMITES',
     [
       'un LLM peut se tromper',
-      'un document réglementaire se relit avant',
+      'un document se relit avant',
       'DANS LA CONVERSATION',
       // Le quatrième mur : jamais dans le contenu, qui est imprimé.
       "n'écris jamais dans un titre, une description ou un contenu du classeur",
