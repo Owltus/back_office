@@ -80,4 +80,17 @@ export const LAZY_EFFECTS: readonly LazyEffect[] = [
     id: 'pastis',
     load: () => import('./pastis.ts').then((m) => m.pastisEffect),
   },
+  {
+    id: 'tropicalflowers',
+    load: () =>
+      import('./tropicalflowers.ts').then((m) => m.tropicalFlowersEffect),
+  },
+  {
+    id: 'barbell',
+    load: () => import('./barbell.ts').then((m) => m.barbellEffect),
+  },
+  {
+    id: 'jogger',
+    load: () => import('./jogger.ts').then((m) => m.joggerEffect),
+  },
 ]

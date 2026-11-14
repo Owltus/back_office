@@ -1,10 +1,12 @@
 import { autumnEffect } from './autumn.ts'
+import { barbellEffect } from './barbell.ts'
 import { confettiEffect } from './confetti.ts'
 import { diceEffect } from './dice.ts'
 import { fireworksEffect } from './fireworks.ts'
 import { flowersEffect } from './flowers.ts'
 import { heartEffect } from './heart.ts'
 import { heartSwarmEffect } from './heartswarm.ts'
+import { joggerEffect } from './jogger.ts'
 import { lightningEffect } from './lightning.ts'
 import { moneyRainEffect } from './moneyrain.ts'
 import { pastisEffect } from './pastis.ts'
@@ -12,12 +14,14 @@ import { sakuraEffect } from './sakura.ts'
 import { shootingStarsEffect } from './shootingstars.ts'
 import { snowEffect } from './snow.ts'
 import { strawhatEffect } from './strawhat.ts'
+import { tropicalFlowersEffect } from './tropicalflowers.ts'
 import type { EffectDefinition } from './types.ts'
 
 export type {
   EffectDefinition,
   EffectEnv,
   EffectRunner,
+  SvgEffectEnv,
   WebglEffectEnv,
 } from './types.ts'
 
@@ -48,6 +52,9 @@ export const EFFECTS: readonly EffectDefinition[] = [
   diceEffect,
   strawhatEffect,
   pastisEffect,
+  tropicalFlowersEffect,
+  barbellEffect,
+  joggerEffect,
 ]
 
 /**
@@ -69,4 +76,7 @@ export const VALIDATED_EFFECT_IDS: ReadonlySet<string> = new Set([
   'strawhat',
   'lightning',
   'pastis',
+  'tropicalflowers',
+  'barbell',
+  'jogger',
 ])

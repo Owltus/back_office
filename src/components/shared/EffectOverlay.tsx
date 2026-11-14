@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 
-import type { EffectDefinition } from '#/lib/artefact/effects/index.ts'
+import type {
+  EffectDefinition,
+  EffectRunner,
+} from '#/lib/artefact/effects/index.ts'
 
 /*
  * Moteur de rendu commun à tous les effets visuels : les easter eggs clavier
@@ -27,12 +30,25 @@ interface EffectOverlayProps {
 
 export function EffectOverlay({ effect, onDone }: EffectOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const layerRef = useRef<HTMLDivElement | null>(null)
   // onDone dans une ref : l'effet de rendu ne doit tourner qu'UNE fois, il ne
   // faut pas le relancer parce que le parent a recréé la fonction.
   const onDoneRef = useRef(onDone)
   onDoneRef.current = onDone
 
   useEffect(() => {
+    // Effet SVG : pas de canvas, l'effet dessine dans le calque lui-même.
+    if (effect.mode === 'svg') {
+      const layer = layerRef.current
+      if (!layer) return
+      const runner = effect.create({
+        layer,
+        width: window.innerWidth,
+        height: window.innerHeight,
+      })
+      return boucle(runner, effect.durationMs, () => onDoneRef.current())
+    }
+
     const canvasEl = canvasRef.current
     if (!canvasEl) return
     const canvas: HTMLCanvasElement = canvasEl
@@ -69,43 +85,11 @@ export function EffectOverlay({ effect, onDone }: EffectOverlayProps) {
         ? effect.create({ canvas, width, height, dpr })
         : effect.create({ ctx: ctx as CanvasRenderingContext2D, width, height })
 
-    let raf = 0
-    let stopped = false
-    let start = 0
-    let last = 0
-
-    function frame(now: number) {
-      if (stopped) return
-      if (!start) {
-        start = now
-        last = now
-      }
-      const elapsed = now - start
-      // dt borné à 50 ms : un retour d'onglet en arrière-plan livrerait sinon un
-      // dt de plusieurs secondes qui ferait diverger toutes les intégrations.
-      const dt = Math.min(now - last, 50)
-      last = now
-
-      // L'overlay N'EFFACE PAS : chaque effet gère son propre fond (net ou
-      // traînée). Effacer ici casserait les effets à rémanence.
-      const alive = runner.frame(elapsed, dt)
-      if (!alive || elapsed > effect.durationMs + 4000) {
-        stopped = true
-        onDoneRef.current()
-        return
-      }
-      raf = requestAnimationFrame(frame)
-    }
-    raf = requestAnimationFrame(frame)
+    const arreter = boucle(runner, effect.durationMs, () => onDoneRef.current())
 
     return () => {
-      stopped = true
-      cancelAnimationFrame(raf)
+      arreter()
       window.removeEventListener('resize', resize)
-      // Libère les ressources de l'effet (renderer WebGL, monde physique…). Le
-      // cleanup ne s'exécutant qu'une fois par montage, `destroy` est appelé une
-      // seule fois — que l'arrêt soit naturel (via onDone -> démontage) ou forcé.
-      runner.destroy?.()
     }
   }, [effect])
 
@@ -114,9 +98,60 @@ export function EffectOverlay({ effect, onDone }: EffectOverlayProps) {
       aria-hidden="true"
       className="pointer-events-none fixed inset-0 z-[9998] overflow-hidden print:hidden"
     >
-      <canvas ref={canvasRef} className="h-full w-full" />
+      {effect.mode === 'svg' ? (
+        <div ref={layerRef} className="absolute inset-0" />
+      ) : (
+        <canvas ref={canvasRef} className="h-full w-full" />
+      )}
     </div>
   )
+}
+
+/*
+ * Boucle d'animation commune aux trois modes. Rend la fonction d'arrêt, qui
+ * libère aussi les ressources de l'effet (`destroy`, une seule fois).
+ */
+function boucle(
+  runner: EffectRunner,
+  durationMs: number,
+  onDone: () => void,
+): () => void {
+  let raf = 0
+  let stopped = false
+  let start = 0
+  let last = 0
+
+  function frame(now: number) {
+    if (stopped) return
+    if (!start) {
+      start = now
+      last = now
+    }
+    const elapsed = now - start
+    // dt borné à 50 ms : un retour d'onglet en arrière-plan livrerait sinon un
+    // dt de plusieurs secondes qui ferait diverger toutes les intégrations.
+    const dt = Math.min(now - last, 50)
+    last = now
+
+    // L'overlay N'EFFACE PAS : chaque effet gère son propre fond (net ou
+    // traînée). Effacer ici casserait les effets à rémanence.
+    const alive = runner.frame(elapsed, dt)
+    if (!alive || elapsed > durationMs + 4000) {
+      stopped = true
+      onDone()
+      return
+    }
+    raf = requestAnimationFrame(frame)
+  }
+  raf = requestAnimationFrame(frame)
+
+  return () => {
+    stopped = true
+    cancelAnimationFrame(raf)
+    // Le cleanup ne s'exécutant qu'une fois par montage, `destroy` est appelé
+    // une seule fois — que l'arrêt soit naturel (via onDone -> démontage) ou forcé.
+    runner.destroy?.()
+  }
 }
 
 /*

@@ -21,6 +21,13 @@
  * et lui passe le `<canvas>` BRUT — l'effet crée son propre renderer WebGL. Un
  * canvas ne pouvant avoir qu'un type de contexte à vie, c'est le champ `mode` qui
  * décide, lu par l'overlay AVANT tout `getContext`.
+ *
+ * TROISIÈME MODE, « svg » (2026-11-14) : l'effet reçoit le CALQUE plein écran
+ * (un `<div>` en `pointer-events: none`, sans canvas) et y pose son propre SVG,
+ * qu'il met à jour image par image. Pour les personnages et objets dessinés en
+ * vectoriel (joggeuse, barre, fleurs tropicales), dont le rendu repose sur des
+ * dégradés et des transformations SVG. La boucle, la durée maximale et le
+ * démontage restent ceux de l'overlay : le calque disparaît avec lui.
  */
 
 /** Surface de dessin 2D. Dimensions en pixels CSS, pas en pixels physiques. */
@@ -38,6 +45,14 @@ export interface WebglEffectEnv {
   height: number
   /** Densité de pixels déjà plafonnée par l'overlay (à passer à `setPixelRatio`). */
   dpr: number
+}
+
+/** Surface SVG : un calque plein écran vide, où l'effet ajoute ses éléments.
+ * Dimensions en pixels CSS. */
+export interface SvgEffectEnv {
+  layer: HTMLDivElement
+  width: number
+  height: number
 }
 
 /** Instance vivante d'un effet, créée à chaque déclenchement. */
@@ -83,4 +98,10 @@ export interface WebglEffect extends EffectMeta {
   create: (env: WebglEffectEnv) => EffectRunner
 }
 
-export type EffectDefinition = Canvas2DEffect | WebglEffect
+/** Effet SVG — reçoit un calque `<div>` vide. */
+export interface SvgEffect extends EffectMeta {
+  mode: 'svg'
+  create: (env: SvgEffectEnv) => EffectRunner
+}
+
+export type EffectDefinition = Canvas2DEffect | WebglEffect | SvgEffect
