@@ -153,6 +153,10 @@ function ClasseurForm({
     !moi.admin &&
     classeur.created_by !== moi.userId
   const auteurVoulu = auteurFige ? (moi.userId ?? null) : auteur
+  // L'auteur choisi n'a que la lecture : il lira « son » classeur sans le
+  // modifier (décision utilisateur du 2026-11-16), on le lui dit.
+  const auteurEnLecture =
+    personnes.data?.find((p) => p.id === auteurVoulu)?.niveau_page === 'lecture'
   // Inchangé (type et auteur) : rien à vérifier ; sinon l'auteur doit
   // pouvoir tenir un classeur de ce type (la base le refuse aussi).
   const auteurValide =
@@ -302,6 +306,7 @@ function ClasseurForm({
                 {auteursPossibles.map((p) => (
                   <SelectItem key={p.id} value={p.id}>
                     {nomAuteur(p.id, personnes.data, moi.userId)}
+                    {p.niveau_page === 'lecture' ? ' (lecture seule)' : ''}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -318,6 +323,12 @@ function ClasseurForm({
                 ? 'Seul l’auteur voit un classeur privé.'
                 : 'L’auteur et la gestion peuvent changer son type et son auteur.'}
           </p>
+          {auteurEnLecture && (
+            <p className="text-xs text-muted-foreground">
+              Cette personne a la page en lecture : elle pourra lire ce
+              classeur, pas le modifier.
+            </p>
+          )}
           {changerAuteur && !auteurValide && !personnes.isPending && (
             <p className="text-xs text-destructive">
               Cet auteur ne peut pas avoir un classeur de ce type : choisissez

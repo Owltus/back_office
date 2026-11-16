@@ -140,8 +140,9 @@ export function peutChangerAuteur(
 }
 
 /**
- * Qui peut être l'auteur d'un classeur de ce type : un compte en écriture ou
- * en gestion sur la page (la gestion seule pour un classeur de gestion).
+ * Qui peut être l'auteur d'un classeur de ce type : tout compte qui a la page,
+ * même en lecture (il lira « son » classeur sans le modifier ; décision
+ * utilisateur du 2026-11-16) ; la gestion seule pour un classeur de gestion.
  * `niveauPersonne` : son niveau de page (`gestion` pour un admin).
  */
 export function peutEtreAuteur(
@@ -149,7 +150,7 @@ export function peutEtreAuteur(
   visibilite: Visibilite,
 ): boolean {
   if (niveauPersonne === 'gestion') return true
-  return niveauPersonne === 'ecriture' && visibilite !== 'gestion'
+  return niveauPersonne !== null && visibilite !== 'gestion'
 }
 
 /** Créer un classeur : écriture sur la page (ou gestion). */

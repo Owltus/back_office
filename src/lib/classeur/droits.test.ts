@@ -279,10 +279,10 @@ describe('peutChangerType / peutChangerAuteur — garde de la base', () => {
 })
 
 describe('peutEtreAuteur, typesCreables, création, ordre', () => {
-  it('peutEtreAuteur : écriture hors gestion, gestion partout', () => {
+  it('peutEtreAuteur : tout compte de la page hors gestion (lecture comprise, 2026-11-16), gestion partout', () => {
     const attendu: Record<string, Record<Visibilite, boolean>> = {
       null: { public: false, prive: false, gestion: false },
-      lecture: { public: false, prive: false, gestion: false },
+      lecture: { public: true, prive: true, gestion: false },
       ecriture: { public: true, prive: true, gestion: false },
       gestion: { public: true, prive: true, gestion: true },
     }

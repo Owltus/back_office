@@ -266,7 +266,7 @@ select plan(
   (select count(*)::int from t_op) * 6 * 8   -- matrice
   + 5 * 8                                   -- déplacements
   + 22                                      -- cas nommés (socle)
-  + 22);                                    -- type et auteur
+  + 24);                                    -- type et auteur
 
 select * from pg_temp.matrice();
 select * from pg_temp.deplacements();
@@ -301,7 +301,11 @@ select is(pg_temp.essai('gestion', format($q$update public.classeur_classeurs se
 select is(pg_temp.essai('gestion', format($q$update public.classeur_classeurs set created_by = '%s' where id = %s$q$, pg_temp.uid('ecriture'), pg_temp.vis('B'))),
   'err=23514', 'auteur : un classeur de gestion n''a qu''un auteur qui a la gestion');
 select is(pg_temp.essai('gestion', format($q$update public.classeur_classeurs set created_by = '%s' where id = %s$q$, pg_temp.uid('lecture'), pg_temp.vis('A'))),
-  'err=23514', 'auteur : un compte en lecture ne peut pas être l''auteur');
+  'ok', 'auteur : la gestion dédie un public à un compte en lecture');
+select is(pg_temp.essai('gestion', format($q$update public.classeur_classeurs set created_by = '%s' where id = %s$q$, pg_temp.uid('lecture'), pg_temp.vis('B'))),
+  'err=23514', 'auteur : un compte en lecture n''a pas de classeur de gestion');
+select is(pg_temp.essai('gestion', format($q$update public.classeur_classeurs set created_by = '%s' where id = %s$q$, pg_temp.uid('aucun'), pg_temp.vis('A'))),
+  'err=23514', 'auteur : un compte sans la page ne peut pas être l''auteur');
 select is(pg_temp.essai('gestion', format($q$update public.classeur_classeurs set created_by = null where id = %s$q$, pg_temp.vis('A'))),
   'err=23514', 'auteur : jamais vide');
 select is(pg_temp.essai('ecriture', format($q$update public.classeur_classeurs set created_by = '%s' where id = %s$q$, pg_temp.uid('gestion'), pg_temp.vis('D'))),

@@ -154,10 +154,10 @@ begin
   if v_n = 1 then ok := ok + 1; else ko := array_append(ko, ('admin : ne change pas l''auteur')::text); end if;
   attendu_err := false;
   begin
-    update public.classeur_classeurs set created_by = v_lect where id = v_neuf;
+    update public.classeur_classeurs set created_by = v_sans where id = v_neuf;
   exception when check_violation then attendu_err := true;
   end;
-  if attendu_err then ok := ok + 1; else ko := array_append(ko, ('admin : un compte en lecture devient auteur')::text); end if;
+  if attendu_err then ok := ok + 1; else ko := array_append(ko, ('admin : un compte sans la page devient auteur')::text); end if;
   select count(*) into v_n from public.audit_log
    where table_name = 'classeur_classeurs' and performed_by = v_admin
      and performed_at >= now() - interval '1 minute';

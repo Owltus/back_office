@@ -1612,8 +1612,9 @@ editionTextarea.ts`) : `execCommand('insertText')` une fois le dialogue
   seule) ; l'admin voit et gère tout. Exceptions par personne et `acces_tous`
   NE SONT PLUS LUS (table et colonne gardées) ; bouclier Accès et
   `AccesClasseurDialog` retirés. Type et auteur changés par l'auteur et la
-  gestion, vers ou depuis Gestion par la gestion seule ; auteur d'un classeur
-  de gestion = quelqu'un qui a la gestion (`classeur_garde`, 23514 / 42501 ;
+  gestion, vers ou depuis Gestion par la gestion seule ; auteur = tout compte
+  qui a la page, MÊME EN LECTURE (il lit sans modifier, décision utilisateur),
+  sauf un classeur de gestion : quelqu'un qui a la gestion (`classeur_garde`, 23514 / 42501 ;
   `classeur_stamp` ne fige plus l'auteur d'un CLASSEUR). La RLS refuse qu'un
   compte se cache un classeur (lecture de la ligne neuve) : déposé dans « Mes
   privés », un classeur devient privé ET à soi. Niveau `gestion` sur un

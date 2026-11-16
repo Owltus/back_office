@@ -69,6 +69,13 @@ vi.mock('#/components/classeur/hooks/useDroitsClasseur.ts', () => ({
         nom_affiche: '',
         niveau_page: 'ecriture',
       },
+      {
+        id: 'lect',
+        prenom: 'Lou',
+        nom: 'Lecture',
+        nom_affiche: '',
+        niveau_page: 'lecture',
+      },
     ],
   }),
 }))
@@ -189,6 +196,23 @@ describe('ClasseurDialog — type et auteur', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
     await waitFor(() => expect(etat.rangerClasseur).toHaveBeenCalled())
     expect(etat.rangerClasseur).toHaveBeenCalledWith(7, { visibilite: 'prive' })
+  })
+
+  it('un auteur en lecture est permis pour un public ou un privé, et le dialogue le dit', () => {
+    rendre(classeur({ created_by: 'lect' }))
+    expect(
+      screen.getByText(/pourra lire ce classeur, pas le modifier/),
+    ).toBeTruthy()
+    expect(
+      screen
+        .getByRole('button', { name: 'Enregistrer' })
+        .hasAttribute('disabled'),
+    ).toBe(false)
+    // Vers Gestion : refusé (la gestion seule y est auteur).
+    fireEvent.click(screen.getAllByRole('radio')[2])
+    expect(
+      screen.getByText(/ne peut pas avoir un classeur de ce type/),
+    ).toBeTruthy()
   })
 
   it('rien changé dans le type ni l’auteur : aucun rangement écrit', async () => {

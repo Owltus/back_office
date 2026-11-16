@@ -15,8 +15,10 @@
 -- un gestion, l'auteur d'un privé (s'il a l'écriture sur la page).
 -- Changer le TYPE : l'auteur (public <-> privé) et la gestion ; vers ou depuis
 -- « gestion » : la gestion seule. Changer l'AUTEUR : l'auteur et la gestion ;
--- le nouvel auteur doit avoir l'écriture sur la page (la gestion pour un
--- classeur de type gestion), ou être admin.
+-- le nouvel auteur doit avoir la page, même en LECTURE (décision utilisateur
+-- du 2026-11-16 : la gestion peut dédier à quelqu'un un classeur qu'il lira
+-- sans le modifier ; la gestion pour un classeur de type gestion), ou être
+-- admin.
 -- Les exceptions par personne (`classeur_acces`) ne sont plus lues ; la table
 -- reste (aucune ligne aujourd'hui), comme `acces_tous`.
 --
@@ -147,7 +149,7 @@ begin
               or exists (select 1 from public.user_page_permissions u
                           where u.user_id = p.id and u.page = 'classeur'
                             and (u.level = 'gestion'
-                                 or (u.level = 'ecriture' and new.visibilite is distinct from 'gestion'))))) then
+                                 or (u.level in ('lecture', 'ecriture') and new.visibilite is distinct from 'gestion'))))) then
       raise exception 'Cette personne ne peut pas être l''auteur de ce classeur.' using errcode = '23514';
     end if;
   elsif new.visibilite is distinct from old.visibilite and new.visibilite = 'gestion'
