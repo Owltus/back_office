@@ -44,6 +44,7 @@ const CLASSEUR: DbClasseur = {
   updated_at: T,
   created_by: null,
   visibilite: 'public',
+  couleur: 'violet',
 }
 const chapitre = (
   id: number,

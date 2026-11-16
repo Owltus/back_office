@@ -53,6 +53,7 @@ function classeur(id: number) {
     etablissement_complement: '',
     created_by: null,
     visibilite: 'public',
+    couleur: 'violet',
     sort_order: id,
     created_at: T,
     updated_at: T,

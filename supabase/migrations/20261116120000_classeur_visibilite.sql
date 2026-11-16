@@ -40,6 +40,16 @@ alter table public.classeur_classeurs
   add constraint classeur_classeurs_visibilite_check
   check (visibilite in ('public', 'prive', 'gestion'));
 
+-- Couleur de l'icône (2026-11-16, demande utilisateur, purement esthétique) :
+-- 14 teintes, `violet` = l'apparence d'avant. Miroir : `lib/classeur/couleurs.ts`.
+alter table public.classeur_classeurs
+  add column if not exists couleur text not null default 'violet';
+alter table public.classeur_classeurs
+  drop constraint if exists classeur_classeurs_couleur_check;
+alter table public.classeur_classeurs
+  add constraint classeur_classeurs_couleur_check
+  check (couleur in ('rouge', 'orange', 'jaune', 'lime', 'vert', 'sarcelle', 'cyan', 'ciel', 'bleu', 'indigo', 'violet', 'fuchsia', 'rose', 'ardoise'));
+
 update public.classeur_classeurs
    set visibilite = 'prive'
  where acces_tous = 'aucun' and visibilite = 'public';

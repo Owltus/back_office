@@ -41,6 +41,7 @@ const classeur = (
 ): DbClasseur => ({
   id,
   uuid: `c${String(id)}`,
+  couleur: 'violet',
   name,
   icon: 'Book',
   etablissement: '',

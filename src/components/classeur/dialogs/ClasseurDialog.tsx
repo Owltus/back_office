@@ -37,6 +37,13 @@ import {
 import type { Visibilite } from '#/lib/classeur/droits.ts'
 import { nomAuteur } from '#/lib/classeur/auteurs.ts'
 import {
+  CLASSES_PASTILLE,
+  COULEURS_CLASSEUR,
+  NOM_COULEUR,
+  couleurDe,
+} from '#/lib/classeur/couleurs.ts'
+import type { CouleurClasseur } from '#/lib/classeur/couleurs.ts'
+import {
   createClasseur,
   rangerClasseur,
   updateClasseur,
@@ -120,6 +127,9 @@ function ClasseurForm({
 }) {
   const [name, setName] = useState(classeur?.name ?? '')
   const [icon, setIcon] = useState(classeur?.icon ?? ICONE_PAR_DEFAUT)
+  const [couleur, setCouleur] = useState<CouleurClasseur>(
+    couleurDe(classeur?.couleur),
+  )
   const [etablissement, setEtablissement] = useState(
     classeur?.etablissement ?? '',
   )
@@ -195,6 +205,7 @@ function ClasseurForm({
           icon,
           etablissement: etablissement.trim(),
           etablissement_complement: complement.trim(),
+          couleur,
         })
       }}
       className="flex flex-col gap-4"
@@ -214,6 +225,34 @@ function ClasseurForm({
       <div className="flex flex-col gap-2">
         <Label>Icône</Label>
         <IconPicker value={icon} onChange={setIcon} />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Label id="classeur-couleur">Couleur</Label>
+        <div
+          role="radiogroup"
+          aria-labelledby="classeur-couleur"
+          className="grid grid-cols-7 justify-items-center gap-2 sm:grid-cols-14 sm:gap-1.5"
+        >
+          {COULEURS_CLASSEUR.map((c) => (
+            <button
+              key={c}
+              type="button"
+              role="radio"
+              aria-checked={couleur === c}
+              aria-label={NOM_COULEUR[c]}
+              title={NOM_COULEUR[c]}
+              onClick={() => setCouleur(c)}
+              className={cn(
+                'size-6 rounded-full ring-offset-2 ring-offset-background transition-shadow',
+                CLASSES_PASTILLE[c],
+                couleur === c
+                  ? 'ring-2 ring-foreground'
+                  : 'hover:ring-2 hover:ring-border',
+              )}
+            />
+          ))}
+        </div>
       </div>
 
       <div className="flex flex-col gap-2">

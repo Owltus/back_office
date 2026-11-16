@@ -102,7 +102,7 @@ export const MERGE_HISTORY_TABLE = 'classeur_merge_history'
 export const IMAGES_TABLE = 'classeur_images'
 
 const COLS_COMMUNES = 'id, uuid, sort_order, deleted_at, created_at, updated_at'
-const COLS_CLASSEUR = `${COLS_COMMUNES}, name, icon, etablissement, etablissement_complement, created_by, visibilite`
+const COLS_CLASSEUR = `${COLS_COMMUNES}, name, icon, etablissement, etablissement_complement, created_by, visibilite, couleur`
 const COLS_CHAPTER = `${COLS_COMMUNES}, classeur_id, label, icon, description`
 const COLS_DOCUMENT = `${COLS_COMMUNES}, chapter_id, title, description, content, version_majeure, version_mineure`
 const COLS_TRACKING = `${COLS_COMMUNES}, chapter_id, title, periodicite_id`
@@ -354,6 +354,8 @@ export interface ClasseurInput {
   icon: string
   etablissement: string
   etablissement_complement: string
+  /** Couleur de l'icône ; absente : celle par défaut (base). */
+  couleur?: DbClasseur['couleur']
 }
 
 /**

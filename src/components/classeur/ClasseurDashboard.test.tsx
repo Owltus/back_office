@@ -55,6 +55,7 @@ vi.mock('#/components/classeur/hooks/useClasseur.ts', () => ({
       etablissement: '',
       etablissement_complement: '',
       visibilite: 'public',
+      couleur: 'violet',
     },
     isPending: false,
     isError: false,

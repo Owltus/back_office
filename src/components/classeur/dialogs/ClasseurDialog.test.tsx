@@ -96,6 +96,7 @@ const classeur = (x: Partial<DbClasseur> = {}): DbClasseur => ({
   updated_at: '2026-09-01T00:00:00Z',
   created_by: 'autre',
   visibilite: 'public',
+  couleur: 'violet',
   ...x,
 })
 
@@ -107,9 +108,34 @@ function rendre(c?: DbClasseur) {
   )
 }
 
-const types = () => screen.queryAllByRole('radio').map((r) => r.textContent)
+/** Les choix du TYPE (les pastilles de couleur sont aussi des radios). */
+const radiosType = () => {
+  const g = screen.queryByRole('radiogroup', { name: 'Type du classeur' })
+  return g ? [...g.querySelectorAll<HTMLElement>('[role="radio"]')] : []
+}
+
+const types = () => radiosType().map((r) => r.textContent)
 
 afterEach(cleanup)
+
+describe('ClasseurDialog — couleur', () => {
+  it('14 pastilles, la couleur du classeur cochée, envoyée à l’enregistrement', async () => {
+    rendre(classeur({ couleur: 'vert' }))
+    const g = screen.getByRole('radiogroup', { name: 'Couleur' })
+    const pastilles = [...g.querySelectorAll('[role="radio"]')]
+    expect(pastilles).toHaveLength(14)
+    expect(
+      screen.getByRole('radio', { name: 'Vert' }).getAttribute('aria-checked'),
+    ).toBe('true')
+    fireEvent.click(screen.getByRole('radio', { name: 'Fuchsia' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+    await waitFor(() => expect(etat.updateClasseur).toHaveBeenCalled())
+    expect(etat.updateClasseur).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ couleur: 'fuchsia' }),
+    )
+  })
+})
 beforeEach(() => {
   etat.page = 'gestion'
   etat.admin = false
@@ -129,7 +155,7 @@ describe('ClasseurDialog — type et auteur', () => {
     fireEvent.change(screen.getByLabelText('Nom'), {
       target: { value: 'Mon classeur' },
     })
-    fireEvent.click(screen.getAllByRole('radio')[1])
+    fireEvent.click(radiosType()[1])
     fireEvent.click(screen.getByRole('button', { name: 'Créer' }))
     await waitFor(() => expect(etat.createClasseur).toHaveBeenCalled())
     expect(etat.createClasseur.mock.calls[0]).toEqual([
@@ -155,7 +181,7 @@ describe('ClasseurDialog — type et auteur', () => {
   it('la gestion range le public d’un autre dans Gestion : son auteur a la gestion, enregistré', async () => {
     rendre(classeur())
     expect(screen.getByRole('combobox', { name: 'Auteur' })).toBeTruthy()
-    fireEvent.click(screen.getAllByRole('radio')[2])
+    fireEvent.click(radiosType()[2])
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
     await waitFor(() => expect(etat.rangerClasseur).toHaveBeenCalled())
     expect(etat.rangerClasseur).toHaveBeenCalledWith(7, {
@@ -165,7 +191,7 @@ describe('ClasseurDialog — type et auteur', () => {
 
   it('vers Gestion, un auteur sans la gestion bloque l’enregistrement', () => {
     rendre(classeur({ created_by: 'ecri' }))
-    fireEvent.click(screen.getAllByRole('radio')[2])
+    fireEvent.click(radiosType()[2])
     expect(
       screen.getByText(/ne peut pas avoir un classeur de ce type/),
     ).toBeTruthy()
@@ -178,7 +204,7 @@ describe('ClasseurDialog — type et auteur', () => {
 
   it('la gestion range le public d’un autre dans les privés : il devient le sien', async () => {
     rendre(classeur())
-    fireEvent.click(screen.getAllByRole('radio')[1])
+    fireEvent.click(radiosType()[1])
     expect(screen.getByText(/devient le vôtre/)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
     await waitFor(() => expect(etat.rangerClasseur).toHaveBeenCalled())
@@ -192,7 +218,7 @@ describe('ClasseurDialog — type et auteur', () => {
     etat.page = 'ecriture'
     rendre(classeur({ created_by: 'moi' }))
     expect(types()).toHaveLength(2)
-    fireEvent.click(screen.getAllByRole('radio')[1])
+    fireEvent.click(radiosType()[1])
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
     await waitFor(() => expect(etat.rangerClasseur).toHaveBeenCalled())
     expect(etat.rangerClasseur).toHaveBeenCalledWith(7, { visibilite: 'prive' })
@@ -209,7 +235,7 @@ describe('ClasseurDialog — type et auteur', () => {
         .hasAttribute('disabled'),
     ).toBe(false)
     // Vers Gestion : refusé (la gestion seule y est auteur).
-    fireEvent.click(screen.getAllByRole('radio')[2])
+    fireEvent.click(radiosType()[2])
     expect(
       screen.getByText(/ne peut pas avoir un classeur de ce type/),
     ).toBeTruthy()

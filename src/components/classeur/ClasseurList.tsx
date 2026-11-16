@@ -65,6 +65,7 @@ import {
   usePersonnesClasseur,
 } from '#/components/classeur/hooks/useDroitsClasseur.ts'
 import { nomAuteur } from '#/lib/classeur/auteurs.ts'
+import { CLASSES_ICONE, couleurDe } from '#/lib/classeur/couleurs.ts'
 import {
   capacites,
   niveauEffectif,
@@ -794,7 +795,12 @@ function LigneClasseur({
     >
       <td className="px-3 py-2">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <span
+            className={cn(
+              'flex size-11 shrink-0 items-center justify-center rounded-xl',
+              CLASSES_ICONE[couleurDe(classeur.couleur)],
+            )}
+          >
             <Icon className="size-7" strokeWidth={1.5} />
           </span>
           <div className="flex min-w-0 flex-col">

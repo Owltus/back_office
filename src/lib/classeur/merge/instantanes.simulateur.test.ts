@@ -59,6 +59,7 @@ beforeEach(() => {
         etablissement_complement: '',
         created_by: null,
         visibilite: 'public',
+        couleur: 'violet',
         sort_order: 1,
         created_at: T,
         updated_at: T,

@@ -44,6 +44,7 @@ export function classeur(over: Partial<DbClasseur> = {}): DbClasseur {
     updated_at: T0,
     created_by: null,
     visibilite: 'public',
+    couleur: 'violet',
     ...over,
   }
 }

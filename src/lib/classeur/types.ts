@@ -9,6 +9,8 @@
  * cache persisté (`lib/queryPersist.ts`, règle `survitAuJson`).
  */
 
+import type { CouleurClasseur } from '#/lib/classeur/couleurs.ts'
+
 /** Ligne de `classeur_classeurs`. */
 export interface DbClasseur {
   id: number
@@ -31,6 +33,8 @@ export interface DbClasseur {
    * (son auteur seul), gestion (la gestion de la page seule).
    */
   visibilite: 'public' | 'prive' | 'gestion'
+  /** Couleur de l'icône (2026-11-16, `lib/classeur/couleurs.ts`). */
+  couleur: CouleurClasseur
 }
 
 /** Personne ayant un droit sur la page Classeur (RPC, tout compte de la page). */

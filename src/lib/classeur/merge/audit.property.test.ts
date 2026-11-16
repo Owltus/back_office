@@ -162,6 +162,7 @@ class Simulateur {
       updated_at: T0,
       created_by: null,
       visibilite: 'public',
+      couleur: 'violet',
     },
   ]
   chapters: DbChapter[] = []
@@ -302,6 +303,7 @@ class Simulateur {
       uuid: `cl-${id}`,
       created_by: null,
       visibilite: 'public',
+      couleur: 'violet',
       ...input,
       sort_order: this.classeurs.length + 1,
       deleted_at: null,

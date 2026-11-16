@@ -36,6 +36,7 @@ const classeur = (id: number, x: Partial<DbClasseur> = {}): DbClasseur => ({
   updated_at: '2026-09-01T00:00:00Z',
   created_by: 'autre',
   visibilite: 'public',
+  couleur: 'violet',
   ...x,
 })
 
