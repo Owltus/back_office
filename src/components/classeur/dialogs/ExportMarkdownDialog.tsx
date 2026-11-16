@@ -90,16 +90,24 @@ export function phraseResultat(
     choix.avecImages && n > 0
       ? ` avec ${n > 1 ? `ses ${String(n)} images` : 'son image'} dans un dossier images`
       : ''
-  if (!archive) return `Vous recevez ${nom}, un seul fichier Markdown.`
+  // Avec les images mais aucune dans ces documents : le choix reste
+  // possible (demande utilisateur du 2026-11-16), il n'y a rien à joindre.
+  const rien =
+    choix.avecImages && n === 0
+      ? ' Aucune image dans ces documents : rien à joindre.'
+      : ''
+  if (!archive) return `Vous recevez ${nom}, un seul fichier Markdown.${rien}`
   if (choix.forme === 'unique')
     return `Vous recevez ${nom} : le fichier Markdown${images}.`
-  return `Vous recevez ${nom} : un dossier par chapitre, un fichier par document${images}.`
+  return `Vous recevez ${nom} : un dossier par chapitre, un fichier par document${images}.${rien}`
 }
 
 /**
  * Export Markdown, UNE entrée pour toutes les formes (demande utilisateur
  * du 2026-11-13) : un seul fichier ou un fichier par document, avec ou
- * sans les images. Un seul fichier sans image à joindre part en `.md`
+ * sans les images, les quatre combinaisons toujours possibles (2026-11-16 :
+ * « Avec les images » n'est plus grisé quand il n'y en a aucune, la phrase
+ * dit qu'il n'y a rien à joindre). Un seul fichier sans image à joindre part en `.md`
  * nu, tout le reste en ZIP (`exporterMarkdown`).
  */
 export function ExportMarkdownDialog({
@@ -125,7 +133,6 @@ export function ExportMarkdownDialog({
     },
     onSuccess: () => onOpenChange(false),
   })
-  const sansImage = portee !== null && nombreImages(portee) === 0
 
   return (
     <Dialog
@@ -180,18 +187,15 @@ export function ExportMarkdownDialog({
             className="grid gap-3 sm:grid-cols-2"
           >
             <Option
-              choisie={choix.avecImages && !sansImage}
+              choisie={choix.avecImages}
               onChoisir={() => setChoix({ ...choix, avecImages: true })}
               icone={Image}
               titre="Avec les images"
-              disabled={sansImage}
             >
-              {sansImage
-                ? 'Aucune image dans ces documents.'
-                : 'Jointes dans un dossier images, à côté du texte.'}
+              Jointes dans un dossier images, à côté du texte.
             </Option>
             <Option
-              choisie={!choix.avecImages || sansImage}
+              choisie={!choix.avecImages}
               onChoisir={() => setChoix({ ...choix, avecImages: false })}
               icone={ImageOff}
               titre="Sans les images"
@@ -203,10 +207,7 @@ export function ExportMarkdownDialog({
 
         {portee !== null && (
           <p className="rounded-lg bg-muted/40 px-4 py-3 text-sm" role="status">
-            {phraseResultat(portee, {
-              ...choix,
-              avecImages: choix.avecImages && !sansImage,
-            })}
+            {phraseResultat(portee, choix)}
           </p>
         )}
         {exporter.isError && (
@@ -224,12 +225,7 @@ export function ExportMarkdownDialog({
             Annuler
           </Button>
           <Button
-            onClick={() =>
-              exporter.mutate({
-                ...choix,
-                avecImages: choix.avecImages && !sansImage,
-              })
-            }
+            onClick={() => exporter.mutate(choix)}
             disabled={portee === null || exporter.isPending}
           >
             {exporter.isPending ? (
