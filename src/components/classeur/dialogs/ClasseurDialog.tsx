@@ -279,7 +279,7 @@ function ClasseurForm({
 
       {types.length > 1 && (
         <div className="flex flex-col gap-2">
-          <Label>Type</Label>
+          <Label>Tableau</Label>
           <div
             role="radiogroup"
             aria-label="Type du classeur"

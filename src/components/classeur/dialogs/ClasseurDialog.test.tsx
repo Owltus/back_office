@@ -149,8 +149,8 @@ describe('ClasseurDialog — type et auteur', () => {
     etat.page = 'ecriture'
     rendre()
     expect(types().map((t) => t.split(/(?=[A-Z])/)[0])).toEqual([
-      'Public',
-      'Privé',
+      'Classeurs publics',
+      'Classeurs privés',
     ])
     fireEvent.change(screen.getByLabelText('Nom'), {
       target: { value: 'Mon classeur' },

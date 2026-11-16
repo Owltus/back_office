@@ -247,7 +247,7 @@ export const LIBELLE_NIVEAU: Record<NiveauEffectif, string> = {
 }
 
 export const LIBELLE_VISIBILITE: Record<Visibilite, string> = {
-  public: 'Public',
-  prive: 'Privé',
-  gestion: 'Gestion',
+  public: 'Classeurs publics',
+  prive: 'Classeurs privés',
+  gestion: 'Classeurs des gestionnaires',
 }
