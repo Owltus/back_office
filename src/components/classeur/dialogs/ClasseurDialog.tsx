@@ -155,13 +155,11 @@ function ClasseurForm({
   const auteursPossibles = (personnes.data ?? []).filter((p) =>
     peutEtreAuteur(p.niveau_page, type),
   )
-  // Un privé déplacé par la gestion devient le sien (la base refuse qu'on se
-  // cache un classeur) : pas d'autre auteur possible que soi, sauf l'admin.
-  const auteurFige =
-    classeur != null &&
-    type === 'prive' &&
-    !moi.admin &&
-    classeur.created_by !== moi.userId
+  // Un classeur PRIVÉ est à soi, sauf pour l'admin : la base refuse qu'on se
+  // cache un classeur (un privé donné à un autre disparaîtrait). Un privé
+  // déplacé par la gestion devient donc le sien, et l'auteur d'un privé ne
+  // peut pas le donner tel quel (le passer d'abord en public).
+  const auteurFige = classeur != null && type === 'prive' && !moi.admin
   const auteurVoulu = auteurFige ? (moi.userId ?? null) : auteur
   // L'auteur choisi n'a que la lecture : il lira « son » classeur sans le
   // modifier (décision utilisateur du 2026-11-16), on le lui dit.
@@ -357,7 +355,9 @@ function ClasseurForm({
           )}
           <p className="text-xs text-muted-foreground">
             {auteurFige
-              ? 'Un classeur privé que vous rangez chez vous devient le vôtre.'
+              ? classeur?.created_by === moi.userId
+                ? 'Un classeur privé reste le vôtre. Pour le donner à quelqu’un, rangez-le d’abord dans les classeurs publics.'
+                : 'Un classeur privé que vous rangez chez vous devient le vôtre.'
               : type === 'prive'
                 ? 'Seul l’auteur voit un classeur privé.'
                 : 'L’auteur et la gestion peuvent changer son type et son auteur.'}

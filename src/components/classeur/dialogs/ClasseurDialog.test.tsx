@@ -224,6 +224,18 @@ describe('ClasseurDialog — type et auteur', () => {
     expect(etat.rangerClasseur).toHaveBeenCalledWith(7, { visibilite: 'prive' })
   })
 
+  it('l’auteur de son privé ne peut pas le donner tel quel (il se le cacherait)', () => {
+    etat.page = 'ecriture'
+    rendre(classeur({ created_by: 'moi', visibilite: 'prive' }))
+    expect(screen.queryByRole('combobox', { name: 'Auteur' })).toBeNull()
+    expect(
+      screen.getByText(/rangez-le d’abord dans les classeurs publics/),
+    ).toBeTruthy()
+    // Repassé en public, il peut choisir un autre auteur.
+    fireEvent.click(radiosType()[0])
+    expect(screen.getByRole('combobox', { name: 'Auteur' })).toBeTruthy()
+  })
+
   it('un auteur en lecture est permis pour un public ou un privé, et le dialogue le dit', () => {
     rendre(classeur({ created_by: 'lect' }))
     expect(
