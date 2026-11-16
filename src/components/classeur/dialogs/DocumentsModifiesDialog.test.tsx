@@ -76,10 +76,11 @@ afterEach(() => {
 })
 
 describe('DocumentsModifiesDialog', () => {
-  it('les cartes rangées par chapitre ; Tout imprimer envoie tout, dans l’ordre', () => {
+  it('les cartes côte à côte, sans chapitre ; Tout imprimer envoie tout, dans l’ordre', () => {
     ouvrir()
-    expect(screen.getByRole('region', { name: 'Accueil' })).toBeTruthy()
-    expect(screen.getByRole('region', { name: 'Sécurité' })).toBeTruthy()
+    // Côte à côte, sans titre de chapitre (2026-11-17).
+    expect(screen.queryByRole('region')).toBeNull()
+    expect(screen.queryByText('Accueil')).toBeNull()
     fireEvent.click(bouton(/Tout imprimer/))
     expect(titres(onImprimer.mock.calls[0][0] as ChapterItem[])).toEqual([
       'Check-in',
@@ -94,7 +95,7 @@ describe('DocumentsModifiesDialog', () => {
     expect(bouton(/Imprimer la sélection/).hasAttribute('disabled')).toBe(true)
     fireEvent.click(bouton('Extincteur'))
     fireEvent.click(bouton('Check-in'))
-    expect(screen.getByText(/2 éléments sélectionnés/)).toBeTruthy()
+    expect(screen.getByText(/2 contenus sélectionnés/)).toBeTruthy()
     fireEvent.click(bouton(/Imprimer la sélection/))
     expect(titres(onImprimer.mock.calls[0][0] as ChapterItem[])).toEqual([
       'Check-in',
