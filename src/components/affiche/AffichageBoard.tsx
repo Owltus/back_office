@@ -147,11 +147,14 @@ export function AffichageBoard() {
 
   // Groupement du dropdown par PROPRIÉTÉ (createdBy), pas par droit de modif :
   // « Mes modèles » (dont je suis l'auteur) vs « Autres modèles » (seeds sans
-  // auteur + modèles d'autres). Un gestionnaire/admin voit le même découpage
-  // même s'il peut tout modifier. On ne groupe QUE si les deux listes existent.
+  // auteur + modèles d'autres). MÊME découpage pour tous ceux qui peuvent
+  // créer, gestion et admin compris (demande utilisateur du 2026-11-16) : avant,
+  // il ne paraissait que si les deux listes avaient un modèle, donc un admin
+  // sans modèle à lui voyait une liste à plat. Un groupe vide le dit. En
+  // lecture seule (aucune création possible), la liste reste à plat.
   const myTemplates = templates.filter((t) => t.createdBy === user?.id)
   const otherTemplates = templates.filter((t) => t.createdBy !== user?.id)
-  const groupedTemplates = myTemplates.length > 0 && otherTemplates.length > 0
+  const groupedTemplates = canWrite
 
   // Modale « nom du modèle » (création), réservée aux niveaux écriture/gestion.
   const [nameOpen, setNameOpen] = useState(false)
@@ -540,20 +543,28 @@ export function AffichageBoard() {
                     <>
                       <SelectGroup>
                         <SelectLabel>Mes modèles</SelectLabel>
-                        {myTemplates.map((t) => (
-                          <SelectItem key={t.id} value={t.id}>
-                            {t.name}
-                          </SelectItem>
-                        ))}
+                        {myTemplates.length === 0 ? (
+                          <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                            Aucun modèle créé par vous.
+                          </div>
+                        ) : (
+                          myTemplates.map((t) => (
+                            <SelectItem key={t.id} value={t.id}>
+                              {t.name}
+                            </SelectItem>
+                          ))
+                        )}
                       </SelectGroup>
-                      <SelectGroup>
-                        <SelectLabel>Autres modèles</SelectLabel>
-                        {otherTemplates.map((t) => (
-                          <SelectItem key={t.id} value={t.id}>
-                            {t.name}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
+                      {otherTemplates.length > 0 && (
+                        <SelectGroup>
+                          <SelectLabel>Autres modèles</SelectLabel>
+                          {otherTemplates.map((t) => (
+                            <SelectItem key={t.id} value={t.id}>
+                              {t.name}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      )}
                     </>
                   ) : (
                     templates.map((t) => (
