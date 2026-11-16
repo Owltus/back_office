@@ -60,17 +60,13 @@ export function EasterEggs() {
     gcTime: 2 * 60 * 60_000,
   })
 
-  const eggs = (data ?? []).filter((egg) => egg.enabled)
+  const motsCles = (data ?? [])
+    .filter((egg) => egg.enabled)
+    .flatMap((egg) => {
+      const effect = LAZY_EFFECTS.find((e) => e.id === egg.effectId)
+      return effect ? [{ keyword: egg.keyword, load: effect.load }] : []
+    })
 
-  return (
-    <>
-      {eggs.map((egg) => {
-        const effect = LAZY_EFFECTS.find((e) => e.id === egg.effectId)
-        if (!effect) return null
-        return (
-          <SecretEffect key={egg.id} keyword={egg.keyword} load={effect.load} />
-        )
-      })}
-    </>
-  )
+  // UN seul détecteur pour tous les mots-clés (voir SecretEffect).
+  return motsCles.length > 0 ? <SecretEffect motsCles={motsCles} /> : null
 }

@@ -24,6 +24,7 @@ import {
   fetchEasterEggs,
   updateEasterEgg,
 } from '#/lib/easter-eggs/service.ts'
+import { problemeMotCle } from '#/lib/easter-eggs/detecteur.ts'
 import { cn } from '#/lib/utils.ts'
 
 import type { ReactNode } from 'react'
@@ -140,14 +141,21 @@ export function EasterEggsBoard() {
 
   const eggs = data ?? []
   const trimmed = keyword.trim()
-  const canAdd = trimmed.length > 0 && !createMut.isPending
+  const probleme =
+    trimmed === ''
+      ? null
+      : problemeMotCle(
+          trimmed,
+          eggs.map((e) => e.keyword),
+        )
+  const canAdd = trimmed.length > 0 && probleme === null && !createMut.isPending
 
   return (
     <PageContainer>
       <div className="mx-auto w-full max-w-2xl space-y-6">
         <PageHeader
           title="Easter eggs"
-          meta="Taper un mot-clé n'importe où dans l'app lance un effet. Clique une carte pour l'essayer."
+          meta="Taper un mot-clé n'importe où dans l'app, comme un mot entier, lance un effet. Clique une carte pour l'essayer."
         />
 
         {/* Aperçu jouable des effets validés — candidats pour un déclencheur.
@@ -206,6 +214,9 @@ export function EasterEggsBoard() {
           </Button>
         </form>
 
+        {probleme !== null && (
+          <p className="text-sm text-destructive">{probleme}</p>
+        )}
         {createMut.isError && (
           <p className="text-sm text-destructive">
             Ajout impossible — ce mot-clé existe peut-être déjà.
@@ -237,6 +248,9 @@ export function EasterEggsBoard() {
                 <EasterEggEditor
                   key={egg.id}
                   egg={egg}
+                  autres={eggs
+                    .filter((e) => e.id !== egg.id)
+                    .map((e) => e.keyword)}
                   pending={updateMut.isPending}
                   onSave={(patch) => updateMut.mutate({ id: egg.id, patch })}
                   onCancel={() => setEditingId(null)}
@@ -349,11 +363,13 @@ function EasterEggCard({
 
 function EasterEggEditor({
   egg,
+  autres,
   pending,
   onSave,
   onCancel,
 }: {
   egg: EasterEgg
+  autres: string[]
   pending: boolean
   onSave: (patch: { keyword: string; effectId: string }) => void
   onCancel: () => void
@@ -361,12 +377,14 @@ function EasterEggEditor({
   const [keyword, setKeyword] = useState(egg.keyword)
   const [effectId, setEffectId] = useState(egg.effectId)
   const trimmed = keyword.trim()
+  const probleme = trimmed === '' ? null : problemeMotCle(trimmed, autres)
+  const valide = trimmed !== '' && probleme === null
 
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault()
-        if (trimmed) onSave({ keyword: trimmed, effectId })
+        if (valide) onSave({ keyword: trimmed, effectId })
       }}
       className="flex flex-col gap-3 rounded-xl border border-primary/40 bg-card p-4 sm:flex-row sm:items-end"
     >
@@ -381,7 +399,11 @@ function EasterEggEditor({
           onChange={(e) => setKeyword(e.target.value)}
           autoComplete="off"
           autoFocus
+          aria-invalid={probleme !== null}
         />
+        {probleme !== null && (
+          <p className="text-sm text-destructive">{probleme}</p>
+        )}
       </Field>
       <Field label="Effet" htmlFor={`edit-effect-${egg.id}`} className="flex-1">
         <EffectSelect
@@ -394,7 +416,7 @@ function EasterEggEditor({
         <Button
           type="submit"
           size="icon"
-          disabled={!trimmed || pending}
+          disabled={!valide || pending}
           title="Enregistrer"
         >
           <Check />
