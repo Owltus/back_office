@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 
 import type { ItemCardCommonProps } from '#/components/classeur/cards/ItemCardShell.tsx'
@@ -69,7 +69,19 @@ const bouton = (nom: string | RegExp) =>
   screen.getByRole('button', { name: nom })
 const titres = (items: ChapterItem[]) => items.map((it) => it.data.title)
 
+beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  )
+  window.localStorage.clear()
+})
 afterEach(() => {
+  vi.unstubAllGlobals()
   cleanup()
   onImprimer.mockReset()
   onDejaAJour.mockReset()
@@ -121,5 +133,17 @@ describe('DocumentsModifiesDialog', () => {
     fireEvent.click(bouton(/Déjà à jour/))
     expect(onDejaAJour).toHaveBeenCalledTimes(1)
     expect(onImprimer).not.toHaveBeenCalled()
+  })
+
+  it('Ctrl + molette sur les cartes : moins de colonnes, la page ne zoome pas', () => {
+    ouvrir()
+    const zone = window.document.querySelector('[data-zone-cartes]')!
+    const grille = zone.querySelector('.grid') as HTMLElement
+    expect(grille.style.gridTemplateColumns).toContain('auto-fill')
+    // `fireEvent` rend false quand l'événement a été annulé.
+    const nonAnnule = fireEvent.wheel(zone, { deltaY: -100, ctrlKey: true })
+    expect(nonAnnule).toBe(false)
+    // Une seule colonne en moins depuis l'automatique (borne basse : 1).
+    expect(grille.style.gridTemplateColumns).toMatch(/^repeat\(\d+, /)
   })
 })

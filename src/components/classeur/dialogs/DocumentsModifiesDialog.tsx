@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
+import type { CSSProperties, ReactNode, RefCallback } from 'react'
 import { DndContext } from '@dnd-kit/core'
 import { SortableContext } from '@dnd-kit/sortable'
 import { CheckSquare, Printer, X } from 'lucide-react'
@@ -6,6 +7,7 @@ import { CheckSquare, Printer, X } from 'lucide-react'
 import { DocumentCard } from '#/components/classeur/cards/DocumentCard.tsx'
 import { IntercalaireCard } from '#/components/classeur/cards/IntercalaireCard.tsx'
 import type { ItemCardCommonProps } from '#/components/classeur/cards/ItemCardShell.tsx'
+import { useChapterZoom } from '#/components/classeur/hooks/useChapterZoom.ts'
 import { SignatureSheetCard } from '#/components/classeur/cards/SignatureSheetCard.tsx'
 import { TrackingSheetCard } from '#/components/classeur/cards/TrackingSheetCard.tsx'
 import { Button } from '#/components/ui/button.tsx'
@@ -32,6 +34,46 @@ import type {
  * (ou la case d'une carte) permet d'en choisir quelques-uns. « Déjà à jour »
  * retient le tout sans imprimer.
  */
+
+/*
+ * Zoom des cartes comme dans un chapitre (demande utilisateur du
+ * 2026-11-17) : Ctrl + molette sur la zone des cartes, ou Ctrl + « + » /
+ * « - » / « 0 », change le nombre de colonnes, jamais le zoom de la page.
+ * Même réglage que les chapitres (`useChapterZoom`). Le contenu de la
+ * fenêtre n'est monté qu'ouvert : le zoom n'écoute que pendant ce temps.
+ */
+const ZoomContexte = createContext<{
+  gridStyle: CSSProperties
+  containerRef: RefCallback<HTMLElement>
+} | null>(null)
+
+function ZoneCartes({ children }: { children: ReactNode }) {
+  const { gridStyle, containerRef, zoneRef } = useChapterZoom()
+  return (
+    <div
+      ref={zoneRef}
+      className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1"
+      data-zone-cartes=""
+    >
+      <ZoomContexte.Provider value={{ gridStyle, containerRef }}>
+        {children}
+      </ZoomContexte.Provider>
+    </div>
+  )
+}
+
+function GrilleCartes({ children }: { children: ReactNode }) {
+  const zoom = useContext(ZoomContexte)
+  return (
+    <div
+      ref={zoom?.containerRef}
+      className="grid gap-4"
+      style={zoom?.gridStyle}
+    >
+      {children}
+    </div>
+  )
+}
 
 export interface GroupeModifies {
   chapitre: DbChapter
@@ -118,18 +160,13 @@ export function DocumentsModifiesDialog({
 
         {/* Mêmes cartes que la page d'un chapitre, en lecture : ni glisser
             ni modification. Le contexte dnd-kit est requis par les cartes. */}
-        <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1">
+        <ZoneCartes>
           <DndContext>
             <SortableContext
               items={elements.map(({ it }) => cleRef(it.kind, it.data.id))}
               disabled
             >
-              <div
-                className="grid gap-4"
-                style={{
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-                }}
-              >
+              <GrilleCartes>
                 {elements.map(({ it, chapitre }) => {
                   const cle = cleRef(it.kind, it.data.id)
                   const props: ItemCardCommonProps = {
@@ -178,10 +215,10 @@ export function DocumentsModifiesDialog({
                       )
                   }
                 })}
-              </div>
+              </GrilleCartes>
             </SortableContext>
           </DndContext>
-        </div>
+        </ZoneCartes>
 
         <DialogFooter className="gap-2 sm:items-center sm:justify-between">
           {selectionActive ? (
