@@ -572,20 +572,19 @@ const GRILLE_CHAPITRE: CSSProperties = {
  */
 export const TABLEAU_CLASSEURS = {
   /*
-   * Même bornage que `AnalytiqueTable` (2026-10-19, demande utilisateur) :
-   * sous `lg`, la carte prend sa hauteur naturelle et la page défile ; à
-   * partir de `lg`, elle descend jusqu'au bas de la fenêtre et son corps
-   * défile en interne, en-tête de colonnes collant. Les lignes gardent
-   * leur hauteur (contrairement aux 12 mois de l'analytique, étirés) : peu
-   * de classeurs ne doivent pas donner des lignes géantes.
+   * PLUSIEURS tableaux l'un sous l'autre (Publics, Mes privés, Privés des
+   * autres, Gestion ; demande utilisateur du 2026-11-16) : la zone sous
+   * l'en-tête défile (`sections`), chaque carte garde sa hauteur naturelle.
+   * Avant : un seul tableau qui descendait jusqu'au bas de la fenêtre.
    */
-  carte:
-    'overflow-hidden rounded-xl border border-border bg-card lg:flex lg:min-h-0 lg:flex-1 lg:flex-col',
-  defilement:
-    'no-scrollbar overflow-x-auto lg:min-h-0 lg:flex-1 lg:overflow-y-auto',
-  /* Opaque (il passe au-dessus des lignes qui défilent) ; le trait est une
-     ombre : une bordure de `tr` collant disparaît avec `border-collapse`. */
-  thead: 'sticky top-0 z-10 bg-muted shadow-[inset_0_-1px_0_var(--border)]',
+  sections:
+    'flex flex-col gap-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pb-2',
+  section: 'flex flex-col gap-2',
+  titre:
+    'flex items-baseline gap-2 px-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase',
+  carte: 'overflow-hidden rounded-xl border border-border bg-card',
+  defilement: 'no-scrollbar overflow-x-auto',
+  thead: 'bg-muted shadow-[inset_0_-1px_0_var(--border)]',
   th: 'px-3 py-2 text-xs font-medium text-muted-foreground',
   ligne:
     'border-b border-border/50 transition-colors last:border-b-0 hover:bg-accent/50',
@@ -593,78 +592,86 @@ export const TABLEAU_CLASSEURS = {
 
 /**
  * Silhouette de la liste des classeurs : la barre des boutons (Nouveau
- * classeur, puis le groupe « ? » et Importer) puis le TABLEAU, mêmes colonnes et mêmes
- * points de bascule que `ClasseurList`. `actions = false` : le tableau seul
- * (pendant le chargement, sous la barre réelle). `acces` suit la colonne
- * que la page affichera (droits connus).
+ * classeur, puis le groupe « ? » et Importer) puis les TABLEAUX (un par
+ * type), mêmes colonnes et mêmes points de bascule que `ClasseurList`.
+ * `actions = false` : les tableaux seuls (pendant le chargement, sous la
+ * barre réelle). `sections` : le nombre de tableaux que la page affichera.
  */
 export function FormeClasseurListe({
   cartes = 3,
   actions = true,
-  acces = false,
+  sections = 2,
 }: {
   cartes?: number
   actions?: boolean
-  acces?: boolean
+  sections?: number
 }) {
-  const tableau = (
-    <div className={TABLEAU_CLASSEURS.carte}>
-      <div className={TABLEAU_CLASSEURS.defilement}>
-        <table className="w-full text-sm">
-          <thead className={TABLEAU_CLASSEURS.thead}>
-            <tr>
-              <th className={cn(TABLEAU_CLASSEURS.th, 'text-left')}>
-                <Skeleton className="h-3 w-16" />
-              </th>
-              <th
-                className={cn(
-                  TABLEAU_CLASSEURS.th,
-                  'hidden w-24 sm:table-cell',
-                )}
-              >
-                <Skeleton className="mx-auto h-3 w-16" />
-              </th>
-              {acces && (
+  const tableau = (k: number) => (
+    <div key={k} className={TABLEAU_CLASSEURS.section}>
+      <div className={TABLEAU_CLASSEURS.titre}>
+        <Skeleton className="h-3 w-20" />
+      </div>
+      <div className={TABLEAU_CLASSEURS.carte}>
+        <div className={TABLEAU_CLASSEURS.defilement}>
+          <table className="w-full text-sm">
+            <thead className={TABLEAU_CLASSEURS.thead}>
+              <tr>
+                <th className={cn(TABLEAU_CLASSEURS.th, 'text-left')}>
+                  <Skeleton className="h-3 w-16" />
+                </th>
                 <th
                   className={cn(
                     TABLEAU_CLASSEURS.th,
-                    'hidden w-12 sm:table-cell',
+                    'hidden w-40 sm:table-cell',
                   )}
-                />
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {Array.from({ length: cartes }).map((_, i) => (
-              <tr key={i} className={TABLEAU_CLASSEURS.ligne}>
-                <td className="px-3 py-2">
-                  <div className="flex items-center gap-3">
-                    <Skeleton className="size-11 shrink-0 rounded-xl" />
-                    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                      <Skeleton className="h-4 w-full max-w-48" />
-                      <Skeleton className="h-3 w-28" />
-                    </div>
-                  </div>
-                </td>
-                <td className="hidden px-3 py-3 sm:table-cell">
-                  <Skeleton className="mx-auto h-3.5 w-14" />
-                </td>
-                {acces && (
-                  <td className="hidden px-3 py-3 sm:table-cell">
-                    <Skeleton className="mx-auto size-4 rounded-sm" />
-                  </td>
-                )}
+                >
+                  <Skeleton className="h-3 w-12" />
+                </th>
+                <th
+                  className={cn(
+                    TABLEAU_CLASSEURS.th,
+                    'hidden w-24 sm:table-cell',
+                  )}
+                >
+                  <Skeleton className="mx-auto h-3 w-16" />
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {Array.from({ length: k === 0 ? cartes : 1 }).map((_, i) => (
+                <tr key={i} className={TABLEAU_CLASSEURS.ligne}>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="size-11 shrink-0 rounded-xl" />
+                      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                        <Skeleton className="h-4 w-full max-w-48" />
+                        <Skeleton className="h-3 w-28" />
+                      </div>
+                    </div>
+                  </td>
+                  <td className="hidden px-3 py-3 sm:table-cell">
+                    <Skeleton className="h-3.5 w-24" />
+                  </td>
+                  <td className="hidden px-3 py-3 sm:table-cell">
+                    <Skeleton className="mx-auto h-3.5 w-14" />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
+    </div>
+  )
+  const tableaux = (
+    <div className={TABLEAU_CLASSEURS.sections}>
+      {Array.from({ length: sections }).map((_, k) => tableau(k))}
     </div>
   )
   if (!actions)
     return (
       <div aria-hidden="true" className="flex flex-col lg:min-h-0 lg:flex-1">
-        {tableau}
+        {tableaux}
       </div>
     )
   return (
@@ -680,7 +687,7 @@ export function FormeClasseurListe({
           <Skeleton className="size-8 rounded-l-none rounded-r-md" />
         </div>
       </div>
-      {tableau}
+      {tableaux}
     </div>
   )
 }

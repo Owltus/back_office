@@ -21,24 +21,19 @@ export interface DbClasseur {
   deleted_at: string | null
   created_at: string
   updated_at: string
-  /** Créateur (posé par trigger) : écriture par défaut, sauf exception. */
+  /**
+   * AUTEUR (posé par trigger à la création) : il décide qui voit un privé.
+   * Changé par l'auteur ou la gestion (2026-11-16, `classeur_garde`).
+   */
   created_by: string | null
   /**
-   * Accès pour tous (2026-09-28) : niveau des personnes sans exception.
-   * `aucun` = classeur privé. Modifiable par la gestion seule.
+   * TYPE du classeur (2026-11-16, `lib/classeur/droits.ts`) : public, privé
+   * (son auteur seul), gestion (la gestion de la page seule).
    */
-  acces_tous: 'aucun' | 'lecture' | 'ecriture'
+  visibilite: 'public' | 'prive' | 'gestion'
 }
 
-/** Exception d'accès d'une personne sur un classeur (`classeur_acces`). */
-export interface DbAccesClasseur {
-  id: number
-  classeur_id: number
-  user_id: string
-  niveau: 'aucun' | 'lecture' | 'ecriture'
-}
-
-/** Personne ayant un droit sur la page Classeur (RPC, gestion seule). */
+/** Personne ayant un droit sur la page Classeur (RPC, tout compte de la page). */
 export interface PersonneClasseur {
   id: string
   prenom: string

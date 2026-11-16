@@ -385,12 +385,6 @@ export function ChapterBoard({
       err: contenuQ.error,
       action: 'Éléments indisponibles',
     })
-  if (droits.isError)
-    erreurs.push({
-      cle: 'droits',
-      err: droits.error,
-      action: 'Droits indisponibles, modifications désactivées',
-    })
   if (reorder.isError)
     erreurs.push({
       cle: 'ordre',

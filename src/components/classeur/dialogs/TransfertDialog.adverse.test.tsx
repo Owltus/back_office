@@ -7,12 +7,10 @@ import { cleanup, render, screen } from '@testing-library/react'
 import type { ChapterItem, DbClasseur } from '#/lib/classeur/types.ts'
 
 /*
- * Relecture adverse du transfert (étape 7c) : mes EXCEPTIONS d'accès
- * illisibles. Une exception peut RETIRER l'écriture d'un classeur ouvert à
- * tous en écriture ; si la lecture de mes exceptions échoue, la liste des
- * cibles ne doit pas les supposer absentes (elle proposerait un classeur
- * où la base refusera tout) : elle doit le dire, comme pour la liste des
- * classeurs.
+ * Relecture adverse du transfert (étape 7c) : la LISTE des classeurs
+ * illisible. Les exceptions d'accès par personne n'existent plus
+ * (2026-11-16) : le niveau ne dépend que du type, de l'auteur et de la page.
+ * Si la liste échoue, le dialogue ne propose rien et le dit.
  */
 
 const USER = 'u-moi'
@@ -20,7 +18,7 @@ const USER = 'u-moi'
 const classeur = (
   id: number,
   name: string,
-  acces_tous: DbClasseur['acces_tous'],
+  visibilite: DbClasseur['visibilite'],
 ): DbClasseur => ({
   id,
   uuid: `c${String(id)}`,
@@ -33,29 +31,23 @@ const classeur = (
   created_at: '',
   updated_at: '',
   created_by: 'u-autre',
-  acces_tous,
+  visibilite,
 })
 
-const fetchClasseurs = vi.fn(() =>
-  Promise.resolve([
-    classeur(5, 'Courant', 'ecriture'),
-    classeur(10, 'Fermé à moi', 'ecriture'),
-  ]),
-)
-const fetchMesAcces = vi.fn(() =>
-  Promise.reject(new Error('Failed to fetch')),
-)
+// Gardé pour la forme des données : jamais rendu, la lecture échoue.
+void [classeur(5, 'Courant', 'public'), classeur(10, 'Ailleurs', 'public')]
+const fetchClasseurs = vi.fn(() => Promise.reject(new Error('Failed to fetch')))
 
 vi.mock('#/lib/supabase.ts', () => ({ supabase: {} }))
 vi.mock('#/components/auth/AuthContext.tsx', () => ({
   useAuth: () => ({
     user: { id: USER },
+    role: 'utilisateur',
     can: (_page: string, niveau: string) => niveau !== 'gestion',
   }),
 }))
 vi.mock('#/lib/classeur/service.ts', () => ({
   fetchClasseurs: () => fetchClasseurs(),
-  fetchMesAcces: () => fetchMesAcces(),
   fetchChapters: () => Promise.resolve([]),
 }))
 vi.mock('#/lib/classeur/transfertExecution.ts', () => ({
@@ -88,8 +80,8 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('TransfertDialog — exceptions d’accès illisibles', () => {
-  it('ne propose aucun classeur et le dit, au lieu d’ignorer les exceptions', async () => {
+describe('TransfertDialog — liste des classeurs illisible', () => {
+  it('ne propose aucun classeur et le dit', async () => {
     render(
       avecClient(
         <TransfertDialog
@@ -105,6 +97,6 @@ describe('TransfertDialog — exceptions d’accès illisibles', () => {
     expect(
       await screen.findByText(/Liste des classeurs indisponible/),
     ).toBeTruthy()
-    expect(screen.queryByRole('radio', { name: 'Fermé à moi' })).toBeNull()
+    expect(screen.queryByRole('radio', { name: 'Ailleurs' })).toBeNull()
   })
 })

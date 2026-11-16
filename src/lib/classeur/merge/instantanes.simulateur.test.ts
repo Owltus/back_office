@@ -58,7 +58,7 @@ beforeEach(() => {
         etablissement: 'OKKO Nantes',
         etablissement_complement: '',
         created_by: null,
-        acces_tous: 'lecture',
+        visibilite: 'public',
         sort_order: 1,
         created_at: T,
         updated_at: T,

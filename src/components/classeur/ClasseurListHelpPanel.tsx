@@ -1,6 +1,4 @@
 import type { ReactNode } from 'react'
-import { Eye, EyeOff, Lock, Pencil, Users } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
 
 import { MouseGlyph } from '#/components/parking/MouseGlyph.tsx'
 
@@ -40,21 +38,6 @@ function GestureRow({
   )
 }
 
-function Legende({
-  icone: Icone,
-  children,
-}: {
-  icone: LucideIcon
-  children: ReactNode
-}) {
-  return (
-    <div className="flex items-start gap-2.5">
-      <Icone className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-      <span>{children}</span>
-    </div>
-  )
-}
-
 const fort = (texte: string) => (
   <span className="font-medium text-foreground">{texte}</span>
 )
@@ -62,11 +45,14 @@ const fort = (texte: string) => (
 export function ClasseurListHelpPanel({
   canWrite,
   canManage,
+  admin = false,
 }: {
-  /** Écriture sur la page : créer et importer. */
+  /** Écriture sur la page : créer, importer, ranger les siens. */
   canWrite: boolean
-  /** Gestion de la page : ranger, accès donnés à tous, supprimer. */
+  /** Gestion de la page : ranger tous les classeurs, tableau Gestion. */
   canManage: boolean
+  /** Admin : le tableau des privés des autres. */
+  admin?: boolean
 }) {
   return (
     <div className="space-y-6">
@@ -96,7 +82,7 @@ export function ClasseurListHelpPanel({
       <Section title="Le menu d'un classeur">
         <GestureRow side="right">
           {fort('Clic droit')} sur une ligne : ouvrir, modifier le nom et
-          l'icône, régler les accès, copier pour un LLM, exporter en JSON ou
+          l'icône, le type et l'auteur, copier pour un LLM, exporter en JSON ou
           supprimer.
         </GestureRow>
         <p>
@@ -105,29 +91,37 @@ export function ClasseurListHelpPanel({
         </p>
       </Section>
 
-      <Section title="Les colonnes">
+      <Section title="Les tableaux">
         <p>
-          {fort('Modifié le')} : la dernière modification du classeur ou de son
-          contenu.
+          {fort('Publics')} : tous ceux qui ont la page les lisent, et ceux qui
+          ont l'écriture les modifient.
         </p>
-        {canManage ? (
-          <>
-            <p>{fort('Accès')} : ce que les autres peuvent faire.</p>
-            <Legende icone={EyeOff}>
-              Privé : seuls la gestion et les accès donnés un par un.
-            </Legende>
-            <Legende icone={Eye}>Tous le lisent.</Legende>
-            <Legende icone={Users}>Tous peuvent le modifier.</Legende>
-          </>
-        ) : canWrite ? (
-          <>
-            <p>{fort('Accès')} : ce que vous pouvez faire.</p>
-            <Legende icone={Pencil}>Vous pouvez le modifier.</Legende>
-            <Legende icone={Lock}>Vous pouvez seulement le lire.</Legende>
-          </>
-        ) : null}
-        {(canManage || canWrite) && (
-          <p>Survolez une icône pour lire son sens.</p>
+        <p>{fort('Mes privés')} : vous seul les voyez.</p>
+        {admin && (
+          <p>
+            {fort('Privés des autres')} : les privés de chacun, que vous voyez
+            parce que vous êtes administrateur.
+          </p>
+        )}
+        {canManage && (
+          <p>
+            {fort('Gestion')} : seuls ceux qui ont la gestion de la page les
+            voient.
+          </p>
+        )}
+        <p>
+          {fort('Auteur')} : la personne à qui le classeur appartient. Elle
+          décide de son type, avec la gestion. {fort('Modifié le')} : la
+          dernière modification du classeur ou de son contenu.
+        </p>
+        {(canWrite || canManage) && (
+          <GestureRow side="left">
+            {fort('Glisser')} une ligne dans un autre tableau change son type.
+            Vous rangez ainsi vos propres classeurs
+            {canManage
+              ? ', et tous ceux que vous voyez. Un classeur déposé dans Mes privés devient le vôtre.'
+              : ' entre Publics et Mes privés.'}
+          </GestureRow>
         )}
       </Section>
 

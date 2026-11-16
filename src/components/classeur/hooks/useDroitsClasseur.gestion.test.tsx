@@ -2,93 +2,113 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Mock } from 'vitest'
-import { cleanup, renderHook, waitFor } from '@testing-library/react'
+import { cleanup, renderHook } from '@testing-library/react'
 
 /*
- * La GESTION de la page a tout sur tout classeur, quelles que soient les
- * exceptions d'accès (`niveauEffectif`, miroir de la base). Échouer fermé
- * quand les exceptions sont illisibles (74a5f2b) ne doit donc pas la priver
- * de ses droits : ses exceptions ne changent rien à son niveau.
+ * La GESTION de la page gère les publics et les classeurs de gestion, mais
+ * ne voit PAS le privé d'un autre (2026-11-16). L'admin a tout, partout
+ * (`useMoiClasseur` lit `role === 'admin'`).
  */
 
 const etat = vi.hoisted(
-  (): { fetchMesAcces: Mock; page: 'gestion' | 'ecriture' } => ({
-    fetchMesAcces: vi.fn(),
-    page: 'gestion',
+  (): {
+    role: 'admin' | 'utilisateur'
+    classeur: {
+      id: number
+      created_by: string | null
+      visibilite: 'public' | 'prive' | 'gestion'
+    }
+  } => ({
+    role: 'utilisateur',
+    classeur: { id: 24, created_by: 'autre', visibilite: 'prive' },
   }),
 )
 
 vi.mock('#/lib/supabase.ts', () => ({ supabase: {} }))
 vi.mock('#/lib/classeur/service.ts', () => ({
-  fetchMesAcces: etat.fetchMesAcces,
+  fetchPersonnesClasseur: vi.fn(),
 }))
 vi.mock('#/components/auth/AuthContext.tsx', () => ({
   useAuth: () => ({
     user: { id: 'moi' },
-    can: (_page: string, niveau: string) =>
-      etat.page === 'gestion' || niveau !== 'gestion',
+    role: etat.role,
+    // Gestion de la page (l'admin l'a aussi).
+    can: () => true,
   }),
 }))
 vi.mock('#/components/classeur/hooks/useClasseur.ts', () => ({
   useClasseur: () => ({
-    data: { id: 24, created_by: 'autre', acces_tous: 'aucun' },
+    data: etat.classeur,
     isPending: false,
     isError: false,
   }),
   useClasseurs: () => ({ data: [], isPending: false, isError: false }),
 }))
 
-const { useDroitsClasseur } =
+const { useDroitsClasseur, useDroitsPageClasseur, useMoiClasseur } =
   await import('#/components/classeur/hooks/useDroitsClasseur.ts')
 
-function monter() {
+function monter<T>(hook: () => T) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   )
-  return renderHook(() => useDroitsClasseur(24), { wrapper }).result
+  return renderHook(hook, { wrapper }).result
 }
 
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
-  etat.page = 'gestion'
+  etat.role = 'utilisateur'
+  etat.classeur = { id: 24, created_by: 'autre', visibilite: 'prive' }
 })
 
-describe('useDroitsClasseur — gestion et exceptions illisibles', () => {
-  it('gestion, exceptions en ERREUR : gestion entière, aucune erreur', async () => {
-    etat.fetchMesAcces.mockRejectedValue(new Error('panne'))
-    const result = monter()
-    await waitFor(() => {
-      expect(etat.fetchMesAcces).toHaveBeenCalled()
-    })
-    await waitFor(() => {
-      expect(result.current.niveau).toBe('gestion')
-    })
-    expect(result.current.canWrite).toBe(true)
-    expect(result.current.canManage).toBe(true)
-    expect(result.current.pret).toBe(true)
-    expect(result.current.isError).toBe(false)
+describe('useDroitsClasseur — gestion et admin', () => {
+  it('gestion : le privé d’un autre reste invisible', () => {
+    const result = monter(() => useDroitsClasseur(24))
+    expect(result.current.niveau).toBe('aucun')
+    expect(result.current.lire).toBe(false)
+    expect(result.current.canWrite).toBe(false)
+    expect(result.current.canManage).toBe(false)
+    expect(result.current.canRanger).toBe(false)
   })
 
-  it('gestion, exceptions en cours de lecture : gestion sans attendre', () => {
-    etat.fetchMesAcces.mockReturnValue(new Promise(() => {}))
-    const result = monter()
+  it('admin : le privé d’un autre, en gestion entière', () => {
+    etat.role = 'admin'
+    const result = monter(() => useDroitsClasseur(24))
     expect(result.current.niveau).toBe('gestion')
     expect(result.current.canWrite).toBe(true)
+    expect(result.current.canManage).toBe(true)
+    expect(result.current.canRanger).toBe(true)
   })
 
-  it('écriture (pas gestion), exceptions en ERREUR : toujours fermé', async () => {
-    etat.page = 'ecriture'
-    etat.fetchMesAcces.mockRejectedValue(new Error('panne'))
-    const result = monter()
-    await waitFor(() => {
-      expect(result.current.isError).toBe(true)
+  it('gestion : un public d’un autre, géré et rangeable', () => {
+    etat.classeur = { id: 24, created_by: 'autre', visibilite: 'public' }
+    const result = monter(() => useDroitsClasseur(24))
+    expect(result.current.niveau).toBe('gestion')
+    expect(result.current.canManage).toBe(true)
+    expect(result.current.canRanger).toBe(true)
+  })
+
+  it('gestion : un classeur de gestion', () => {
+    etat.classeur = { id: 24, created_by: 'autre', visibilite: 'gestion' }
+    const result = monter(() => useDroitsClasseur(24))
+    expect(result.current.niveau).toBe('gestion')
+  })
+
+  it('useMoiClasseur et useDroitsPageClasseur : admin lu sur le rôle', () => {
+    const gestion = monter(() => useMoiClasseur())
+    expect(gestion.current).toEqual({
+      page: 'gestion',
+      userId: 'moi',
+      admin: false,
     })
-    expect(result.current.canWrite).toBe(false)
-    expect(result.current.niveau).toBe('aucun')
+    etat.role = 'admin'
+    const admin = monter(() => useDroitsPageClasseur())
+    expect(admin.current.moi.admin).toBe(true)
+    expect(admin.current.typesCreables).toEqual(['public', 'prive', 'gestion'])
+    expect(admin.current.canReorderList).toBe(true)
   })
 })

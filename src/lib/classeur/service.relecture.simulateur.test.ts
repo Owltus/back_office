@@ -87,9 +87,6 @@ function nouveau(): SimulateurSupabase {
       { id: 70, classeur_id: 24, kind: 'auto', merged_at: SUPPRIME },
       { id: 71, classeur_id: 24, kind: 'manuel', merged_at: SUPPRIME },
     ],
-    classeur_acces: [
-      { id: 80, classeur_id: 24, user_id: 'u-1', niveau: 'lecture' },
-    ],
   })
 }
 
@@ -295,23 +292,6 @@ describe('suppressions physiques', () => {
 
   it('deleteMergeHistory : déjà supprimée par un collègue ⇒ succès', async () => {
     await expect(service.deleteMergeHistory(999)).resolves.toBeUndefined()
-  })
-
-  it('definirAcces(null) : aucune exception à retirer ⇒ succès', async () => {
-    await expect(service.definirAcces(24, 'u-2', null)).resolves.toBeUndefined()
-  })
-
-  it('definirAcces(null) : retire l’exception ; refus ⇒ 42501', async () => {
-    sim.refuser('classeur_acces', 'delete')
-    await expect(service.definirAcces(24, 'u-1', null)).rejects.toMatchObject(
-      REFUS,
-    )
-    expect(ligne('classeur_acces', 80)).toBeDefined()
-  })
-
-  it('definirAcces(null) : retire l’exception', async () => {
-    await service.definirAcces(24, 'u-1', null)
-    expect(ligne('classeur_acces', 80)).toBeUndefined()
   })
 })
 

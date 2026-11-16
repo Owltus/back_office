@@ -88,7 +88,7 @@ select is(pg_temp.essai('a9000000-0000-4000-8000-00000000000e',
   'err=P0001:not authorized', 'facturation écriture (pas gestion) : RPC facturation refusée');
 select is(pg_temp.essai('a9000000-0000-4000-8000-00000000000f',
   $$select public.classeur_personnes()$$),
-  'err=42501:Réservé à la gestion de la page Classeur.', 'sans droit classeur : classeur_personnes refusé');
+  'err=42501:Réservé aux comptes qui ont la page Classeur.', 'sans droit classeur : classeur_personnes refusé');
 select is(pg_temp.essai('a9000000-0000-4000-8000-00000000000a',
   $$select public.set_user_grade('a9000000-0000-4000-8000-00000000000e', null)$$),
   'err=P0001:invalid grade: <NULL>', 'admin : grade NULL refusé');

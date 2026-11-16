@@ -43,7 +43,7 @@ const CLASSEUR: DbClasseur = {
   created_at: T,
   updated_at: T,
   created_by: null,
-  acces_tous: 'lecture',
+  visibilite: 'public',
 }
 const chapitre = (
   id: number,

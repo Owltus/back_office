@@ -35,7 +35,7 @@ const ORIGINE = 5
 const classeur = (
   id: number,
   name: string,
-  acces_tous: DbClasseur['acces_tous'],
+  visibilite: DbClasseur['visibilite'],
   created_by: string | null = 'u-autre',
   deleted_at: string | null = null,
 ): DbClasseur => ({
@@ -50,19 +50,11 @@ const classeur = (
   created_at: '',
   updated_at: '',
   created_by,
-  acces_tous,
+  visibilite,
 })
 
 let classeurs: DbClasseur[] = []
 const fetchClasseurs = vi.fn(() => Promise.resolve(classeurs))
-const fetchMesAcces = vi.fn(() =>
-  Promise.resolve([
-    // Exception qui OUVRE l'écriture sur un classeur « lecture pour tous ».
-    { id: 1, classeur_id: 9, user_id: USER, niveau: 'ecriture' },
-    // Exception qui la RETIRE sur un classeur « écriture pour tous ».
-    { id: 2, classeur_id: 10, user_id: USER, niveau: 'lecture' },
-  ]),
-)
 const chapitre = (id: number, classeur_id: number, label: string) =>
   ({ id, classeur_id, label }) as DbChapter
 const fetchChapters = vi.fn((id: number) =>
@@ -80,13 +72,13 @@ vi.mock('#/lib/supabase.ts', () => ({ supabase: {} }))
 vi.mock('#/components/auth/AuthContext.tsx', () => ({
   useAuth: () => ({
     user: { id: USER },
+    role: 'utilisateur',
     // Écriture sur la page Classeur, pas gestion.
     can: (_page: string, niveau: string) => niveau !== 'gestion',
   }),
 }))
 vi.mock('#/lib/classeur/service.ts', () => ({
   fetchClasseurs: () => fetchClasseurs(),
-  fetchMesAcces: () => fetchMesAcces(),
   fetchChapters: (id: number) => fetchChapters(id),
 }))
 vi.mock('#/lib/classeur/transfertExecution.ts', () => ({
@@ -167,13 +159,14 @@ async function choisirArrivee() {
 
 beforeEach(() => {
   classeurs = [
-    classeur(ORIGINE, 'Courant', 'ecriture', USER),
-    classeur(6, 'Arrivée', 'ecriture'),
-    classeur(7, 'Lecture seule', 'lecture'),
-    classeur(8, 'Privé', 'aucun'),
-    classeur(9, 'Ouvert à moi', 'lecture'),
-    classeur(10, 'Fermé à moi', 'ecriture'),
-    classeur(11, 'Mon privé', 'aucun', USER),
+    classeur(ORIGINE, 'Courant', 'public', USER),
+    classeur(6, 'Arrivée', 'public'),
+    // Classeur de gestion : invisible pour un compte en écriture.
+    classeur(7, 'Gestion seule', 'gestion'),
+    // Privé d'un autre : invisible.
+    classeur(8, 'Privé', 'prive'),
+    classeur(9, 'Sans chapitre', 'public'),
+    classeur(11, 'Mon privé', 'prive', USER),
   ]
   fetchClasseurs.mockClear()
   fetchChapters.mockClear()
@@ -200,7 +193,7 @@ describe('TransfertDialog', () => {
       .getAllByRole('radio')
       .map((r) => r.closest('label')?.textContent)
       .filter((t) => t !== 'Déplacer' && t !== 'Copier')
-    expect(noms).toEqual(['Arrivée', 'Ouvert à moi', 'Mon privé'])
+    expect(noms).toEqual(['Arrivée', 'Sans chapitre', 'Mon privé'])
   })
 
   it('chapitres lus à la sélection du classeur, pas avant', async () => {
@@ -296,14 +289,14 @@ describe('TransfertDialog', () => {
   })
 
   it('aucune cible : phrase claire, pas de liste', async () => {
-    classeurs = [classeur(ORIGINE, 'Courant', 'ecriture', USER)]
+    classeurs = [classeur(ORIGINE, 'Courant', 'public', USER)]
     ouvrirDialogue()
     expect(await screen.findByText(`${AUCUNE_CIBLE}.`)).toBeTruthy()
   })
 
   it('classeur sans chapitre : le dit, bouton grisé', async () => {
     ouvrirDialogue()
-    fireEvent.click(await screen.findByRole('radio', { name: 'Ouvert à moi' }))
+    fireEvent.click(await screen.findByRole('radio', { name: 'Sans chapitre' }))
     expect(await screen.findByText(/aucun chapitre/)).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Déplacer' })).toHaveProperty(
       'disabled',
@@ -396,7 +389,7 @@ describe('textes', () => {
   })
   it('confirmation : mode, images copiées, introuvables', () => {
     const base = {
-      classeur: classeur(6, 'Arrivée', 'ecriture'),
+      classeur: classeur(6, 'Arrivée', 'public'),
       chapitre: chapitre(62, 6, 'Annexes'),
     }
     expect(
@@ -501,8 +494,8 @@ describe('MenuDeplacerVers', () => {
 
   it('sans cible : les deux entrées grisées, avec la raison', async () => {
     classeurs = [
-      classeur(ORIGINE, 'Courant', 'ecriture', USER),
-      classeur(7, 'Lecture seule', 'lecture'),
+      classeur(ORIGINE, 'Courant', 'public', USER),
+      classeur(7, 'Gestion seule', 'gestion'),
     ]
     const { onAutreClasseur } = monterMenu()
     ouvrirMenu()

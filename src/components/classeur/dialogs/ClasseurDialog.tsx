@@ -16,12 +16,41 @@ import {
 } from '#/components/ui/dialog.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { Label } from '#/components/ui/label.tsx'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '#/components/ui/select.tsx'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
-import { useDroitsPageClasseur } from '#/components/classeur/hooks/useDroitsClasseur.ts'
-import { createClasseur, updateClasseur } from '#/lib/classeur/service.ts'
+import {
+  useDroitsPageClasseur,
+  usePersonnesClasseur,
+} from '#/components/classeur/hooks/useDroitsClasseur.ts'
+import {
+  LIBELLE_VISIBILITE,
+  peutChangerAuteur,
+  peutChangerType,
+  peutEtreAuteur,
+} from '#/lib/classeur/droits.ts'
+import type { Visibilite } from '#/lib/classeur/droits.ts'
+import { nomAuteur } from '#/lib/classeur/auteurs.ts'
+import {
+  createClasseur,
+  rangerClasseur,
+  updateClasseur,
+} from '#/lib/classeur/service.ts'
 import { cn } from '#/lib/utils.ts'
 import type { ClasseurInput } from '#/lib/classeur/service.ts'
 import type { DbClasseur } from '#/lib/classeur/types.ts'
+
+/** Ce que dit chaque type, sous son nom. */
+const AIDE_TYPE: Record<Visibilite, string> = {
+  public: 'Tous ceux qui ont la page le lisent.',
+  prive: 'Son auteur seul.',
+  gestion: 'La gestion de la page seule.',
+}
 
 const ICONE_PAR_DEFAUT = 'BookOpen'
 
@@ -29,6 +58,10 @@ const ICONE_PAR_DEFAUT = 'BookOpen'
  * Dialogue de création OU d'édition d'un classeur (nom, icône, établissement,
  * complément) — fusion des deux dialogues de Registre (`ClasseurListPage`,
  * `DashboardPage`). Édition si `classeur` est fourni.
+ *
+ * TYPE ET AUTEUR (2026-11-16) : à la création, le type (public, privé, et
+ * gestion pour la gestion) ; en édition, l'auteur et la gestion changent le
+ * type et l'auteur (`lib/classeur/droits.ts`), les autres voient l'auteur.
  *
  * Le dialogue porte sa mutation : écriture, puis invalidation de
  * `classeurKeys.all`, puis `onDone(id)`. L'erreur (dont le refus RLS 42501)
@@ -94,20 +127,51 @@ function ClasseurForm({
     classeur?.etablissement_complement ?? '',
   )
   const invalider = useInvaliderClasseur()
-  // « Privé » à la création : gestion seule (la base force `lecture` sinon).
-  const { canCreatePrive } = useDroitsPageClasseur()
-  const [prive, setPrive] = useState(false)
+  const { moi, typesCreables } = useDroitsPageClasseur()
+  const [type, setType] = useState<Visibilite>(classeur?.visibilite ?? 'public')
+  const [auteur, setAuteur] = useState<string | null>(
+    classeur?.created_by ?? null,
+  )
+  const personnes = usePersonnesClasseur(classeur != null)
+
+  // Types proposés : à la création, ceux que l'on peut créer ; en édition,
+  // le type actuel et ceux vers lesquels on peut le changer.
+  const types: Visibilite[] = classeur
+    ? (['public', 'prive', 'gestion'] as const).filter(
+        (t) => t === classeur.visibilite || peutChangerType(moi, classeur, t),
+      )
+    : typesCreables
+  const changerAuteur = classeur != null && peutChangerAuteur(moi, classeur)
+  const auteursPossibles = (personnes.data ?? []).filter((p) =>
+    peutEtreAuteur(p.niveau_page, type),
+  )
+  // Un privé déplacé par la gestion devient le sien (la base refuse qu'on se
+  // cache un classeur) : pas d'autre auteur possible que soi, sauf l'admin.
+  const auteurFige =
+    classeur != null &&
+    type === 'prive' &&
+    !moi.admin &&
+    classeur.created_by !== moi.userId
+  const auteurVoulu = auteurFige ? (moi.userId ?? null) : auteur
+  // Inchangé (type et auteur) : rien à vérifier ; sinon l'auteur doit
+  // pouvoir tenir un classeur de ce type (la base le refuse aussi).
+  const auteurValide =
+    (auteurVoulu === classeur?.created_by && type === classeur.visibilite) ||
+    auteursPossibles.some((p) => p.id === auteurVoulu)
 
   const mutation = useMutation({
     mutationFn: async (input: ClasseurInput) => {
       if (classeur) {
         await updateClasseur(classeur.id, input)
+        const patch: { visibilite?: Visibilite; created_by?: string } = {}
+        if (type !== classeur.visibilite) patch.visibilite = type
+        if (auteurVoulu !== null && auteurVoulu !== classeur.created_by)
+          patch.created_by = auteurVoulu
+        if (Object.keys(patch).length > 0)
+          await rangerClasseur(classeur.id, patch)
         return classeur.id
       }
-      return createClasseur(
-        input,
-        canCreatePrive && prive ? 'aucun' : 'lecture',
-      )
+      return createClasseur(input, type)
     },
     onSuccess: async (id) => {
       await invalider()
@@ -115,7 +179,7 @@ function ClasseurForm({
     },
   })
 
-  const valide = name.trim() !== ''
+  const valide = name.trim() !== '' && (!changerAuteur || auteurValide)
 
   return (
     <form
@@ -170,46 +234,96 @@ function ClasseurForm({
         />
       </div>
 
-      {!classeur && canCreatePrive && (
+      {types.length > 1 && (
         <div className="flex flex-col gap-2">
-          <Label>Visibilité</Label>
+          <Label>Type</Label>
           <div
             role="radiogroup"
-            aria-label="Visibilité du classeur"
-            className="grid grid-cols-2 gap-2"
+            aria-label="Type du classeur"
+            className={cn(
+              'grid gap-2',
+              types.length === 3 ? 'grid-cols-3' : 'grid-cols-2',
+            )}
           >
-            {(
-              [
-                [
-                  false,
-                  'Lecture pour tous',
-                  'Tous ceux qui ont la page le lisent.',
-                ],
-                [
-                  true,
-                  'Privé',
-                  'Personne, sauf la gestion et les accès donnés.',
-                ],
-              ] as const
-            ).map(([valeur, titre, aide]) => (
+            {types.map((t) => (
               <button
-                key={titre}
+                key={t}
                 type="button"
                 role="radio"
-                aria-checked={prive === valeur}
-                onClick={() => setPrive(valeur)}
+                aria-checked={type === t}
+                onClick={() => setType(t)}
                 className={cn(
                   'rounded-md border p-2.5 text-left text-sm transition-colors',
-                  prive === valeur
+                  type === t
                     ? 'border-primary bg-primary/10'
                     : 'border-border hover:bg-accent',
                 )}
               >
-                <span className="block font-medium">{titre}</span>
-                <span className="text-xs text-muted-foreground">{aide}</span>
+                <span className="block font-medium">
+                  {LIBELLE_VISIBILITE[t]}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {AIDE_TYPE[t]}
+                </span>
               </button>
             ))}
           </div>
+        </div>
+      )}
+
+      {classeur && (
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="classeur-auteur">Auteur</Label>
+          {changerAuteur && !auteurFige ? (
+            <Select
+              value={auteur ?? undefined}
+              onValueChange={setAuteur}
+              disabled={personnes.isPending}
+            >
+              <SelectTrigger
+                id="classeur-auteur"
+                className="w-full"
+                aria-label="Auteur"
+              >
+                <SelectValue
+                  placeholder={
+                    personnes.isPending ? 'Chargement…' : 'Choisir l’auteur'
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent position="popper">
+                {auteur !== null &&
+                  !auteursPossibles.some((p) => p.id === auteur) && (
+                    <SelectItem value={auteur}>
+                      {nomAuteur(auteur, personnes.data, moi.userId)}, sans
+                      droit pour ce type
+                    </SelectItem>
+                  )}
+                {auteursPossibles.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {nomAuteur(p.id, personnes.data, moi.userId)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <p id="classeur-auteur" className="text-sm">
+              {nomAuteur(auteurVoulu, personnes.data, moi.userId)}
+            </p>
+          )}
+          <p className="text-xs text-muted-foreground">
+            {auteurFige
+              ? 'Un classeur privé que vous rangez chez vous devient le vôtre.'
+              : type === 'prive'
+                ? 'Seul l’auteur voit un classeur privé.'
+                : 'L’auteur et la gestion peuvent changer son type et son auteur.'}
+          </p>
+          {changerAuteur && !auteurValide && !personnes.isPending && (
+            <p className="text-xs text-destructive">
+              Cet auteur ne peut pas avoir un classeur de ce type : choisissez
+              une autre personne.
+            </p>
+          )}
         </div>
       )}
 

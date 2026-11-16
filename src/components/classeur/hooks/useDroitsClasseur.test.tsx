@@ -2,35 +2,45 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, renderHook, waitFor } from '@testing-library/react'
-
-import { classeurKeys } from '#/lib/classeur/keys.ts'
+import { cleanup, renderHook } from '@testing-library/react'
 
 /*
- * `useDroitsClasseur` échoue FERMÉ : tant que mes exceptions d'accès n'ont
- * pas été lues avec succès (chargement OU erreur), tout est `false`. Une
- * exception peut RETIRER l'écriture d'un classeur ouvert à tous : la
- * supposer absente parce que sa lecture a échoué donnerait l'écriture à
- * tort (relecture adverse du 2026-10-04).
+ * `useDroitsClasseur` échoue FERMÉ : tant que le classeur n'est pas chargé,
+ * tout est `false`. Une fois chargé, le niveau vient de `niveauEffectif`
+ * (type du classeur, auteur, niveau de page) : plus aucune exception par
+ * personne à lire (2026-11-16).
  */
 
-const service = vi.hoisted(() => ({ fetchMesAcces: vi.fn() }))
+const etat = vi.hoisted(
+  (): {
+    classeur: {
+      id: number
+      created_by: string | null
+      visibilite: 'public' | 'prive' | 'gestion'
+    } | null
+    isPending: boolean
+  } => ({
+    classeur: { id: 24, created_by: 'autre', visibilite: 'public' },
+    isPending: false,
+  }),
+)
 
 vi.mock('#/lib/supabase.ts', () => ({ supabase: {} }))
 vi.mock('#/lib/classeur/service.ts', () => ({
-  fetchMesAcces: service.fetchMesAcces,
+  fetchPersonnesClasseur: vi.fn(),
 }))
 vi.mock('#/components/auth/AuthContext.tsx', () => ({
   useAuth: () => ({
     user: { id: 'moi' },
+    role: 'utilisateur',
     // Écriture sur la page, pas gestion.
     can: (_page: string, niveau: string) => niveau !== 'gestion',
   }),
 }))
 vi.mock('#/components/classeur/hooks/useClasseur.ts', () => ({
   useClasseur: () => ({
-    data: { id: 24, created_by: 'autre', acces_tous: 'ecriture' },
-    isPending: false,
+    data: etat.classeur,
+    isPending: etat.isPending,
     isError: false,
   }),
   useClasseurs: () => ({ data: [], isPending: false, isError: false }),
@@ -39,76 +49,84 @@ vi.mock('#/components/classeur/hooks/useClasseur.ts', () => ({
 const { useDroitsClasseur } =
   await import('#/components/classeur/hooks/useDroitsClasseur.ts')
 
-function monter(client = nouveauClient()) {
+function monter() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   )
   return renderHook(() => useDroitsClasseur(24), { wrapper }).result
 }
 
-function nouveauClient() {
-  return new QueryClient({ defaultOptions: { queries: { retry: false } } })
-}
-
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
+  etat.classeur = { id: 24, created_by: 'autre', visibilite: 'public' }
+  etat.isPending = false
 })
 
-describe('useDroitsClasseur — exceptions illisibles', () => {
-  it('lecture des exceptions en ERREUR : aucune écriture, erreur exposée', async () => {
-    service.fetchMesAcces.mockRejectedValue(new Error('panne'))
+describe('useDroitsClasseur — compte en écriture', () => {
+  it('classeur en cours de lecture : tout fermé', () => {
+    etat.isPending = true
     const result = monter()
-    await waitFor(() => {
-      expect(result.current.isError).toBe(true)
-    })
-    expect(result.current.canWrite).toBe(false)
-    expect(result.current.niveau).toBe('aucun')
     expect(result.current.pret).toBe(false)
-    expect(result.current.error).toBeInstanceOf(Error)
-  })
-
-  it('exceptions lues, aucune pour ce classeur : écriture (ouvert à tous)', async () => {
-    service.fetchMesAcces.mockResolvedValue([])
-    const result = monter()
-    await waitFor(() => {
-      expect(result.current.pret).toBe(true)
-    })
-    expect(result.current.canWrite).toBe(true)
-    expect(result.current.isError).toBe(false)
-  })
-
-  it('exception « lecture » lue : écriture retirée', async () => {
-    service.fetchMesAcces.mockResolvedValue([
-      { classeur_id: 24, niveau: 'lecture' },
-    ])
-    const result = monter()
-    await waitFor(() => {
-      expect(result.current.pret).toBe(true)
-    })
+    expect(result.current.niveau).toBe('aucun')
     expect(result.current.canWrite).toBe(false)
+    expect(result.current.canManage).toBe(false)
+    expect(result.current.canRanger).toBe(false)
+    // La création ne dépend que de la page.
+    expect(result.current.canCreate).toBe(true)
   })
 
-  it('rafraîchissement raté après une lecture réussie : la dernière liste sert', async () => {
-    const client = nouveauClient()
-    service.fetchMesAcces.mockResolvedValue([
-      { classeur_id: 24, niveau: 'lecture' },
-    ])
-    const result = monter(client)
-    await waitFor(() => {
-      expect(result.current.pret).toBe(true)
-    })
-    service.fetchMesAcces.mockRejectedValue(new Error('panne'))
-    await client
-      .refetchQueries({ queryKey: classeurKeys.mesAcces('moi') })
-      .catch(() => {})
-    await waitFor(() => {
-      expect(client.getQueryState(classeurKeys.mesAcces('moi'))?.status).toBe(
-        'error',
-      )
-    })
+  it('public d’un autre : écriture, sans le gérer ni le ranger', () => {
+    const result = monter()
     expect(result.current.pret).toBe(true)
+    expect(result.current.niveau).toBe('ecriture')
+    expect(result.current.canWrite).toBe(true)
+    expect(result.current.canManage).toBe(false)
+    expect(result.current.canRanger).toBe(false)
+    expect(result.current.estCreateur).toBe(false)
+  })
+
+  it('mon public : écriture, et je peux le ranger', () => {
+    etat.classeur = { id: 24, created_by: 'moi', visibilite: 'public' }
+    const result = monter()
+    expect(result.current.niveau).toBe('ecriture')
+    expect(result.current.canRanger).toBe(true)
+    expect(result.current.estCreateur).toBe(true)
+  })
+
+  it('mon privé : je le gère', () => {
+    etat.classeur = { id: 24, created_by: 'moi', visibilite: 'prive' }
+    const result = monter()
+    expect(result.current.niveau).toBe('gestion')
+    expect(result.current.canWrite).toBe(true)
+    expect(result.current.canManage).toBe(true)
+    expect(result.current.canRanger).toBe(true)
+  })
+
+  it('privé d’un autre : rien', () => {
+    etat.classeur = { id: 24, created_by: 'autre', visibilite: 'prive' }
+    const result = monter()
+    expect(result.current.niveau).toBe('aucun')
+    expect(result.current.lire).toBe(false)
     expect(result.current.canWrite).toBe(false)
-    expect(result.current.isError).toBe(false)
+    expect(result.current.canRanger).toBe(false)
+  })
+
+  it('classeur de gestion, même le mien : rien', () => {
+    etat.classeur = { id: 24, created_by: 'moi', visibilite: 'gestion' }
+    const result = monter()
+    expect(result.current.niveau).toBe('aucun')
+    expect(result.current.canRanger).toBe(false)
+  })
+
+  it('classeur introuvable une fois lu : rien', () => {
+    etat.classeur = null
+    const result = monter()
+    expect(result.current.pret).toBe(true)
+    expect(result.current.niveau).toBe('aucun')
+    expect(result.current.canRanger).toBe(false)
   })
 })

@@ -44,13 +44,10 @@ export const classeurKeys = {
   versions: (documentId: number) =>
     ['classeur', 'versions', documentId] as const,
   /**
-   * Accès par classeur (2026-09-28). Mes exceptions, celles d'un classeur
-   * (gestion), la liste des personnes : identifiants et NOMS — exclues du
-   * cache disque (`PREFIXES_SENSIBLES`), et propres au compte connecté.
+   * La liste des personnes de la page (auteurs des classeurs) : identifiants
+   * et NOMS — exclue du cache disque (`PREFIXES_SENSIBLES`, préfixe
+   * `classeur/acces`).
    */
-  mesAcces: (userId: string) => ['classeur', 'acces', 'miens', userId] as const,
-  acces: (classeurId: number) =>
-    ['classeur', 'acces', 'classeur', classeurId] as const,
   personnes: () => ['classeur', 'acces', 'personnes'] as const,
   /**
    * Corbeille d'un classeur (étape 6) : titres et dates de suppression,

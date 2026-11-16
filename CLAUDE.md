@@ -1604,6 +1604,29 @@ editionTextarea.ts`) : `execCommand('insertText')` une fois le dialogue
     inchangés). ⚠ Fenêtre Chrome non affichée = captures en échec et
     animations de sortie figées (`data-state="closed"` reste dans le DOM) :
     contrôler par script, ne pas conclure à un défaut de l'app.
+- **TYPES DE CLASSEURS (2026-11-16, REMPLACE l'accès par classeur ci-dessous ;
+  migration `20261116120000_classeur_visibilite`, décisions utilisateur)** :
+  colonne `visibilite` = public (la page décide : lecture lit, écriture modifie
+  TOUS les publics, gestion gère) / privé (son AUTEUR seul ; la gestion NON
+  admin ne voit PAS les privés des autres) / gestion (gestion de la page
+  seule) ; l'admin voit et gère tout. Exceptions par personne et `acces_tous`
+  NE SONT PLUS LUS (table et colonne gardées) ; bouclier Accès et
+  `AccesClasseurDialog` retirés. Type et auteur changés par l'auteur et la
+  gestion, vers ou depuis Gestion par la gestion seule ; auteur d'un classeur
+  de gestion = quelqu'un qui a la gestion (`classeur_garde`, 23514 / 42501 ;
+  `classeur_stamp` ne fige plus l'auteur d'un CLASSEUR). La RLS refuse qu'un
+  compte se cache un classeur (lecture de la ligne neuve) : déposé dans « Mes
+  privés », un classeur devient privé ET à soi. Niveau `gestion` sur un
+  classeur = le gérer (supprimer, réordonner, restaurer) : admin, gestion de
+  la page sur public/gestion, auteur d'un privé. Miroir exact :
+  `lib/classeur/droits.ts` (`niveauEffectif(moi, classeur)`, `rangementVers`,
+  `sectionsVisibles`). Liste `/classeur` : un tableau par type (Publics, Mes
+  privés, Privés des autres pour l'admin, Gestion), colonne Auteur
+  (`classeur_personnes` ouverte à tout compte de la page, jamais sur disque),
+  glisser une ligne vers un autre tableau = la ranger. « Modifier le
+  classeur » porte Type et Auteur. ⚠ `classeur_niveau_de(id, uuid, text)` :
+  le 3e paramètre, nommé `p_acces_tous`, porte la VISIBILITÉ. Tests :
+  `04_classeur_acces` (1 524), `verif_classeur_acces.sql` (40/40).
 - **ACCÈS PAR CLASSEUR (2026-09-28, remplace le modèle « Affichage » du
   26/09 ; plan `plan/classeur-acces-par-classeur/`)**. Règle validée par
   l'utilisateur : **niveau effectif = le plus petit de (droit sur la PAGE,

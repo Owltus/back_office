@@ -54,7 +54,7 @@ vi.mock('#/components/classeur/hooks/useClasseur.ts', () => ({
       icon: 'BookOpen',
       etablissement: '',
       etablissement_complement: '',
-      acces_tous: 'lecture',
+      visibilite: 'public',
     },
     isPending: false,
     isError: false,
@@ -177,19 +177,6 @@ describe('ClasseurDashboard — places des cartes d’écriture', () => {
     expect(
       screen.queryByRole('button', { name: /Nouveau chapitre/ }),
     ).toBeNull()
-  })
-
-  it('exceptions illisibles : le dit, sans place réservée', () => {
-    Object.assign(droits, {
-      canWrite: false,
-      pret: false,
-      isError: true,
-      error: new Error('Failed to fetch'),
-    })
-    expect(monterComplet()).toBe(0)
-    expect(
-      screen.getByText(/Droits indisponibles, modifications désactivées/),
-    ).toBeTruthy()
   })
 })
 

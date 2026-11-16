@@ -20,14 +20,12 @@ import {
   Search,
   Table2,
   Upload,
-  ShieldCheck,
   Trash,
   Trash2,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 import { ChapterDrawerButton } from '#/components/classeur/ChapterDrawer.tsx'
-import { AccesClasseurDialog } from '#/components/classeur/dialogs/AccesClasseurDialog.tsx'
 import { ChapterDialog } from '#/components/classeur/dialogs/ChapterDialog.tsx'
 import { ClasseurDialog } from '#/components/classeur/dialogs/ClasseurDialog.tsx'
 import {
@@ -176,10 +174,7 @@ export function ClasseurDashboard({
   // à réserver.
   const { page } = useDroitsPageClasseur()
   const reserverEcriture =
-    !droits.pret &&
-    !droits.isError &&
-    (page === 'ecriture' || page === 'gestion')
-  const [accesOuvert, setAccesOuvert] = useState(false)
+    !droits.pret && (page === 'ecriture' || page === 'gestion')
   const [suppressionOuverte, setSuppressionOuverte] = useState(false)
   const navigate = useNavigate()
   const invaliderTout = useInvaliderClasseur()
@@ -342,20 +337,9 @@ export function ClasseurDashboard({
                       onClick={() => setEditOpen(true)}
                     />
                   )}
-                  {/* Accès au classeur : gestion et admin (2026-09-28). */}
-                  {canManage && (
-                    <IconAction
-                      label={
-                        classeur.acces_tous === 'aucun'
-                          ? 'Accès au classeur (privé)'
-                          : 'Accès au classeur'
-                      }
-                      icon={<ShieldCheck />}
-                      onClick={() => setAccesOuvert(true)}
-                    />
-                  )}
-                  {/* Supprimer le classeur : gestion. Seule voie au doigt (la
-                      croix de la liste n'apparaît qu'au survol à la souris). */}
+                  {/* Supprimer le classeur : qui le gère (gestion, auteur
+                      d'un privé). Le type et l'auteur se règlent dans
+                      « Modifier le classeur » (2026-11-16). */}
                   {canManage && (
                     <IconAction
                       label="Supprimer le classeur"
@@ -377,14 +361,6 @@ export function ClasseurDashboard({
         {erreurLecture !== null && (
           <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
             {messageErreur(erreurLecture, 'Classeur indisponible')}
-          </div>
-        )}
-        {droits.isError && (
-          <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {messageErreur(
-              droits.error,
-              'Droits indisponibles, modifications désactivées',
-            )}
           </div>
         )}
         {suppression.isError && (
@@ -579,11 +555,6 @@ export function ClasseurDashboard({
         confirmLabel="Supprimer"
         destructive
         onConfirm={() => suppression.mutate()}
-      />
-
-      <AccesClasseurDialog
-        classeur={accesOuvert ? classeur : null}
-        onClose={() => setAccesOuvert(false)}
       />
 
       <ClasseurDialog

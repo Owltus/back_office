@@ -10,151 +10,110 @@ import {
   capacites,
   niveauEffectif,
   niveauPage,
+  peutChangerAuteur,
   peutCreerClasseur,
-  peutCreerPrive,
   peutReordonnerListe,
+  typesCreables,
 } from '#/lib/classeur/droits.ts'
-import type { NiveauClasseur, NiveauEffectif } from '#/lib/classeur/droits.ts'
+import type { Moi, NiveauEffectif } from '#/lib/classeur/droits.ts'
 import { classeurKeys } from '#/lib/classeur/keys.ts'
-import { fetchMesAcces } from '#/lib/classeur/service.ts'
+import { fetchPersonnesClasseur } from '#/lib/classeur/service.ts'
 import { classeursCibles } from '#/lib/classeur/transfert.ts'
 import type { DbClasseur } from '#/lib/classeur/types.ts'
 
-/**
- * Mes exceptions d'accès, par classeur (2026-09-28). Propres au compte : la
- * clé porte l'identifiant, et elle n'est jamais écrite sur disque.
- */
-export function useMesAcces() {
-  const { user } = useAuth()
+/** Qui regarde : niveau de page, identifiant, admin (`lib/classeur/droits.ts`). */
+export function useMoiClasseur(): Moi {
+  const { can, user, role } = useAuth()
+  const page = niveauPage(can)
   const userId = user?.id ?? null
-  const q = useQuery({
-    queryKey: classeurKeys.mesAcces(userId ?? ''),
-    queryFn: () => fetchMesAcces(userId ?? ''),
-    enabled: userId !== null,
-    staleTime: 60_000,
-  })
-  const parClasseur = useMemo(() => {
-    const m = new Map<number, NiveauClasseur>()
-    for (const a of q.data ?? []) m.set(a.classeur_id, a.niveau)
-    return m
-  }, [q.data])
-  return {
-    parClasseur,
-    isPending: q.isPending && userId !== null,
-    /** Lues avec succès au moins une fois (un rafraîchissement raté garde la
-     *  dernière liste connue). */
-    lues: q.data !== undefined,
-    isError: q.isError,
-    error: q.error,
-  }
+  const admin = role === 'admin'
+  return useMemo(() => ({ page, userId, admin }), [page, userId, admin])
 }
 
 /** Niveau de l'utilisateur sur la PAGE Classeur, et ce qu'il permet. */
 export function useDroitsPageClasseur() {
-  const { can } = useAuth()
-  const page = niveauPage(can)
+  const moi = useMoiClasseur()
   return {
-    page,
-    canCreate: peutCreerClasseur(page),
-    canCreatePrive: peutCreerPrive(page),
-    canReorderList: peutReordonnerListe(page),
-    canManage: page === 'gestion',
+    page: moi.page,
+    moi,
+    canCreate: peutCreerClasseur(moi.page),
+    /** Types qu'il peut donner à un classeur qu'il crée. */
+    typesCreables: typesCreables(moi),
+    canReorderList: peutReordonnerListe(moi.page),
+    canManage: moi.page === 'gestion',
   }
 }
 
 /**
+ * Les personnes de la page (auteurs possibles et noms des auteurs). Jamais
+ * écrites sur disque (`PREFIXES_SENSIBLES`). `actif` : lue seulement quand
+ * elle sert.
+ */
+export function usePersonnesClasseur(actif = true) {
+  const { page } = useMoiClasseur()
+  return useQuery({
+    queryKey: classeurKeys.personnes(),
+    queryFn: fetchPersonnesClasseur,
+    enabled: actif && page !== null,
+    staleTime: 5 * 60_000,
+  })
+}
+
+/**
  * Droits de l'utilisateur sur UN classeur — miroir de la base
- * (`lib/classeur/droits.ts`). Tout est `false` tant que le classeur et mes
- * accès ne sont pas chargés : on masque, jamais l'inverse.
+ * (`lib/classeur/droits.ts`). Tout est `false` tant que le classeur n'est
+ * pas chargé : on masque, jamais l'inverse.
  *
  *   canWrite   modifier le contenu (écriture effective ou gestion) ;
- *   canManage  gestion : accès, suppression, restauration, purge ;
+ *   canManage  gérer : suppression, restauration, purge ;
  *   canCreate  créer, importer un classeur (écriture sur la page).
  */
 export function useDroitsClasseur(classeurId: number) {
-  const { user } = useAuth()
+  const moi = useMoiClasseur()
   const pagesDroits = useDroitsPageClasseur()
   const classeurQ = useClasseur(classeurId)
-  const mesAcces = useMesAcces()
-  // Mes exceptions jamais lues avec succès (chargement OU erreur) : on ne
-  // les suppose pas absentes (une exception peut RETIRER l'écriture d'un
-  // classeur ouvert à tous). Tout reste `false`, et l'erreur est exposée
-  // pour être dite à l'écran (jamais un « lecture seule » muet). Un
-  // rafraîchissement raté garde la dernière liste lue : pas de droits qui
-  // disparaissent en pleine édition sur une panne passagère.
-  // La GESTION a tout sur tout classeur, quelles que soient ses exceptions
-  // (`niveauEffectif`) : elle n'a pas à les attendre, ni à en subir l'échec.
-  const exceptionsInutiles = pagesDroits.page === 'gestion'
-  const erreurAcces = !exceptionsInutiles && mesAcces.isError && !mesAcces.lues
-  const pret = !classeurQ.isPending && (exceptionsInutiles || mesAcces.lues)
-  const niveau = pret
-    ? niveauEffectif(
-        pagesDroits.page,
-        classeurQ.data,
-        mesAcces.parClasseur.get(classeurId) ?? null,
-        user?.id,
-      )
-    : 'aucun'
+  const pret = !classeurQ.isPending
+  const niveau = pret ? niveauEffectif(moi, classeurQ.data) : 'aucun'
   const cap = capacites(niveau)
   return {
     niveau,
     ...cap,
     canWrite: cap.modifier,
-    canManage: cap.gererAcces,
+    canManage: cap.supprimerClasseur,
     canCreate: pagesDroits.canCreate,
-    estCreateur: user?.id != null && classeurQ.data?.created_by === user.id,
-    /** Le classeur et mes accès sont chargés : les droits sont définitifs. */
+    /** Changer l'auteur ou le type (auteur et gestion). */
+    canRanger:
+      pret && classeurQ.data != null && peutChangerAuteur(moi, classeurQ.data),
+    estCreateur:
+      moi.userId != null && classeurQ.data?.created_by === moi.userId,
+    /** Le classeur est chargé : les droits sont définitifs. */
     pret,
-    /** Mes exceptions d'accès n'ont pas pu être lues (droits retenus). */
-    isError: erreurAcces,
-    error: erreurAcces ? mesAcces.error : null,
   }
 }
 
 /**
  * Les classeurs vers lesquels transférer depuis `origineId` (étape 7c) :
  * filtrés par `classeursCibles` (écriture effective, jamais l'origine, jamais
- * un classeur supprimé ni « Privé » inaccessible). La liste n'est lue que si
- * `actif` (menu ou dialogue ouvert : base Nano). `niveauDe` donne le niveau
- * effectif d'une cible, à transmettre au service (D6 : écriture des deux
- * côtés).
+ * un classeur supprimé). La liste n'est lue que si `actif` (menu ou dialogue
+ * ouvert : base Nano). `niveauDe` donne le niveau effectif d'une cible, à
+ * transmettre au service (D6 : écriture des deux côtés).
  */
 export function useClasseursCibles(origineId: number, actif: boolean) {
-  const { user } = useAuth()
-  const userId = user?.id ?? null
-  const { page } = useDroitsPageClasseur()
+  const moi = useMoiClasseur()
   const liste = useClasseurs(actif)
-  const mesAcces = useMesAcces()
-  const pret = !liste.isPending && !mesAcces.isPending
-  // Mes exceptions illisibles : on ne les suppose pas absentes (une
-  // exception peut RETIRER l'écriture d'un classeur ouvert à tous) : erreur,
-  // comme pour la liste (dialogue et menu n'offrent alors aucune cible).
-  const erreur = liste.isError ? liste.error : mesAcces.error
-  const isError = liste.isError || mesAcces.isError
+  const pret = !liste.isPending
   const cibles = useMemo(
     () =>
-      pret
-        ? classeursCibles(
-            liste.data ?? [],
-            { page, exceptions: mesAcces.parClasseur, userId },
-            origineId,
-            'deplacer',
-          )
-        : [],
-    [pret, liste.data, page, mesAcces.parClasseur, userId, origineId],
+      pret ? classeursCibles(liste.data ?? [], moi, origineId, 'deplacer') : [],
+    [pret, liste.data, moi, origineId],
   )
   const niveauDe = (classeur: DbClasseur): NiveauEffectif =>
-    niveauEffectif(
-      page,
-      classeur,
-      mesAcces.parClasseur.get(classeur.id) ?? null,
-      userId,
-    )
+    niveauEffectif(moi, classeur)
   return {
     cibles,
     niveauDe,
     isPending: !pret,
-    isError,
-    error: erreur,
+    isError: liste.isError,
+    error: liste.error,
   }
 }

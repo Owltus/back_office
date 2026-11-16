@@ -41,9 +41,8 @@
 import { capacites, niveauEffectif } from '#/lib/classeur/droits.ts'
 import type {
   ClasseurPourDroits,
-  NiveauClasseur,
+  Moi,
   NiveauEffectif,
-  NiveauPage,
 } from '#/lib/classeur/droits.ts'
 import {
   cheminImage,
@@ -113,12 +112,7 @@ export function reecrireChemins(
 }
 
 /** Ce qu'il faut savoir de l'utilisateur pour calculer ses droits par classeur. */
-export interface DroitsUtilisateur {
-  page: NiveauPage
-  /** Exceptions d'accès de la personne, par identifiant de classeur. */
-  exceptions: ReadonlyMap<number, NiveauClasseur>
-  userId: string | null
-}
+export type DroitsUtilisateur = Moi
 
 /** Copier ou déplacer exige l'écriture des DEUX côtés (D6 pour la copie). */
 export function peutTransferer(
@@ -158,12 +152,7 @@ export function classeursCibles<
   void mode
   return classeurs.filter((c) => {
     if (c.id === origineId || c.deleted_at !== null) return false
-    const niveau = niveauEffectif(
-      droitsParClasseur.page,
-      c,
-      droitsParClasseur.exceptions.get(c.id),
-      droitsParClasseur.userId,
-    )
+    const niveau = niveauEffectif(droitsParClasseur, c)
     return capacites(niveau).modifier
   })
 }

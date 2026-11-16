@@ -3,9 +3,10 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { niveauEffectif } from '#/lib/classeur/droits.ts'
 import type {
-  NiveauClasseur,
+  Moi,
   NiveauEffectif,
   NiveauPage,
+  Visibilite,
 } from '#/lib/classeur/droits.ts'
 import { imagesReferencees } from '#/lib/classeur/images.ts'
 import {
@@ -409,15 +410,10 @@ describe('peutTransferer — table complète (D6)', () => {
 describe('classeursCibles', () => {
   const MOI = '00000000-0000-0000-0000-000000000001'
   const AUTRE = '00000000-0000-0000-0000-000000000002'
-  const niveauC = fc.constantFrom<NiveauClasseur>(
-    'aucun',
-    'lecture',
-    'ecriture',
-  )
   const classeur = fc.record({
     id: fc.integer({ min: 1, max: 8 }),
     created_by: fc.constantFrom<string | null>(MOI, AUTRE, null),
-    acces_tous: niveauC,
+    visibilite: fc.constantFrom<Visibilite>('public', 'prive', 'gestion'),
     deleted_at: fc.constantFrom<string | null>(null, null, '2026-10-01'),
   })
 
@@ -426,18 +422,15 @@ describe('classeursCibles', () => {
       fc.property(
         fc.array(classeur, { maxLength: 8 }),
         fc.constantFrom<NiveauPage>(null, 'lecture', 'ecriture', 'gestion'),
-        fc.array(fc.tuple(fc.integer({ min: 1, max: 8 }), niveauC), {
-          maxLength: 5,
-        }),
+        fc.boolean(),
         fc.constantFrom<string | null>(MOI, null),
         fc.integer({ min: 1, max: 8 }),
         fc.constantFrom('copier' as const, 'deplacer' as const),
-        (classeurs, page, exc, userId, origine, mode) => {
-          const exceptions = new Map(exc)
-          const droits = { page, exceptions, userId }
-          const r = classeursCibles(classeurs, droits, origine, mode)
+        (classeurs, page, admin, userId, origine, mode) => {
+          const moi: Moi = { page, admin, userId }
+          const r = classeursCibles(classeurs, moi, origine, mode)
           const niveau = (c: (typeof classeurs)[number]) =>
-            niveauEffectif(page, c, exceptions.get(c.id), userId)
+            niveauEffectif(moi, c)
           for (const c of r) {
             expect(['ecriture', 'gestion']).toContain(niveau(c))
             expect(c.id).not.toBe(origine)
@@ -456,48 +449,52 @@ describe('classeursCibles', () => {
     )
   })
 
-  it('exemples : privé non accessible absent, exception lecture retire le créateur', () => {
+  it('exemples : privé d’un autre et classeur de gestion absents, mon privé présent', () => {
     const cs = [
       {
         id: 1,
         created_by: AUTRE,
-        acces_tous: 'ecriture' as const,
+        visibilite: 'public' as const,
         deleted_at: null,
       },
       {
         id: 2,
         created_by: AUTRE,
-        acces_tous: 'aucun' as const,
+        visibilite: 'prive' as const,
         deleted_at: null,
       },
       {
         id: 3,
         created_by: MOI,
-        acces_tous: 'lecture' as const,
+        visibilite: 'prive' as const,
         deleted_at: null,
       },
       {
         id: 4,
         created_by: AUTRE,
-        acces_tous: 'lecture' as const,
+        visibilite: 'gestion' as const,
         deleted_at: null,
       },
     ]
-    const droits = {
-      page: 'ecriture' as const,
-      exceptions: new Map<number, NiveauClasseur>([[3, 'lecture']]),
-      userId: MOI,
-    }
-    expect(classeursCibles(cs, droits, 9, 'copier').map((c) => c.id)).toEqual([
-      1,
+    const moi: Moi = { page: 'ecriture', admin: false, userId: MOI }
+    expect(classeursCibles(cs, moi, 9, 'copier').map((c) => c.id)).toEqual([
+      1, 3,
     ])
-    expect(classeursCibles(cs, droits, 1, 'deplacer').map((c) => c.id)).toEqual(
-      [],
-    )
-    const gestion = { ...droits, page: 'gestion' as const }
+    expect(classeursCibles(cs, moi, 1, 'deplacer').map((c) => c.id)).toEqual([
+      3,
+    ])
+    // La gestion ne voit pas le privé d'un autre ; l'admin, tout.
+    const gestion: Moi = { ...moi, page: 'gestion' }
     expect(classeursCibles(cs, gestion, 1, 'copier').map((c) => c.id)).toEqual([
+      3, 4,
+    ])
+    const admin: Moi = { ...gestion, admin: true }
+    expect(classeursCibles(cs, admin, 1, 'copier').map((c) => c.id)).toEqual([
       2, 3, 4,
     ])
+    // En lecture sur la page : aucune cible.
+    const lecture: Moi = { ...moi, page: 'lecture' }
+    expect(classeursCibles(cs, lecture, 9, 'copier')).toEqual([])
   })
 })
 

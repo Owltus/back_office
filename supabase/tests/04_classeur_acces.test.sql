@@ -3,12 +3,12 @@
 -- Plan environnement-dev-docker-2026-10-12, étape 10 (port pgTAP de
 -- `supabase/verif_classeur_acces.sql`, étendu en matrice).
 --
--- Règle (CLAUDE.md « ACCÈS PAR CLASSEUR ») : niveau effectif = le plus petit
--- de (droit sur la PAGE, droit sur le CLASSEUR) ; gestion de la page : tout.
--- Droit sur le classeur : exception de la personne, sinon créateur → écriture,
--- sinon `acces_tous`. L'oracle `pg_temp.niveau` applique cette règle à une
--- SPÉCIFICATION (t_spec, t_spec_exc) qui sert aussi à poser les données ; il
--- n'appelle aucune fonction de la base.
+-- Règle (2026-11-16, migration `20261116120000_classeur_visibilite`) : TYPE
+-- du classeur. Public : la page décide (lecture, écriture, gestion). Privé :
+-- son auteur seul (lecture si sa page est en lecture, gestion sinon). Gestion :
+-- la gestion de la page seule. L'admin : tout. L'oracle `pg_temp.niveau`
+-- applique cette règle à une SPÉCIFICATION (t_spec) qui sert aussi à poser les
+-- données ; il n'appelle aucune fonction de la base.
 --
 -- Partie 2 : confrontation du simulateur `src/lib/classeur/test/
 -- simulateurSupabase.ts` à la base (scénarios S1…S8, écarts en commentaire).
@@ -32,39 +32,29 @@ select c.compte, coalesce(p.id, c.repli), c.ordre, c.page
   ) as c(compte, email, repli, ordre, page)
   left join public.profiles p on p.email = c.email;
 
--- Spécification des classeurs (A, B, C = classeurs 1, 2, 3 du seed ; D, E créés).
-create temp table t_spec (cle text primary key, createur text, acces_tous text);
+-- Spécification des classeurs (A, B, C = classeurs 1, 2, 3 du seed ; D, E, F créés).
+create temp table t_spec (cle text primary key, createur text, visibilite text);
 insert into t_spec values
-  ('A', 'admin', 'lecture'), ('B', 'admin', 'ecriture'), ('C', 'admin', 'aucun'),
-  ('D', 'ecriture', 'lecture'), ('E', 'ecriture', 'aucun');
-create temp table t_spec_exc (cle text, compte text, niveau text);
-insert into t_spec_exc values
-  ('A', 'lecture', 'ecriture'),    -- plafonnée par la page lecture
-  ('A', 'ecriture', 'ecriture'),
-  ('A', 'reception', 'aucun'),
-  ('B', 'aucun', 'ecriture'),      -- sans droit de page : rien
-  ('B', 'lecture', 'aucun'),
-  ('C', 'lecture', 'lecture'),     -- ouvre un classeur privé
-  ('C', 'ecriture', 'lecture'),
-  ('D', 'reception', 'ecriture'),  -- plafonnée par la page lecture
-  ('E', 'ecriture', 'aucun');      -- retrait au créateur
+  ('A', 'admin', 'public'), ('B', 'admin', 'gestion'), ('C', 'admin', 'prive'),
+  ('D', 'ecriture', 'public'), ('E', 'ecriture', 'prive'), ('F', 'gestion', 'prive');
 
 -- Oracle : 'aucun' | 'lecture' | 'ecriture' | 'gestion'.
 create function pg_temp.niveau(p_compte text, p_cle text) returns text
 language plpgsql as $$
-declare v_page int; v_droit text; s record;
+declare v_page int; s record;
 begin
   select page into v_page from t_compte where compte = p_compte;
   if coalesce(v_page, 0) = 0 then return 'aucun'; end if;
-  if v_page = 3 then return 'gestion'; end if;
+  if p_compte = 'admin' then return 'gestion'; end if;
   select * into s from t_spec where cle = p_cle;
-  v_droit := coalesce(
-    (select niveau from t_spec_exc where cle = p_cle and compte = p_compte),
-    case when s.createur = p_compte then 'ecriture' end,
-    s.acces_tous);
-  if v_droit = 'aucun' then return 'aucun'; end if;
-  if v_page = 1 then return 'lecture'; end if;
-  return v_droit;
+  if s.visibilite = 'prive' then
+    if s.createur <> p_compte then return 'aucun'; end if;
+    return case when v_page = 1 then 'lecture' else 'gestion' end;
+  end if;
+  if s.visibilite = 'gestion' then
+    return case when v_page = 3 then 'gestion' else 'aucun' end;
+  end if;
+  return case v_page when 3 then 'gestion' when 2 then 'ecriture' else 'lecture' end;
 end $$;
 
 create function pg_temp.rang(p_niveau text) returns int language sql as $$
@@ -116,17 +106,18 @@ set local session_replication_role = replica;
 insert into auth.users (id, email) values ('b0000000-0000-4000-8000-0000000000ff', 'revoque@exemple.test');
 insert into t_cl (cle, id) values ('A', 1), ('B', 2), ('C', 3);
 with n as (
-  insert into public.classeur_classeurs (name, created_by, acces_tous)
-  select 'Essai ' || s.cle, (select uid from t_compte where compte = s.createur), s.acces_tous
-    from t_spec s where s.cle in ('D', 'E') order by s.cle
+  insert into public.classeur_classeurs (name, created_by, visibilite)
+  select 'Essai ' || s.cle, (select uid from t_compte where compte = s.createur), s.visibilite
+    from t_spec s where s.cle in ('D', 'E', 'F') order by s.cle
   returning id, name)
 insert into t_cl (cle, id) select right(name, 1), id from n;
-update public.classeur_classeurs c set acces_tous = s.acces_tous,
+update public.classeur_classeurs c set visibilite = s.visibilite,
        created_by = (select uid from t_compte where compte = s.createur), deleted_at = null
   from t_spec s join t_cl l using (cle) where c.id = l.id;
+-- Les exceptions par personne ne sont plus lues : on en pose une pour le prouver.
 delete from public.classeur_acces where classeur_id in (select id from t_cl);
 insert into public.classeur_acces (classeur_id, user_id, niveau)
-select l.id, c.uid, e.niveau from t_spec_exc e join t_cl l using (cle) join t_compte c using (compte);
+select l.id, c.uid, 'ecriture' from t_cl l, t_compte c where l.cle = 'C' and c.compte = 'lecture';
 
 -- Un chapitre + un élément de chaque famille + version, image, points, fichier.
 do $$
@@ -187,15 +178,9 @@ insert into t_op (nom, besoin, refus, sql, prep) values
 ('élaguer un point auto',       'ecriture', 'zero', $q$delete from public.classeur_merge_history where classeur_id = {c} and kind = 'auto'$q$, null),
 ('supprimer un point manuel',   'gestion',  'zero', $q$delete from public.classeur_merge_history where classeur_id = {c} and kind = 'manuel'$q$, null),
 ('renommer le classeur',        'ecriture', 'zero', $q$update public.classeur_classeurs set name = 'T' where id = {c}$q$, null),
-('changer l''accès pour tous',  'gestion',  'err_si_ecriture', $q$update public.classeur_classeurs set acces_tous = case acces_tous when 'aucun' then 'lecture' else 'aucun' end where id = {c}$q$, null),
 ('supprimer (doucement) le classeur','gestion','err_si_ecriture', $q$update public.classeur_classeurs set deleted_at = now() where id = {c}$q$, null),
 ('réordonner le classeur',      'gestion',  'err_si_ecriture', $q$update public.classeur_classeurs set sort_order = sort_order + 1 where id = {c}$q$, null),
-('supprimer physiquement le classeur','gestion','zero', 'delete from public.classeur_classeurs where id = {c}', null),
-('donner un accès (upsert)',    'gestion',  'err', $q$insert into public.classeur_acces (classeur_id, user_id, niveau) values ({c}, (select uid from pg_temp.t_uid), 'lecture') on conflict (classeur_id, user_id) do update set niveau = excluded.niveau$q$, null);
-
--- Identifiant à qui l'on donne un accès (lisible sans droit sur profiles).
-create temp table t_uid as select uid from t_compte where compte = 'aucun';
-grant select on t_uid to authenticated;
+('supprimer physiquement le classeur','gestion','zero', 'delete from public.classeur_classeurs where id = {c}', null);
 
 -- Deux commandes, MÊME compte, même sous-transaction annulée (l'effet d'un
 -- trigger AFTER n'est visible qu'à la commande suivante).
@@ -251,69 +236,107 @@ begin
   end loop;
 end $$;
 
--- Déplacer un document vers le chapitre du classeur C : écriture exigée des
--- DEUX côtés ; écriture à l'origine seulement → WITH CHECK → 42501.
+-- Déplacer un document vers le chapitre du classeur B (gestion) : écriture
+-- exigée des DEUX côtés ; écriture à l'origine seulement → WITH CHECK → 42501.
 create function pg_temp.deplacements() returns setof text language plpgsql as $$
-declare l t_cl; c record; v_cible bigint := (select ch from t_cl where cle = 'C'); v_att text;
+declare l t_cl; c record; v_cible bigint := (select ch from t_cl where cle = 'B'); v_att text;
 begin
-  for l in select * from t_cl where cle <> 'C' order by cle loop
+  for l in select * from t_cl where cle <> 'B' order by cle loop
     for c in select * from t_compte order by ordre loop
       v_att := case
         when c.compte = 'anon' then 'err=42501'
         when pg_temp.rang(pg_temp.niveau(c.compte, l.cle)) < 2 then 'zero'
-        when pg_temp.rang(pg_temp.niveau(c.compte, 'C')) < 2 then 'err=42501'
+        when pg_temp.rang(pg_temp.niveau(c.compte, 'B')) < 2 then 'err=42501'
         else 'ok' end;
       return next is(
         pg_temp.essai(c.compte, format('update public.classeur_documents set chapter_id = %s where id = %s', v_cible, l.doc)),
-        v_att, format('déplacer un document de %s vers C — %s', l.cle, c.compte));
+        v_att, format('déplacer un document de %s vers B — %s', l.cle, c.compte));
     end loop;
   end loop;
 end $$;
 
--- Lire les exceptions d'accès : les siennes, ou toutes pour la gestion.
-create function pg_temp.lectures_acces() returns setof text language plpgsql as $$
-declare l t_cl; c record; v_att text;
-begin
-  for l in select * from t_cl order by cle loop
-    for c in select * from t_compte order by ordre loop
-      v_att := case
-        when c.compte = 'anon' then 'err=42501'
-        when c.page = 3 and exists (select 1 from t_spec_exc where cle = l.cle) then 'ok'
-        when exists (select 1 from t_spec_exc where cle = l.cle and compte = c.compte) then 'ok'
-        else 'zero' end;
-      return next is(
-        pg_temp.essai(c.compte, format('select count(*) from public.classeur_acces where classeur_id = %s', l.id)),
-        v_att, format('lire les accès du classeur %s — %s', l.cle, c.compte));
-    end loop;
-  end loop;
-end $$;
+-- Changer le TYPE ou l'AUTEUR d'un classeur (garde `classeur_garde`).
+create function pg_temp.vis(p_cle text) returns bigint language sql as $$
+  select id from t_cl where cle = p_cle $$;
+create function pg_temp.uid(p_compte text) returns uuid language sql as $$
+  select uid from t_compte where compte = p_compte $$;
+grant select on t_cl, t_compte to authenticated;
 
 select plan(
-  (select count(*)::int from t_op) * 5 * 8   -- matrice
-  + 4 * 8                                   -- déplacements
-  + 5 * 8                                   -- lectures d'accès
-  + 22);                                    -- cas nommés ci-dessous
+  (select count(*)::int from t_op) * 6 * 8   -- matrice
+  + 5 * 8                                   -- déplacements
+  + 22                                      -- cas nommés (socle)
+  + 22);                                    -- type et auteur
 
 select * from pg_temp.matrice();
 select * from pg_temp.deplacements();
-select * from pg_temp.lectures_acces();
+
+-- ----------------------------------------------------- type et auteur ---
+select is(pg_temp.essai('ecriture', format($q$update public.classeur_classeurs set visibilite = 'prive' where id = %s$q$, pg_temp.vis('D'))),
+  'ok', 'type : l''auteur passe son public en privé');
+select is(pg_temp.essai('ecriture', format($q$update public.classeur_classeurs set visibilite = 'public' where id = %s$q$, pg_temp.vis('E'))),
+  'ok', 'type : l''auteur passe son privé en public');
+select is(pg_temp.essai('ecriture', format($q$update public.classeur_classeurs set visibilite = 'prive' where id = %s$q$, pg_temp.vis('A'))),
+  'err=42501', 'type : un compte en écriture ne range pas le public d''un autre en privé');
+select is(pg_temp.essai('ecriture', format($q$update public.classeur_classeurs set visibilite = 'gestion' where id = %s$q$, pg_temp.vis('D'))),
+  'err=42501', 'type : un compte en écriture ne range rien dans Gestion');
+select is(pg_temp.essai('lecture', format($q$update public.classeur_classeurs set visibilite = 'prive' where id = %s$q$, pg_temp.vis('A'))),
+  'zero', 'type : un compte en lecture ne change rien (0 ligne)');
+select is(pg_temp.essai('gestion', format($q$update public.classeur_classeurs set visibilite = 'gestion' where id = %s$q$, pg_temp.vis('A'))),
+  'ok', 'type : la gestion range un public dans Gestion');
+select is(pg_temp.essai('gestion', format($q$update public.classeur_classeurs set visibilite = 'prive' where id = %s$q$, pg_temp.vis('D'))),
+  'err=42501', 'type : la gestion ne se cache pas un classeur (privé d''un autre : la ligne neuve doit rester lisible)');
+select is(pg_temp.essai('gestion', format($q$update public.classeur_classeurs set visibilite = 'prive', created_by = auth.uid() where id = %s$q$, pg_temp.vis('D'))),
+  'ok', 'type : la gestion prend un public dans ses privés');
+select is(pg_temp.essai('gestion', format($q$update public.classeur_classeurs set visibilite = 'public' where id = %s$q$, pg_temp.vis('C'))),
+  'zero', 'type : la gestion ne voit pas le privé d''un autre (0 ligne)');
+select is(pg_temp.essai('gestion', format($q$update public.classeur_classeurs set visibilite = 'gestion' where id = %s$q$, pg_temp.vis('F'))),
+  'ok', 'type : la gestion range son propre privé dans Gestion');
+select is(pg_temp.essai('admin', format($q$update public.classeur_classeurs set visibilite = 'gestion' where id = %s$q$, pg_temp.vis('E'))),
+  'err=23514', 'type : vers Gestion, un auteur sans la gestion est refusé');
+select is(pg_temp.essai('admin', format($q$update public.classeur_classeurs set visibilite = 'public' where id = %s$q$, pg_temp.vis('E'))),
+  'ok', 'type : l''admin déplace le privé d''un autre');
+select is(pg_temp.essai('gestion', format($q$update public.classeur_classeurs set created_by = '%s' where id = %s$q$, pg_temp.uid('ecriture'), pg_temp.vis('A'))),
+  'ok', 'auteur : la gestion donne un public à un compte en écriture');
+select is(pg_temp.essai('gestion', format($q$update public.classeur_classeurs set created_by = '%s' where id = %s$q$, pg_temp.uid('ecriture'), pg_temp.vis('B'))),
+  'err=23514', 'auteur : un classeur de gestion n''a qu''un auteur qui a la gestion');
+select is(pg_temp.essai('gestion', format($q$update public.classeur_classeurs set created_by = '%s' where id = %s$q$, pg_temp.uid('lecture'), pg_temp.vis('A'))),
+  'err=23514', 'auteur : un compte en lecture ne peut pas être l''auteur');
+select is(pg_temp.essai('gestion', format($q$update public.classeur_classeurs set created_by = null where id = %s$q$, pg_temp.vis('A'))),
+  'err=23514', 'auteur : jamais vide');
+select is(pg_temp.essai('ecriture', format($q$update public.classeur_classeurs set created_by = '%s' where id = %s$q$, pg_temp.uid('gestion'), pg_temp.vis('D'))),
+  'ok', 'auteur : l''auteur donne son classeur');
+select is(pg_temp.essai('ecriture', format($q$update public.classeur_classeurs set created_by = '%s' where id = %s$q$, pg_temp.uid('ecriture'), pg_temp.vis('A'))),
+  'err=42501', 'auteur : un compte en écriture ne prend pas le classeur d''un autre');
+select is(pg_temp.essai('ecriture', $q$insert into public.classeur_classeurs (name, visibilite) values ('T', 'gestion')$q$),
+  'err=42501', 'création : un compte en écriture ne crée pas un classeur de gestion');
+select is(pg_temp.essai('ecriture',
+  $q$with i as (insert into public.classeur_classeurs (name, visibilite) values ('T', 'prive') returning visibilite, created_by)
+     select count(*) from i where visibilite = 'prive' and created_by = auth.uid()$q$),
+  'ok', 'création : un compte en écriture crée son privé et le relit');
+select is(pg_temp.essai('gestion',
+  $q$with i as (insert into public.classeur_classeurs (name, visibilite) values ('T', 'gestion') returning visibilite)
+     select count(*) from i where visibilite = 'gestion'$q$),
+  'ok', 'création : la gestion crée un classeur de gestion');
+select is((select count(*)::int from pg_trigger where tgname = 'audit_classeur_visibilite'), 1,
+  'journal : le changement de type ou d''auteur est journalisé (trigger présent)');
 
 -- ------------------------------------------------- cas repris de la verif ---
 select is((select count(*)::int from t_compte where uid is not null), 7, 'comptes du seed présents');
 select is(pg_temp.essai('lecture', 'select count(*) from public.classeur_periodicites'), 'ok', 'périodicités lisibles au rang lecture');
 select is(pg_temp.essai('aucun', 'select count(*) from public.classeur_periodicites'), 'zero', 'périodicités invisibles sans droit de page');
-select is(pg_temp.essai('ecriture', 'select count(*) from public.classeur_personnes()'), 'err=42501', 'liste des personnes : gestion seule');
+select is(pg_temp.essai('lecture', 'select count(*) from public.classeur_personnes()'), 'ok', 'liste des personnes : tout compte qui a la page');
 
--- Création hors gestion : « privé » forcé à lecture, fin de liste, jamais supprimé.
+-- Création hors gestion : fin de liste, jamais supprimé.
 select is(pg_temp.essai('ecriture',
-  $q$with i as (insert into public.classeur_classeurs (name, acces_tous, sort_order, deleted_at)
-                values ('T', 'aucun', -5, now()) returning acces_tous, sort_order, deleted_at)
-     select count(*) from i where acces_tous = 'lecture' and deleted_at is null
-       and sort_order = (select max(sort_order) from public.classeur_classeurs where name <> 'T') + 1$q$),
-  'ok', 'création hors gestion : privé → lecture, fin de liste, non supprimé');
+  $q$with i as (insert into public.classeur_classeurs (name, sort_order, deleted_at)
+                values ('T', -5, now()) returning visibilite, sort_order, deleted_at)
+     select count(*) from i where visibilite = 'public' and deleted_at is null
+       and sort_order = $q$ || (select max(sort_order) + 1 from public.classeur_classeurs)),
+  'ok', 'création hors gestion : public par défaut, fin de liste, non supprimé');
 select is(pg_temp.essai('gestion',
-  $q$with i as (insert into public.classeur_classeurs (name, acces_tous) values ('T', 'aucun') returning acces_tous)
-     select count(*) from i where acces_tous = 'aucun'$q$),
+  $q$with i as (insert into public.classeur_classeurs (name, visibilite) values ('T', 'prive') returning visibilite)
+     select count(*) from i where visibilite = 'prive'$q$),
   'ok', 'création par la gestion : « privé » respecté');
 select is(pg_temp.essai('lecture', $q$insert into public.classeur_classeurs (name) values ('T')$q$),
   'err=42501', 'création : refusée au rang lecture');
@@ -329,7 +352,7 @@ select is(pg_temp.essai('gestion', $q$insert into public.classeur_documents (id,
   'err=428C9', 'identifiant de document choisi : refusé, même à la gestion');
 select is(pg_temp.essai('ecriture',
   format($q$insert into public.classeur_images (classeur_id, chemin, nom) values (%s, '%s/' || gen_random_uuid() || '.webp', 'T')$q$,
-         (select id from t_cl where cle = 'A'), (select id from t_cl where cle = 'C'))),
+         (select id from t_cl where cle = 'A'), (select id from t_cl where cle = 'D'))),
   'err=23514', 'fiche d''image dans le dossier d''un autre classeur : refusée (CHECK)');
 select is(pg_temp.essai('ecriture',
   format($q$insert into storage.objects (bucket_id, name) values ('classeur-images', '%s/' || gen_random_uuid() || '.png')$q$,
@@ -348,7 +371,7 @@ select is(pg_temp.essai('admin',
 -- un update dont la NOUVELLE ligne sort des droits → 42501, RIEN écrit.
 select is(pg_temp.essai('ecriture',
   format('update public.classeur_chapters set classeur_id = %s where id = %s',
-         (select id from t_cl where cle = 'C'), (select ch from t_cl where cle = 'A'))),
+         (select id from t_cl where cle = 'B'), (select ch from t_cl where cle = 'A'))),
   'err=42501', 'S1 : update vers un classeur non modifiable → 42501 (= simulateur)');
 
 -- S2 (simulateur `modifier` : updated_at posé SAUF s'il est fourni et différent) :

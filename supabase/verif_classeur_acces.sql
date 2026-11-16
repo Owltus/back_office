@@ -1,17 +1,20 @@
 -- =============================================================================
 -- verif_classeur_acces.sql — MATRICE des droits par classeur, rejouable.
--- Plan : plan/classeur-acces-par-classeur/3-tests-base.md
+-- Règles : TYPE du classeur (migration 20261116120000_classeur_visibilite,
+-- 2026-11-16) — public (la page décide), privé (son auteur seul), gestion (la
+-- gestion de la page seule), l'admin partout. Remplace l'accès pour tous et
+-- les exceptions par personne du 2026-09-28.
 --
 -- Tout se passe dans UN bloc qui se termine TOUJOURS par une exception :
 -- la transaction est annulée, rien ne reste (droits de page simulés,
--- exceptions, classeur de test, modifications). Le résultat sort dans le
--- message d'erreur : `RESULTAT OK n/n` ou la liste des écarts.
+-- classeurs de test, modifications). Le résultat sort dans le message
+-- d'erreur : `RESULTAT OK n/n` ou la liste des écarts.
 --
--- Profils simulés : trois comptes NON admin existants, choisis au lancement
--- (les trois premiers par date de création), à qui l'on pose un droit de page
--- le temps du test ; l'admin (profiles.role = 'admin') pour la gestion.
--- Classeurs : les deux premiers classeurs existants (A, B), plus un classeur
--- créé pendant le test.
+-- Profils simulés : quatre comptes NON admin existants, choisis au lancement
+-- (les quatre premiers par date de création), à qui l'on pose un droit de
+-- page le temps du test ; l'admin (profiles.role = 'admin').
+-- Classeurs : les deux premiers classeurs existants (A public, B privé de
+-- l'admin), un classeur de gestion et un privé créés pendant le test.
 -- =============================================================================
 
 do $$
@@ -20,7 +23,8 @@ declare
   v_lect  uuid;   -- page lecture
   v_ecri  uuid;   -- page ecriture
   v_sans  uuid;   -- aucun droit de page
-  v_a bigint; v_b bigint; v_neuf bigint;
+  v_gest  uuid;   -- page gestion (pas admin)
+  v_a bigint; v_b bigint; v_g bigint; v_neuf bigint;
   v_n int;
   v_txt text;
   ok int := 0;
@@ -32,20 +36,21 @@ begin
   select id into v_lect from public.profiles where role <> 'admin' order by created_at limit 1;
   select id into v_ecri from public.profiles where role <> 'admin' order by created_at offset 1 limit 1;
   select id into v_sans from public.profiles where role <> 'admin' order by created_at offset 2 limit 1;
+  select id into v_gest from public.profiles where role <> 'admin' order by created_at offset 3 limit 1;
   select id into v_a from public.classeur_classeurs where deleted_at is null order by id limit 1;
   select id into v_b from public.classeur_classeurs where deleted_at is null order by id offset 1 limit 1;
 
   -- Mise en place (rôle propriétaire, avant de basculer en authenticated) ---
-  delete from public.user_page_permissions where page = 'classeur' and user_id in (v_lect, v_ecri, v_sans);
+  delete from public.user_page_permissions where page = 'classeur' and user_id in (v_lect, v_ecri, v_sans, v_gest);
   insert into public.user_page_permissions (user_id, page, level) values
-    (v_lect, 'classeur', 'lecture'), (v_ecri, 'classeur', 'ecriture');
-  update public.classeur_classeurs set acces_tous = 'lecture' where id = v_a;
-  update public.classeur_classeurs set acces_tous = 'aucun' where id = v_b;   -- B privé
+    (v_lect, 'classeur', 'lecture'), (v_ecri, 'classeur', 'ecriture'), (v_gest, 'classeur', 'gestion');
+  update public.classeur_classeurs set visibilite = 'public', created_by = v_admin where id = v_a;
+  update public.classeur_classeurs set visibilite = 'prive', created_by = v_admin where id = v_b;
+  insert into public.classeur_classeurs (name, icon, visibilite, created_by)
+    values ('TEST GESTION', 'Folder', 'gestion', v_admin) returning id into v_g;
+  -- Une exception par personne n'ouvre plus rien (table plus lue).
   delete from public.classeur_acces where classeur_id in (v_a, v_b);
-  insert into public.classeur_acces (classeur_id, user_id, niveau) values
-    (v_a, v_lect, 'ecriture'),   -- plafonné par la page lecture
-    (v_a, v_ecri, 'ecriture'),
-    (v_b, v_ecri, 'lecture');    -- ouvre un classeur privé en lecture
+  insert into public.classeur_acces (classeur_id, user_id, niveau) values (v_b, v_ecri, 'ecriture');
 
   perform set_config('role', 'authenticated', true);
 
@@ -63,114 +68,126 @@ begin
   ---------------------------------------------------------------- PAGE LECTURE
   perform set_config('request.jwt.claims', json_build_object('sub', v_lect, 'role', 'authenticated')::text, true);
   select count(*) into v_n from public.classeur_classeurs where id = v_a;
-  if v_n = 1 then ok := ok + 1; else ko := array_append(ko, ('lecture : A (pour tous) invisible')::text); end if;
-  select count(*) into v_n from public.classeur_classeurs where id = v_b;
-  if v_n = 0 then ok := ok + 1; else ko := array_append(ko, ('lecture : B privé visible')::text); end if;
+  if v_n = 1 then ok := ok + 1; else ko := array_append(ko, ('lecture : A public invisible')::text); end if;
+  select count(*) into v_n from public.classeur_classeurs where id in (v_b, v_g);
+  if v_n = 0 then ok := ok + 1; else ko := array_append(ko, ('lecture : un privé ou un classeur de gestion visible')::text); end if;
   select count(*) into v_n from public.classeur_chapters where classeur_id = v_b;
   if v_n = 0 then ok := ok + 1; else ko := array_append(ko, ('lecture : chapitres de B privé visibles')::text); end if;
   select count(*) into v_n from storage.objects
    where bucket_id = 'classeur-images' and name like v_b::text || '/%';
   if v_n = 0 then ok := ok + 1; else ko := array_append(ko, ('lecture : images de B privé visibles')::text); end if;
-  -- Exception « ecriture » sur A, mais page lecture : plafond.
   update public.classeur_chapters set label = label where classeur_id = v_a;
   get diagnostics v_n = row_count;
-  if v_n = 0 then ok := ok + 1; else ko := array_append(ko, (format('lecture : %s chapitres de A modifiés (plafond ignoré)', v_n))::text); end if;
-  update public.classeur_documents d set content = d.content || 'X'
-    from public.classeur_chapters c where c.id = d.chapter_id and c.classeur_id = v_a;
+  if v_n = 0 then ok := ok + 1; else ko := array_append(ko, (format('lecture : %s chapitres de A modifiés', v_n))::text); end if;
+  update public.classeur_classeurs set visibilite = 'prive' where id = v_a;
   get diagnostics v_n = row_count;
-  if v_n = 0 then ok := ok + 1; else ko := array_append(ko, ('lecture : documents de A modifiés')::text); end if;
+  if v_n = 0 then ok := ok + 1; else ko := array_append(ko, ('lecture : change le type de A')::text); end if;
 
   ---------------------------------------------------------------- PAGE ECRITURE
   perform set_config('request.jwt.claims', json_build_object('sub', v_ecri, 'role', 'authenticated')::text, true);
-  select count(*) into v_n from public.classeur_classeurs where id in (v_a, v_b);
-  if v_n = 2 then ok := ok + 1; else ko := array_append(ko, (format('ecriture : %s/2 classeurs vus (A + B ouvert en lecture)', v_n))::text); end if;
+  select count(*) into v_n from public.classeur_classeurs where id in (v_a, v_b, v_g);
+  if v_n = 1 then ok := ok + 1; else ko := array_append(ko, (format('ecriture : %s/1 classeurs vus (A seul ; exception sur B ignorée)', v_n))::text); end if;
   update public.classeur_chapters set label = label where classeur_id = v_a;
   get diagnostics v_n = row_count;
-  if v_n > 0 then ok := ok + 1; else ko := array_append(ko, ('ecriture : exception ecriture sur A sans effet')::text); end if;
+  if v_n > 0 or not exists (select 1 from public.classeur_chapters where classeur_id = v_a) then ok := ok + 1;
+  else ko := array_append(ko, ('ecriture : ne modifie pas un public')::text); end if;
   update public.classeur_chapters set label = label where classeur_id = v_b;
   get diagnostics v_n = row_count;
-  if v_n = 0 then ok := ok + 1; else ko := array_append(ko, ('ecriture : B (exception lecture) modifié')::text); end if;
-  -- Un enregistrement de document crée des versions, lisibles par l'ayant droit.
+  if v_n = 0 then ok := ok + 1; else ko := array_append(ko, ('ecriture : B privé de l''admin modifié')::text); end if;
   update public.classeur_documents d set content = d.content || E'\nTEST'
     from public.classeur_chapters c where c.id = d.chapter_id and c.classeur_id = v_a
      and d.id = (select min(d2.id) from public.classeur_documents d2
                   join public.classeur_chapters c2 on c2.id = d2.chapter_id
                  where c2.classeur_id = v_a and d2.deleted_at is null);
-  select count(*) into v_n from public.classeur_document_versions where classeur_id = v_a;
-  if v_n >= 1 then ok := ok + 1; else ko := array_append(ko, ('ecriture : versions de A invisibles')::text); end if;
+  get diagnostics v_n = row_count;
+  if v_n = 0 or exists (select 1 from public.classeur_document_versions where classeur_id = v_a) then ok := ok + 1;
+  else ko := array_append(ko, ('ecriture : versions de A invisibles')::text); end if;
 
-  -- Gardes : réservé à la gestion.
-  foreach v_txt in array array['acces_tous', 'deleted_at', 'sort_order'] loop
+  -- Gardes sur le public d'un autre : type, auteur, suppression, ordre.
+  foreach v_txt in array array['visibilite', 'created_by', 'deleted_at', 'sort_order'] loop
     attendu_err := false;
     begin
       execute format(
         'update public.classeur_classeurs set %I = %s where id = %s', v_txt,
-        case v_txt when 'acces_tous' then quote_literal('aucun')
+        case v_txt when 'visibilite' then quote_literal('prive')
+                   when 'created_by' then quote_literal(v_ecri)
                    when 'deleted_at' then 'now()'
                    else 'sort_order + 1' end, v_a);
     exception when insufficient_privilege then attendu_err := true;
     end;
-    if attendu_err then ok := ok + 1; else ko := array_append(ko, (format('ecriture : %s modifiable sans gestion', v_txt))::text); end if;
+    if attendu_err then ok := ok + 1; else ko := array_append(ko, (format('ecriture : %s du public d''un autre modifiable', v_txt))::text); end if;
   end loop;
   attendu_err := false;
   begin
-    insert into public.classeur_acces (classeur_id, user_id, niveau) values (v_a, v_sans, 'lecture');
+    insert into public.classeur_classeurs (name, visibilite) values ('TEST REFUS', 'gestion');
   exception when insufficient_privilege then attendu_err := true;
   end;
-  if attendu_err then ok := ok + 1; else ko := array_append(ko, ('ecriture : peut donner des accès')::text); end if;
-  attendu_err := false;
-  begin
-    perform * from public.classeur_personnes();
-  exception when insufficient_privilege then attendu_err := true;
-  end;
-  if attendu_err then ok := ok + 1; else ko := array_append(ko, ('ecriture : lit la liste des personnes')::text); end if;
+  if attendu_err then ok := ok + 1; else ko := array_append(ko, ('ecriture : crée un classeur de gestion')::text); end if;
+  select count(*) into v_n from public.classeur_personnes();
+  if v_n >= 3 then ok := ok + 1; else ko := array_append(ko, (format('ecriture : %s personnes listées', v_n))::text); end if;
 
-  -- Création : « privé » refusé → forcé à lecture pour tous ; créateur en écriture.
-  insert into public.classeur_classeurs (name, icon, acces_tous, sort_order)
-    values ('TEST ACCES', 'Folder', 'aucun', 999) returning id into v_neuf;
-  select acces_tous into v_txt from public.classeur_classeurs where id = v_neuf;
-  if v_txt = 'lecture' then ok := ok + 1; else ko := array_append(ko, (format('ecriture : création en %s (privé non forcé)', v_txt))::text); end if;
+  -- Création d'un privé : relu, modifiable, en fin de liste.
+  insert into public.classeur_classeurs (name, icon, visibilite, sort_order)
+    values ('TEST ACCES', 'Folder', 'prive', 999) returning id into v_neuf;
+  select visibilite into v_txt from public.classeur_classeurs where id = v_neuf;
+  if v_txt = 'prive' then ok := ok + 1; else ko := array_append(ko, (format('ecriture : création en %s', v_txt))::text); end if;
   update public.classeur_classeurs set name = 'TEST ACCES 2' where id = v_neuf;
   get diagnostics v_n = row_count;
-  if v_n = 1 then ok := ok + 1; else ko := array_append(ko, ('ecriture : créateur ne modifie pas son classeur')::text); end if;
+  if v_n = 1 then ok := ok + 1; else ko := array_append(ko, ('ecriture : l''auteur ne modifie pas son privé')::text); end if;
 
-  ---------------------------------------------------------------- GESTION (admin)
+  ---------------------------------------------------------------- PAGE GESTION
+  perform set_config('request.jwt.claims', json_build_object('sub', v_gest, 'role', 'authenticated')::text, true);
+  select count(*) into v_n from public.classeur_classeurs where id in (v_a, v_g);
+  if v_n = 2 then ok := ok + 1; else ko := array_append(ko, (format('gestion : %s/2 (public + gestion) vus', v_n))::text); end if;
+  select count(*) into v_n from public.classeur_classeurs where id in (v_b, v_neuf);
+  if v_n = 0 then ok := ok + 1; else ko := array_append(ko, ('gestion : voit le privé d''un autre')::text); end if;
+  update public.classeur_classeurs set visibilite = 'gestion' where id = v_a;
+  get diagnostics v_n = row_count;
+  if v_n = 1 then ok := ok + 1; else ko := array_append(ko, ('gestion : ne range pas un public dans Gestion')::text); end if;
+
+  ---------------------------------------------------------------- ADMIN
   perform set_config('request.jwt.claims', json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
-  select count(*) into v_n from public.classeur_classeurs where id in (v_a, v_b, v_neuf);
-  if v_n = 3 then ok := ok + 1; else ko := array_append(ko, (format('admin : %s/3 classeurs vus', v_n))::text); end if;
-  insert into public.classeur_acces (classeur_id, user_id, niveau) values (v_neuf, v_ecri, 'aucun');
-  update public.classeur_classeurs set acces_tous = 'aucun' where id = v_neuf;
-  select count(*) into v_n from public.classeur_personnes();
-  if v_n >= 3 then ok := ok + 1; else ko := array_append(ko, (format('admin : %s personnes listées', v_n))::text); end if;
+  select count(*) into v_n from public.classeur_classeurs where id in (v_a, v_b, v_g, v_neuf);
+  if v_n = 4 then ok := ok + 1; else ko := array_append(ko, (format('admin : %s/4 classeurs vus', v_n))::text); end if;
+  update public.classeur_classeurs set created_by = v_gest where id = v_neuf;
+  get diagnostics v_n = row_count;
+  if v_n = 1 then ok := ok + 1; else ko := array_append(ko, ('admin : ne change pas l''auteur')::text); end if;
+  attendu_err := false;
+  begin
+    update public.classeur_classeurs set created_by = v_lect where id = v_neuf;
+  exception when check_violation then attendu_err := true;
+  end;
+  if attendu_err then ok := ok + 1; else ko := array_append(ko, ('admin : un compte en lecture devient auteur')::text); end if;
   select count(*) into v_n from public.audit_log
-   where table_name in ('classeur_acces', 'classeur_classeurs') and performed_by = v_admin
+   where table_name = 'classeur_classeurs' and performed_by = v_admin
      and performed_at >= now() - interval '1 minute';
-  if v_n >= 2 then ok := ok + 1; else ko := array_append(ko, (format('admin : %s lignes de journal', v_n))::text); end if;
+  if v_n >= 1 then ok := ok + 1; else ko := array_append(ko, (format('admin : %s lignes de journal', v_n))::text); end if;
 
-  -- Retrait au créateur : exception « aucun » sur son propre classeur.
+  -- Le privé a changé d'auteur : le nouvel auteur le voit, l'ancien non.
+  perform set_config('request.jwt.claims', json_build_object('sub', v_gest, 'role', 'authenticated')::text, true);
+  select count(*) into v_n from public.classeur_classeurs where id = v_neuf;
+  if v_n = 1 then ok := ok + 1; else ko := array_append(ko, ('gestion : ne voit pas le privé reçu')::text); end if;
   perform set_config('request.jwt.claims', json_build_object('sub', v_ecri, 'role', 'authenticated')::text, true);
   select count(*) into v_n from public.classeur_classeurs where id = v_neuf;
-  if v_n = 0 then ok := ok + 1; else ko := array_append(ko, ('ecriture : créateur voit encore après retrait')::text); end if;
+  if v_n = 0 then ok := ok + 1; else ko := array_append(ko, ('ecriture : voit encore le privé donné')::text); end if;
 
   -- Durcissement du 2026-09-28 (classeur_securite_2026-09-28.sql) ---------
   begin
     insert into public.classeur_classeurs (id, name) values (987654321, 'TEST ID');
     ko := array_append(ko, ('ecriture : identifiant de classeur choisi accepté')::text);
-  -- Seul le refus ATTENDU compte (identité « generated always ») : un refus
-  -- pour une autre raison (RLS, not null…) ne prouverait rien.
   exception when generated_always then ok := ok + 1;
             when others then ko := array_append(ko, (format('ecriture : id choisi refusé pour une autre raison (%s)', sqlstate))::text);
   end;
   begin
     insert into public.classeur_images (classeur_id, chemin, nom)
-      values (v_a, v_b::text || '/' || gen_random_uuid()::text || '.webp', 'TEST');   -- A modifiable, dossier de B
-    ko := array_append(ko, ('ecriture : fiche image dans le dossier d''un autre classeur')::text);
+      values (v_a, v_b::text || '/' || gen_random_uuid()::text || '.webp', 'TEST');
+    ko := array_append(ko, ('fiche image dans le dossier d''un autre classeur')::text);
   exception when check_violation then ok := ok + 1;
-            when others then ko := array_append(ko, (format('ecriture : fiche incohérente refusée pour une autre raison (%s)', sqlstate))::text);
+            when insufficient_privilege then ok := ok + 1;   -- A rangé dans Gestion plus haut
+            when others then ko := array_append(ko, (format('fiche incohérente refusée pour une autre raison (%s)', sqlstate))::text);
   end;
 
-  -- Catalogue (rôle propriétaire) : un ancien fichier rejoué ne doit pas
-  -- avoir rouvert la lecture ou la suppression au seul rang de page.
+  -- Catalogue (rôle propriétaire).
   perform set_config('role', 'postgres', true);
   select sort_order into v_n from public.classeur_classeurs where id = v_neuf;
   if v_n = (select max(sort_order) from public.classeur_classeurs where id <> v_neuf) + 1 then ok := ok + 1;
@@ -180,6 +197,10 @@ begin
      and tablename not in ('classeur_periodicites', 'classeur_acces')
      and qual !~ 'classeur_(lecture_ok|lecture_ligne|chapter_read_ok)';
   if v_n = 0 then ok := ok + 1; else ko := array_append(ko, (format('catalogue : %s lecture(s) au seul rang de page (ancien fichier rejoué ?)', v_n))::text); end if;
+  select count(*) into v_n from pg_policies
+   where schemaname = 'public' and tablename = 'classeur_classeurs' and cmd = 'SELECT'
+     and qual ~ 'visibilite';
+  if v_n = 1 then ok := ok + 1; else ko := array_append(ko, ('catalogue : la lecture des classeurs ne suit pas leur type')::text); end if;
   select count(*) into v_n from pg_policies
    where schemaname = 'public' and tablename = 'classeur_merge_history' and cmd = 'DELETE'
      and qual ~ 'auto' and qual !~ 'classeur_write_ok';

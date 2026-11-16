@@ -52,7 +52,7 @@ function classeur(id: number) {
     etablissement: 'OKKO Nantes',
     etablissement_complement: '',
     created_by: null,
-    acces_tous: 'lecture',
+    visibilite: 'public',
     sort_order: id,
     created_at: T,
     updated_at: T,

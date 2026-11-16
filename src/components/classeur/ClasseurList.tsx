@@ -1,9 +1,14 @@
 import { Fragment, useRef, useState } from 'react'
-import type { ChangeEvent, DragEvent } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import type { ChangeEvent, DragEvent, ReactNode } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { DndContext, closestCenter } from '@dnd-kit/core'
-import type { DragEndEvent } from '@dnd-kit/core'
+import {
+  DndContext,
+  closestCenter,
+  pointerWithin,
+  useDroppable,
+} from '@dnd-kit/core'
+import type { CollisionDetection, DragEndEvent } from '@dnd-kit/core'
 import {
   SortableContext,
   useSortable,
@@ -12,27 +17,20 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import {
   Copy,
-  Eye,
-  EyeOff,
   FileDown,
   FileUp,
   FolderOpen,
-  Lock,
   Pencil,
   Plus,
-  ShieldCheck,
   Trash2,
   Upload,
-  Users,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
-import { useAuth } from '#/components/auth/AuthContext.tsx'
 import {
   CLASSES_CARTE_GLISSABLE,
   useCapteursClasseur,
 } from '#/components/classeur/dnd/useCapteursClasseur.ts'
-import { AccesClasseurDialog } from '#/components/classeur/dialogs/AccesClasseurDialog.tsx'
 import { ClasseurDialog } from '#/components/classeur/dialogs/ClasseurDialog.tsx'
 import { ClasseurListHelpPanel } from '#/components/classeur/ClasseurListHelpPanel.tsx'
 import {
@@ -64,13 +62,27 @@ import {
 } from '#/components/shared/skeleton/PageShapes.tsx'
 import {
   useDroitsPageClasseur,
-  useMesAcces,
+  usePersonnesClasseur,
 } from '#/components/classeur/hooks/useDroitsClasseur.ts'
-import { capacites, niveauEffectif } from '#/lib/classeur/droits.ts'
-import type { NiveauEffectif } from '#/lib/classeur/droits.ts'
+import { nomAuteur } from '#/lib/classeur/auteurs.ts'
+import {
+  capacites,
+  niveauEffectif,
+  peutEtreAuteur,
+  rangementVers,
+  sectionDe,
+  sectionsVisibles,
+} from '#/lib/classeur/droits.ts'
+import type {
+  Moi,
+  NiveauEffectif,
+  Rangement,
+  Section,
+} from '#/lib/classeur/droits.ts'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
+import { classeurKeys } from '#/lib/classeur/keys.ts'
 import { formatDateCourte, getIcon } from '#/lib/classeur/naming.ts'
-import { softDeleteClasseur } from '#/lib/classeur/service.ts'
+import { rangerClasseur, softDeleteClasseur } from '#/lib/classeur/service.ts'
 import type { StatsClasseur } from '#/lib/classeur/statsClasseurs.ts'
 import type { DbClasseur } from '#/lib/classeur/types.ts'
 import { MAX_JSON_BYTES, fileTooLarge } from '#/lib/shared/files.ts'
@@ -97,20 +109,19 @@ import { cn } from '#/lib/utils.ts'
  *   un document compte 1 qu'il fasse 1 ou 50 pages, les feuilles ne
  *   comptent pas, le chiffre trompait).
  *
- * ACCÈS PAR CLASSEUR (2026-09-28, `lib/classeur/droits.ts`) : la liste ne
- * contient que les classeurs lisibles (la RLS filtre). La gestion voit
- * l'accès donné à tous (Privé / Tous en lecture / Tous en écriture) ; un
- * compte en écriture voit son propre niveau (Modification / Lecture) ; un
- * compte en lecture seule n'a pas la colonne (elle dirait partout la même
- * chose). Supprimer un classeur et réordonner : gestion seule. La colonne
- * ne montre qu'une ICÔNE, sans texte ni intitulé visible (décision
- * utilisateur du 2026-10-19) : le libellé passe par l'infobulle et reste
- * lu par les lecteurs d'écran.
+ * UN TABLEAU PAR TYPE (demande utilisateur du 2026-11-16,
+ * `lib/classeur/droits.ts`) : Publics, Mes privés, Gestion (gestion de la
+ * page) ; l'admin a en plus les Privés des autres. Chaque ligne dit son
+ * AUTEUR. Glisser une ligne dans un autre tableau change son type (et, vers
+ * Mes privés, son auteur) : l'auteur et la gestion, vers ou depuis Gestion
+ * la gestion seule (`rangementVers`). Dans un même tableau, le glisser
+ * réordonne (gestion). La liste ne contient que les classeurs lisibles (la
+ * RLS filtre).
  *
  * MENU D'UN CLASSEUR (2026-10-19, demande utilisateur) : clic droit sur la
  * ligne, rien d'autre (aucun bouton « ⋯ », décision utilisateur). Ouvrir,
- * Modifier le classeur, Accès, Copier pour un LLM, Exporter en JSON,
- * Supprimer : toujours listés, grisés avec leur
+ * Modifier le classeur (nom, type, auteur), Copier pour un LLM, Exporter en
+ * JSON, Supprimer : toujours listés, grisés avec leur
  * raison quand le niveau EFFECTIF ne les permet pas (`capacites`, miroir
  * des RLS). La base reste juge : le menu ne fait que le montrer.
  */
@@ -124,36 +135,31 @@ export function ClasseurList({
   /** Copier pour un LLM (étape 3 du plan `classeur-echange-ia-2026-10-19`). */
   onCopierJson?: (classeur: DbClasseur) => void | Promise<void>
 }) {
-  const { user } = useAuth()
   const droitsPage = useDroitsPageClasseur()
-  const mesAcces = useMesAcces()
+  const moi = droitsPage.moi
   const canWrite = droitsPage.canCreate
   const canManage = droitsPage.canManage
   const navigate = useNavigate()
   const classeurs = useClasseurs()
   const stats = useStatsClasseurs(classeurs.isSuccess)
+  const personnes = usePersonnesClasseur(classeurs.isSuccess)
   const reorder = useReorderClasseurs()
+  const ranger = useRangerClasseur()
   const invalider = useInvaliderClasseur()
   const liste = classeurs.data ?? []
   const peutReordonner = droitsPage.canReorderList
   const statsDe = new Map((stats.data ?? []).map((s) => [s.classeurId, s]))
-  const niveauDe = (c: DbClasseur): NiveauEffectif | null =>
-    mesAcces.isPending
-      ? null
-      : niveauEffectif(
-          droitsPage.page,
-          c,
-          mesAcces.parClasseur.get(c.id) ?? null,
-          user?.id,
-        )
-  const colonneAcces = canManage || canWrite
+  const niveauDe = (c: DbClasseur): NiveauEffectif => niveauEffectif(moi, c)
+  const sections = sectionsVisibles(moi)
+  const parSection = (sec: Section) =>
+    liste.filter((c) => sectionDe(moi, c) === sec)
 
   const [createOpen, setCreateOpen] = useState(false)
   const [aSupprimer, setASupprimer] = useState<DbClasseur | null>(null)
   const [aModifier, setAModifier] = useState<DbClasseur | null>(null)
-  const [accesDe, setAccesDe] = useState<DbClasseur | null>(null)
   const [aideOuverte, setAideOuverte] = useState(false)
   const [erreurImport, setErreurImport] = useState<string | null>(null)
+  const [erreurRangement, setErreurRangement] = useState<string | null>(null)
 
   const suppression = useMutation({
     mutationFn: (id: number) => softDeleteClasseur(id),
@@ -163,18 +169,56 @@ export function ClasseurList({
   // Souris 5 px, doigt : appui long (audit tactile 2026-09-28).
   const sensors = useCapteursClasseur()
 
+  /** Glisser une ligne vers un autre tableau : le rangement permis, ou une raison. */
+  function rangementOuRaison(
+    c: DbClasseur,
+    cible: Section,
+  ): Rangement | string {
+    const r = rangementVers(moi, c, cible)
+    if (r === null)
+      return cible === 'gestion'
+        ? 'Seule la gestion range un classeur dans Gestion.'
+        : 'Seuls l’auteur et la gestion changent le type de ce classeur.'
+    // Vers Gestion, l'auteur doit avoir la gestion (la base le refuse aussi).
+    const auteur = r.created_by ?? c.created_by
+    const p = personnes.data?.find((x) => x.id === auteur)
+    if (personnes.data && !peutEtreAuteur(p?.niveau_page ?? null, r.visibilite))
+      return `${nomAuteur(auteur, personnes.data, moi.userId)} ne peut pas avoir un classeur de ce type : changez d’abord son auteur (clic droit, Modifier le classeur).`
+    return r
+  }
+
   // Le clic qui termine un glisser n'ouvre pas le classeur : dnd-kit
   // l'arrête lui-même (écouteur `click` en capture gardé jusqu'au tour
   // suivant, `AbstractPointerSensor`), testé dans `ClasseurList.test.tsx`.
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
     if (!over || active.id === over.id) return
+    const moved = liste.find((c) => c.id === Number(active.id))
+    if (!moved) return
+    const surSection = sectionDeCible(String(over.id))
+    const cibleLigne =
+      surSection === null
+        ? liste.find((c) => c.id === Number(over.id))
+        : undefined
+    const cible = surSection ?? (cibleLigne ? sectionDe(moi, cibleLigne) : null)
+    if (cible === null) return
+    if (cible !== sectionDe(moi, moved)) {
+      const r = rangementOuRaison(moved, cible)
+      if (typeof r === 'string') {
+        setErreurRangement(r)
+        return
+      }
+      setErreurRangement(null)
+      ranger.mutate({ id: moved.id, rangement: r })
+      return
+    }
+    if (!peutReordonner || !cibleLigne) return
     const ids = liste.map((c) => c.id)
-    const oldIndex = ids.indexOf(Number(active.id))
-    const newIndex = ids.indexOf(Number(over.id))
+    const oldIndex = ids.indexOf(moved.id)
+    const newIndex = ids.indexOf(cibleLigne.id)
     if (oldIndex === -1 || newIndex === -1) return
-    const [moved] = ids.splice(oldIndex, 1)
-    ids.splice(newIndex, 0, moved)
+    ids.splice(oldIndex, 1)
+    ids.splice(newIndex, 0, moved.id)
     reorder.mutate(ids)
   }
 
@@ -219,11 +263,11 @@ export function ClasseurList({
 
   const erreurEcriture = reorder.isError
     ? messageErreur(reorder.error, 'Ordre non enregistré')
-    : suppression.isError
-      ? messageErreur(suppression.error, 'Suppression impossible')
-      : erreurImport
-
-  const colonnes = { acces: colonneAcces }
+    : ranger.isError
+      ? messageErreur(ranger.error, 'Classeur non déplacé')
+      : suppression.isError
+        ? messageErreur(suppression.error, 'Suppression impossible')
+        : (erreurRangement ?? erreurImport)
 
   return (
     // `flex-1 lg:min-h-0` : à partir de `lg`, la colonne tient dans la
@@ -312,113 +356,69 @@ export function ClasseurList({
 
       {classeurs.isPending ? (
         /* DÉLÈGUE à `FormeClasseurListe` : une seule silhouette par page. */
-        <FormeClasseurListe actions={false} {...colonnes} />
+        <FormeClasseurListe actions={false} sections={sections.length} />
       ) : classeurs.isError ? null : (
-        <div className={TABLEAU_CLASSEURS.carte}>
-          <div className={TABLEAU_CLASSEURS.defilement}>
-            {/* `DndContext` HORS du tableau : il rend des `<div>` d'annonce pour
-                les lecteurs d'écran, interdits dans un `<tbody>` (erreur
-                d'hydratation). Seul `SortableContext`, qui ne rend rien, reste
-                dans le corps. */}
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <table className="w-full text-sm">
-                <thead className={TABLEAU_CLASSEURS.thead}>
-                  <tr>
-                    <th className={cn(TABLEAU_CLASSEURS.th, 'text-left')}>
-                      Classeur
-                    </th>
-                    <th
-                      className={cn(
-                        TABLEAU_CLASSEURS.th,
-                        'hidden w-24 text-center sm:table-cell',
-                      )}
-                    >
-                      Modifié le
-                    </th>
-                    {colonnes.acces && (
-                      <th
-                        className={cn(
-                          TABLEAU_CLASSEURS.th,
-                          'hidden w-12 sm:table-cell',
-                        )}
-                      >
-                        <span className="sr-only">Accès</span>
-                      </th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody>
-                  {liste.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={3}
-                        className="px-4 py-8 text-center text-sm text-muted-foreground"
-                      >
-                        Aucun classeur.
-                        {canWrite ? ' Créez-en un pour commencer.' : ''}
-                      </td>
-                    </tr>
-                  ) : (
-                    <SortableContext
-                      items={liste.map((c) => c.id)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      {liste.map((c) => (
-                        <LigneClasseur
-                          key={c.id}
-                          classeur={c}
-                          stats={statsDe.get(c.id)}
-                          statsEtat={
-                            stats.isPending
-                              ? 'chargement'
-                              : stats.isError
-                                ? 'erreur'
-                                : 'ok'
-                          }
-                          canDrag={peutReordonner}
-                          menu={entreesMenu(niveauDe(c), {
-                            ouvrir: () =>
-                              navigate({
-                                to: '/classeur/$classeurId',
-                                params: { classeurId: String(c.id) },
-                              }),
-                            modifier: () => setAModifier(c),
-                            acces: () => setAccesDe(c),
-                            exporter: onExporterJson
-                              ? () => void onExporterJson(c)
-                              : undefined,
-                            copier: onCopierJson
-                              ? () => void onCopierJson(c)
-                              : undefined,
-                            supprimer: () => setASupprimer(c),
-                          })}
-                          avecAcces={colonnes.acces}
-                          acces={
-                            !colonnes.acces
-                              ? null
-                              : canManage
-                                ? accesPourTous(c.acces_tous)
-                                : accesPersonnel(niveauDe(c))
-                          }
-                          onOpen={() =>
-                            navigate({
-                              to: '/classeur/$classeurId',
-                              params: { classeurId: String(c.id) },
-                            })
-                          }
-                        />
-                      ))}
-                    </SortableContext>
-                  )}
-                </tbody>
-              </table>
-            </DndContext>
+        /* `DndContext` HORS des tableaux : il rend des `<div>` d'annonce pour
+           les lecteurs d'écran, interdits dans un `<tbody>` (erreur
+           d'hydratation). Seul `SortableContext`, qui ne rend rien, reste
+           dans le corps. */
+        <DndContext
+          sensors={sensors}
+          collisionDetection={detection}
+          onDragEnd={handleDragEnd}
+        >
+          <div className={TABLEAU_CLASSEURS.sections}>
+            {sections.map((sec) => (
+              <TableauSection
+                key={sec}
+                section={sec}
+                classeurs={parSection(sec)}
+                vide={
+                  sec === 'public' && canWrite && liste.length === 0
+                    ? 'Aucun classeur. Créez-en un pour commencer.'
+                    : 'Aucun classeur.'
+                }
+                ligne={(c) => (
+                  <LigneClasseur
+                    key={c.id}
+                    classeur={c}
+                    auteur={nomAuteur(c.created_by, personnes.data, moi.userId)}
+                    stats={statsDe.get(c.id)}
+                    statsEtat={
+                      stats.isPending
+                        ? 'chargement'
+                        : stats.isError
+                          ? 'erreur'
+                          : 'ok'
+                    }
+                    canDrag={peutGlisser(moi, c, peutReordonner)}
+                    menu={entreesMenu(niveauDe(c), {
+                      ouvrir: () =>
+                        navigate({
+                          to: '/classeur/$classeurId',
+                          params: { classeurId: String(c.id) },
+                        }),
+                      modifier: () => setAModifier(c),
+                      exporter: onExporterJson
+                        ? () => void onExporterJson(c)
+                        : undefined,
+                      copier: onCopierJson
+                        ? () => void onCopierJson(c)
+                        : undefined,
+                      supprimer: () => setASupprimer(c),
+                    })}
+                    onOpen={() =>
+                      navigate({
+                        to: '/classeur/$classeurId',
+                        params: { classeurId: String(c.id) },
+                      })
+                    }
+                  />
+                )}
+              />
+            ))}
           </div>
-        </div>
+        </DndContext>
       )}
 
       <ClasseurDialog
@@ -440,11 +440,6 @@ export function ClasseurList({
         classeur={aModifier}
       />
 
-      <AccesClasseurDialog
-        classeur={accesDe}
-        onClose={() => setAccesDe(null)}
-      />
-
       {/* Aide de la page (bouton « ? »), même gabarit que les autres onglets. */}
       <Dialog open={aideOuverte} onOpenChange={setAideOuverte}>
         <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-2xl">
@@ -455,7 +450,11 @@ export function ClasseurList({
           />
           {/* Seul le corps défile : l'en-tête reste fixe en haut. */}
           <div className="min-h-0 flex-1 overflow-y-auto">
-            <ClasseurListHelpPanel canWrite={canWrite} canManage={canManage} />
+            <ClasseurListHelpPanel
+              canWrite={canWrite}
+              canManage={canManage}
+              admin={moi.admin}
+            />
           </div>
         </DialogContent>
       </Dialog>
@@ -481,43 +480,158 @@ export function ClasseurList({
   )
 }
 
-interface Acces {
-  libelle: string
-  icone: LucideIcon
-  aide: string
+/** Intitulé de chaque tableau. */
+const TITRE_SECTION: Record<Section, string> = {
+  public: 'Publics',
+  mesPrives: 'Mes privés',
+  privesAutres: 'Privés des autres',
+  gestion: 'Gestion',
 }
 
-/** Vu de la gestion : l'accès donné à tous. */
-function accesPourTous(niveau: DbClasseur['acces_tous']): Acces {
-  if (niveau === 'aucun')
-    return {
-      libelle: 'Privé',
-      icone: EyeOff,
-      aide: 'Visible de la gestion et des accès donnés',
-    }
-  return niveau === 'ecriture'
-    ? {
-        libelle: 'Tous en écriture',
-        icone: Users,
-        aide: 'Tout le monde peut modifier',
-      }
-    : {
-        libelle: 'Tous en lecture',
-        icone: Eye,
-        aide: 'Tout le monde peut lire',
-      }
+/** Ce que dit chaque tableau, à côté de son intitulé. */
+const AIDE_SECTION: Record<Section, string> = {
+  public: 'Tous ceux qui ont la page',
+  mesPrives: 'Vous seul',
+  privesAutres: 'Leur auteur seul',
+  gestion: 'La gestion de la page seule',
 }
 
-/** Vu d'un compte en écriture : son propre niveau sur ce classeur. */
-function accesPersonnel(niveau: NiveauEffectif | null): Acces | null {
-  if (niveau === null) return null
-  return niveau === 'ecriture' || niveau === 'gestion'
-    ? {
-        libelle: 'Modification',
-        icone: Pencil,
-        aide: 'Vous pouvez le modifier',
-      }
-    : { libelle: 'Lecture', icone: Lock, aide: 'Lecture seule sur ce classeur' }
+const PREFIXE_SECTION = 'section:'
+
+function sectionDeCible(id: string): Section | null {
+  if (!id.startsWith(PREFIXE_SECTION)) return null
+  return id.slice(PREFIXE_SECTION.length) as Section
+}
+
+/**
+ * Sous le pointeur d'abord (une ligne avant son tableau), sinon le plus
+ * proche : un tableau vide reste une cible.
+ */
+const detection: CollisionDetection = (args) => {
+  const sous = pointerWithin(args)
+  if (sous.length > 0)
+    return [...sous].sort(
+      (a, b) =>
+        Number(String(a.id).startsWith(PREFIXE_SECTION)) -
+        Number(String(b.id).startsWith(PREFIXE_SECTION)),
+    )
+  return closestCenter(args)
+}
+
+/** Une ligne se glisse si elle peut changer de tableau ou d'ordre. */
+function peutGlisser(moi: Moi, c: DbClasseur, reordonner: boolean): boolean {
+  if (reordonner) return true
+  return sectionsVisibles(moi).some((s) => rangementVers(moi, c, s) !== null)
+}
+
+/** Type et auteur d'un classeur, en OPTIMISTE sur la liste. */
+function useRangerClasseur() {
+  const queryClient = useQueryClient()
+  const invalider = useInvaliderClasseur()
+  const key = classeurKeys.list()
+  return useMutation({
+    mutationFn: ({ id, rangement }: { id: number; rangement: Rangement }) =>
+      rangerClasseur(id, rangement),
+    onMutate: async ({ id, rangement }) => {
+      await queryClient.cancelQueries({ queryKey: key })
+      const avant = queryClient.getQueryData<DbClasseur[]>(key)
+      if (avant)
+        queryClient.setQueryData<DbClasseur[]>(
+          key,
+          avant.map((c) => (c.id === id ? { ...c, ...rangement } : c)),
+        )
+      return { avant }
+    },
+    onError: (_err, _v, ctx) => {
+      if (ctx?.avant) queryClient.setQueryData(key, ctx.avant)
+    },
+    onSettled: () => invalider(),
+  })
+}
+
+/** Un tableau : son intitulé, puis sa carte, cible de dépôt même vide. */
+function TableauSection({
+  section,
+  classeurs,
+  vide,
+  ligne,
+}: {
+  section: Section
+  classeurs: DbClasseur[]
+  vide: string
+  ligne: (c: DbClasseur) => ReactNode
+}) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: PREFIXE_SECTION + section,
+  })
+  return (
+    <section
+      className={TABLEAU_CLASSEURS.section}
+      aria-label={TITRE_SECTION[section]}
+    >
+      <h2 className={TABLEAU_CLASSEURS.titre}>
+        {TITRE_SECTION[section]}
+        <span className="font-normal tracking-normal normal-case">
+          {AIDE_SECTION[section]}
+        </span>
+      </h2>
+      <div
+        ref={setNodeRef}
+        className={cn(
+          TABLEAU_CLASSEURS.carte,
+          'transition-colors',
+          isOver && 'border-primary ring-2 ring-primary/30',
+        )}
+      >
+        <div className={TABLEAU_CLASSEURS.defilement}>
+          <table className="w-full text-sm">
+            <thead className={TABLEAU_CLASSEURS.thead}>
+              <tr>
+                <th className={cn(TABLEAU_CLASSEURS.th, 'text-left')}>
+                  Classeur
+                </th>
+                <th
+                  className={cn(
+                    TABLEAU_CLASSEURS.th,
+                    'hidden w-40 text-left sm:table-cell',
+                  )}
+                >
+                  Auteur
+                </th>
+                <th
+                  className={cn(
+                    TABLEAU_CLASSEURS.th,
+                    'hidden w-24 text-center sm:table-cell',
+                  )}
+                >
+                  Modifié le
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {classeurs.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={3}
+                    className="px-4 py-6 text-center text-sm text-muted-foreground"
+                  >
+                    {vide}
+                  </td>
+                </tr>
+              ) : (
+                <SortableContext
+                  items={classeurs.map((c) => c.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {classeurs.map(ligne)}
+                </SortableContext>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  )
 }
 
 /** Une entrée du menu d'un classeur ; `raison` non nulle = grisée. */
@@ -533,25 +647,19 @@ interface EntreeMenu {
   separe?: boolean
 }
 
-/**
- * Les entrées du menu d'un classeur selon le niveau EFFECTIF (page et
- * classeur, `niveauEffectif`) ; `null` = droits pas encore lus, tout ce
- * qui écrit reste grisé.
- */
+/** Les entrées du menu d'un classeur selon le niveau EFFECTIF (`niveauEffectif`). */
 function entreesMenu(
-  niveau: NiveauEffectif | null,
+  niveau: NiveauEffectif,
   actions: {
     ouvrir: () => void
     modifier: () => void
-    acces: () => void
     exporter?: () => void
     copier?: () => void
     supprimer: () => void
   },
 ): EntreeMenu[] {
-  const peut = niveau === null ? null : capacites(niveau)
-  const raison = (permis: boolean | undefined, sinon: string) =>
-    peut === null ? '' : permis ? null : sinon
+  const peut = capacites(niveau)
+  const raison = (permis: boolean, sinon: string) => (permis ? null : sinon)
   const entrees: EntreeMenu[] = [
     {
       cle: 'ouvrir',
@@ -565,15 +673,8 @@ function entreesMenu(
       libelle: 'Modifier le classeur',
       icone: Pencil,
       action: actions.modifier,
-      raison: raison(peut?.modifier, 'Lecture seule'),
+      raison: raison(peut.modifier, 'Lecture seule'),
       separe: true,
-    },
-    {
-      cle: 'acces',
-      libelle: 'Accès',
-      icone: ShieldCheck,
-      action: actions.acces,
-      raison: raison(peut?.gererAcces, 'Gestion seule'),
     },
   ]
   // Copier pour un LLM et Exporter en JSON : mêmes droits (lire suffit).
@@ -600,7 +701,7 @@ function entreesMenu(
     libelle: 'Supprimer',
     icone: Trash2,
     action: actions.supprimer,
-    raison: raison(peut?.supprimerClasseur, 'Gestion seule'),
+    raison: raison(peut.supprimerClasseur, 'Gestion seule'),
     danger: true,
     separe: true,
   })
@@ -634,25 +735,22 @@ function EntreesMenu({ entrees }: { entrees: EntreeMenu[] }) {
 /** Une ligne du tableau (Registre : `SortableClasseurCard`). */
 function LigneClasseur({
   classeur,
+  auteur,
   stats,
   statsEtat,
   canDrag,
   menu,
-  avecAcces,
-  acces,
   onOpen,
 }: {
   classeur: DbClasseur
+  /** Nom de l'auteur (« Vous » pour soi). */
+  auteur: string
   stats: StatsClasseur | undefined
   statsEtat: 'chargement' | 'erreur' | 'ok'
-  /** Peut réordonner la liste : la ligne entière se glisse. */
+  /** La ligne se glisse (ordre ou autre tableau). */
   canDrag: boolean
   /** Entrées du menu du clic droit. */
   menu: EntreeMenu[]
-  /** La colonne Accès existe (gestion, ou écriture sur la page). */
-  avecAcces: boolean
-  /** Contenu de la colonne Accès ; `null` = pas encore lu. */
-  acces: Acces | null
   onOpen: () => void
 }) {
   const Icon = getIcon(classeur.icon)
@@ -726,8 +824,15 @@ function LigneClasseur({
                 {sousTitre}
               </span>
             )}
+            {/* Sous 640 px, la colonne Auteur est masquée : l'auteur passe ici. */}
+            <span className="truncate text-xs text-muted-foreground sm:hidden">
+              {auteur}
+            </span>
           </div>
         </div>
+      </td>
+      <td className="hidden truncate px-3 py-3 text-muted-foreground sm:table-cell">
+        {auteur}
       </td>
       <td className="hidden px-3 py-3 text-center text-muted-foreground sm:table-cell">
         {statsEtat === 'chargement' ? (
@@ -736,7 +841,6 @@ function LigneClasseur({
           formatDateCourte(misAJour)
         )}
       </td>
-      {avecAcces && <AccesCellule acces={acces} />}
     </tr>
   )
 
@@ -747,20 +851,5 @@ function LigneClasseur({
         <EntreesMenu entrees={menu} />
       </ContextMenuContent>
     </ContextMenu>
-  )
-}
-
-function AccesCellule({ acces }: { acces: Acces | null }) {
-  if (acces === null) return <td className="hidden px-3 py-3 sm:table-cell" />
-  const Icone = acces.icone
-  return (
-    <td className="hidden px-3 py-3 sm:table-cell">
-      <Tip label={`${acces.libelle} : ${acces.aide.toLowerCase()}`}>
-        <span className="flex justify-center text-muted-foreground">
-          <Icone className="size-4" aria-hidden="true" />
-          <span className="sr-only">{acces.libelle}</span>
-        </span>
-      </Tip>
-    </td>
   )
 }
