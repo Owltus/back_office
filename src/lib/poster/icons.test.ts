@@ -41,14 +41,14 @@ describe('getIconSvg / getIconName', () => {
 })
 
 /*
- * La contrainte CHECK de `supabase/affiche_templates_icon_check_2026-09-28.sql`
+ * La contrainte CHECK de `supabase/migrations/20261116110000_affiche_icones_frigo_cookie_gateau.sql`
  * doit lister EXACTEMENT les clés du registre : une clé en moins et la base
  * refuserait l'enregistrement d'un modèle portant cette icône.
  */
 describe('contrainte SQL affiche_templates_icon_check', () => {
   it('liste exactement les clés de ICONS', () => {
     const sql = readFileSync(
-      'supabase/affiche_templates_icon_check_2026-09-28.sql',
+      'supabase/migrations/20261116110000_affiche_icones_frigo_cookie_gateau.sql',
       'utf8',
     )
     const bloc = sql.slice(sql.indexOf('check (icon in ('))

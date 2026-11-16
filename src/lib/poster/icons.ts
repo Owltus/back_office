@@ -431,6 +431,46 @@ export const ICONS: Record<string, { name: string; svg: string }> = {
                 <path d="M10 4h4"/>
             </svg>`,
   },
+  // Ajoutées le 2026-11-16 à la demande de l'utilisateur (icônes Lucide
+  // refrigerator, cookie, cake).
+  refrigerator: {
+    name: 'Réfrigérateur',
+    svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5 6a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6Z"/>
+                <path d="M5 10h14"/>
+                <path d="M15 7v6"/>
+            </svg>`,
+  },
+
+  cookie: {
+    name: 'Cookie',
+    svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M11 17h.01"/>
+                <path d="M11.496 2c.324-.016.558.292.529.615a4 4 0 004.235 4.368.713.713 0 01.758.757 4 4 0 004.366 4.237c.323-.03.63.204.614.527a10 10 0 01-2.915 6.566A1 1 0 114.93 4.918 10 10 0 0111.496 2"/>
+                <path d="M12 12h.01"/>
+                <path d="M16 16h.01"/>
+                <path d="M16 3h.01"/>
+                <path d="M21 4h.01"/>
+                <path d="M21 8h.01"/>
+                <path d="M7 14h.01"/>
+                <path d="M9 8h.01"/>
+            </svg>`,
+  },
+
+  cake: {
+    name: 'Gâteau',
+    svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8"/>
+                <path d="M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1"/>
+                <path d="M2 21h20"/>
+                <path d="M7 8v3"/>
+                <path d="M12 8v3"/>
+                <path d="M17 8v3"/>
+                <path d="M7 4h.01"/>
+                <path d="M12 4h.01"/>
+                <path d="M17 4h.01"/>
+            </svg>`,
+  },
 }
 
 /**
