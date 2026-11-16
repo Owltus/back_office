@@ -19,6 +19,7 @@ import {
   nomFichierJson,
   texteExportClasseur,
 } from '#/lib/classeur/exportJson.ts'
+import { exporterMarkdown } from '#/lib/classeur/exportMarkdown.ts'
 import { classeurKeys } from '#/lib/classeur/keys.ts'
 import { parseImportJson } from '#/lib/classeur/merge/schema.ts'
 import type { ClasseurJson } from '#/lib/classeur/merge/schema.ts'
@@ -60,9 +61,9 @@ export function ClasseurListActions() {
   const importerNouveau = useImporterNouveauClasseur()
   const copie = useCopieExport()
 
-  /** Le texte de l'export, identique pour Copier et Exporter. */
-  async function lireExport(classeur: DbClasseur) {
-    const [{ chapters, content }, periodicites] = await Promise.all([
+  /** Le contenu du classeur et les périodicités, pour tous les exports. */
+  async function lireContenu(classeur: DbClasseur) {
+    return Promise.all([
       queryClient.fetchQuery({
         queryKey: classeurKeys.classeurItems(classeur.id),
         queryFn: () => fetchClasseurContent(classeur.id),
@@ -74,6 +75,11 @@ export function ClasseurListActions() {
         staleTime: Infinity,
       }),
     ])
+  }
+
+  /** Le texte de l'export, identique pour Copier et Exporter. */
+  async function lireExport(classeur: DbClasseur) {
+    const [{ chapters, content }, periodicites] = await lireContenu(classeur)
     return {
       texte: texteExportClasseur(classeur, chapters, content, periodicites),
       nomFichier: nomFichierJson(classeur.name),
@@ -84,6 +90,19 @@ export function ClasseurListActions() {
     mutationFn: async (classeur: DbClasseur) => {
       const x = await lireExport(classeur)
       telechargerTexte(x.nomFichier, x.texte, MIME_JSON)
+    },
+  })
+
+  // Exporter en Markdown depuis la liste : UN fichier .md, sans les images
+  // (demande utilisateur du 2026-11-16) ; chaque image devient sa légende.
+  const exporterMd = useMutation({
+    mutationFn: async (classeur: DbClasseur) => {
+      const [{ chapters, content }, periodicites] = await lireContenu(classeur)
+      await exporterMarkdown(
+        { classeurName: classeur.name, chapters, content },
+        { forme: 'unique', avecImages: false },
+        periodicites,
+      )
     },
   })
 
@@ -136,7 +155,8 @@ export function ClasseurListActions() {
   })
 
   const erreurImport = importer.error ?? creer.error
-  const erreur = exporter.error ?? erreurImport ?? copie.erreur
+  const erreurExport = exporter.error ?? exporterMd.error
+  const erreur = erreurExport ?? erreurImport ?? copie.erreur
 
   return (
     <>
@@ -146,7 +166,7 @@ export function ClasseurListActions() {
           <AlertDescription>
             {messageErreur(
               erreur,
-              exporter.isError
+              erreurExport != null
                 ? 'Export impossible'
                 : erreurImport != null
                   ? 'Import impossible'
@@ -173,6 +193,7 @@ export function ClasseurListActions() {
       )}
       <ClasseurList
         onExporterJson={(c) => exporter.mutate(c)}
+        onExporterMarkdown={(c) => exporterMd.mutate(c)}
         onCopierJson={(c) => copie.copier(() => lireExport(c))}
         onImporterJson={(file) => importer.mutate(file)}
       />

@@ -27,8 +27,8 @@ import {
   Ban,
   Copy,
   FileDown,
+  FileText,
   FileUp,
-  FolderOpen,
   Pencil,
   Plus,
   Trash2,
@@ -131,7 +131,7 @@ import { cn } from '#/lib/utils.ts'
  * RLS filtre).
  *
  * MENU D'UN CLASSEUR (2026-10-19, demande utilisateur) : clic droit sur la
- * ligne, rien d'autre (aucun bouton « ⋯ », décision utilisateur). Ouvrir,
+ * ligne, rien d'autre (aucun bouton « ⋯ », décision utilisateur). Pas d'Ouvrir (un clic suffit),
  * Modifier le classeur (nom, type, auteur), Copier pour un LLM, Exporter en
  * JSON, Supprimer : toujours listés, grisés avec leur
  * raison quand le niveau EFFECTIF ne les permet pas (`capacites`, miroir
@@ -140,10 +140,13 @@ import { cn } from '#/lib/utils.ts'
 export function ClasseurList({
   onImporterJson,
   onExporterJson,
+  onExporterMarkdown,
   onCopierJson,
 }: {
   onImporterJson?: (file: File) => void | Promise<void>
   onExporterJson?: (classeur: DbClasseur) => void | Promise<void>
+  /** Un seul fichier .md, SANS les images (demande utilisateur du 2026-11-16). */
+  onExporterMarkdown?: (classeur: DbClasseur) => void | Promise<void>
   /** Copier pour un LLM (étape 3 du plan `classeur-echange-ia-2026-10-19`). */
   onCopierJson?: (classeur: DbClasseur) => void | Promise<void>
 }) {
@@ -441,14 +444,12 @@ export function ClasseurList({
                     }
                     canDrag={peutGlisser(moi, c, peutReordonner)}
                     menu={entreesMenu(niveauDe(c), {
-                      ouvrir: () =>
-                        navigate({
-                          to: '/classeur/$classeurId',
-                          params: { classeurId: String(c.id) },
-                        }),
                       modifier: () => setAModifier(c),
                       exporter: onExporterJson
                         ? () => void onExporterJson(c)
+                        : undefined,
+                      exporterMarkdown: onExporterMarkdown
+                        ? () => void onExporterMarkdown(c)
                         : undefined,
                       copier: onCopierJson
                         ? () => void onCopierJson(c)
@@ -725,30 +726,24 @@ interface EntreeMenu {
 function entreesMenu(
   niveau: NiveauEffectif,
   actions: {
-    ouvrir: () => void
     modifier: () => void
     exporter?: () => void
+    exporterMarkdown?: () => void
     copier?: () => void
     supprimer: () => void
   },
 ): EntreeMenu[] {
   const peut = capacites(niveau)
   const raison = (permis: boolean, sinon: string) => (permis ? null : sinon)
+  // Pas d'entrée Ouvrir : un simple clic sur la ligne ouvre le classeur
+  // (décision utilisateur du 2026-11-16).
   const entrees: EntreeMenu[] = [
-    {
-      cle: 'ouvrir',
-      libelle: 'Ouvrir',
-      icone: FolderOpen,
-      action: actions.ouvrir,
-      raison: null,
-    },
     {
       cle: 'modifier',
       libelle: 'Modifier le classeur',
       icone: Pencil,
       action: actions.modifier,
       raison: raison(peut.modifier, 'Lecture seule'),
-      separe: true,
     },
   ]
   // Copier pour un LLM et Exporter en JSON : mêmes droits (lire suffit).
@@ -769,6 +764,17 @@ function entreesMenu(
       action: actions.exporter,
       raison: null,
       separe: !actions.copier,
+    })
+  // Exporter en Markdown : un seul fichier, sans les images (la fenêtre de
+  // choix reste dans le classeur).
+  if (actions.exporterMarkdown)
+    entrees.push({
+      cle: 'markdown',
+      libelle: 'Exporter en Markdown',
+      icone: FileText,
+      action: actions.exporterMarkdown,
+      raison: null,
+      separe: !actions.copier && !actions.exporter,
     })
   entrees.push({
     cle: 'supprimer',

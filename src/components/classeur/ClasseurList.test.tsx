@@ -116,6 +116,7 @@ function rendre() {
         <ClasseurList
           onImporterJson={vi.fn()}
           onExporterJson={etat.exporter}
+          onExporterMarkdown={vi.fn()}
           onCopierJson={etat.copier}
         />
       </TooltipProvider>
@@ -300,10 +301,10 @@ describe('ClasseurList — tableaux par type', () => {
   it('menu, gestion : tout est permis', async () => {
     rendre()
     expect(await menuDe(9)).toEqual({
-      Ouvrir: 'actif',
       'Modifier le classeur': 'actif',
       'Copier pour un LLM': 'actif',
       'Exporter en JSON': 'actif',
+      'Exporter en Markdown': 'actif',
       Supprimer: 'actif',
     })
   })
@@ -312,10 +313,10 @@ describe('ClasseurList — tableaux par type', () => {
     etat.page = 'ecriture'
     rendre()
     expect(await menuDe(9)).toEqual({
-      Ouvrir: 'actif',
       'Modifier le classeur': 'actif',
       'Copier pour un LLM': 'actif',
       'Exporter en JSON': 'actif',
+      'Exporter en Markdown': 'actif',
       'SupprimerGestion seule': 'grisé',
     })
     cleanup()
@@ -327,10 +328,10 @@ describe('ClasseurList — tableaux par type', () => {
     etat.page = 'lecture'
     rendre()
     expect(await menuDe(9)).toEqual({
-      Ouvrir: 'actif',
       'Modifier le classeurLecture seule': 'grisé',
       'Copier pour un LLM': 'actif',
       'Exporter en JSON': 'actif',
+      'Exporter en Markdown': 'actif',
       'SupprimerGestion seule': 'grisé',
     })
   })
