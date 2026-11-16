@@ -110,10 +110,12 @@ import { cn } from '#/lib/utils.ts'
  *   comptent pas, le chiffre trompait).
  *
  * UN TABLEAU PAR TYPE (demande utilisateur du 2026-11-16,
- * `lib/classeur/droits.ts`) : Publics, Mes privés, Gestion (gestion de la
- * page) ; l'admin a en plus les Privés des autres. Chaque ligne dit son
+ * `lib/classeur/droits.ts`) : Classeurs publics, Classeurs privés (les
+ * siens), Classeurs des gestionnaires (gestion de la page) ; l'admin a en
+ * plus les Classeurs privés des autres. Aucun sous-texte sous les titres
+ * (demande utilisateur). Chaque ligne dit son
  * AUTEUR. Glisser une ligne dans un autre tableau change son type (et, vers
- * Mes privés, son auteur) : l'auteur et la gestion, vers ou depuis Gestion
+ * les classeurs privés, son auteur) : l'auteur et la gestion, vers ou depuis Gestion
  * la gestion seule (`rangementVers`). Dans un même tableau, le glisser
  * réordonne (gestion). La liste ne contient que les classeurs lisibles (la
  * RLS filtre).
@@ -270,9 +272,8 @@ export function ClasseurList({
         : (erreurRangement ?? erreurImport)
 
   return (
-    // `flex-1 lg:min-h-0` : à partir de `lg`, la colonne tient dans la
-    // fenêtre et le tableau prend la place restante (voir `TABLEAU_CLASSEURS`).
-    <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-4 lg:min-h-0">
+    // La page défile d'un seul tenant (voir `TABLEAU_CLASSEURS`).
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
       {importActif && (
         <input
           ref={inputRef}
@@ -480,20 +481,12 @@ export function ClasseurList({
   )
 }
 
-/** Intitulé de chaque tableau. */
-const TITRE_SECTION: Record<Section, string> = {
-  public: 'Publics',
-  mesPrives: 'Mes privés',
-  privesAutres: 'Privés des autres',
-  gestion: 'Gestion',
-}
-
-/** Ce que dit chaque tableau, à côté de son intitulé. */
-const AIDE_SECTION: Record<Section, string> = {
-  public: 'Tous ceux qui ont la page',
-  mesPrives: 'Vous seul',
-  privesAutres: 'Leur auteur seul',
-  gestion: 'La gestion de la page seule',
+/** Intitulé de chaque tableau (libellés de l'utilisateur, 2026-11-16). */
+export const TITRE_SECTION: Record<Section, string> = {
+  public: 'Classeurs publics',
+  mesPrives: 'Classeurs privés',
+  privesAutres: 'Classeurs privés des autres',
+  gestion: 'Classeurs des gestionnaires',
 }
 
 const PREFIXE_SECTION = 'section:'
@@ -569,12 +562,7 @@ function TableauSection({
       className={TABLEAU_CLASSEURS.section}
       aria-label={TITRE_SECTION[section]}
     >
-      <h2 className={TABLEAU_CLASSEURS.titre}>
-        {TITRE_SECTION[section]}
-        <span className="font-normal tracking-normal normal-case">
-          {AIDE_SECTION[section]}
-        </span>
-      </h2>
+      <h2 className={TABLEAU_CLASSEURS.titre}>{TITRE_SECTION[section]}</h2>
       <div
         ref={setNodeRef}
         className={cn(
@@ -583,52 +571,52 @@ function TableauSection({
           isOver && 'border-primary ring-2 ring-primary/30',
         )}
       >
-        <div className={TABLEAU_CLASSEURS.defilement}>
-          <table className="w-full text-sm">
-            <thead className={TABLEAU_CLASSEURS.thead}>
+        <table className={TABLEAU_CLASSEURS.table}>
+          <thead className={TABLEAU_CLASSEURS.thead}>
+            <tr>
+              <th className={cn(TABLEAU_CLASSEURS.th, 'text-left')}>
+                Classeur
+              </th>
+              <th
+                className={cn(
+                  TABLEAU_CLASSEURS.th,
+                  TABLEAU_CLASSEURS.colAuteur,
+                  'text-left',
+                )}
+              >
+                Auteur
+              </th>
+              <th
+                className={cn(
+                  TABLEAU_CLASSEURS.th,
+                  TABLEAU_CLASSEURS.colDate,
+                  'text-center',
+                )}
+              >
+                Modifié le
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {classeurs.length === 0 ? (
               <tr>
-                <th className={cn(TABLEAU_CLASSEURS.th, 'text-left')}>
-                  Classeur
-                </th>
-                <th
-                  className={cn(
-                    TABLEAU_CLASSEURS.th,
-                    'hidden w-40 text-left sm:table-cell',
-                  )}
+                <td
+                  colSpan={3}
+                  className="px-4 py-6 text-center text-sm text-muted-foreground"
                 >
-                  Auteur
-                </th>
-                <th
-                  className={cn(
-                    TABLEAU_CLASSEURS.th,
-                    'hidden w-24 text-center sm:table-cell',
-                  )}
-                >
-                  Modifié le
-                </th>
+                  {vide}
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {classeurs.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={3}
-                    className="px-4 py-6 text-center text-sm text-muted-foreground"
-                  >
-                    {vide}
-                  </td>
-                </tr>
-              ) : (
-                <SortableContext
-                  items={classeurs.map((c) => c.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  {classeurs.map(ligne)}
-                </SortableContext>
-              )}
-            </tbody>
-          </table>
-        </div>
+            ) : (
+              <SortableContext
+                items={classeurs.map((c) => c.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                {classeurs.map(ligne)}
+              </SortableContext>
+            )}
+          </tbody>
+        </table>
       </div>
     </section>
   )

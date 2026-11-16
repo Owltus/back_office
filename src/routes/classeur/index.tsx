@@ -11,14 +11,13 @@ export const Route = createFileRoute('/classeur/')({
 /**
  * Liste des classeurs. Export et import JSON sont branchés par
  * `ClasseurListActions` (bouton Importer de l'en-tête + dépôt sur la page).
- * `lg:min-h-0` : à partir de `lg`, la page tient dans la fenêtre et le
- * tableau défile en interne (comme les pages analytiques) ; en dessous, la
- * page suit son flux et défile normalement.
+ * La page suit son flux et défile d'un seul tenant (2026-11-16 : plus de
+ * défilement interne des tableaux).
  */
 function ClasseurPage() {
   return (
     <PageGuard page="classeur">
-      <PageContainer className="lg:min-h-0">
+      <PageContainer>
         <ClasseurListActions />
       </PageContainer>
     </PageGuard>

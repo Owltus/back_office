@@ -225,7 +225,7 @@ describe('Classeur — quatre silhouettes relevées sur les boards', () => {
     const { container } = render(<FormeClasseurListe cartes={4} />)
     expect(container.querySelector('.max-w-4xl')).not.toBeNull()
     expect(container.querySelectorAll('.justify-end > *').length).toBe(2)
-    // Deux tableaux par défaut (Publics, Mes privés), chacun son en-tête.
+    // Deux tableaux par défaut (publics, privés), chacun son en-tête.
     expect(container.querySelectorAll('thead tr').length).toBe(2)
     // Le premier porte les lignes demandées, le suivant une seule.
     expect(container.querySelectorAll('tbody tr').length).toBe(5)

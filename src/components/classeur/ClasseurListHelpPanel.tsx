@@ -93,20 +93,20 @@ export function ClasseurListHelpPanel({
 
       <Section title="Les tableaux">
         <p>
-          {fort('Publics')} : tous ceux qui ont la page les lisent, et ceux qui
-          ont l'écriture les modifient.
+          {fort('Classeurs publics')} : tous ceux qui ont la page les lisent, et
+          ceux qui ont l'écriture les modifient.
         </p>
-        <p>{fort('Mes privés')} : vous seul les voyez.</p>
+        <p>{fort('Classeurs privés')} : vous seul les voyez.</p>
         {admin && (
           <p>
-            {fort('Privés des autres')} : les privés de chacun, que vous voyez
-            parce que vous êtes administrateur.
+            {fort('Classeurs privés des autres')} : les privés de chacun, que
+            vous voyez parce que vous êtes administrateur.
           </p>
         )}
         {canManage && (
           <p>
-            {fort('Gestion')} : seuls ceux qui ont la gestion de la page les
-            voient.
+            {fort('Classeurs des gestionnaires')} : seuls ceux qui ont la
+            gestion de la page les voient.
           </p>
         )}
         <p>
@@ -119,8 +119,8 @@ export function ClasseurListHelpPanel({
             {fort('Glisser')} une ligne dans un autre tableau change son type.
             Vous rangez ainsi vos propres classeurs
             {canManage
-              ? ', et tous ceux que vous voyez. Un classeur déposé dans Mes privés devient le vôtre.'
-              : ' entre Publics et Mes privés.'}
+              ? ', et tous ceux que vous voyez. Un classeur déposé dans vos classeurs privés devient le vôtre.'
+              : ' entre classeurs publics et classeurs privés.'}
           </GestureRow>
         )}
       </Section>

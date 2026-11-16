@@ -173,22 +173,26 @@ async function menuDe(id: number) {
 describe('ClasseurList — tableaux par type', () => {
   it('gestion : Publics, Mes privés, Gestion ; le privé d’un autre n’apparaît pas', () => {
     const { getByText } = rendre()
-    expect(titres()).toEqual(['Publics', 'Mes privés', 'Gestion'])
-    expect(noms('Publics')).toEqual(['Classeur 5', 'Classeur 9'])
-    expect(noms('Mes privés')).toEqual(['Classeur 7'])
-    expect(noms('Gestion')).toEqual(['Classeur 8'])
+    expect(titres()).toEqual([
+      'Classeurs publics',
+      'Classeurs privés',
+      'Classeurs des gestionnaires',
+    ])
+    expect(noms('Classeurs publics')).toEqual(['Classeur 5', 'Classeur 9'])
+    expect(noms('Classeurs privés')).toEqual(['Classeur 7'])
+    expect(noms('Classeurs des gestionnaires')).toEqual(['Classeur 8'])
     expect(document.body.textContent).not.toContain('Classeur 2')
-    const entetes = [...tableau('Publics').querySelectorAll('thead th')].map(
-      (th) => th.textContent,
-    )
+    const entetes = [
+      ...tableau('Classeurs publics').querySelectorAll('thead th'),
+    ].map((th) => th.textContent)
     expect(entetes).toEqual(['Classeur', 'Auteur', 'Modifié le'])
     // Auteur : « Vous » pour soi, le nom sinon. Date au format jj/mm/aa.
-    const c5 = [...lignes('Publics')[0].querySelectorAll('td')].map(
+    const c5 = [...lignes('Classeurs publics')[0].querySelectorAll('td')].map(
       (td) => td.textContent,
     )
     expect(c5[1]).toBe('Vous')
     expect(c5[2]).toBe('02/10/26')
-    const c9 = [...lignes('Publics')[1].querySelectorAll('td')].map(
+    const c9 = [...lignes('Classeurs publics')[1].querySelectorAll('td')].map(
       (td) => td.textContent,
     )
     expect(c9[1]).toBe('Bob Autre')
@@ -207,18 +211,18 @@ describe('ClasseurList — tableaux par type', () => {
     etat.admin = true
     rendre()
     expect(titres()).toEqual([
-      'Publics',
-      'Mes privés',
-      'Privés des autres',
-      'Gestion',
+      'Classeurs publics',
+      'Classeurs privés',
+      'Classeurs privés des autres',
+      'Classeurs des gestionnaires',
     ])
-    expect(noms('Privés des autres')).toEqual(['Classeur 2'])
+    expect(noms('Classeurs privés des autres')).toEqual(['Classeur 2'])
   })
 
   it('écriture : pas de tableau Gestion ; seules ses lignes se glissent', () => {
     etat.page = 'ecriture'
     rendre()
-    expect(titres()).toEqual(['Publics', 'Mes privés'])
+    expect(titres()).toEqual(['Classeurs publics', 'Classeurs privés'])
     expect(ligneDe(5).getAttribute('aria-roledescription')).toBe('sortable')
     expect(ligneDe(7).getAttribute('aria-roledescription')).toBe('sortable')
     expect(ligneDe(9).getAttribute('aria-roledescription')).toBeNull()
@@ -227,7 +231,7 @@ describe('ClasseurList — tableaux par type', () => {
   it('lecture : rien ne se glisse, ni création ni import', () => {
     etat.page = 'lecture'
     const { queryByText } = rendre()
-    expect(titres()).toEqual(['Publics', 'Mes privés'])
+    expect(titres()).toEqual(['Classeurs publics', 'Classeurs privés'])
     for (const tr of document.querySelectorAll('tbody tr'))
       expect(tr.getAttribute('aria-roledescription')).toBeNull()
     expect(queryByText('Nouveau classeur')).toBeNull()
@@ -243,12 +247,12 @@ describe('ClasseurList — tableaux par type', () => {
     etat.page = 'lecture'
     rendre()
     // Lecture : son privé (7) est le sien, Mes privés n'est pas vide.
-    expect(noms('Mes privés')).toEqual(['Classeur 7'])
+    expect(noms('Classeurs privés')).toEqual(['Classeur 7'])
     cleanup()
     etat.page = 'gestion'
     etat.admin = true
     rendre()
-    expect(lignes('Gestion')).toHaveLength(1)
+    expect(lignes('Classeurs des gestionnaires')).toHaveLength(1)
   })
 
   it('aide en lecture : ni création, ni rangement', async () => {
@@ -271,14 +275,16 @@ describe('ClasseurList — tableaux par type', () => {
     expect(screen.getByText('Créer ou importer')).toBeTruthy()
     expect(screen.getByText(/change son type/)).toBeTruthy()
     expect(screen.getByText(/devient le vôtre/)).toBeTruthy()
-    expect(screen.queryByText(/Privés des autres/)).toBeNull()
+    expect(screen.queryByText(/Classeurs privés des autres/)).toBeNull()
     expect(screen.getByText(/Pour reprendre ses modifications/)).toBeTruthy()
   })
 
   it('date en cours de lecture : place réservée, jamais une fausse date', () => {
     etat.statsPending = true
     rendre()
-    expect(lignes('Publics')[0].querySelectorAll('td')[2].textContent).toBe('')
+    expect(
+      lignes('Classeurs publics')[0].querySelectorAll('td')[2].textContent,
+    ).toBe('')
   })
 
   it('un clic sur la ligne ouvre le classeur', () => {

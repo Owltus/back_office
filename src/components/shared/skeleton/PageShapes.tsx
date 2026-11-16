@@ -572,19 +572,23 @@ const GRILLE_CHAPITRE: CSSProperties = {
  */
 export const TABLEAU_CLASSEURS = {
   /*
-   * PLUSIEURS tableaux l'un sous l'autre (Publics, Mes privés, Privés des
-   * autres, Gestion ; demande utilisateur du 2026-11-16) : la zone sous
-   * l'en-tête défile (`sections`), chaque carte garde sa hauteur naturelle.
-   * Avant : un seul tableau qui descendait jusqu'au bas de la fenêtre.
+   * PLUSIEURS tableaux l'un sous l'autre (demande utilisateur du
+   * 2026-11-16). C'est la PAGE qui défile (barre de l'app au bord de la
+   * fenêtre), jamais une zone interne : une barre au milieu de la page, à
+   * côté des tableaux, était « pas très belle ». Colonnes de largeur FIXE
+   * (`table`, `colAuteur`, `colDate`) : les tableaux empilés s'alignent.
    */
-  sections:
-    'flex flex-col gap-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pb-2',
+  sections: 'flex flex-col gap-6 pb-2',
   section: 'flex flex-col gap-2',
   titre:
-    'flex items-baseline gap-2 px-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase',
+    'px-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase',
   carte: 'overflow-hidden rounded-xl border border-border bg-card',
-  defilement: 'no-scrollbar overflow-x-auto',
-  thead: 'bg-muted shadow-[inset_0_-1px_0_var(--border)]',
+  table: 'w-full table-fixed text-sm',
+  colAuteur: 'hidden w-44 sm:table-cell',
+  colDate: 'hidden w-28 sm:table-cell',
+  // Sous 640 px, la seule colonne restante s'appelle comme le tableau : en-tête masqué.
+  thead:
+    'hidden bg-muted shadow-[inset_0_-1px_0_var(--border)] sm:table-header-group',
   th: 'px-3 py-2 text-xs font-medium text-muted-foreground',
   ligne:
     'border-b border-border/50 transition-colors last:border-b-0 hover:bg-accent/50',
@@ -612,54 +616,49 @@ export function FormeClasseurListe({
         <Skeleton className="h-3 w-20" />
       </div>
       <div className={TABLEAU_CLASSEURS.carte}>
-        <div className={TABLEAU_CLASSEURS.defilement}>
-          <table className="w-full text-sm">
-            <thead className={TABLEAU_CLASSEURS.thead}>
-              <tr>
-                <th className={cn(TABLEAU_CLASSEURS.th, 'text-left')}>
-                  <Skeleton className="h-3 w-16" />
-                </th>
-                <th
-                  className={cn(
-                    TABLEAU_CLASSEURS.th,
-                    'hidden w-40 sm:table-cell',
-                  )}
-                >
-                  <Skeleton className="h-3 w-12" />
-                </th>
-                <th
-                  className={cn(
-                    TABLEAU_CLASSEURS.th,
-                    'hidden w-24 sm:table-cell',
-                  )}
-                >
-                  <Skeleton className="mx-auto h-3 w-16" />
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {Array.from({ length: k === 0 ? cartes : 1 }).map((_, i) => (
-                <tr key={i} className={TABLEAU_CLASSEURS.ligne}>
-                  <td className="px-3 py-2">
-                    <div className="flex items-center gap-3">
-                      <Skeleton className="size-11 shrink-0 rounded-xl" />
-                      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                        <Skeleton className="h-4 w-full max-w-48" />
-                        <Skeleton className="h-3 w-28" />
-                      </div>
+        <table className={TABLEAU_CLASSEURS.table}>
+          <thead className={TABLEAU_CLASSEURS.thead}>
+            <tr>
+              <th className={cn(TABLEAU_CLASSEURS.th, 'text-left')}>
+                <Skeleton className="h-3 w-16" />
+              </th>
+              <th
+                className={cn(
+                  TABLEAU_CLASSEURS.th,
+                  TABLEAU_CLASSEURS.colAuteur,
+                )}
+              >
+                <Skeleton className="h-3 w-12" />
+              </th>
+              <th
+                className={cn(TABLEAU_CLASSEURS.th, TABLEAU_CLASSEURS.colDate)}
+              >
+                <Skeleton className="mx-auto h-3 w-16" />
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: k === 0 ? cartes : 1 }).map((_, i) => (
+              <tr key={i} className={TABLEAU_CLASSEURS.ligne}>
+                <td className="px-3 py-2">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="size-11 shrink-0 rounded-xl" />
+                    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                      <Skeleton className="h-4 w-full max-w-48" />
+                      <Skeleton className="h-3 w-28" />
                     </div>
-                  </td>
-                  <td className="hidden px-3 py-3 sm:table-cell">
-                    <Skeleton className="h-3.5 w-24" />
-                  </td>
-                  <td className="hidden px-3 py-3 sm:table-cell">
-                    <Skeleton className="mx-auto h-3.5 w-14" />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  </div>
+                </td>
+                <td className="hidden px-3 py-3 sm:table-cell">
+                  <Skeleton className="h-3.5 w-24" />
+                </td>
+                <td className="hidden px-3 py-3 sm:table-cell">
+                  <Skeleton className="mx-auto h-3.5 w-14" />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   )
@@ -670,13 +669,13 @@ export function FormeClasseurListe({
   )
   if (!actions)
     return (
-      <div aria-hidden="true" className="flex flex-col lg:min-h-0 lg:flex-1">
+      <div aria-hidden="true" className="flex flex-col">
         {tableaux}
       </div>
     )
   return (
     <div
-      className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-4 lg:min-h-0"
+      className="mx-auto flex w-full max-w-4xl flex-col gap-4"
       aria-hidden="true"
     >
       {/* Nouveau classeur (libellé), puis le groupe « ? » + Importer. */}
