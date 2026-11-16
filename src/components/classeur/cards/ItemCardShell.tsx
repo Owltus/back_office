@@ -44,6 +44,8 @@ export interface ItemCardCommonProps {
   isSelected?: boolean
   onToggleSelect?: () => void
   onPrint?: () => void
+  /** Clic sur la carte hors sélection ; absent : la page de détail s'ouvre. */
+  onOpen?: () => void
   onEdit?: () => void
   onDelete?: () => void
   /**
@@ -90,6 +92,7 @@ export function ItemCardShell({
   isSelected = false,
   onToggleSelect,
   onPrint,
+  onOpen,
   onEdit,
   onDelete,
   menuDeplacer,
@@ -131,6 +134,10 @@ export function ItemCardShell({
     }
     if (selectionMode) {
       onToggleSelect?.()
+      return
+    }
+    if (onOpen) {
+      onOpen()
       return
     }
     void navigate({

@@ -11,6 +11,7 @@ import type {
 } from '#/components/classeur/ClasseurDashboard.tsx'
 import { CorbeilleDialog } from '#/components/classeur/dialogs/CorbeilleDialog.tsx'
 import { ExportMarkdownDialog } from '#/components/classeur/dialogs/ExportMarkdownDialog.tsx'
+import { DocumentsModifiesDialog } from '#/components/classeur/dialogs/DocumentsModifiesDialog.tsx'
 import { EchangeJsonDialog } from '#/components/classeur/dialogs/EchangeJsonDialog.tsx'
 import { HistoriqueDialog } from '#/components/classeur/dialogs/HistoriqueDialog.tsx'
 import { ImagesDialog } from '#/components/classeur/dialogs/ImagesDialog.tsx'
@@ -175,11 +176,36 @@ export function ClasseurDashboardActions({
     setEchange(c)
   }
 
+  // « Documents modifiés » : d'abord la fenêtre des cartes (choisir), puis
+  // l'aperçu d'impression des éléments retenus (demande du 2026-11-16).
+  const [modifiesAChoisir, setModifiesAChoisir] =
+    useState<DashboardContexte | null>(null)
+  const choisirModifies = useMutation({
+    mutationFn: async (c: DashboardContexte) => {
+      setPeriodicites(await lirePeriodicites())
+      setModifiesAChoisir(c)
+    },
+  })
+  const groupesModifies =
+    modifiesAChoisir === null
+      ? []
+      : trierChapitres(modifiesAChoisir.chapters)
+          .map((ch) => ({
+            chapitre: ch,
+            items: elementsModifies(
+              flattenItems(contenuDuChapitre(modifiesAChoisir.content, ch.id)),
+              suivi.empreintes,
+            ),
+          }))
+          .filter((g) => g.items.length > 0)
+
   const busy: DashboardBusy = ouvrirApercu.isPending
     ? ouvrirApercu.variables.type
-    : null
+    : choisirModifies.isPending
+      ? 'modifies'
+      : null
 
-  const erreur = ouvrirApercu.error
+  const erreur = ouvrirApercu.error ?? choisirModifies.error
 
   const ctx = apercu?.ctx
   const classeurName = ctx?.classeur.name
@@ -241,13 +267,7 @@ export function ClasseurDashboardActions({
         onSommaire={(c) => ouvrirApercu.mutate({ type: 'sommaire', ctx: c })}
         onExporterPdf={(c) => ouvrirApercu.mutate({ type: 'pdf', ctx: c })}
         onExporterMarkdown={setExportMd}
-        onImprimerModifies={(c) =>
-          ouvrirApercu.mutate({
-            type: 'modifies',
-            ctx: c,
-            items: elementsModifies(elementsDuClasseur(c), suivi.empreintes),
-          })
-        }
+        onImprimerModifies={(c) => choisirModifies.mutate(c)}
         etatModifies={
           suivi.pret
             ? (c) => decrireModifies(elementsDuClasseur(c), suivi.empreintes)
@@ -259,6 +279,31 @@ export function ClasseurDashboardActions({
         onImages={() => setImagesOuvertes(true)}
         onCorbeille={() => setCorbeilleOuverte(true)}
         busy={busy}
+      />
+
+      <DocumentsModifiesDialog
+        open={modifiesAChoisir !== null}
+        onOpenChange={(open) => {
+          if (!open) setModifiesAChoisir(null)
+        }}
+        classeurId={classeurId}
+        classeurName={modifiesAChoisir?.classeur.name}
+        establishment={
+          modifiesAChoisir
+            ? buildEstablishment(modifiesAChoisir.classeur)
+            : undefined
+        }
+        groupes={groupesModifies}
+        periodicites={periodicites}
+        onImprimer={(items) => {
+          const c = modifiesAChoisir
+          setModifiesAChoisir(null)
+          if (c) setApercu({ type: 'modifies', ctx: c, items })
+        }}
+        onDejaAJour={() => {
+          suivi.retenir(groupesModifies.flatMap((g) => g.items))
+          setModifiesAChoisir(null)
+        }}
       />
 
       <EchangeJsonDialog

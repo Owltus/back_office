@@ -741,7 +741,7 @@ export function LigneActionSquelette() {
  */
 const SECTIONS_ACCUEIL: { cle: string; lignes: string[] }[] = [
   { cle: 'contenu', lignes: ['nouveau', 'images'] },
-  { cle: 'imprimer', lignes: ['pdf', 'modifies', 'sommaire'] },
+  { cle: 'imprimer', lignes: ['pdf', 'sommaire', 'modifies'] },
   { cle: 'fichiers', lignes: ['echange', 'markdown'] },
   { cle: 'historique', lignes: ['historique', 'corbeille'] },
 ]

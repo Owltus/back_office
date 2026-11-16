@@ -318,8 +318,8 @@ describe('ClasseurDashboard — en-tête fixe et panneau', () => {
         titre: 'Imprimer',
         cartes: [
           expect.stringContaining('Classeur complet'),
-          expect.stringContaining('Documents modifiés'),
           expect.stringContaining('Sommaire'),
+          expect.stringContaining('Documents modifiés'),
         ],
         reservees: 0,
       },

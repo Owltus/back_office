@@ -30,6 +30,7 @@ import {
 } from 'lucide-react'
 
 import { DocumentCard } from '#/components/classeur/cards/DocumentCard.tsx'
+import { DocumentsModifiesDialog } from '#/components/classeur/dialogs/DocumentsModifiesDialog.tsx'
 import { IntercalaireCard } from '#/components/classeur/cards/IntercalaireCard.tsx'
 import { SignatureSheetCard } from '#/components/classeur/cards/SignatureSheetCard.tsx'
 import { TrackingSheetCard } from '#/components/classeur/cards/TrackingSheetCard.tsx'
@@ -229,6 +230,8 @@ export function ChapterBoard({
     null,
   )
   const [apercu, setApercu] = useState<Apercu>(null)
+  // « Documents modifiés » : la fenêtre des cartes, puis l'aperçu.
+  const [modifiesOuvert, setModifiesOuvert] = useState(false)
   /** Export / réimport JSON du chapitre pour un LLM (2026-09-29). */
   const [jsonOuvert, setJsonOuvert] = useState(false)
   /**
@@ -584,9 +587,7 @@ export function ChapterBoard({
                       <IconAction
                         label={libelleModifies}
                         icon={<FilePenLine />}
-                        onClick={() =>
-                          setApercu({ type: 'modifies', items: modifies })
-                        }
+                        onClick={() => setModifiesOuvert(true)}
                         disabled={!chapter || modifies.length === 0}
                       />
                       <IconAction
@@ -657,9 +658,7 @@ export function ChapterBoard({
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           disabled={!chapter || modifies.length === 0}
-                          onSelect={() =>
-                            setApercu({ type: 'modifies', items: modifies })
-                          }
+                          onSelect={() => setModifiesOuvert(true)}
                         >
                           <FilePenLine />
                           Documents modifiés
@@ -982,6 +981,24 @@ export function ChapterBoard({
           />
         )}
       </PrintPreview>
+
+      <DocumentsModifiesDialog
+        open={modifiesOuvert}
+        onOpenChange={setModifiesOuvert}
+        classeurId={classeurId}
+        classeurName={classeurName}
+        establishment={establishment}
+        groupes={chapter ? [{ chapitre: chapter, items: modifies }] : []}
+        periodicites={periodicites}
+        onImprimer={(choisis) => {
+          setModifiesOuvert(false)
+          setApercu({ type: 'modifies', items: choisis })
+        }}
+        onDejaAJour={() => {
+          suivi.retenir(modifies)
+          setModifiesOuvert(false)
+        }}
+      />
 
       <ExportMarkdownDialog
         open={exportMdOuvert}

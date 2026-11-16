@@ -439,6 +439,16 @@ export function ClasseurDashboard({
                     busy={busy === 'pdf'}
                   />
                 )}
+                {onSommaire && (
+                  <LigneAction
+                    icon={List}
+                    title="Sommaire"
+                    description="La table des matières seule"
+                    onClick={action(onSommaire)}
+                    disabled={!pret}
+                    busy={busy === 'sommaire'}
+                  />
+                )}
                 {onImprimerModifies && (
                   <LigneAction
                     icon={FilePenLine}
@@ -450,16 +460,6 @@ export function ClasseurDashboard({
                     onClick={action(onImprimerModifies)}
                     disabled={!pret || modifies?.aucun === true}
                     busy={busy === 'modifies'}
-                  />
-                )}
-                {onSommaire && (
-                  <LigneAction
-                    icon={List}
-                    title="Sommaire"
-                    description="La table des matières seule"
-                    onClick={action(onSommaire)}
-                    disabled={!pret}
-                    busy={busy === 'sommaire'}
                   />
                 )}
               </SectionActions>
