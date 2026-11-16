@@ -4,11 +4,18 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import {
   DndContext,
+  DragOverlay,
   closestCenter,
   pointerWithin,
   useDroppable,
 } from '@dnd-kit/core'
-import type { CollisionDetection, DragEndEvent } from '@dnd-kit/core'
+import type {
+  CollisionDetection,
+  DragEndEvent,
+  DragOverEvent,
+  DragStartEvent,
+  Over,
+} from '@dnd-kit/core'
 import {
   SortableContext,
   useSortable,
@@ -16,6 +23,8 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import {
+  ArrowRight,
+  Ban,
   Copy,
   FileDown,
   FileUp,
@@ -163,6 +172,9 @@ export function ClasseurList({
   const [aideOuverte, setAideOuverte] = useState(false)
   const [erreurImport, setErreurImport] = useState<string | null>(null)
   const [erreurRangement, setErreurRangement] = useState<string | null>(null)
+  // Glisser en cours : la ligne prise, et le tableau survolé.
+  const [enMain, setEnMain] = useState<DbClasseur | null>(null)
+  const [survol, setSurvol] = useState<Section | null>(null)
 
   const suppression = useMutation({
     mutationFn: (id: number) => softDeleteClasseur(id),
@@ -190,10 +202,40 @@ export function ClasseurList({
     return r
   }
 
+  /** Le tableau visé par la cible survolée (le tableau, ou une de ses lignes). */
+  function tableauDe(over: Over | null): Section | null {
+    if (!over) return null
+    const surSection = sectionDeCible(String(over.id))
+    if (surSection !== null) return surSection
+    const ligne = liste.find((c) => c.id === Number(over.id))
+    return ligne ? sectionDe(moi, ligne) : null
+  }
+
+  /** Pendant un glisser : ce que chaque tableau ferait de la ligne prise. */
+  function etatTableau(sec: Section): EtatTableau {
+    if (!enMain) return 'repos'
+    if (sec === sectionDe(moi, enMain)) return 'origine'
+    if (typeof rangementOuRaison(enMain, sec) === 'string') return 'refuse'
+    return survol === sec ? 'survole' : 'possible'
+  }
+
+  function handleDragStart(event: DragStartEvent) {
+    setEnMain(liste.find((c) => c.id === Number(event.active.id)) ?? null)
+    setSurvol(null)
+  }
+  function handleDragOver(event: DragOverEvent) {
+    setSurvol(tableauDe(event.over))
+  }
+  function finirGlisser() {
+    setEnMain(null)
+    setSurvol(null)
+  }
+
   // Le clic qui termine un glisser n'ouvre pas le classeur : dnd-kit
   // l'arrête lui-même (écouteur `click` en capture gardé jusqu'au tour
   // suivant, `AbstractPointerSensor`), testé dans `ClasseurList.test.tsx`.
   function handleDragEnd(event: DragEndEvent) {
+    finirGlisser()
     const { active, over } = event
     if (!over || active.id === over.id) return
     const moved = liste.find((c) => c.id === Number(active.id))
@@ -203,7 +245,7 @@ export function ClasseurList({
       surSection === null
         ? liste.find((c) => c.id === Number(over.id))
         : undefined
-    const cible = surSection ?? (cibleLigne ? sectionDe(moi, cibleLigne) : null)
+    const cible = tableauDe(over)
     if (cible === null) return
     if (cible !== sectionDe(moi, moved)) {
       const r = rangementOuRaison(moved, cible)
@@ -367,13 +409,17 @@ export function ClasseurList({
         <DndContext
           sensors={sensors}
           collisionDetection={detection}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
+          onDragCancel={finirGlisser}
         >
           <div className={TABLEAU_CLASSEURS.sections}>
             {sections.map((sec) => (
               <TableauSection
                 key={sec}
                 section={sec}
+                etat={etatTableau(sec)}
                 classeurs={parSection(sec)}
                 vide={
                   sec === 'public' && canWrite && liste.length === 0
@@ -420,6 +466,22 @@ export function ClasseurList({
               />
             ))}
           </div>
+          {/* La ligne prise suit le pointeur en ÉTIQUETTE flottante (une
+              ligne de tableau déplacée hors de sa carte était coupée et
+              perdait ses colonnes). Elle dit où le classeur va aller. */}
+          <DragOverlay dropAnimation={null}>
+            {enMain && (
+              <EtiquetteGlisser
+                classeur={enMain}
+                vers={
+                  survol !== null && etatTableau(survol) === 'survole'
+                    ? TITRE_SECTION[survol]
+                    : null
+                }
+                refuse={survol !== null && etatTableau(survol) === 'refuse'}
+              />
+            )}
+          </DragOverlay>
         </DndContext>
       )}
 
@@ -543,33 +605,56 @@ function useRangerClasseur() {
   })
 }
 
+/**
+ * Ce qu'un tableau ferait de la ligne en cours de glisser : `repos` (rien
+ * n'est glissé), `origine` (son tableau : réordonner), `possible` (il
+ * l'accepterait), `survole` (il l'accepte, pointeur dessus), `refuse`.
+ */
+type EtatTableau = 'repos' | 'origine' | 'possible' | 'survole' | 'refuse'
+
 /** Un tableau : son intitulé, puis sa carte, cible de dépôt même vide. */
 function TableauSection({
   section,
+  etat,
   classeurs,
   vide,
   ligne,
 }: {
   section: Section
+  etat: EtatTableau
   classeurs: DbClasseur[]
   vide: string
   ligne: (c: DbClasseur) => ReactNode
 }) {
-  const { setNodeRef, isOver } = useDroppable({
+  const { setNodeRef } = useDroppable({
     id: PREFIXE_SECTION + section,
   })
   return (
     <section
-      className={TABLEAU_CLASSEURS.section}
+      className={cn(
+        TABLEAU_CLASSEURS.section,
+        'transition-opacity duration-150',
+        etat === 'refuse' && 'opacity-40',
+      )}
       aria-label={TITRE_SECTION[section]}
     >
-      <h2 className={TABLEAU_CLASSEURS.titre}>{TITRE_SECTION[section]}</h2>
+      <h2
+        className={cn(
+          TABLEAU_CLASSEURS.titre,
+          'transition-colors',
+          etat === 'survole' && 'text-primary',
+        )}
+      >
+        {TITRE_SECTION[section]}
+      </h2>
       <div
         ref={setNodeRef}
         className={cn(
           TABLEAU_CLASSEURS.carte,
-          'transition-colors',
-          isOver && 'border-primary ring-2 ring-primary/30',
+          'transition-[border-color,background-color,box-shadow] duration-150',
+          etat === 'possible' && 'border-dashed border-primary/40',
+          etat === 'survole' &&
+            'border-primary bg-primary/5 shadow-[0_0_0_3px_color-mix(in_oklab,var(--primary)_15%,transparent)]',
         )}
       >
         <table className={TABLEAU_CLASSEURS.table}>
@@ -790,7 +875,9 @@ function LigneClasseur({
         TABLEAU_CLASSEURS.ligne,
         'cursor-pointer',
         canDrag && CLASSES_CARTE_GLISSABLE,
-        isDragging && 'relative z-50 cursor-grabbing bg-card opacity-60',
+        // La ligne prise reste à sa place, en creux : c'est l'étiquette
+        // (`DragOverlay`) qui suit le pointeur.
+        isDragging && 'bg-muted/60 opacity-40 hover:bg-muted/60',
       )}
     >
       <td className="px-3 py-2">
@@ -845,5 +932,46 @@ function LigneClasseur({
         <EntreesMenu entrees={menu} />
       </ContextMenuContent>
     </ContextMenu>
+  )
+}
+
+/** L'étiquette qui suit le pointeur pendant un glisser. */
+function EtiquetteGlisser({
+  classeur,
+  vers,
+  refuse,
+}: {
+  classeur: DbClasseur
+  /** Le tableau qui recevrait le classeur, s'il en change. */
+  vers: string | null
+  refuse: boolean
+}) {
+  const Icon = getIcon(classeur.icon)
+  return (
+    <div className="flex w-max max-w-80 cursor-grabbing items-center gap-3 rounded-xl border border-border bg-popover py-2 pr-4 pl-2 text-sm text-popover-foreground shadow-lg">
+      <span
+        className={cn(
+          'flex size-9 shrink-0 items-center justify-center rounded-lg',
+          CLASSES_ICONE[couleurDe(classeur.couleur)],
+        )}
+      >
+        <Icon className="size-5" strokeWidth={1.5} />
+      </span>
+      <div className="flex min-w-0 flex-col">
+        <span className="truncate font-medium">{classeur.name}</span>
+        {vers !== null && (
+          <span className="flex items-center gap-1 truncate text-xs text-primary">
+            <ArrowRight className="size-3 shrink-0" />
+            {vers}
+          </span>
+        )}
+        {refuse && (
+          <span className="flex items-center gap-1 truncate text-xs text-muted-foreground">
+            <Ban className="size-3 shrink-0" />
+            Pas ici
+          </span>
+        )}
+      </div>
+    </div>
   )
 }
