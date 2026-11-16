@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '@tanstack/react-store'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, FilePlus2, Plus, Save, Trash2 } from 'lucide-react'
+import { Check, FilePlus2, Pencil, Plus, Save } from 'lucide-react'
 
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { SkeletonBlock } from '#/components/shared/skeleton/SkeletonBlock.tsx'
@@ -30,8 +30,8 @@ import {
 } from '#/components/form/fields.tsx'
 import { PosterPreview } from '#/components/affiche/Poster.tsx'
 import { IconPicker, ColorPicker } from '#/components/affiche/pickers.tsx'
+import { TemplateEditDialog } from '#/components/affiche/TemplateEditDialog.tsx'
 import { TemplateNameDialog } from '#/components/affiche/TemplateNameDialog.tsx'
-import { useConfirm } from '#/components/shared/ConfirmDialog.tsx'
 import {
   calculateAutoSizes,
   calculateIconSize,
@@ -105,9 +105,6 @@ export function AffichageBoard() {
   const canWrite = can('affichage', 'ecriture')
   const canManage = can('affichage', 'gestion')
   const queryClient = useQueryClient()
-  // Confirmation de suppression : modale maison (comme le reste de l'app), au lieu
-  // du window.confirm natif.
-  const { confirm, confirmDialog } = useConfirm()
 
   // Modèles chargés depuis Supabase (cache TanStack Query) — remplace la
   // collection en dur. `isPending` distingue le chargement (aucune donnée encore)
@@ -158,6 +155,9 @@ export function AffichageBoard() {
 
   // Modale « nom du modèle » (création), réservée aux niveaux écriture/gestion.
   const [nameOpen, setNameOpen] = useState(false)
+  // Modale « Modifier le modèle » (renommer, supprimer), bornée à la propriété.
+  const [editOpen, setEditOpen] = useState(false)
+  const [editPending, setEditPending] = useState(false)
 
   // Feedback bref à l'enregistrement : le bouton passe à « Enregistré ✓ » ~1,8 s.
   const [savedFlash, setSavedFlash] = useState(false)
@@ -241,22 +241,42 @@ export function AffichageBoard() {
     }
   }
 
+  function openEdit() {
+    if (!selected || !canModifySelected) return
+    setActionError(null)
+    setEditOpen(true)
+  }
+
+  // « Modifier » → renommer : seul le nom change, le contenu reste celui en base.
+  async function handleRename(name: string) {
+    if (!selected || !canModifySelected) return
+    setEditPending(true)
+    try {
+      await updateTemplate(selected.id, { name })
+      await invalidateTemplates()
+      setActionError(null)
+      setEditOpen(false)
+    } catch (err) {
+      setActionError(`Modification impossible : ${errorMessage(err)}`)
+    } finally {
+      setEditPending(false)
+    }
+  }
+
+  // « Modifier » → Supprimer, confirmé dans la modale.
   async function handleDeleteTemplate() {
     if (!selected || !canModifySelected) return
-    const ok = await confirm({
-      title: `Supprimer le modèle « ${selected.name} » ?`,
-      description: 'Cette action est définitive.',
-      confirmLabel: 'Supprimer',
-      destructive: true,
-    })
-    if (!ok) return
+    setEditPending(true)
     try {
       await deleteTemplate(selected.id)
       if (selectedTemplate === selected.id) setAffiche({ selectedTemplate: '' })
       await invalidateTemplates()
       setActionError(null)
+      setEditOpen(false)
     } catch (err) {
       setActionError(`Suppression impossible : ${errorMessage(err)}`)
+    } finally {
+      setEditPending(false)
     }
   }
 
@@ -559,19 +579,21 @@ export function AffichageBoard() {
                   </Tip>
                   <Tip
                     label={
-                      selected && !canModifySelected
-                        ? 'Modèle d’un autre auteur (réservé à la gestion)'
-                        : 'Supprimer le modèle'
+                      !selected
+                        ? 'Choisissez d’abord un modèle'
+                        : !canModifySelected
+                          ? 'Modèle d’un autre auteur (réservé à la gestion)'
+                          : 'Renommer ou supprimer le modèle'
                     }
                   >
                     <Button
                       variant="outline"
                       size="icon-sm"
-                      onClick={handleDeleteTemplate}
+                      onClick={openEdit}
                       disabled={!selected || !canModifySelected}
-                      aria-label="Supprimer le modèle"
+                      aria-label="Modifier le modèle"
                     >
-                      <Trash2 />
+                      <Pencil />
                     </Button>
                   </Tip>
                 </div>
@@ -717,7 +739,17 @@ export function AffichageBoard() {
           error={actionError}
         />
       )}
-      {confirmDialog}
+      {canWrite && selected && canModifySelected && (
+        <TemplateEditDialog
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          name={selected.name}
+          onRename={handleRename}
+          onDelete={handleDeleteTemplate}
+          pending={editPending}
+          error={editOpen ? actionError : null}
+        />
+      )}
     </div>
   )
 }
