@@ -31,6 +31,7 @@ import {
 import { PosterPreview } from '#/components/affiche/Poster.tsx'
 import { IconPicker, ColorPicker } from '#/components/affiche/pickers.tsx'
 import { TemplateEditDialog } from '#/components/affiche/TemplateEditDialog.tsx'
+import type { ModificationModele } from '#/components/affiche/TemplateEditDialog.tsx'
 import { TemplateNameDialog } from '#/components/affiche/TemplateNameDialog.tsx'
 import {
   calculateAutoSizes,
@@ -42,6 +43,7 @@ import type { AfficheTemplateInput } from '#/lib/affiche/model.ts'
 import {
   createTemplate,
   deleteTemplate,
+  fetchPersonnesAffiche,
   fetchTemplates,
   toDbInsert,
   toDbUpdate,
@@ -250,12 +252,24 @@ export function AffichageBoard() {
     setEditOpen(true)
   }
 
-  // « Modifier » → renommer : seul le nom change, le contenu reste celui en base.
-  async function handleRename(name: string) {
+  // Auteurs possibles : lus pour la gestion seule, à l'ouverture de la modale.
+  const { data: personnes } = useQuery({
+    queryKey: ['affiche', 'personnes'],
+    queryFn: fetchPersonnesAffiche,
+    enabled: canManage && editOpen,
+  })
+
+  // « Modifier » → nom, et auteur pour la gestion ; le contenu reste celui en
+  // base (il se sauvegarde par le bouton du bas).
+  async function handleEdit(modification: ModificationModele) {
     if (!selected || !canModifySelected) return
+    const patch =
+      canManage && modification.createdBy !== undefined
+        ? { name: modification.name, created_by: modification.createdBy }
+        : { name: modification.name }
     setEditPending(true)
     try {
-      await updateTemplate(selected.id, { name })
+      await updateTemplate(selected.id, patch)
       await invalidateTemplates()
       setActionError(null)
       setEditOpen(false)
@@ -755,7 +769,9 @@ export function AffichageBoard() {
           open={editOpen}
           onOpenChange={setEditOpen}
           name={selected.name}
-          onRename={handleRename}
+          auteur={selected.createdBy}
+          personnes={canManage ? (personnes ?? null) : undefined}
+          onSave={handleEdit}
           onDelete={handleDeleteTemplate}
           pending={editPending}
           error={editOpen ? actionError : null}

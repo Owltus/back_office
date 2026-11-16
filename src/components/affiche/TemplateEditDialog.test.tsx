@@ -4,6 +4,8 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 
 import { TemplateEditDialog } from '#/components/affiche/TemplateEditDialog.tsx'
 
+import type { PersonneAffiche } from '#/lib/affiche/service.ts'
+
 /*
  * Modale « Modifier le modèle » de l'affichage (2026-11-16) : renommer, ou
  * supprimer après une confirmation dans la même modale.
@@ -11,7 +13,7 @@ import { TemplateEditDialog } from '#/components/affiche/TemplateEditDialog.tsx'
 
 afterEach(cleanup)
 
-function monter() {
+function monter(personnes?: PersonneAffiche[] | null) {
   const onRename = vi.fn()
   const onDelete = vi.fn()
   render(
@@ -19,7 +21,9 @@ function monter() {
       open
       onOpenChange={() => {}}
       name="Piscine fermée"
-      onRename={onRename}
+      auteur="u1"
+      personnes={personnes}
+      onSave={onRename}
       onDelete={onDelete}
     />,
   )
@@ -37,7 +41,7 @@ describe('TemplateEditDialog', () => {
     expect(enregistrer).toHaveProperty('disabled', true)
     fireEvent.change(champ, { target: { value: ' Piscine ouverte ' } })
     fireEvent.click(enregistrer)
-    expect(onRename).toHaveBeenCalledWith('Piscine ouverte')
+    expect(onRename).toHaveBeenCalledWith({ name: 'Piscine ouverte' })
   })
 
   it('ne supprime qu’après confirmation', () => {
@@ -51,5 +55,14 @@ describe('TemplateEditDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }))
     fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }))
     expect(onDelete).toHaveBeenCalledTimes(1)
+  })
+
+  it('le choix de l’auteur n’apparaît que pour la gestion', () => {
+    monter()
+    expect(screen.queryByLabelText('Auteur')).toBeNull()
+    cleanup()
+    monter([{ id: 'u1', prenom: 'Ana', nom: 'Test', nom_affiche: '' }])
+    expect(screen.getByLabelText('Auteur')).toBeTruthy()
+    expect(screen.getByText('Ana Test')).toBeTruthy()
   })
 })

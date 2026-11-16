@@ -191,6 +191,31 @@ export async function updateTemplate(
   exigerUneLigne(data, 'modifié')
 }
 
+/** Personne qui peut être l'auteur d'un modèle (RPC, gestion seule). */
+export interface PersonneAffiche {
+  id: string
+  prenom: string
+  nom: string
+  nom_affiche: string
+}
+
+/** Nom lisible d'une personne (prénom nom, sinon nom affiché). */
+export function nomPersonne(p: PersonneAffiche): string {
+  const complet = `${p.prenom} ${p.nom}`.trim()
+  if (complet !== '') return complet
+  return p.nom_affiche !== '' ? p.nom_affiche : 'Sans nom'
+}
+
+/**
+ * Personnes qui peuvent être auteur d'un modèle : admin, ou droit écriture /
+ * gestion sur la page (2026-11-16). Réservé à la gestion de la page.
+ */
+export async function fetchPersonnesAffiche(): Promise<PersonneAffiche[]> {
+  const { data, error } = await supabase.rpc('affiche_personnes')
+  if (error) throw error
+  return data as PersonneAffiche[]
+}
+
 export async function deleteTemplate(id: string): Promise<void> {
   const { data, error } = await supabase
     .from(AFFICHE_TEMPLATES_TABLE)

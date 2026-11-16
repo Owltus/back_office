@@ -128,6 +128,9 @@ insert into t_cas (nom, sql, prep, attendu) values
 ('classeur_personnes (gestion du Classeur)',
   $q$select count(*) from public.classeur_personnes()$q$, null,
   '{"admin":"ok","gestion":"ok","anon":"err=42501:permission denied for function classeur_personnes","*":"err=42501:Réservé à la gestion de la page Classeur."}'),
+('affiche_personnes (gestion de l''Affichage, 2026-11-16)',
+  $q$select count(*) from public.affiche_personnes()$q$, null,
+  '{"admin":"ok","gestion":"ok","anon":"err=42501:permission denied for function affiche_personnes","*":"err=42501:Réservé à la gestion de la page Affichage."}'),
 -- get_my_access : un compte sans profil reçoit profile = null (jamais une erreur).
 ('get_my_access (profil présent)',
   $q$select count(*) from (select public.get_my_access() -> 'profile' p) s where p <> 'null'::jsonb$q$, null,

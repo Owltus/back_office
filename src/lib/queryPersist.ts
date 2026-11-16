@@ -117,6 +117,8 @@ const PREFIXES_SENSIBLES: ReadonlyArray<ReadonlyArray<string>> = [
   ['classeur', 'acces'],
   // Lits bébé : `label` est un texte libre « Nom / chambre » (2026-09-28).
   ['baby-cots', 'assignments'],
+  // Affichage : noms des auteurs possibles d'un modèle (2026-11-16).
+  ['affiche', 'personnes'],
   // Planning : noms du staff, contrats, absences (dont la maladie), 2026-10-27.
   ['planning'],
 ]
