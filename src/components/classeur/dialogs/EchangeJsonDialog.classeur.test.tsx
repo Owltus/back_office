@@ -25,9 +25,11 @@ import type {
   FichierChangements,
 } from '#/lib/classeur/merge/changements.ts'
 import { construireExport } from '#/lib/classeur/merge/schema.ts'
+import { texteExportClasseur } from '#/lib/classeur/exportJson.ts'
 
 /*
- * Import dans le classeur COMPLET (ligne Importer de l'accueil). Le VRAI
+ * Import dans le classeur COMPLET (ligne Échange avec un LLM de l'accueil,
+ * `EchangeJsonDialog` depuis le 2026-11-16 ; avant, `MergePreviewDialog`). Le VRAI
  * planificateur sur un état local écrit ici ; seules la lecture de la base,
  * la médiathèque et l'écriture sont simulées. Oracles posés à la main.
  *
@@ -88,14 +90,26 @@ vi.mock('#/lib/classeur/merge/apply.ts', async (original) => {
 })
 vi.mock('#/components/classeur/hooks/useClasseur.ts', () => ({
   useInvaliderClasseur: () => () => Promise.resolve(),
+  usePeriodicites: () => ({ data: PERIODICITES, aJour: true }),
 }))
 vi.mock('#/components/classeur/hooks/useImages.ts', () => ({
   useImages: () => ({ data: [], isPending: false }),
 }))
 vi.mock('#/lib/supabase.ts', () => ({ supabase: {} }))
+const telecharge = vi.fn()
+vi.mock('#/lib/classeur/download.ts', () => ({
+  telechargerTexte: (...args: unknown[]) => telecharge(...args),
+}))
 
-const { MergePreviewDialog } =
-  await import('#/components/classeur/dialogs/MergePreviewDialog.tsx')
+const { EchangeJsonDialog } =
+  await import('#/components/classeur/dialogs/EchangeJsonDialog.tsx')
+
+/** Le classeur complet, comme l'accueil le passe (2026-11-16). */
+const SUJET = {
+  type: 'classeur' as const,
+  chapitres: [A, B],
+  contenu: local.content,
+}
 
 /** La réponse d'un LLM, telle qu'elle arrive (JSON nu, modifiable par un test). */
 interface Reponse {
@@ -163,11 +177,13 @@ const onDone = vi.fn()
 function ouvrir(file: File | null) {
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <MergePreviewDialog
+      <EchangeJsonDialog
         open
         onOpenChange={() => {}}
-        classeurId={1}
-        file={file}
+        classeur={classeur()}
+        sujet={SUJET}
+        canWrite
+        fichier={file}
         onDone={onDone}
       />
     </QueryClientProvider>,
@@ -211,7 +227,7 @@ function textesAffiches(): string {
 }
 const MOT_IA = /(?<![\p{L}\d])IA(?![\p{L}\d])/u
 
-describe('MergePreviewDialog — LLM et non IA (2026-10-20)', () => {
+describe('Échange du classeur complet — LLM et non IA (2026-10-20)', () => {
   it('ni en saisie, ni avec l’aperçu, « IA » n’apparaît comme mot', async () => {
     ouvrir(null)
     expect(textesAffiches()).toContain('LLM')
@@ -222,7 +238,7 @@ describe('MergePreviewDialog — LLM et non IA (2026-10-20)', () => {
   })
 })
 
-describe('MergePreviewDialog — aperçu du classeur complet', () => {
+describe('Échange du classeur complet — aperçu du classeur complet', () => {
   it('groupé par chapitre, chapitre neuf en ligne à part sans case', async () => {
     await ouvrirAvecApercu()
     const accueil = screen.getByRole('list', { name: 'Accueil' })
@@ -335,7 +351,7 @@ describe('MergePreviewDialog — aperçu du classeur complet', () => {
   })
 })
 
-describe('MergePreviewDialog — un seul comportement (décision du 2026-10-20)', () => {
+describe('Échange du classeur complet — un seul comportement (décision du 2026-10-20)', () => {
   it('aucun choix ni jargon à l’écran', async () => {
     await ouvrirAvecApercu()
     expect(screen.queryAllByRole('radio')).toHaveLength(0)
@@ -539,7 +555,7 @@ describe('MergePreviewDialog — un seul comportement (décision du 2026-10-20)'
   })
 })
 
-describe('MergePreviewDialog — deux états (refonte du 2026-10-20)', () => {
+describe('Échange du classeur complet — deux états (refonte du 2026-10-20)', () => {
   const resumeAbsent = () =>
     screen.queryByRole('list', { name: 'Résumé de l’import' }) === null
 
@@ -609,16 +625,18 @@ describe('MergePreviewDialog — deux états (refonte du 2026-10-20)', () => {
   })
 })
 
-describe('MergePreviewDialog — utilisateur pressé (navigateur, 2026-10-22)', () => {
-  it('double clic puis Échap : un seul import, le dialogue reste ouvert', async () => {
+describe('Échange du classeur complet — utilisateur pressé (navigateur, 2026-10-22)', () => {
+  it('double clic puis Échap : un seul import, la fenêtre reste ouverte et le dit', async () => {
     const changer = vi.fn()
     render(
       <QueryClientProvider client={new QueryClient()}>
-        <MergePreviewDialog
+        <EchangeJsonDialog
           open
           onOpenChange={changer}
-          classeurId={1}
-          file={fichierLlm()}
+          classeur={classeur()}
+          sujet={SUJET}
+          canWrite
+          fichier={fichierLlm()}
         />
       </QueryClientProvider>,
     )
@@ -641,12 +659,14 @@ describe('MergePreviewDialog — utilisateur pressé (navigateur, 2026-10-22)', 
       deleted: 0,
       ignores: 0,
     })
-    await waitFor(() => expect(changer).toHaveBeenCalledWith(false))
+    // Comme pour un chapitre : la fenêtre reste ouverte et dit le bilan.
+    expect(await screen.findByText(/Import appliqué/)).toBeTruthy()
+    expect(changer).not.toHaveBeenCalledWith(false)
     expect(appliquer).toHaveBeenCalledTimes(1)
   })
 })
 
-describe('MergePreviewDialog — réponse faite avant une suppression', () => {
+describe('Échange du classeur complet — réponse faite avant une suppression', () => {
   afterEach(() => {
     localCourant = local
   })
@@ -661,5 +681,26 @@ describe('MergePreviewDialog — réponse faite avant une suppression', () => {
     expect(
       screen.getByText(/Extincteur : son chapitre est à la corbeille/),
     ).toBeTruthy()
+  })
+})
+
+describe('Échange du classeur complet — exporter', () => {
+  it('Télécharger : exactement l’export du classeur complet, nommé d’après lui', () => {
+    telecharge.mockReset()
+    ouvrir(null)
+    fireEvent.click(screen.getByRole('button', { name: /Télécharger/ }))
+    const [nomFichier, contenu] = telecharge.mock.calls[0] as [string, string]
+    expect(nomFichier).toBe(`${classeur().name}.json`)
+    // `generated_at` change d'un appel à l'autre : comparé sans lui.
+    const sansDate = (s: string) => {
+      const o = JSON.parse(s) as { _metadata: Record<string, unknown> }
+      delete o._metadata.generated_at
+      return o
+    }
+    expect(sansDate(contenu)).toEqual(
+      sansDate(
+        texteExportClasseur(classeur(), [A, B], local.content, PERIODICITES),
+      ),
+    )
   })
 })

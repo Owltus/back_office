@@ -129,7 +129,7 @@ export function ClasseurListHelpPanel({
         <GestureRow side="right">
           {fort('Clic droit')} sur une ligne, puis {fort('Copier pour un LLM')}{' '}
           : tout le classeur est copié, avec un mode d'emploi pour le LLM. Dans
-          un classeur, la ligne Exporter en JSON a le même bouton Copier.
+          un classeur, la ligne Échange avec un LLM a le même bouton Copier.
         </GestureRow>
         <p>
           Collez dans la conversation avec le LLM. Il vous demande ce que vous
@@ -142,8 +142,8 @@ export function ClasseurListHelpPanel({
           <>
             <p>
               Pour reprendre ses modifications : ouvrez le classeur, ligne{' '}
-              {fort('Importer')}, puis collez sa réponse. Une réponse sur un
-              chapitre ou un document ne change que lui.
+              {fort('Échange avec un LLM')}, puis collez sa réponse. Une réponse
+              sur un chapitre ou un document ne change que lui.
             </p>
             <p>
               Le LLM ne renvoie que ce qui change : le reste ne bouge pas. Vous

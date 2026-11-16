@@ -11,10 +11,9 @@ import type {
 } from '#/components/classeur/ClasseurDashboard.tsx'
 import { CorbeilleDialog } from '#/components/classeur/dialogs/CorbeilleDialog.tsx'
 import { ExportMarkdownDialog } from '#/components/classeur/dialogs/ExportMarkdownDialog.tsx'
-import { ExportJsonClasseurDialog } from '#/components/classeur/dialogs/ExportJsonClasseurDialog.tsx'
+import { EchangeJsonDialog } from '#/components/classeur/dialogs/EchangeJsonDialog.tsx'
 import { HistoriqueDialog } from '#/components/classeur/dialogs/HistoriqueDialog.tsx'
 import { ImagesDialog } from '#/components/classeur/dialogs/ImagesDialog.tsx'
-import { MergePreviewDialog } from '#/components/classeur/dialogs/MergePreviewDialog.tsx'
 import { ClasseurCoverPage } from '#/components/classeur/print/ClasseurCoverPage.tsx'
 import { useDroitsClasseur } from '#/components/classeur/hooks/useDroitsClasseur.ts'
 import {
@@ -105,13 +104,12 @@ export function bilanFusion(r: ResultatFusion): string {
  * Tableau de bord d'un classeur AVEC ses actions branchées :
  *   - Sommaire et Exporter en PDF ouvrent un `PrintPreview` (impression via
  *     iframe, « Enregistrer en PDF » dans le dialogue du navigateur) ;
- *   - Exporter en Markdown télécharge l'archive ZIP ; Exporter en JSON ouvre
- *     son dialogue (`ExportJsonClasseurDialog` : Copier pour un LLM ou
- *     Télécharger le fichier v2, sans aucun choix) ;
- *   - Importer ouvre le dialogue d'import (`MergePreviewDialog`) :
- *     coller la réponse d'un LLM ou choisir un fichier (un fichier déposé sur
- *     la ligne l'ouvre déjà chargé), aperçu, puis un point de restauration
- *     avant toute écriture ; Historique ouvre les instantanés restaurables.
+ *   - Exporter en Markdown ouvre sa fenêtre de choix ; Échange avec un LLM
+ *     ouvre LA fenêtre des chapitres (`EchangeJsonDialog`, 2026-11-16) :
+ *     exporter le classeur complet (Copier / Télécharger), puis réimporter
+ *     la réponse du LLM (un fichier déposé sur la ligne l'ouvre déjà
+ *     chargé), aperçu, point de restauration avant toute écriture ;
+ *     Historique ouvre les instantanés restaurables.
  *
  * Porte l'état (aperçu, export en cours, fichier à fusionner, bilan, erreur)
  * pour que la route reste mince. Les périodicités, nécessaires aux feuilles
@@ -126,15 +124,13 @@ export function ClasseurDashboardActions({
   const queryClient = useQueryClient()
   const [apercu, setApercu] = useState<Apercu>(null)
   const [periodicites, setPeriodicites] = useState<DbPeriodicite[]>([])
-  // Import du classeur : dialogue ouvert, avec le fichier déposé s'il y en a
-  // un (sinon la personne y colle la réponse du LLM ou choisit un fichier).
-  const [importOuvert, setImportOuvert] = useState(false)
+  // Échange avec un LLM (export ET import) : la fenêtre, avec le fichier
+  // déposé sur la ligne s'il y en a un.
+  const [echange, setEchange] = useState<DashboardContexte | null>(null)
   const [fichierImport, setFichierImport] = useState<File | null>(null)
   const [historiqueOuvert, setHistoriqueOuvert] = useState(false)
   const [imagesOuvertes, setImagesOuvertes] = useState(false)
   const [corbeilleOuverte, setCorbeilleOuverte] = useState(false)
-  // Export JSON du classeur complet : son dialogue (Copier / Télécharger).
-  const [exportJson, setExportJson] = useState<DashboardContexte | null>(null)
   const { canWrite } = useDroitsClasseur(classeurId)
   const suivi = useImpressionsSuivies(classeurId)
   const [bilan, setBilan] = useState<string | null>(null)
@@ -160,8 +156,7 @@ export function ClasseurDashboardActions({
     },
   })
 
-  const recevoirFichier = (file: File | undefined) => {
-    if (!file) return
+  const recevoirFichier = (file: File, c: DashboardContexte) => {
     const trop = fileTooLarge(file, MAX_JSON_BYTES)
     if (trop) {
       setErreurFichier(trop)
@@ -170,14 +165,14 @@ export function ClasseurDashboardActions({
     setErreurFichier(null)
     setBilan(null)
     setFichierImport(file)
-    setImportOuvert(true)
+    setEchange(c)
   }
 
-  const ouvrirImport = () => {
+  const ouvrirEchange = (c: DashboardContexte) => {
     setErreurFichier(null)
     setBilan(null)
     setFichierImport(null)
-    setImportOuvert(true)
+    setEchange(c)
   }
 
   const busy: DashboardBusy = ouvrirApercu.isPending
@@ -258,8 +253,7 @@ export function ClasseurDashboardActions({
             ? (c) => decrireModifies(elementsDuClasseur(c), suivi.empreintes)
             : undefined
         }
-        onExporterJson={setExportJson}
-        onImporter={ouvrirImport}
+        onEchange={ouvrirEchange}
         onFichierDepose={recevoirFichier}
         onHistorique={() => setHistoriqueOuvert(true)}
         onImages={() => setImagesOuvertes(true)}
@@ -267,19 +261,27 @@ export function ClasseurDashboardActions({
         busy={busy}
       />
 
-      <MergePreviewDialog
-        open={importOuvert}
+      <EchangeJsonDialog
+        open={echange !== null}
         onOpenChange={(open) => {
-          setImportOuvert(open)
-          if (!open) setFichierImport(null)
+          if (!open) {
+            setEchange(null)
+            setFichierImport(null)
+          }
         }}
-        classeurId={classeurId}
-        file={fichierImport}
-        onDone={(r) => {
-          setBilan(bilanFusion(r))
-          setImportOuvert(false)
-          setFichierImport(null)
-        }}
+        classeur={echange?.classeur ?? null}
+        sujet={
+          echange === null
+            ? null
+            : {
+                type: 'classeur',
+                chapitres: echange.chapters,
+                contenu: echange.content,
+              }
+        }
+        canWrite={canWrite}
+        fichier={fichierImport}
+        onDone={(r) => setBilan(bilanFusion(r))}
       />
 
       <ExportMarkdownDialog
@@ -297,14 +299,6 @@ export function ClasseurDashboardActions({
               }
         }
         lirePeriodicites={lirePeriodicites}
-      />
-
-      <ExportJsonClasseurDialog
-        open={exportJson !== null}
-        onOpenChange={(open) => {
-          if (!open) setExportJson(null)
-        }}
-        sujet={exportJson}
       />
 
       <ImagesDialog

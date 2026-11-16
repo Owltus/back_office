@@ -30,17 +30,21 @@ import {
 import { telechargerTexte } from '#/lib/classeur/download.ts'
 import {
   MIME_JSON,
+  nomFichierJson,
   nomFichierPortee,
   serialiserExport,
+  texteExportClasseur,
 } from '#/lib/classeur/exportJson.ts'
 import { previsualiserImport } from '#/lib/classeur/merge/apply.ts'
-import type { ApercuFusion } from '#/lib/classeur/merge/apply.ts'
+import type {
+  ApercuFusion,
+  ResultatImport,
+} from '#/lib/classeur/merge/apply.ts'
 import type {
   ContexteImport,
   FichierChangements,
 } from '#/lib/classeur/merge/changements.ts'
 import { lireChangements } from '#/lib/classeur/merge/changements.ts'
-import type { CiblePortee } from '#/lib/classeur/merge/changements.ts'
 import {
   construireExportChapitre,
   construireExportDocument,
@@ -58,7 +62,10 @@ import type {
 
 /*
  * « JSON pour un LLM » d'un chapitre ou d'un document (demande utilisateur du
- * 2026-09-29). Deux temps dans une seule fenêtre :
+ * 2026-09-29), et depuis le 2026-11-16 du CLASSEUR complet (accueil d'un
+ * classeur, ligne « Échange avec un LLM » : remplace les deux fenêtres
+ * « Exporter en JSON » et « Importer », demande utilisateur : « comme dans
+ * les chapitres »). Deux temps dans une seule fenêtre :
  *   1. EXPORTER : copier (le plus direct pour un LLM) ou télécharger le
  *      fichier, qui embarque son mode d'emploi (`_metadata.instructions`) ;
  *      un refus du presse-papiers télécharge le fichier à la place ;
@@ -76,6 +83,7 @@ import type {
  */
 
 export type SujetJson =
+  | { type: 'classeur'; chapitres: DbChapter[]; contenu: ChapterContent }
   | { type: 'chapitre'; chapitre: DbChapter; contenu: ChapterContent }
   | { type: 'document'; chapitre: DbChapter; document: DbDocument }
 
@@ -93,12 +101,18 @@ export function EchangeJsonDialog({
   classeur,
   sujet,
   canWrite,
+  fichier = null,
+  onDone,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   classeur: DbClasseur | null
   sujet: SujetJson | null
   canWrite: boolean
+  /** Fichier DÉPOSÉ sur la ligne de l'accueil : la fenêtre s'ouvre dessus. */
+  fichier?: File | null
+  /** Appelé après un import réussi, avec ses compteurs. */
+  onDone?: (resultat: ResultatImport) => void
 }) {
   const periodicitesQ = usePeriodicites(open)
   // Médiathèque, lue à l'ouverture seulement : la relecture de l'aperçu
@@ -121,12 +135,19 @@ export function EchangeJsonDialog({
   // l'écran UNE fois, à son apparition.
   const apercuRef = useRef<HTMLDivElement>(null)
 
-  const contexte: CiblePortee | null =
+  const contexte: ContexteImport | null =
     sujet === null
       ? null
-      : sujet.type === 'chapitre'
-        ? { type: 'chapitre', chapitreId: sujet.chapitre.id }
-        : { type: 'document', documentId: sujet.document.id }
+      : sujet.type === 'classeur'
+        ? { type: 'classeur' }
+        : sujet.type === 'chapitre'
+          ? { type: 'chapitre', chapitreId: sujet.chapitre.id }
+          : { type: 'document', documentId: sujet.document.id }
+
+  // Un fichier déposé sur la ligne de l'accueil devient la source.
+  useEffect(() => {
+    if (open && fichier !== null) setSource({ type: 'fichier', file: fichier })
+  }, [open, fichier])
 
   const preparation = useMutation({
     mutationFn: async (args: {
@@ -134,15 +155,13 @@ export function EchangeJsonDialog({
       contexte: ContexteImport
       classeurId: number
     }): Promise<Preparation> => {
-      const fichier = lireChangements(
-        extraireJson(await lireSource(args.source)),
-      )
+      const lu = lireChangements(extraireJson(await lireSource(args.source)))
       const apercu = await previsualiserImport(
         args.classeurId,
-        fichier,
+        lu,
         args.contexte,
       )
-      return { fichier, ...apercu }
+      return { fichier: lu, ...apercu }
     },
   })
   const fusion = useAppliquerImport()
@@ -152,9 +171,11 @@ export function EchangeJsonDialog({
   const cleContexte =
     contexte === null
       ? ''
-      : contexte.type === 'chapitre'
-        ? `c${contexte.chapitreId}`
-        : `d${contexte.documentId}`
+      : contexte.type === 'classeur'
+        ? 'classeur'
+        : contexte.type === 'chapitre'
+          ? `c${contexte.chapitreId}`
+          : `d${contexte.documentId}`
   useEffect(() => {
     if (!open || contexte === null || classeur === null) return
     if (source === null) {
@@ -207,9 +228,11 @@ export function EchangeJsonDialog({
   if (sujet === null) return null
 
   const libelle =
-    sujet.type === 'chapitre'
-      ? `le chapitre ${sujet.chapitre.label}`
-      : `le document ${sujet.document.title}`
+    sujet.type === 'classeur'
+      ? 'tout le classeur'
+      : sujet.type === 'chapitre'
+        ? `le chapitre ${sujet.chapitre.label}`
+        : `le document ${sujet.document.title}`
 
   // Les périodicités nomment les feuilles de suivi et listent les `id` que
   // le LLM peut choisir : pas d'export sans elles.
@@ -223,6 +246,16 @@ export function EchangeJsonDialog({
     if (classeur === null || sujet === null) return null
     const periodicites = periodicitesQ.data
     if (periodicites === undefined) return null
+    if (sujet.type === 'classeur')
+      return {
+        texte: texteExportClasseur(
+          classeur,
+          sujet.chapitres,
+          sujet.contenu,
+          periodicites,
+        ),
+        nomFichier: nomFichierJson(classeur.name),
+      }
     const export_ =
       sujet.type === 'chapitre'
         ? construireExportChapitre(
@@ -268,7 +301,10 @@ export function EchangeJsonDialog({
     retenus: comptes.retenus,
     nom: comptes.nom,
     noms: comptes.noms,
-    libelleSansElement: 'Importer le chapitre',
+    libelleSansElement:
+      sujet.type === 'classeur'
+        ? 'Importer les chapitres'
+        : 'Importer le chapitre',
   })
 
   function basculerRefus(cle: string) {
@@ -296,12 +332,17 @@ export function EchangeJsonDialog({
         contexte,
         exclus: comptes.exclus,
         sourceName:
-          sujet.type === 'chapitre'
-            ? `Import dans le chapitre ${sujet.chapitre.label}`
-            : `Import dans le document ${sujet.document.title}`,
+          sujet.type === 'classeur'
+            ? source?.type === 'fichier'
+              ? source.file.name
+              : 'Réponse collée d’un LLM'
+            : sujet.type === 'chapitre'
+              ? `Import dans le chapitre ${sujet.chapitre.label}`
+              : `Import dans le document ${sujet.document.title}`,
       },
       {
         onSuccess: (r) => {
+          onDone?.(r)
           const ignores =
             r.ignores > 0
               ? ` ${pluriel(r.ignores, `${comptes.nom} ignoré`, `${comptes.noms} ignorés`)} à votre demande.`

@@ -5,11 +5,10 @@ import { Link, useNavigate } from '@tanstack/react-router'
 import {
   Archive,
   Bookmark,
+  Braces,
   ChevronRight,
-  FileDown,
   FilePenLine,
   FileText,
-  FileUp,
   History,
   Images,
   List,
@@ -84,8 +83,7 @@ export interface ClasseurSearchResult {
 }
 
 /** Action en cours, pour l'état de la carte concernée (Loader2). */
-export type DashboardBusy =
-  'pdf' | 'markdown' | 'json' | 'import' | 'sommaire' | 'modifies' | null
+export type DashboardBusy = 'pdf' | 'markdown' | 'sommaire' | 'modifies' | null
 
 /** Ce que dit la ligne « Documents modifiés » (calculé par l'appelant). */
 export interface EtatModifies {
@@ -112,12 +110,15 @@ const ICONE_KIND: Record<ItemKind, LucideIcon> = {
  * Disposition du 2026-10-04 (décision utilisateur, remplace la colonne de
  * 28 rem de Registre puis la grille de tuiles) : en-tête FIXE
  * (`PageAvecEnTete`, comme un chapitre) et UN panneau en liste, façon page
- * de réglages, en quatre sections (Contenu, Imprimer, Échanger et
- * sauvegarder, Historique et sécurité), en-tête et panneau sur `max-w-3xl`.
+ * de réglages, en quatre sections (Contenu, Imprimer, Fichiers,
+ * Historique et sécurité), en-tête et panneau sur `max-w-3xl`. Fichiers
+ * (2026-11-16, demande utilisateur : « Échanger et sauvegarder » n'était pas
+ * clair, un mot) : Échange avec un LLM (export JSON ET import dans la même
+ * fenêtre, comme un chapitre) et Exporter en Markdown.
  *
  * POINTS D'EXTENSION (branchés par `ClasseurDashboardActions`) : les
  * rappels `onSommaire`, `onExporterPdf`, `onExporterMarkdown`,
- * `onExporterJson`, `onImporter` reçoivent le `DashboardContexte` chargé ;
+ * `onEchange` reçoivent le `DashboardContexte` chargé ;
  * `onHistorique` ouvre le dialogue d'historique. Absent, la ligne n'est pas
  * rendue. `busy` fait tourner la ligne de l'action en cours ; toutes sont
  * désactivées tant que le contenu n'est pas chargé. `renderResult` remplace
@@ -130,8 +131,7 @@ export function ClasseurDashboard({
   onExporterMarkdown,
   onImprimerModifies,
   etatModifies,
-  onExporterJson,
-  onImporter,
+  onEchange,
   onFichierDepose,
   onHistorique,
   onImages,
@@ -147,11 +147,11 @@ export function ClasseurDashboard({
   /** Imprimer ce qui a changé depuis la dernière impression. */
   onImprimerModifies?: (ctx: DashboardContexte) => void
   etatModifies?: (ctx: DashboardContexte) => EtatModifies
-  onExporterJson?: (ctx: DashboardContexte) => void
-  onImporter?: (ctx: DashboardContexte) => void
-  /** Fichier .json DÉPOSÉ sur la carte Importer (Registre acceptait le
-   * glisser-déposer sur cette carte). */
-  onFichierDepose?: (file: File) => void
+  /** Échange avec un LLM : exporter le classeur et réimporter, une fenêtre. */
+  onEchange?: (ctx: DashboardContexte) => void
+  /** Fichier .json DÉPOSÉ sur la ligne Échange avec un LLM (Registre
+   * acceptait le glisser-déposer sur sa carte Importer). */
+  onFichierDepose?: (file: File, ctx: DashboardContexte) => void
   /** Ouvre l'historique des imports (instantanés restaurables). Sans ctx : la
    * liste est lue par le dialogue lui-même. */
   onHistorique?: () => void
@@ -254,7 +254,7 @@ export function ClasseurDashboard({
     e.preventDefault()
     setSurvolDepot(false)
     const file = e.dataTransfer.files.item(0)
-    if (file !== null) onFichierDepose(file)
+    if (file !== null) onFichierDepose(file, contexte)
   }
 
   function action(rappel?: (ctx: DashboardContexte) => void) {
@@ -275,10 +275,7 @@ export function ClasseurDashboard({
   const sectionImprimer = onExporterPdf || onSommaire || onImprimerModifies
   const modifies =
     contexte !== null && etatModifies ? etatModifies(contexte) : null
-  const sectionEchanger =
-    onExporterJson ||
-    onExporterMarkdown ||
-    ((canWrite || reserverEcriture) && onImporter)
+  const sectionFichiers = onEchange || onExporterMarkdown
   const sectionHistorique =
     onHistorique || ((canWrite || reserverEcriture) && onCorbeille)
   const sectionContenu = canWrite || reserverEcriture || onImages
@@ -468,37 +465,25 @@ export function ClasseurDashboard({
               </SectionActions>
             )}
 
-            {sectionEchanger && (
-              <SectionActions titre="Échanger et sauvegarder">
-                {onExporterJson && (
+            {sectionFichiers && (
+              <SectionActions titre="Fichiers">
+                {onEchange && (
                   <LigneAction
-                    icon={FileUp}
-                    title="Exporter en JSON"
-                    description="À coller dans un LLM, ou en fichier"
-                    titreOccupe="Export en cours..."
-                    onClick={action(onExporterJson)}
+                    icon={survolDepot ? Upload : Braces}
+                    title="Échange avec un LLM"
+                    description={
+                      canWrite
+                        ? 'Exporter le classeur, puis réimporter la réponse'
+                        : 'Exporter le classeur, à coller dans un LLM'
+                    }
+                    onClick={action(onEchange)}
                     disabled={!pret || busy !== null}
-                    busy={busy === 'json'}
-                  />
-                )}
-                {canWrite && onImporter && (
-                  <LigneAction
-                    icon={survolDepot ? Upload : FileDown}
-                    title="Importer"
-                    description="Réponse d'un LLM ou fichier"
-                    titreOccupe="Import en cours..."
-                    onClick={action(onImporter)}
-                    disabled={!pret || busy !== null}
-                    busy={busy === 'import'}
                     survolDepot={survolDepot}
                     onDragEnter={surDragOver}
                     onDragOver={surDragOver}
                     onDragLeave={surDragLeave}
                     onDrop={surDrop}
                   />
-                )}
-                {!canWrite && reserverEcriture && onImporter && (
-                  <LigneActionSquelette />
                 )}
                 {onExporterMarkdown && (
                   <LigneAction

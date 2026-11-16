@@ -148,8 +148,7 @@ describe('ClasseurDashboard — places des cartes d’écriture', () => {
             classeurId={24}
             onHistorique={() => {}}
             onCorbeille={() => {}}
-            onExporterJson={() => {}}
-            onImporter={() => {}}
+            onEchange={() => {}}
           />
         </TooltipProvider>
       </QueryClientProvider>,
@@ -157,9 +156,9 @@ describe('ClasseurDashboard — places des cartes d’écriture', () => {
     return container.querySelectorAll('[data-ligne-squelette]').length
   }
 
-  it('droits en lecture, page en écriture : trois places réservées', () => {
+  it('droits en lecture, page en écriture : deux places réservées', () => {
     Object.assign(droits, { canWrite: false, pret: false })
-    expect(monterComplet()).toBe(3)
+    expect(monterComplet()).toBe(2)
     expect(screen.queryByRole('button', { name: /Corbeille/ })).toBeNull()
   })
 
@@ -198,8 +197,7 @@ describe('ClasseurDashboard — en-tête fixe et panneau', () => {
             onExporterPdf={() => {}}
             onExporterMarkdown={() => {}}
             onImprimerModifies={() => {}}
-            onExporterJson={() => {}}
-            onImporter={() => {}}
+            onEchange={() => {}}
             onFichierDepose={() => {}}
             onHistorique={() => {}}
             onImages={() => {}}
@@ -280,7 +278,7 @@ describe('ClasseurDashboard — en-tête fixe et panneau', () => {
     const lignes = Array.from(
       panneau.querySelectorAll<HTMLElement>('[data-ligne-action]'),
     )
-    expect(lignes.length).toBe(10)
+    expect(lignes.length).toBe(9)
     for (const l of lignes) {
       expect(l.className).toMatch(/(^| )h-14( |$)/)
       const d = l.querySelector('[data-testid="ligne-action-description"]')
@@ -295,17 +293,17 @@ describe('ClasseurDashboard — en-tête fixe et panneau', () => {
     }
   })
 
-  it('dépôt d’un fichier sur Importer : la ligne l’annonce', () => {
+  it('dépôt d’un fichier sur Échange avec un LLM : la ligne l’annonce', () => {
     monterTout()
-    const ligne = screen.getByRole('button', { name: /^Importer/ })
+    const ligne = screen.getByRole('button', { name: /^Échange avec un LLM/ })
     fireEvent.dragOver(ligne, { dataTransfer: { types: ['Files'] } })
     expect(ligne.textContent).toContain('Déposez le fichier ici')
     expect(ligne.className).toContain('bg-primary/10')
     fireEvent.dragLeave(ligne)
-    expect(ligne.textContent).toContain("Réponse d'un LLM ou fichier")
+    expect(ligne.textContent).toContain('puis réimporter la réponse')
   })
 
-  it('écriture : quatre sections, dix lignes, comme la silhouette', () => {
+  it('écriture : quatre sections, neuf lignes, comme la silhouette', () => {
     const container = monterTout()
     expect(groupes(container)).toEqual([
       {
@@ -326,10 +324,9 @@ describe('ClasseurDashboard — en-tête fixe et panneau', () => {
         reservees: 0,
       },
       {
-        titre: 'Échanger et sauvegarder',
+        titre: 'Fichiers',
         cartes: [
-          expect.stringMatching(/Exporter en JSON.*À coller dans un LLM/),
-          expect.stringMatching(/^Importer.*Réponse d'un LLM ou fichier/),
+          expect.stringMatching(/^Échange avec un LLM.*réimporter la réponse/),
           expect.stringContaining('Exporter en Markdown'),
         ],
         reservees: 0,
@@ -345,13 +342,14 @@ describe('ClasseurDashboard — en-tête fixe et panneau', () => {
     ])
   })
 
-  it('lecteur : ni Nouveau chapitre, ni Importer, ni Corbeille', () => {
+  it('lecteur : ni Nouveau chapitre, ni import, ni Corbeille', () => {
     Object.assign(droits, { canWrite: false, pret: true })
     const container = monterTout()
     const g = groupes(container)
     expect(g.map((x) => x.cartes.length)).toEqual([1, 3, 2, 1])
     const tout = g.flatMap((x) => x.cartes).join(' | ')
-    expect(tout).not.toMatch(/Nouveau chapitre|Importer|Corbeille/)
+    expect(tout).not.toMatch(/Nouveau chapitre|réimporter|Corbeille/)
+    expect(tout).toContain('Exporter le classeur, à coller dans un LLM')
     expect(
       screen.queryByRole('button', { name: 'Modifier le classeur' }),
     ).toBeNull()
@@ -360,9 +358,9 @@ describe('ClasseurDashboard — en-tête fixe et panneau', () => {
   it('droits pas encore lus : les places réservées tombent dans LEUR section', () => {
     Object.assign(droits, { canWrite: false, pret: false })
     const container = monterTout()
-    expect(groupes(container).map((x) => x.reservees)).toEqual([1, 0, 1, 1])
+    expect(groupes(container).map((x) => x.reservees)).toEqual([1, 0, 0, 1])
     expect(
       groupes(container).map((x) => x.cartes.length + x.reservees),
-    ).toEqual([2, 3, 3, 2])
+    ).toEqual([2, 3, 2, 2])
   })
 })

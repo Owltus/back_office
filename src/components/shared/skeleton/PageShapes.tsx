@@ -736,25 +736,21 @@ export function LigneActionSquelette() {
 
 /**
  * Les sections du panneau de l'accueil et leurs lignes, dans l'ordre du DOM
- * de `ClasseurDashboard`. Forme de qui peut écrire : Nouveau chapitre,
- * Importer et Corbeille sont réservés à l'écriture (un lecteur voit six
- * lignes).
+ * de `ClasseurDashboard`. Forme de qui peut écrire : Nouveau chapitre et
+ * Corbeille sont réservés à l'écriture (un lecteur voit sept lignes).
  */
 const SECTIONS_ACCUEIL: { cle: string; lignes: string[] }[] = [
   { cle: 'contenu', lignes: ['nouveau', 'images'] },
   { cle: 'imprimer', lignes: ['pdf', 'modifies', 'sommaire'] },
-  {
-    cle: 'echanger',
-    lignes: ['json', 'import', 'markdown'],
-  },
+  { cle: 'fichiers', lignes: ['echange', 'markdown'] },
   { cle: 'historique', lignes: ['historique', 'corbeille'] },
 ]
 
 /**
  * /classeur/$id (accueil) : champ de recherche pleine largeur puis LE
  * panneau, relevé sur le DOM de l'accueil : quatre sections (intitulé puis
- * lignes) Contenu (2), Imprimer (3), Échanger et sauvegarder (3),
- * Historique et sécurité (2). Dix lignes.
+ * lignes) Contenu (2), Imprimer (3), Fichiers (2), Historique et
+ * sécurité (2). Neuf lignes.
  */
 export function FormeClasseurDashboard() {
   return (
