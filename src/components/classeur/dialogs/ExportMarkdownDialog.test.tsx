@@ -48,7 +48,17 @@ const phrase = () => screen.getByRole('status').textContent
 
 afterEach(cleanup)
 
+const AVEC_IMAGE =
+  'Texte\n\n![Photo](1/0f8fad5b-d9cb-469f-a165-70867728950e.webp)\n'
+
 describe('ExportMarkdownDialog — quatre combinaisons', () => {
+  it('par défaut : un seul fichier, sans les images', () => {
+    ouvrir(portee(AVEC_IMAGE))
+    expect(coche(/^Un seul fichier/)).toBe('true')
+    expect(coche(/^Sans les images/)).toBe('true')
+    expect(phrase()).toBe('Vous recevez Essai.md, un seul fichier Markdown.')
+  })
+
   for (const [titre, contenu] of [
     [
       'avec des images',

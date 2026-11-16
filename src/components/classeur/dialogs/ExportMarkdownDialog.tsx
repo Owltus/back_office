@@ -79,6 +79,12 @@ function Option({
   )
 }
 
+/**
+ * Choix à l'ouverture (décision utilisateur du 2026-11-16) : un seul
+ * fichier, sans les images.
+ */
+const CHOIX_PAR_DEFAUT: ChoixExport = { forme: 'unique', avecImages: false }
+
 /** Phrase qui dit ce que l'on va recevoir. */
 export function phraseResultat(
   portee: PorteeExport,
@@ -122,10 +128,7 @@ export function ExportMarkdownDialog({
   portee: PorteeExport | null
   lirePeriodicites: () => Promise<DbPeriodicite[]>
 }) {
-  const [choix, setChoix] = useState<ChoixExport>({
-    forme: 'unique',
-    avecImages: true,
-  })
+  const [choix, setChoix] = useState<ChoixExport>(CHOIX_PAR_DEFAUT)
   const exporter = useMutation({
     mutationFn: async (c: ChoixExport) => {
       if (!portee) return
@@ -139,7 +142,11 @@ export function ExportMarkdownDialog({
       open={open}
       onOpenChange={(o) => {
         if (!o && exporter.isPending) return
-        if (!o) exporter.reset()
+        if (!o) {
+          exporter.reset()
+          // Chaque ouverture repart du choix par défaut.
+          setChoix(CHOIX_PAR_DEFAUT)
+        }
         onOpenChange(o)
       }}
     >
