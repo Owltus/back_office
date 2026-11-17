@@ -3424,19 +3424,24 @@ un vérificateur neuf par piste. Résultats hors du dépôt :
 findings.json). Le validateur exige un système Linux (lecture sans suivre les
 liens) : le lancer dans le conteneur Studio local, sans réseau
 (`docker run --rm --network none --entrypoint node <image studio> …`).
-0 confirmé, 3 à valider, chacun avec son correctif commité :
+0 confirmé, 3 à valider. Suites du même jour (décisions utilisateur) :
 
 - Worker e-mail : `senderAuthAligne` (seul l'en-tête de Cloudflare,
-  `pass` aligné sur le domaine de l'enveloppe) ne BLOQUE qu'avec
-  `SENDER_AUTH_ALIGNEE=true`, à poser après avoir lu `aligne oui` sur un vrai
-  e-mail du PMS (leçon du 07/09) ; l'ancien contrôle reste la règle d'ici là.
-- Base locale : la copie de la prod refuse de démarrer tant qu'un conteneur
-  `supabase_*` publie un port hors bouclage (`portsOuverts`) ; correctif
-  propriétaire : Docker Engine `"ip": "127.0.0.1"`.
-- `[auth.email] secure_password_change = true` : changement de mot de passe
-  refusé depuis une session de plus de 24 h (la vérification du mot de passe
-  actuel crée une session neuve, le parcours normal passe). À reporter dans
-  le dashboard de la prod.
+  `pass` aligné sur le domaine de l'enveloppe), BLOQUANT avec
+  `SENDER_AUTH_ALIGNEE = "true"` (wrangler.toml), posé APRÈS lecture des
+  vrais e-mails du PMS des 13-15/11 dans les journaux du Worker
+  (`dkim=pass header.d=stayntouch.com`, `dmarc=pass`, rejoués par
+  `worker.audit.test.ts`). Retour arrière : la variable à "false". Le
+  DMARC `p=none` est celui de stayntouch.com (le PMS), pas le nôtre ;
+  naostack.com est déjà en `p=quarantine` avec DKIM Resend : rien à changer.
+- Base locale ouverte au réseau : décision utilisateur, sans objet (essais
+  seulement) ; la garde de la copie de la prod est retirée.
+- Mot de passe : `[auth.email] secure_password_change = true` en local ;
+  dans le dashboard de la PROD (fait le 17/11) « Secure password change »
+  activé, liens magiques et codes par e-mail désactivés (l'app ne connaît
+  que le mot de passe). `/profil` envoie `current_password` : l'option
+  « Require current password when updating » est à activer dans le
+  dashboard APRÈS la livraison de ce code (sans elle, le serveur l'ignore).
 
 ## Faits base de données (vérifiés en lecture)
 
