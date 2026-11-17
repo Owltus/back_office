@@ -111,8 +111,12 @@ export function ProfilBoard() {
       }
 
       if (changePassword) {
+        // Le mot de passe actuel part AUSSI au serveur (audit du 2026-11-17) :
+        // la vérification ci-dessus se contourne depuis la console, celle du
+        // serveur non (option « Require current password when updating »).
         const { error: pwError } = await supabase.auth.updateUser({
           password: newPassword,
+          current_password: currentPassword,
         })
         if (pwError) {
           echec(`Nom enregistré. ${messageMotDePasse(pwError)}`)

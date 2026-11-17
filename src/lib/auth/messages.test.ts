@@ -27,4 +27,15 @@ describe('messageMotDePasse', () => {
       messageMotDePasse({ code: 'x', message: 'New password should be…' }),
     ).toBe('Mot de passe non modifié. Réessayez.')
   })
+  it('mot de passe actuel refusé par le serveur', () => {
+    for (const code of [
+      'invalid_credentials',
+      'current_password_mismatch',
+      'current_password_required',
+    ])
+      expect(messageMotDePasse({ code })).toMatch(/actuel incorrect/)
+    expect(messageMotDePasse({ code: 'reauthentication_needed' })).toMatch(
+      /Reconnectez-vous/,
+    )
+  })
 })

@@ -45,5 +45,13 @@ export function messageMotDePasse(err: unknown): string {
   if (code === 'reauthentication_needed') {
     return 'Reconnectez-vous avant de changer de mot de passe.'
   }
+  // Mot de passe actuel exigé PAR LE SERVEUR (option « Require current
+  // password when updating », audit du 2026-11-17) : refus si absent ou faux.
+  if (
+    code === 'invalid_credentials' ||
+    (typeof code === 'string' && code.startsWith('current_password'))
+  ) {
+    return 'Mot de passe actuel incorrect : mot de passe non modifié.'
+  }
   return 'Mot de passe non modifié. Réessayez.'
 }
