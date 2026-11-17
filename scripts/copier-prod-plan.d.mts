@@ -18,7 +18,9 @@ export declare function arretAvantCopie(e: {
   baseLocaleJoignable: boolean
   mailpitBranche: boolean
   arbrePropre: boolean
+  portsOuverts?: ReadonlyArray<string>
 }): string | null
+export declare function portsOuverts(sortie: string): Array<string>
 export declare function argumentsDump(fichier: string): Array<string>
 export declare function migrationsNonLivrees(
   fichiersLocaux: ReadonlyArray<string>,

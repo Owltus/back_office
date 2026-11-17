@@ -101,7 +101,38 @@ export function arretAvantCopie(e) {
     return 'Les fonctions locales n’envoient pas encore vers Mailpit (étape 8) : les vrais destinataires recevraient des e-mails. Copie refusée.'
   if (!e.arbrePropre)
     return 'Des modifications ne sont pas commitées : la copie rejoue les migrations du dépôt, commitez d’abord.'
+  if (e.portsOuverts?.length)
+    return (
+      `La base locale est ouverte sur le réseau (${e.portsOuverts.join(', ')}) : ` +
+      'un autre appareil du réseau pourrait lire la copie de la prod avec le mot de passe par défaut. ' +
+      'Dans Docker Desktop, Settings > Docker Engine, ajoutez "ip": "127.0.0.1", ' +
+      'cliquez Apply & restart, puis relancez « pnpm db:stop » et « pnpm db:start ». Copie refusée.'
+    )
   return null
+}
+
+/**
+ * Ports des conteneurs Supabase publiés sur TOUTES les interfaces (audit
+ * security-audit-skill du 2026-11-17). La CLI publie ses ports sans adresse :
+ * Docker les ouvre alors sur 0.0.0.0 et [::], et le pare-feu de Docker
+ * Desktop les laisse entrer, même sur un réseau Public. La copie de la prod
+ * (mots de passe chiffrés des comptes, planning réel) n'a rien à faire sur
+ * une base joignable depuis le réseau. `sortie` = `docker ps --format
+ * "{{.Names}} {{.Ports}}"`. Seule une adresse de bouclage (127.x, ::1) est
+ * acceptée.
+ */
+export function portsOuverts(sortie) {
+  const ouverts = []
+  for (const ligne of sortie.split(/\r?\n/)) {
+    const [nom, ...reste] = ligne.trim().split(/\s+/)
+    if (!nom?.startsWith('supabase_')) continue
+    for (const m of reste.join(' ').matchAll(/(\[[^\]]*\]|[\d.]+):(\d+)->/g)) {
+      const hote = m[1].replace(/^\[|\]$/g, '')
+      const bouclage = hote === '::1' || hote.startsWith('127.')
+      if (!bouclage && !ouverts.includes(m[2])) ouverts.push(m[2])
+    }
+  }
+  return ouverts
 }
 
 /** Arguments du dump des données de la prod. */

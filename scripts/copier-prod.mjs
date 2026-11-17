@@ -28,6 +28,7 @@ import {
   REF_PROD,
   argumentsDump,
   arretAvantCopie,
+  portsOuverts,
   derniereMigration,
   insertionComptes,
   lectureComptes,
@@ -200,6 +201,9 @@ try {
     ).ok,
     mailpitBranche: mailpitBranche(),
     arbrePropre: lancer(['git', 'status', '--porcelain']).sortie === '',
+    portsOuverts: portsOuverts(
+      lancer(['docker', 'ps', '--format', '{{.Names}} {{.Ports}}']).sortie,
+    ),
   })
   if (arret) throw new Error(arret)
 
