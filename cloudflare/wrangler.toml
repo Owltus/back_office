@@ -71,6 +71,12 @@ enabled = true
 # dmarc=pass). Repasser à "false" pour revenir en observation seule.
 [vars]
 REQUIRE_SENDER_AUTH = "true"
+# Contrôle ALIGNÉ (audit du 2026-11-17) : seul l'en-tête posé par Cloudflare
+# compte, et le `pass` doit porter sur le domaine de l'enveloppe. Activé
+# après lecture des vrais e-mails du PMS des 13, 14 et 15/11 (dkim=pass
+# header.d=stayntouch.com, dmarc=pass), rejoués par worker.audit.test.ts.
+# Retour arrière : "false" (ancien contrôle), dans le dashboard ou ici.
+SENDER_AUTH_ALIGNEE = "true"
 
 # Cible du prechauffage.
 #

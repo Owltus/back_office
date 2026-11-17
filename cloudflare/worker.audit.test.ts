@@ -226,6 +226,22 @@ describe('contrôle aligné (SENDER_AUTH_ALIGNEE=true)', () => {
     ).toEqual(RELAIS)
   })
 
+  // En-têtes RÉELS des e-mails du PMS (journaux du Worker, 13-15/11/2026) :
+  // le contrôle aligné doit toujours les relayer.
+  it.each(['QPbp8+Yd', 'OzNThq2n', 'e9ZaFhEn'])(
+    'relayé : vrai e-mail du PMS (signature %s)',
+    async (b) => {
+      expect(
+        await relayeStrict(
+          'bounce+66d2df.8f0739-backoffice=naostack.com@stayntouch.com',
+          {
+            'authentication-results': `mx.cloudflare.net; dkim=pass header.d=stayntouch.com header.s=pic header.b=${b}; dmarc=pass header.from=stayntouch.com policy.dmarc=none; spf=none (mx.cloudflare.net: no SPF records found for stayntouch.com) smtp.mailfrom=bounce+66d2df.8f0739-backoffice=naostack.com@stayntouch.com`,
+          },
+        ),
+      ).toEqual(RELAIS)
+    },
+  )
+
   it('sans la variable, l’ancien contrôle reste en place (observation)', async () => {
     expect(
       await relaye('pms@stayntouch.com', {
