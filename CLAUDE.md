@@ -3415,6 +3415,29 @@ poussé. Règles qui en sortent :
   de caisse persisté sur disque (choix documenté par `queryPersist.test.ts`) ;
   `signOut` global (déconnecte TOUS les postes du compte Réception partagé).
 
+## Audit security-audit-skill du 2026-11-17
+
+Skill de Cloudflare (`github.com/cloudflare/security-audit-skill`, installé
+dans `~/.claude/skills/security-audit/`), profil quick : 7 chercheurs, puis
+un vérificateur neuf par piste. Résultats hors du dépôt :
+`~/security-audit-skill/back_office/run-1/` (REPORT.md, NEEDS-VALIDATION.md,
+findings.json). Le validateur exige un système Linux (lecture sans suivre les
+liens) : le lancer dans le conteneur Studio local, sans réseau
+(`docker run --rm --network none --entrypoint node <image studio> …`).
+0 confirmé, 3 à valider, chacun avec son correctif commité :
+
+- Worker e-mail : `senderAuthAligne` (seul l'en-tête de Cloudflare,
+  `pass` aligné sur le domaine de l'enveloppe) ne BLOQUE qu'avec
+  `SENDER_AUTH_ALIGNEE=true`, à poser après avoir lu `aligne oui` sur un vrai
+  e-mail du PMS (leçon du 07/09) ; l'ancien contrôle reste la règle d'ici là.
+- Base locale : la copie de la prod refuse de démarrer tant qu'un conteneur
+  `supabase_*` publie un port hors bouclage (`portsOuverts`) ; correctif
+  propriétaire : Docker Engine `"ip": "127.0.0.1"`.
+- `[auth.email] secure_password_change = true` : changement de mot de passe
+  refusé depuis une session de plus de 24 h (la vérification du mot de passe
+  actuel crée une session neuve, le parcours normal passe). À reporter dans
+  le dashboard de la prod.
+
 ## Faits base de données (vérifiés en lecture)
 
 - Tables : profiles, daily_reports, forecast_days, budget, email_recipients,
