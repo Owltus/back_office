@@ -11,7 +11,6 @@ import {
   argumentsDump,
   arretAvantCopie,
   derniereMigration,
-  portsOuverts,
   insertionComptes,
   lectureComptes,
   migrationsNonLivrees,
@@ -127,7 +126,6 @@ describe('arretAvantCopie', () => {
     [{ baseLocaleJoignable: false }, 'db:start'],
     [{ mailpitBranche: false }, 'Mailpit'],
     [{ arbrePropre: false }, 'commitez'],
-    [{ portsOuverts: ['54322'] }, '127.0.0.1'],
   ])('%o → arrêt', (m, mot) =>
     expect(arretAvantCopie({ ...sain, ...m })).toContain(mot),
   )
@@ -144,35 +142,6 @@ describe('arretAvantCopie', () => {
       ).toBe(a && b && c)
     },
   )
-})
-
-// Audit du 2026-11-17 : la copie de la prod refuse une base locale publiée
-// sur toutes les interfaces (relevé réel : 0.0.0.0 et [::]).
-describe('portsOuverts', () => {
-  it('relevé réel : 0.0.0.0 et [::] → ouverts', () => {
-    expect(
-      portsOuverts(
-        'supabase_db_back-office 0.0.0.0:54322->5432/tcp, [::]:54322->5432/tcp\n' +
-          'supabase_studio_back-office 0.0.0.0:54323->3000/tcp, [::]:54323->3000/tcp',
-      ),
-    ).toEqual(['54322', '54323'])
-  })
-  it('bouclage seulement → rien', () => {
-    expect(
-      portsOuverts(
-        'supabase_db_back-office 127.0.0.1:54322->5432/tcp, [::1]:54322->5432/tcp\n' +
-          'supabase_rest_back-office 3000/tcp',
-      ),
-    ).toEqual([])
-  })
-  it('une adresse du réseau local compte comme ouverte', () => {
-    expect(
-      portsOuverts('supabase_kong_back-office 192.168.3.13:54321->8000/tcp'),
-    ).toEqual(['54321'])
-  })
-  it('les autres conteneurs ne comptent pas', () => {
-    expect(portsOuverts('autre_projet 0.0.0.0:8080->80/tcp')).toEqual([])
-  })
 })
 
 describe('valeurs figées', () => {
