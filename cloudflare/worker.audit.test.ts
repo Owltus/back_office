@@ -124,3 +124,114 @@ describe('FINDING — contrôle SPF/DKIM/DMARC contournable', () => {
     expect(r).toEqual({ relaye: true, rejet: false })
   })
 })
+
+/*
+ * Correctif du 2026-11-17 (audit security-audit-skill) : avec
+ * SENDER_AUTH_ALIGNEE=true, seul l'en-tête de Cloudflare compte, et un `pass`
+ * doit porter sur le domaine de l'enveloppe. Les trois contournements
+ * ci-dessus sont refusés ; un vrai e-mail aligné passe.
+ */
+describe('contrôle aligné (SENDER_AUTH_ALIGNEE=true)', () => {
+  const STRICT = { ...ENV, SENDER_AUTH_ALIGNEE: 'true' }
+  async function relayeStrict(from: string, headers: Record<string, string>) {
+    const m = message(from, headers)
+    await worker.email(m, STRICT)
+    return {
+      relaye: fetchMock.mock.calls.length > 0,
+      rejet: m.setReject.mock.calls.length > 0,
+    }
+  }
+  const REFUS = { relaye: false, rejet: true }
+  const RELAIS = { relaye: true, rejet: false }
+
+  it('A refusé : « spf=pass » dans l’adresse ou un commentaire', async () => {
+    expect(
+      await relayeStrict('spf=pass@stayntouch.com', {
+        'authentication-results':
+          'mx.cloudflare.net; dkim=none; dmarc=none header.from=stayntouch.com; spf=fail (mx.cloudflare.net: domain of spf=pass@stayntouch.com does not designate 203.0.113.9 as permitted sender) smtp.mailfrom=spf=pass@stayntouch.com',
+      }),
+    ).toEqual(REFUS)
+  })
+
+  it('B refusé : DKIM d’un autre domaine', async () => {
+    expect(
+      await relayeStrict('pms@stayntouch.com', {
+        'authentication-results':
+          'mx.cloudflare.net; dkim=pass header.d=evil.example; spf=fail smtp.mailfrom=pms@stayntouch.com; dmarc=fail header.from=stayntouch.com',
+      }),
+    ).toEqual(REFUS)
+  })
+
+  it('C refusé : X-CF-Authentication-Results fourni par l’expéditeur', async () => {
+    expect(
+      await relayeStrict('pms@stayntouch.com', {
+        'authentication-results':
+          'mx.cloudflare.net; dkim=none; spf=fail; dmarc=none',
+        'x-cf-authentication-results': 'attaquant.example; dmarc=pass',
+      }),
+    ).toEqual(REFUS)
+  })
+
+  it('refusé : un autre authserv-id, ou deux en-têtes « Cloudflare »', async () => {
+    expect(
+      await relayeStrict('pms@stayntouch.com', {
+        'authentication-results':
+          'attaquant.example; dkim=pass header.d=stayntouch.com',
+      }),
+    ).toEqual(REFUS)
+    fetchMock.mockClear()
+    const h = new Headers()
+    h.append(
+      'authentication-results',
+      'mx.cloudflare.net; dkim=pass header.d=stayntouch.com',
+    )
+    h.append('authentication-results', 'mx.cloudflare.net; spf=fail')
+    const m = message('pms@stayntouch.com', {})
+    m.headers = h
+    await worker.email(m, STRICT)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('refusé : domaine voisin qui n’est pas un sous-domaine', async () => {
+    expect(
+      await relayeStrict('pms@stayntouch.com', {
+        'authentication-results':
+          'mx.cloudflare.net; dkim=pass header.d=notstayntouch.com; spf=fail; dmarc=fail',
+      }),
+    ).toEqual(REFUS)
+  })
+
+  it.each([
+    [
+      'dkim aligné',
+      'mx.cloudflare.net; dkim=pass header.d=stayntouch.com header.s=k1; spf=fail; dmarc=fail',
+    ],
+    [
+      'dkim d’un sous-domaine',
+      'mx.cloudflare.net; dkim=pass header.d=mg.stayntouch.com; spf=none; dmarc=none',
+    ],
+    [
+      'spf aligné',
+      'mx.cloudflare.net; dkim=none; spf=pass smtp.mailfrom=pms@stayntouch.com; dmarc=none',
+    ],
+    [
+      'dmarc aligné',
+      'mx.cloudflare.net; dkim=pass header.d=mailgun.org; spf=fail; dmarc=pass header.from=stayntouch.com',
+    ],
+  ])('relayé : %s', async (_, ar) => {
+    expect(
+      await relayeStrict('pms@stayntouch.com', {
+        'authentication-results': ar,
+      }),
+    ).toEqual(RELAIS)
+  })
+
+  it('sans la variable, l’ancien contrôle reste en place (observation)', async () => {
+    expect(
+      await relaye('pms@stayntouch.com', {
+        'authentication-results':
+          'mx.cloudflare.net; dkim=pass header.d=evil.example; spf=fail; dmarc=fail',
+      }),
+    ).toEqual(RELAIS)
+  })
+})

@@ -73,6 +73,69 @@ function senderAuthPassed(headers) {
   return /(dmarc|dkim|spf)=pass(?![a-z])/.test(auth)
 }
 
+// Contrôle ALIGNÉ (audit security-audit-skill du 2026-11-17) : l'ancien
+// contrôle ci-dessus accepte un `dkim=pass` signé par N'IMPORTE QUEL domaine
+// (`header.d=evil.example`), un en-tête ajouté par l'expéditeur, ou le mot
+// « spf=pass » glissé dans l'adresse. Celui-ci ne lit QUE l'en-tête posé par
+// Cloudflare (authserv-id `mx.cloudflare.net`, un seul : deux = refus), ignore
+// X-CF-Authentication-Results, retire les commentaires entre parenthèses, et
+// n'accepte un `pass` que pour le domaine de l'enveloppe :
+//   - dmarc=pass avec header.from aligné,
+//   - dkim=pass avec header.d aligné,
+//   - spf=pass avec smtp.mailfrom aligné.
+// « Aligné » = même domaine, ou l'un est un sous-domaine de l'autre
+// (alignement relâché de DMARC). Leçon du 07/09 : ce contrôle ne BLOQUE que
+// si SENDER_AUTH_ALIGNEE=true ; sinon son verdict est seulement journalisé,
+// à lire sur un vrai e-mail du PMS avant de l'activer.
+const AUTHSERV_CLOUDFLARE = 'mx.cloudflare.net'
+
+function domaineAligne(a, b) {
+  if (!a || !b) return false
+  return a === b || a.endsWith(`.${b}`) || b.endsWith(`.${a}`)
+}
+
+function domaineDe(valeur) {
+  const v = (valeur || '').trim().replace(/^<|>$/g, '')
+  return (v.includes('@') ? v.split('@').pop() : v) || ''
+}
+
+function senderAuthAligne(headers, domaineEnveloppe) {
+  const brut = (headers.get('authentication-results') || '')
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, ' ')
+  // Plusieurs en-têtes sont joints par « , » : chacun commence par son
+  // authserv-id suivi d'un « ; ».
+  const entetes = brut
+    .split(/,\s*(?=[a-z0-9.-]+\s*;)/)
+    .map((e) => e.trim())
+    .filter((e) => e.split(';')[0].trim() === AUTHSERV_CLOUDFLARE)
+  if (entetes.length !== 1) return false
+  const resultats = entetes[0].split(';').slice(1)
+  for (const r of resultats) {
+    const jetons = r.trim().split(/\s+/)
+    const [methode, verdict] = (jetons[0] || '').split('=')
+    if (verdict !== 'pass') continue
+    const props = new Map(
+      jetons.slice(1).map((j) => {
+        const i = j.indexOf('=')
+        return i < 0 ? [j, ''] : [j.slice(0, i), j.slice(i + 1)]
+      }),
+    )
+    const cle =
+      methode === 'dmarc'
+        ? 'header.from'
+        : methode === 'dkim'
+          ? 'header.d'
+          : methode === 'spf'
+            ? 'smtp.mailfrom'
+            : null
+    if (cle && domaineAligne(domaineDe(props.get(cle)), domaineEnveloppe)) {
+      return true
+    }
+  }
+  return false
+}
+
 function allowedDomains(env) {
   const raw = (env.ALLOWED_SENDER_DOMAINS || '').trim()
   const list = raw
@@ -199,7 +262,7 @@ async function sonder(env) {
 export default {
   /**
    * @param {ForwardableEmailMessage} message
-   * @param {{ IMPORT_ENDPOINT: string, IMPORT_SECRET: string, ALLOWED_SENDER_DOMAINS?: string, REQUIRE_SENDER_AUTH?: string }} env
+   * @param {{ IMPORT_ENDPOINT: string, IMPORT_SECRET: string, ALLOWED_SENDER_DOMAINS?: string, REQUIRE_SENDER_AUTH?: string, SENDER_AUTH_ALIGNEE?: string }} env
    */
   async email(message, env) {
     // --- 1. Filtre expéditeur : domaine EXACT + authentification SPF/DKIM/DMARC
@@ -214,9 +277,11 @@ export default {
     }
     // Authenticité SPF/DKIM/DMARC : observation (journal) par défaut, blocage
     // seulement si REQUIRE_SENDER_AUTH=true a été posé après vérification.
-    const authOk = senderAuthPassed(message.headers)
+    const aligne = senderAuthAligne(message.headers, domain)
+    const strict = (env.SENDER_AUTH_ALIGNEE || 'false').toLowerCase() === 'true'
+    const authOk = strict ? aligne : senderAuthPassed(message.headers)
     console.log(
-      `[import] auth ${authOk ? 'pass' : 'inconnu'} pour ${domain} : ${describeAuthHeaders(message.headers)}`,
+      `[import] auth ${authOk ? 'pass' : 'inconnu'} (aligne ${aligne ? 'oui' : 'non'}, mode ${strict ? 'aligne' : 'ancien'}) pour ${domain} : ${describeAuthHeaders(message.headers)}`,
     )
     if (
       !authOk &&
