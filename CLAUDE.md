@@ -104,7 +104,12 @@ migration new`, ou essais dans Studio puis `supabase db diff --local -f
      fonction) bloque toujours, il partirait ; (d) sur une copie de la prod
      en local, une migration qui part ne demande plus `pnpm db:reset` : les
      tests pgTAP qui tournent sur une copie (`TESTS_SUR_COPIE` : planning,
-     audits) sont joués.
+     audits) sont joués. **ASSOUPLI le 2026-11-17 (accord explicite de
+     l'utilisateur : « je te donne tout droit et tout accord »)** : un
+     `config.toml` modifié part sans clavier avec `--reglages-reportes`
+     (réglages déjà reportés dans le dashboard), un Worker modifié avec
+     `--worker-deploye` (déjà déployé et vérifié) ; chacun seulement après
+     accord dans le chat, comme `--supprimer`.
   3. **Commit = `pnpm commit <fichier-message> [fichiers…]`** : message
      écrit avec Write dans le scratchpad (sujet Conventional Commits, ligne
      vide, corps, puis Co-Authored-By et Claude-Session — exigés quand

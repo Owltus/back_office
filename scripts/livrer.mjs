@@ -637,6 +637,8 @@ async function livrer() {
       avecDonnees: migrations.filter((m) => m.donnees.length).map((m) => m.nom),
       donneesAcceptees: process.argv.includes('--avec-donnees'),
       suppressionAcceptee: process.argv.includes('--supprimer'),
+      reglagesReportes: process.argv.includes('--reglages-reportes'),
+      workerDeploye: process.argv.includes('--worker-deploye'),
     })
     if (arrets.length)
       throw new Error(`Envoi sans clavier refusé :\n- ${arrets.join('\n- ')}`)

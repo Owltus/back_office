@@ -76,6 +76,8 @@ export declare function arretsSansClavier(e: {
   configToml: boolean
   worker: boolean
   reglagesFonctions?: Array<string>
+  reglagesReportes?: boolean
+  workerDeploye?: boolean
 }): Array<string>
 export declare function sectionsToml(texte: string): Map<string, Array<string>>
 export declare function changementsConfig(

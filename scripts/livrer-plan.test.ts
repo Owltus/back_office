@@ -516,8 +516,30 @@ describe('arretsSansClavier', () => {
         suppressionAcceptee: true,
       }),
     ).toEqual([])
-    expect(arretsSansClavier({ ...rien, configToml: true })).toHaveLength(1)
-    expect(arretsSansClavier({ ...rien, worker: true })).toHaveLength(1)
+    expect(arretsSansClavier({ ...rien, configToml: true })[0]).toMatch(
+      /--reglages-reportes/,
+    )
+    expect(arretsSansClavier({ ...rien, worker: true })[0]).toMatch(
+      /--worker-deploye/,
+    )
+  })
+  it('laisse passer config.toml et le Worker avec l’accord (2026-11-17)', () => {
+    expect(
+      arretsSansClavier({
+        ...rien,
+        configToml: true,
+        reglagesReportes: true,
+        worker: true,
+        workerDeploye: true,
+      }),
+    ).toEqual([])
+    // Un accord ne vaut que pour son point.
+    expect(
+      arretsSansClavier({ ...rien, configToml: true, workerDeploye: true }),
+    ).toHaveLength(1)
+    expect(
+      arretsSansClavier({ ...rien, worker: true, reglagesReportes: true }),
+    ).toHaveLength(1)
   })
   it('reprend les arrêts des réglages de fonctions', () => {
     expect(

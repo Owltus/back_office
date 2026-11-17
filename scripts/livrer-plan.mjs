@@ -492,7 +492,13 @@ export function descriptionLivraison(e) {
  *
  * @param {{ destructives: Array<string>, configToml: boolean, worker: boolean,
  *   avecDonnees?: Array<string>, donneesAcceptees?: boolean,
- *   suppressionAcceptee?: boolean, reglagesFonctions?: Array<string> }} e
+ *   suppressionAcceptee?: boolean, reglagesFonctions?: Array<string>,
+ *   reglagesReportes?: boolean, workerDeploye?: boolean }} e
+ *
+ * Assoupli le 2026-11-17 (accord explicite de l'utilisateur : « je te donne
+ * tout droit et tout accord ») : config.toml et Worker partent aussi sans
+ * clavier, avec `--reglages-reportes` (réglages reportés dans le dashboard)
+ * et `--worker-deploye` (Worker déployé et vérifié), après accord dans le chat.
  */
 export function arretsSansClavier(e) {
   const arrets = []
@@ -504,13 +510,13 @@ export function arretsSansClavier(e) {
     arrets.push(
       `Migration qui RETIRE ou CHANGE quelque chose (${e.destructives.join(', ')}) : à montrer à l’utilisateur ; avec son accord, relancer avec --supprimer.`,
     )
-  if (e.configToml)
+  if (e.configToml && !e.reglagesReportes)
     arrets.push(
-      'supabase/config.toml a changé : réglages à reporter à la main dans le dashboard, à voir avec l’utilisateur.',
+      'supabase/config.toml a changé : réglages à reporter à la main dans le dashboard ; une fois faits, avec l’accord de l’utilisateur, relancer avec --reglages-reportes.',
     )
-  if (e.worker)
+  if (e.worker && !e.workerDeploye)
     arrets.push(
-      'Le Worker Cloudflare a changé : son déploiement est à part, à voir avec l’utilisateur.',
+      'Le Worker Cloudflare a changé : son déploiement est à part ; une fois déployé et vérifié, avec l’accord de l’utilisateur, relancer avec --worker-deploye.',
     )
   for (const r of e.reglagesFonctions ?? []) arrets.push(r)
   return arrets
