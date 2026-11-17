@@ -42,6 +42,14 @@ password_requirements = "lower_upper_letters_digits"
 enable_signup = true
 # Les e-mails d'Auth partent dans Mailpit (http://127.0.0.1:54324).
 enable_confirmations = false
+# Audit security-audit-skill du 2026-11-17 : le serveur refuse un changement
+# de mot de passe depuis une session ouverte il y a plus de 24 h
+# (reauthentication_needed). /profil vérifie d'abord le mot de passe actuel
+# par une connexion, qui crée une session NEUVE : le parcours normal passe.
+# Une session oubliée sur le poste partagé ne suffit plus. À reporter À LA
+# MAIN dans le dashboard de la prod (Authentication > Email > Secure password
+# change) : ce fichier n'est pas livré.
+secure_password_change = true
 
 [analytics]
 enabled = false
