@@ -9,6 +9,7 @@ import {
   selectInvoice,
 } from '#/lib/facturationStore.ts'
 import type { InvoiceRecord } from '#/lib/facturation/types.ts'
+import { oublierSession } from '#/lib/auth/oubliSession.ts'
 
 /*
  * `facturationStore` (src/lib/facturationStore.ts) est un magasin d'état `@tanstack/store`
@@ -18,7 +19,10 @@ import type { InvoiceRecord } from '#/lib/facturation/types.ts'
  */
 
 /** Facture minimale valide, avec juste ce qui distingue chaque instance (id/fileName). */
-function makeRecord(id: string, overrides: Partial<InvoiceRecord> = {}): InvoiceRecord {
+function makeRecord(
+  id: string,
+  overrides: Partial<InvoiceRecord> = {},
+): InvoiceRecord {
   return {
     id,
     file: new File(['%PDF-1.4'], `${id}.pdf`, { type: 'application/pdf' }),
@@ -221,5 +225,14 @@ describe('facturationStore — clearFacturation', () => {
 
     expect(prev.records).toEqual(prevRecordsSnapshot)
     expect(prev.selectedId).toBe('a')
+  })
+})
+
+describe('oubli de session (poste partagé, 2026-11-18)', () => {
+  it('oublierSession() vide les factures et la sélection', () => {
+    addInvoices([makeRecord('a'), makeRecord('b')])
+    expect(facturationStore.state.records.length).toBeGreaterThan(0)
+    oublierSession()
+    expect(facturationStore.state).toEqual({ records: [], selectedId: null })
   })
 })

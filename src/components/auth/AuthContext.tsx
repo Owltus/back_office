@@ -377,9 +377,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       userIdRef.current = nextUser?.id ?? null
       setLoading(false)
       if (nextUser) {
-        // Purge d'un cache appartenant à un autre compte (changement d'utilisateur).
-        const cached = readCachedProfile()
-        if (cached && cached.id !== nextUser.id) {
+        // Purge d'un profil ou de droits appartenant à un autre compte
+        // (changement d'utilisateur). On compare d'abord à ce que CET onglet
+        // a chargé (refs) : le cache local est partagé entre onglets, et un
+        // autre onglet a pu y écrire le profil du nouveau compte avant que
+        // celui-ci ne reçoive l'événement — l'état de l'ancien compte restait
+        // alors affiché (audit du 2026-11-18).
+        const autreCompte = (id: string | null | undefined) =>
+          id != null && id !== nextUser.id
+        if (
+          autreCompte(profileUserIdRef.current) ||
+          autreCompte(permsUserIdRef.current) ||
+          autreCompte(readCachedProfile()?.id)
+        ) {
           clearProfile()
           clearPerms()
         }
@@ -466,6 +476,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (document.visibilityState === 'visible') revalidate()
     }
     document.addEventListener('visibilitychange', onVisible)
+
+    // Session effacée dans un AUTRE onglet (déconnexion durcie qui retire la
+    // clé elle-même, `localStorage.clear()`) : auth-js ne prévient pas
+    // toujours cet onglet (pas d'événement SIGNED_OUT quand `signOut()` a
+    // échoué). L'état est remis à zéro comme par `signOut`, SANS rappeler
+    // `signOut()` (verrou auth-js) et sans `location.reload()` (écran blanc
+    // pendant une panne). AppAuthGate renvoie vers /login (2026-11-18).
+    const cleDeSession = cleSession(
+      import.meta.env.VITE_SUPABASE_URL as string | undefined,
+    )
+    const onStorage = (e: StorageEvent) => {
+      if (e.storageArea !== window.localStorage) return
+      if (e.key !== null && (cleDeSession === null || e.key !== cleDeSession))
+        return
+      if (e.key !== null && e.newValue !== null) return
+      if (userIdRef.current === null) return
+      changerDeCompte(null)
+      clearProfile()
+      clearPerms()
+      setUser(null)
+      userIdRef.current = null
+      setAuthReadError(null)
+      setLoading(false)
+    }
+    window.addEventListener('storage', onStorage)
     const interval = window.setInterval(revalidate, REVALIDATE_INTERVAL_MS)
 
     // Retour du backend (disjoncteur down → up) : relire compte + droits
@@ -483,6 +518,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       stopRecovery()
       subscription.unsubscribe()
       document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('storage', onStorage)
       window.clearInterval(interval)
     }
   }, [])

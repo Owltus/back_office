@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClient } from '@tanstack/react-query'
 
 import { brancherPersistance, changerDeCompte } from '#/lib/queryPersist.ts'
+import { surOubliSession } from '#/lib/auth/oubliSession.ts'
 
 // La base visée, lue par queryPersist au chargement (avant les imports, d'où
 // `vi.hoisted`) : depuis le 2026-10-13, seule la session de CETTE base compte
@@ -237,5 +238,130 @@ describe('un cache par compte (poste partagé, 2026-09-28)', () => {
     changerDeCompte(null)
     expect(qc.getQueryData(['classeur', 'items', 5])).toBeUndefined()
     expect(window.localStorage.getItem(CLE)).toBeNull()
+  })
+})
+
+describe('mémoire de l’onglet liée à son compte (audit du 2026-11-18)', () => {
+  beforeEach(() => {
+    window.localStorage.clear()
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    window.localStorage.clear()
+  })
+
+  const MARQUE = 'bo.query.cache.proprietaire'
+  const session = (id: string) =>
+    window.localStorage.setItem(
+      'sb-projet-auth-token',
+      JSON.stringify({ user: { id } }),
+    )
+
+  async function ecrirePour(id: string) {
+    session(id)
+    const qc = clientNeuf()
+    brancherPersistance(qc)
+    changerDeCompte(id)
+    await qc.fetchQuery({
+      queryKey: ['classeur', 'items', 5],
+      queryFn: () => Promise.resolve({ secret: 'de-' + id }),
+    })
+    await vi.advanceTimersByTimeAsync(3_000)
+    return qc
+  }
+
+  function evenementStockage(key: string | null, newValue: string | null) {
+    window.dispatchEvent(
+      new StorageEvent('storage', {
+        key,
+        newValue,
+        storageArea: window.localStorage,
+      }),
+    )
+  }
+
+  it('un autre onglet a écrit la marque de B avant moi : ma mémoire de A est vidée', async () => {
+    const qc = await ecrirePour('A')
+    // L'autre onglet : B se connecte et marque le disque AVANT que cet
+    // onglet ne reçoive l'événement d'auth.
+    session('B')
+    window.localStorage.setItem(MARQUE, 'projet:B')
+    changerDeCompte('B')
+    expect(qc.getQueryData(['classeur', 'items', 5])).toBeUndefined()
+    expect(window.localStorage.getItem(MARQUE)).toBe('projet:B')
+  })
+
+  it('même compte au démarrage : le cache restauré reste (lecture en panne)', async () => {
+    await ecrirePour('A')
+    const suivant = clientNeuf()
+    brancherPersistance(suivant)
+    await vi.advanceTimersByTimeAsync(0)
+    // Session initiale, TOKEN_REFRESHED, SIGNED_IN rejoué : même compte.
+    changerDeCompte('A')
+    changerDeCompte('A')
+    expect(suivant.getQueryData(['classeur', 'items', 5])).toEqual({
+      secret: 'de-A',
+    })
+    expect(window.localStorage.getItem(CLE) ?? '').toContain('de-A')
+  })
+
+  it('l’événement storage d’un autre compte vide la mémoire', async () => {
+    const qc = await ecrirePour('A')
+    window.localStorage.setItem(MARQUE, 'projet:B')
+    evenementStockage(MARQUE, 'projet:B')
+    expect(qc.getQueryData(['classeur', 'items', 5])).toBeUndefined()
+  })
+
+  it('l’événement storage de MA marque, ou d’une autre clé, ne vide rien', async () => {
+    const qc = await ecrirePour('A')
+    evenementStockage(MARQUE, 'projet:A')
+    evenementStockage('autre.cle', null)
+    expect(qc.getQueryData(['classeur', 'items', 5])).toBeDefined()
+  })
+
+  it('marque retirée ou stockage vidé dans un autre onglet : mémoire vidée', async () => {
+    const qc = await ecrirePour('A')
+    evenementStockage(MARQUE, null)
+    expect(qc.getQueryData(['classeur', 'items', 5])).toBeUndefined()
+
+    const qc2 = await ecrirePour('A')
+    evenementStockage(null, null)
+    expect(qc2.getQueryData(['classeur', 'items', 5])).toBeUndefined()
+  })
+
+  it('changerDeCompte(null) et vers B oublient la session, pas le même compte', async () => {
+    await ecrirePour('A')
+    const oubli = vi.fn()
+    const retirer = surOubliSession(oubli)
+    try {
+      changerDeCompte('A')
+      expect(oubli).not.toHaveBeenCalled()
+      changerDeCompte('B')
+      expect(oubli).toHaveBeenCalledTimes(1)
+      changerDeCompte(null)
+      expect(oubli).toHaveBeenCalledTimes(2)
+    } finally {
+      retirer()
+    }
+  })
+
+  it('stockage indisponible : un changement de compte vide quand même la mémoire', async () => {
+    const qc = await ecrirePour('A')
+    // Sur le PROTOTYPE : sous jsdom, poser une méthode sur l'instance de
+    // `Storage` écrit une entrée nommée « getItem » au lieu de l'espionner.
+    const lecture = vi
+      .spyOn(Storage.prototype, 'getItem')
+      .mockImplementation(() => {
+        throw new Error('SecurityError')
+      })
+    try {
+      changerDeCompte('A')
+      expect(qc.getQueryData(['classeur', 'items', 5])).toBeDefined()
+      changerDeCompte('B')
+      expect(qc.getQueryData(['classeur', 'items', 5])).toBeUndefined()
+    } finally {
+      lecture.mockRestore()
+    }
   })
 })

@@ -2,6 +2,7 @@ import { persistQueryClient } from '@tanstack/query-persist-client-core'
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'
 import type { Query, QueryClient } from '@tanstack/react-query'
 
+import { oublierSession } from '#/lib/auth/oubliSession.ts'
 import { cleSession, proprietaireCache } from '#/lib/environnement.ts'
 
 /*
@@ -218,6 +219,27 @@ export function doitPersister(query: Query): boolean {
 const CLE_PROPRIETAIRE = 'bo.query.cache.proprietaire'
 const URL_BASE = import.meta.env.VITE_SUPABASE_URL as string | undefined
 let clientBranche: QueryClient | null = null
+/**
+ * Compte auquel appartient la MÉMOIRE de cet onglet (2026-11-18, audit run-2).
+ *
+ * La marque du disque (`CLE_PROPRIETAIRE`) est PARTAGÉE entre les onglets :
+ * si B se connecte dans un autre onglet, il l'écrit avant que celui-ci ne
+ * reçoive l'événement d'auth. Comparer à la seule marque du disque faisait
+ * alors sortir `changerDeCompte('B')` sans rien vider, et la mémoire de A
+ * restait affichée à B. La mémoire de l'onglet a donc sa propre marque.
+ *
+ * ⚠ Posée par `brancherPersistance` à la marque GARDÉE quand le cache est
+ * restauré, jamais à `null` dans ce cas : sinon le premier `changerDeCompte`
+ * du même compte viderait le cache restauré, celui qui sert pendant une panne.
+ */
+let marqueMemoire: string | null = null
+let ecouteStockage = false
+
+/** Vide la mémoire de l'onglet (cache et données de module). */
+function viderMemoire(): void {
+  clientBranche?.clear()
+  oublierSession()
+}
 
 /** Identifiant du compte de la session de LA base visée, sinon `null`. */
 function compteDeLaSession(): string | null {
@@ -244,18 +266,39 @@ function compteDeLaSession(): string | null {
  */
 export function changerDeCompte(userId: string | null): void {
   if (typeof window === 'undefined') return
+  const marque = userId === null ? null : proprietaireCache(URL_BASE, userId)
   try {
     const avant = window.localStorage.getItem(CLE_PROPRIETAIRE)
-    const marque = userId === null ? null : proprietaireCache(URL_BASE, userId)
-    if (marque !== null && avant === marque) return
-    clientBranche?.clear()
+    // Même compte, en mémoire ET sur le disque (TOKEN_REFRESHED, SIGNED_IN
+    // rejoué) : rien. Les DEUX marques comptent (voir `marqueMemoire`).
+    if (marque !== null && marque === marqueMemoire && avant === marque) return
+    viderMemoire()
+    marqueMemoire = marque
     window.localStorage.removeItem(CLE_STOCKAGE)
     if (marque === null) window.localStorage.removeItem(CLE_PROPRIETAIRE)
     else window.localStorage.setItem(CLE_PROPRIETAIRE, marque)
   } catch {
     // Stockage indisponible : on vide au moins la mémoire si le compte change.
-    if (userId === null) clientBranche?.clear()
+    if (marque === null || marque !== marqueMemoire) {
+      viderMemoire()
+      marqueMemoire = marque
+    }
   }
+}
+
+/**
+ * La marque a changé dans un AUTRE onglet (connexion d'un autre compte,
+ * déconnexion, `localStorage.clear()`) : la mémoire de celui-ci n'appartient
+ * plus au compte du poste, elle est vidée sans attendre l'événement d'auth.
+ */
+function surStockage(e: StorageEvent): void {
+  if (e.storageArea !== window.localStorage) return
+  if (e.key !== null && e.key !== CLE_PROPRIETAIRE) return
+  const nouvelle = e.key === null ? null : e.newValue
+  if (nouvelle === marqueMemoire) return
+  viderMemoire()
+  // La mémoire est vide : elle peut se dire celle du nouveau propriétaire.
+  marqueMemoire = nouvelle
 }
 
 /**
@@ -278,6 +321,9 @@ export function changerDeCompte(userId: string | null): void {
 export function brancherPersistance(queryClient: QueryClient): void {
   if (typeof window === 'undefined') return
   clientBranche = queryClient
+  // Client neuf : sa mémoire n'appartient à personne tant que le cache d'un
+  // compte n'y est pas restauré (ci-dessous).
+  marqueMemoire = null
 
   try {
     for (const cle of CLES_PERIMEES) window.localStorage.removeItem(cle)
@@ -293,6 +339,15 @@ export function brancherPersistance(queryClient: QueryClient): void {
     ) {
       window.localStorage.removeItem(CLE_STOCKAGE)
       window.localStorage.removeItem(CLE_PROPRIETAIRE)
+      marqueMemoire = null
+    } else {
+      // Cache gardé : la mémoire restaurée est celle de ce compte.
+      marqueMemoire = proprietaire
+    }
+
+    if (!ecouteStockage) {
+      window.addEventListener('storage', surStockage)
+      ecouteStockage = true
     }
 
     const persister = createSyncStoragePersister({

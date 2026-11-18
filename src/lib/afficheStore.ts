@@ -2,6 +2,7 @@ import { Store } from '@tanstack/store'
 
 import type { PosterContent } from '#/lib/poster/types.ts'
 import type { AfficheTemplate } from '#/lib/affiche/model.ts'
+import { surOubliSession } from '#/lib/auth/oubliSession.ts'
 
 /* Store module-level : l'état de saisie de l'affiche survit à la navigation
  * (le composant peut se démonter/remonter sans perdre la saisie en cours).
@@ -87,3 +88,6 @@ export function applyAfficheTemplate(t: AfficheTemplate) {
 export function resetAffiche() {
   afficheStore.setState(() => buildInitialState())
 }
+
+// Poste partagé : l'affiche en cours ne survit pas à la session (2026-11-18).
+surOubliSession(resetAffiche)

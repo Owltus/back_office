@@ -239,9 +239,17 @@ export function FacturationBoard() {
   // La RLS (RPC facturation à `= gestion`) est le vrai rempart ; l'UI masque juste
   // l'entrée d'édition. Sans ajout de facture, InvoicePanel (stamp, référentiel,
   // revue, denylist) n'est jamais rendu → surface d'édition inaccessible.
-  const { can } = useAuth()
+  const { can, permsResolved } = useAuth()
   const canManage = can('facturation', 'gestion')
-  const { records, selectedId } = useStore(facturationStore)
+  const { records: enMemoire, selectedId } = useStore(facturationStore)
+  // Poste partagé (audit du 2026-11-18) : les factures en mémoire ne sont
+  // montrées qu'avec le droit de gestion. Un compte de niveau inférieur arrivé
+  // après un admin n'en voit rien, et la mémoire est vidée dès que ses droits
+  // sont connus.
+  const records = canManage ? enMemoire : []
+  useEffect(() => {
+    if (permsResolved && !canManage) clearFacturation()
+  }, [permsResolved, canManage])
   const [dragging, setDragging] = useState(false)
   const [histOpen, setHistOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -331,18 +339,19 @@ export function FacturationBoard() {
     addInvoices(created)
     // File de 2 fichiers à la fois (pdf.js + OCR) : les autres restent « en
     // cours » et partent dès qu'une place se libère.
-    created.forEach((r) =>
-      void runInvoice(() =>
-        processInvoice(
-          r,
-          pool,
-          issuers,
-          issuerCodes,
-          issuerDenylist,
-          issuerMemory,
-          knownHashes,
+    created.forEach(
+      (r) =>
+        void runInvoice(() =>
+          processInvoice(
+            r,
+            pool,
+            issuers,
+            issuerCodes,
+            issuerDenylist,
+            issuerMemory,
+            knownHashes,
+          ),
         ),
-      ),
     )
   }
 
@@ -419,25 +428,25 @@ export function FacturationBoard() {
         >
           {records.length === 0 ? (
             canManage ? (
-            <button
-              type="button"
-              onClick={openPicker}
-              className={cn(
-                'empty-canvas flex min-h-[240px] flex-1 cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border p-6 text-center outline-none transition-colors lg:min-h-0',
-                'hover:border-primary/60 hover:bg-secondary/30 focus-visible:ring-2 focus-visible:ring-ring',
-              )}
-            >
-              <div className="rounded-full bg-secondary p-4">
-                <FileUp className="size-8 text-muted-foreground" />
-              </div>
-              <div className="text-base font-medium">
-                Glissez vos factures PDF ici
-              </div>
-              <div className="text-sm text-muted-foreground">
-                un ou plusieurs .pdf — scan ou PDF natif, rien ne quitte votre
-                navigateur
-              </div>
-            </button>
+              <button
+                type="button"
+                onClick={openPicker}
+                className={cn(
+                  'empty-canvas flex min-h-[240px] flex-1 cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border p-6 text-center outline-none transition-colors lg:min-h-0',
+                  'hover:border-primary/60 hover:bg-secondary/30 focus-visible:ring-2 focus-visible:ring-ring',
+                )}
+              >
+                <div className="rounded-full bg-secondary p-4">
+                  <FileUp className="size-8 text-muted-foreground" />
+                </div>
+                <div className="text-base font-medium">
+                  Glissez vos factures PDF ici
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  un ou plusieurs .pdf — scan ou PDF natif, rien ne quitte votre
+                  navigateur
+                </div>
+              </button>
             ) : (
               <div className="empty-canvas flex min-h-[240px] flex-1 flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border p-6 text-center lg:min-h-0">
                 <div className="rounded-full bg-secondary p-4">

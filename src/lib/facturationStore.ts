@@ -1,6 +1,7 @@
 import { Store } from '@tanstack/store'
 
 import type { InvoiceRecord } from '#/lib/facturation/types.ts'
+import { surOubliSession } from '#/lib/auth/oubliSession.ts'
 
 /*
  * Store module-level de l'atelier Facturation : les factures chargées et la
@@ -61,3 +62,7 @@ export function selectInvoice(id: string | null) {
 export function clearFacturation() {
   facturationStore.setState(() => ({ records: [], selectedId: null }))
 }
+
+// Poste partagé : les factures d'un compte ne survivent pas à sa session
+// (audit du 2026-11-18). Inscrit au chargement du module.
+surOubliSession(clearFacturation)

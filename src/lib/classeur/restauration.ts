@@ -68,6 +68,7 @@ import type { RefEcriture } from '#/lib/classeur/service.ts'
 import { estRefusDroits } from '#/lib/classeur/erreur.ts'
 import { pointsAutoSuspendus } from '#/lib/classeur/pointsAutoGarde.ts'
 import type { DbMergeHistoryEntry, PointKind } from '#/lib/classeur/types.ts'
+import { surOubliSession } from '#/lib/auth/oubliSession.ts'
 
 export { sansPointsAuto } from '#/lib/classeur/pointsAutoGarde.ts'
 
@@ -302,6 +303,9 @@ export function reinitialiserPointsAuto(): void {
 // passe par `assurerPointAuto` dès que ce module est importé (il l'est par
 // les hooks de la page Classeur).
 definirGardeEcriture(assurerPointAuto)
+// Poste partagé : les résolutions d'un compte sont oubliées avec sa session
+// (2026-11-18).
+surOubliSession(reinitialiserPointsAuto)
 // Un élément déplacé (`moveItems`, transfert) change de chapitre, parfois
 // de classeur : sa résolution mémorisée est oubliée, sinon ses écritures
 // suivantes prendraient leur point sur le classeur de départ.

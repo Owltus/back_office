@@ -41,6 +41,7 @@ import type {
 } from '#/lib/classeur/types.ts'
 import { nettoyerLegende } from '#/lib/classeur/legende.ts'
 import { supabase } from '#/lib/supabase.ts'
+import { surOubliSession } from '#/lib/auth/oubliSession.ts'
 
 export const BUCKET_IMAGES = 'classeur-images'
 /** Taille maximale du fichier SOURCE accepté (avant conversion). */
@@ -722,6 +723,13 @@ export function urlObjetImage(chemin: string, blob: Blob): string {
   urlsObjets.set(chemin, url)
   return url
 }
+
+// Poste partagé : les images lues par un compte ne restent pas accessibles au
+// suivant (2026-11-18).
+surOubliSession(() => {
+  for (const url of urlsObjets.values()) URL.revokeObjectURL(url)
+  urlsObjets.clear()
+})
 
 export function formaterOctets(octets: number): string {
   if (octets < 1024) return `${String(octets)} o`
