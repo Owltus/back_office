@@ -62,7 +62,8 @@ with checks(ordre, controle, ok) as (
                                'classeur_write_ok','classeur_chapter_write_ok', -- droits par classeur (2026-09-26)
                                'classeur_niveau_de','classeur_niveau','classeur_lecture_ligne','classeur_lecture_ok','classeur_chapter_read_ok','classeur_gestion_ok', -- accès par classeur (2026-09-28)
                                'planning_aujourdhui','planning_competences_ok','planning_depuis','planning_etat','planning_heure_ok','planning_hhmm','planning_horaire_de','planning_journees_ok','planning_lundi','planning_minutes','planning_niveau','planning_presence','planning_semaine_type_ok','planning_verrouillee', -- aides de la page Planning (2026-10-27)
-                               'affiche_peut_etre_auteur') -- aide du trigger de l'Affichage (2026-11-16)
+                               'affiche_peut_etre_auteur', -- aide du trigger de l'Affichage (2026-11-16)
+                               'jour_hotelier') -- jour hôtelier des policies PDJ et Rapprochement (2026-11-18)
          and not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
                          where n.nspname = 'public' and p.proname = q.proname and not p.prosecdef
                            and pg_get_function_identity_arguments(p.oid) = pg_get_function_identity_arguments(q.oid)
