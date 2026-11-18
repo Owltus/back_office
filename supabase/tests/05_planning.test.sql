@@ -143,7 +143,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':J', (select j from t_ids)::text);
 $$;
 
-select plan(197);
+select plan(222);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -885,6 +885,124 @@ select is(pg_temp.essai('ecriture', array[
   pg_temp.q('select public.planning_appliquer_generation(:F, public.planning_etat_semaine(:F), 0, false, ''{}'', true, jsonb_build_array(jsonb_build_object(''salarie_id'', :S3, ''jour'', 4, ''motif_id'', :R)))'),
   pg_temp.q('select string_agg(epinglee::text, '','') from public.planning_absences where salarie_id = :S3 and jour = :F::date + 4 and motif_id = :R')]),
   'false', 'génération : un repos se pose en proposition');
+
+-- ---------------------- jours passés figés en écriture (2026-11-18) ---
+-- Migration 20261118160000, décision utilisateur Q1 (a) : un jour passé
+-- est figé pour le rang écriture, libre pour la gestion ; une semaine
+-- verrouillée reste figée pour tous (PL423 d'abord). Données posées sur la
+-- semaine P (passée, ouverte) sous le drapeau d'administration.
+set local planning.admin = 'on';
+insert into public.planning_affectations (lundi, salarie_id, poste_id, jour, horaire_id, debut, fin, epinglee, pause)
+select t_sem.p, t_ids.s1, t_ids.pa, 0, t_ids.h, '05:05', '13:50', true, 45 from t_sem, t_ids
+union all
+select t_sem.p, t_ids.s1, t_ids.pa, 1, t_ids.h, '05:05', '13:50', false, 45 from t_sem, t_ids
+union all
+select t_sem.p, t_ids.s2, t_ids.pb, 2, null, '09:00', '17:00', true, 0 from t_sem, t_ids;
+insert into public.planning_absences (salarie_id, jour, motif_id)
+  select t_ids.s1, t_sem.p + 4, t_ids.m from t_sem, t_ids;
+set local planning.admin = 'off';
+-- Aujourd'hui : sa semaine est ouverte le temps du test (transaction annulée).
+create temp table t_auj as
+  select private.planning_lundi(private.planning_aujourdhui()) as lundi,
+         private.planning_aujourdhui() - private.planning_lundi(private.planning_aujourdhui()) as jour,
+         private.planning_aujourdhui() as d;
+delete from public.planning_semaines_verrouillees where lundi = (select lundi from t_auj);
+
+select is(pg_temp.essai('ecriture', array[pg_temp.q(
+  'insert into public.planning_affectations (lundi, salarie_id, poste_id, jour, debut, fin) values (:P, :S3, :PA, 3, ''09:00'', ''17:00'')')]),
+  'err=PL409', 'passé : l''écriture ne pose pas de shift sur un jour passé');
+select is(pg_temp.essai('ecriture', array[pg_temp.q(
+  'update public.planning_affectations set horaire_id = null, debut = ''09:00'', fin = ''12:00'' where lundi = :P and salarie_id = :S2')]),
+  'err=PL409', 'passé : l''écriture ne modifie pas un shift passé');
+select is(pg_temp.essai('ecriture', array[pg_temp.q(
+  'delete from public.planning_affectations where lundi = :P and salarie_id = :S2')]),
+  'err=PL409', 'passé : l''écriture ne supprime pas un shift passé');
+select is(pg_temp.essai('ecriture', array[pg_temp.q(
+  'insert into public.planning_absences (salarie_id, jour, motif_id) values (:S3, :P::date + 3, :M)')]),
+  'err=PL409', 'passé : l''écriture ne pose pas d''absence sur un jour passé');
+select is(pg_temp.essai('ecriture', array[pg_temp.q(
+  'delete from public.planning_absences where salarie_id = :S1 and jour = :P::date + 4')]),
+  'err=PL409', 'passé : l''écriture ne retire pas une absence passée');
+select is(pg_temp.essai('ecriture', array[pg_temp.q(
+  'select public.planning_modifier_shift((select id from public.planning_affectations where lundi = :P and salarie_id = :S2), ''{"horaire_id": null, "debut": "10:00", "fin": "11:00"}''::jsonb)')]),
+  'err=PL409', 'passé : planning_modifier_shift refuse un jour passé');
+select is(pg_temp.essai('ecriture', array[pg_temp.q(
+  'select public.planning_poser_absences(:S3, array[:P::date + 5], :M)')]),
+  'err=PL409', 'passé : planning_poser_absences refuse un jour passé');
+select is(pg_temp.essai('ecriture', array[pg_temp.q(
+  'select public.planning_deplacer_statut(:P, :S1, 4, :S1, 5)')]),
+  'err=PL409', 'passé : planning_deplacer_statut refuse un jour passé');
+select is(pg_temp.essai('ecriture', array[
+  'insert into public.planning_affectations (lundi, salarie_id, poste_id, jour, debut, fin) values ('
+    || quote_literal((select lundi from t_auj)) || ', ' || (select s3 from t_ids) || ', ' || (select pa from t_ids)
+    || ', ' || (select jour from t_auj) || ', ''09:00'', ''17:00'')']),
+  '1', 'aujourd''hui : l''écriture pose un shift');
+select is(pg_temp.essai('ecriture', array[
+  'insert into public.planning_absences (salarie_id, jour, motif_id) values ('
+    || (select s3 from t_ids) || ', ' || quote_literal((select d from t_auj)) || ', ' || (select m from t_ids) || ')']),
+  '1', 'aujourd''hui : l''écriture pose une absence');
+select is(pg_temp.essai('ecriture', array[
+  pg_temp.q('select public.planning_valider_avec_repos(:P, :S1, null, true, ''[]'')'),
+  pg_temp.q('select string_agg(jour || ''/'' || epinglee, '','' order by jour) from public.planning_affectations where lundi = :P and salarie_id = :S1')]),
+  '0/true,1/true', 'passé : valider une proposition passée reste possible');
+select is(pg_temp.essai('ecriture', array[
+  pg_temp.q('select public.planning_valider_avec_repos(:P, null, null, false, ''[]'')'),
+  pg_temp.q('select string_agg(jour || ''/'' || epinglee, '','' order by jour) from public.planning_affectations where lundi = :P and salarie_id = :S1')]),
+  '0/true,1/false', 'passé : remettre en proposition ne touche pas un jour passé');
+select is(pg_temp.essai('ecriture', array[
+  pg_temp.q('select public.planning_valider_avec_repos(:P, :S3, null, true, jsonb_build_array(jsonb_build_object(''salarie_id'', :S3, ''jour'', 6)))'),
+  pg_temp.q('select count(*) from public.planning_absences where salarie_id = :S3 and jour = :P::date + 6')]),
+  '0', 'passé : aucun repos n''est posé sur un jour passé');
+-- Seuil des congés convertis en repos : au plus nombre - 5 convertis.
+select is(pg_temp.essai('ecriture', array[
+  pg_temp.q('insert into public.planning_absences (salarie_id, jour, motif_id) select :S3, :F::date + g, :M from generate_series(0, 6) g'),
+  pg_temp.q('select public.planning_valider_avec_repos(:F, :S3, null, true, (select jsonb_agg(jsonb_build_object(''salarie_id'', :S3, ''jour'', g)) from generate_series(0, 6) g))'),
+  pg_temp.q('select count(*) filter (where motif_id = :M) || ''/'' || count(*) filter (where motif_id <> :M) from public.planning_absences where salarie_id = :S3 and jour between :F::date and :F::date + 6')]),
+  '5/2', 'repos sur congé : 7 congés, 7 jours demandés, 5 congés restent');
+select is(pg_temp.essai('ecriture', array[
+  pg_temp.q('insert into public.planning_absences (salarie_id, jour, motif_id) select :S3, :F::date + g, :M from generate_series(0, 5) g'),
+  pg_temp.q('select public.planning_valider_avec_repos(:F, :S3, null, true, (select jsonb_agg(jsonb_build_object(''salarie_id'', :S3, ''jour'', g)) from generate_series(0, 6) g))'),
+  pg_temp.q('select count(*) filter (where motif_id = :M) || ''/'' || count(*) filter (where motif_id <> :M) from public.planning_absences where salarie_id = :S3 and jour between :F::date and :F::date + 6')]),
+  '5/2', 'repos sur congé : 6 congés, un seul converti, le 7e jour reçoit un repos');
+-- La gestion corrige le passé.
+select is(pg_temp.essai('gestion', array[
+  pg_temp.q('select public.planning_valider_avec_repos(:P, null, null, false, ''[]'')'),
+  pg_temp.q('select string_agg(jour || ''/'' || epinglee, '','' order by jour) from public.planning_affectations where lundi = :P and salarie_id = :S1')]),
+  '0/false,1/false', 'passé : la gestion remet en proposition un jour passé');
+select is(pg_temp.essai('gestion', array[
+  pg_temp.q('select public.planning_valider_avec_repos(:P, :S3, null, true, jsonb_build_array(jsonb_build_object(''salarie_id'', :S3, ''jour'', 6)))'),
+  pg_temp.q('select count(*) from public.planning_absences where salarie_id = :S3 and jour = :P::date + 6')]),
+  '1', 'passé : la gestion pose un repos sur un jour passé');
+select is(pg_temp.essai('gestion', array[pg_temp.q(
+  'update public.planning_affectations set horaire_id = null, debut = ''09:00'', fin = ''12:00'' where lundi = :P and salarie_id = :S2')]),
+  '1', 'passé : la gestion modifie un shift passé');
+select is(pg_temp.essai('gestion', array[
+  pg_temp.q('select public.planning_poser_absences(:S3, array[:P::date + 5], :M)'),
+  pg_temp.q('select count(*) from public.planning_absences where salarie_id = :S3 and jour = :P::date + 5')]),
+  '1', 'passé : la gestion pose une absence passée');
+select is(pg_temp.essai('gestion', array[
+  pg_temp.q('select public.planning_supprimer_poste(:PB)'),
+  pg_temp.q('select count(*) from public.planning_affectations where lundi = :P and salarie_id = :S2')]),
+  '0', 'passé : la gestion supprime un poste qui a un historique (cascade)');
+select is(pg_temp.essai('gestion', array[
+  pg_temp.q('select public.planning_supprimer_motif(:M)'),
+  pg_temp.q('select count(*) from public.planning_absences where salarie_id = :S1 and jour = :P::date + 4')]),
+  '0', 'passé : la gestion supprime un motif qui a un historique (cascade)');
+select is(pg_temp.essai('gestion', array[
+  'update public.planning_horaires set debut = ''06:30'', fin = ''15:15'' where nom = ''Matin test''',
+  pg_temp.q('select string_agg(jour || '' '' || debut || ''-'' || fin, '','' order by jour) from public.planning_affectations where lundi = :P and salarie_id = :S1')]),
+  '0 05:05-13:50,1 05:05-13:50', 'passé : un horaire modifié ne déplace pas un shift passé');
+-- Le contexte sans utilisateur (clé serveur) n'a pas de porte dérobée.
+select throws_ok(pg_temp.q('delete from public.planning_affectations where lundi = :P and salarie_id = :S2'),
+  'PL409', null, 'passé : refusé aussi sans utilisateur (clé serveur)');
+select lives_ok(pg_temp.q('update public.planning_affectations set created_by = null where lundi = :P'),
+  'passé : l''auteur peut être effacé (suppression d''un compte)');
+-- Semaine verrouillée : le verrou parle d'abord (figé pour tous).
+insert into public.planning_semaines_verrouillees (lundi) select p from t_sem;
+select is(pg_temp.essai('ecriture', array[pg_temp.q(
+  'update public.planning_affectations set horaire_id = null, debut = ''09:00'', fin = ''12:00'' where lundi = :P and salarie_id = :S2')]),
+  'err=PL423', 'passé et verrouillé : le message reste celui du verrou');
+delete from public.planning_semaines_verrouillees where lundi = (select p from t_sem);
 
 select * from finish();
 rollback;

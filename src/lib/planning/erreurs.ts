@@ -85,3 +85,18 @@ function messageSimple(err: unknown, action: string): string {
 export function refusDroits(): Error & { code: string } {
   return Object.assign(new Error('refus'), { code: '42501' })
 }
+
+/** Message d'un jour passé, le même que celui de la base (PL409, migration
+ * 20261118160000) : l'écran le dit avant d'essayer d'écrire. */
+export const MSG_JOUR_PASSE =
+  'On ne touche pas au passé : ce jour est terminé. Seule la gestion du planning peut le corriger.'
+
+/** Un jour passé est figé pour l'écriture et reste libre pour la gestion
+ * (décision utilisateur du 2026-11-18). Dates au format AAAA-MM-JJ, à Paris. */
+export function jourFige(
+  date: string,
+  aujourdhui: string,
+  gerer: boolean,
+): boolean {
+  return !gerer && date < aujourdhui
+}

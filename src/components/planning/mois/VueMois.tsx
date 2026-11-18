@@ -47,7 +47,11 @@ import {
   resumeEquite,
   numeroSemaine,
 } from '#/lib/planning/affichage.ts'
-import { messageErreur } from '#/lib/planning/erreurs.ts'
+import {
+  jourFige,
+  messageErreur,
+  MSG_JOUR_PASSE,
+} from '#/lib/planning/erreurs.ts'
 import { planningKeys } from '#/lib/planning/keys.ts'
 import { analyser, refusAbsenceSurReposFixe } from '#/lib/planning/semaine.ts'
 import type { SemaineOut, ShiftOut } from '#/lib/planning/semaine.ts'
@@ -484,6 +488,9 @@ export function VueMois({
       return
     }
     if (etats.get(lundi)?.verrouillee) return notifier(MSG_VERROU, 'attention')
+    // Jour passé : figé pour l'écriture, libre pour la gestion (2026-11-18).
+    if (jourFige(date, aujourdhui, droits.gerer))
+      return notifier(MSG_JOUR_PASSE, 'attention')
     if (
       caseDe(semaines, referentiel?.motifs ?? [], salarieId, date)?.type ===
       'hors'
@@ -515,6 +522,9 @@ export function VueMois({
       caseDe(semaines, referentiel?.motifs ?? [], salarieId, date),
     )
     if (!v) return
+    // Valider un jour passé reste permis ; le remettre en proposition, non.
+    if (v.valide && jourFige(date, aujourdhui, droits.gerer))
+      return notifier(MSG_JOUR_PASSE, 'attention')
     void executer(
       lundi,
       () =>
@@ -642,6 +652,11 @@ export function VueMois({
     ) {
       return notifier(MSG_VERROU, 'attention')
     }
+    if (
+      jourFige(vol.date, aujourdhui, droits.gerer) ||
+      jourFige(date, aujourdhui, droits.gerer)
+    )
+      return notifier(MSG_JOUR_PASSE, 'attention')
     const motifs = referentiel?.motifs ?? []
     const caseCible = caseDe(semaines, motifs, salarieId, date)
     if (caseCible?.type === 'hors') return notifier(MSG_HORS, 'attention')

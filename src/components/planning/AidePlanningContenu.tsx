@@ -1354,13 +1354,13 @@ export function AidePlanningContenu({
             ],
             [
               'Gestion',
-              'En plus : régler les horaires, postes, équipe et besoins, verrouiller et rouvrir les semaines.',
+              'En plus : régler les horaires, postes, équipe et besoins, corriger un jour passé, verrouiller et rouvrir les semaines.',
             ],
           ]}
         />
         <p className="text-muted-foreground">
-          Une semaine verrouillée et les jours passés sont figés pour tout le
-          monde.
+          Une semaine verrouillée est figée pour tout le monde. Un jour passé
+          est figé en écriture : seule la gestion peut encore le corriger.
         </p>
       </Section>
     </div>

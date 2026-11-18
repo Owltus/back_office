@@ -50,7 +50,11 @@ import {
   parGroupe,
   sousContrat,
 } from '#/lib/planning/affichage.ts'
-import { messageErreur } from '#/lib/planning/erreurs.ts'
+import {
+  jourFige,
+  messageErreur,
+  MSG_JOUR_PASSE,
+} from '#/lib/planning/erreurs.ts'
 import { refusAbsenceSurReposFixe } from '#/lib/planning/semaine.ts'
 import type { SemaineOut, ShiftOut } from '#/lib/planning/semaine.ts'
 import * as service from '#/lib/planning/service.ts'
@@ -218,6 +222,12 @@ export function VueSemaine({
   const dates = useMemo(
     () => JOURS.map((_, j) => ajouterJours(lundi, j)),
     [lundi],
+  )
+  // Jours passés : figés pour l'écriture, libres pour la gestion (décision
+  // du 2026-11-18, la base refuse aussi, PL409).
+  const joursFiges = useMemo(
+    () => dates.map((d) => jourFige(d, aujourdhui, droits.gerer)),
+    [dates, aujourdhui, droits.gerer],
   )
 
   const [deplacement, setDeplacement] = useState<Deplacement | null>(null)
@@ -424,8 +434,13 @@ export function VueSemaine({
     if (!pret || estOccupe()) return notifier(MSG_OCCUPE, 'attention')
     action()
   }
-  const siSousContrat = (salarieId: number, jour: number, action: () => void) =>
+  /** Un jour passé ne se modifie qu'avec la gestion de la page. */
+  const siJourOuvert = (jour: number, action: () => void) =>
     siOuverte(() =>
+      joursFiges[jour] ? notifier(MSG_JOUR_PASSE, 'attention') : action(),
+    )
+  const siSousContrat = (salarieId: number, jour: number, action: () => void) =>
+    siJourOuvert(jour, () =>
       statutDe(salarieId, jour)?.genre === 'hors'
         ? notifier(MSG_HORS_CONTRAT, 'attention')
         : action(),
@@ -506,7 +521,9 @@ export function VueSemaine({
     ouvrirShift: (id) =>
       siOuverte(() => {
         const shift = semaine?.affectations.find((a) => a.id === id)
-        if (shift) setEdition({ mode: 'modification', shift })
+        if (!shift) return
+        if (joursFiges[shift.jour]) return notifier(MSG_JOUR_PASSE, 'attention')
+        setEdition({ mode: 'modification', shift })
       }),
     fiche: (id) => setFicheId(id),
     basculer: (salarieId, jour) =>
@@ -524,6 +541,9 @@ export function VueSemaine({
               )
         const valide = shift ? shift.epinglee : repos?.valide
         if (valide === undefined) return
+        // Valider un jour passé reste permis ; le remettre en proposition, non.
+        if (valide && joursFiges[jour])
+          return notifier(MSG_JOUR_PASSE, 'attention')
         void executer(
           () =>
             service.valider(
@@ -598,6 +618,9 @@ export function VueSemaine({
     if (estOccupe()) return notifier(MSG_OCCUPE, 'attention')
     const [, sid, j] = String(e.over.id).split(':')
     const cible = { salarie_id: Number(sid), jour: Number(j) }
+    const depart = vol.type === 'statut' ? vol.jour : vol.shift.jour
+    if (joursFiges[depart] || joursFiges[cible.jour])
+      return notifier(MSG_JOUR_PASSE, 'attention')
     const statutCible = statutDe(cible.salarie_id, cible.jour)
 
     if (vol.type === 'statut') {
@@ -701,6 +724,7 @@ export function VueSemaine({
     let refus: string | null = null
     if (verrou) refus = MSG_VERROU
     else if (!pret || estOccupe()) refus = MSG_OCCUPE
+    else if (joursFiges[j]) refus = MSG_JOUR_PASSE
     else if (statutDe(sid, j)?.genre === 'hors') refus = MSG_HORS_CONTRAT
     if (refus) {
       e.preventDefault()
@@ -1008,6 +1032,7 @@ export function VueSemaine({
                     nbPersonnes={nbPersonnes}
                     postes={referentiel.postes}
                     gestes={gestes && !occupe}
+                    joursFiges={joursFiges}
                     cliquable={pret && droits.ecrire}
                     verrou={verrou}
                     enGlisser={!!enVol}

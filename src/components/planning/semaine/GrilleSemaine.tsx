@@ -70,6 +70,7 @@ export function GrilleSemaine({
   nbPersonnes,
   postes,
   gestes,
+  joursFiges,
   cliquable,
   verrou,
   enGlisser,
@@ -86,6 +87,8 @@ export function GrilleSemaine({
   postes: Poste[]
   /** Droit d'écriture et semaine ouverte : glisser, +, clic. */
   gestes: boolean
+  /** Jours passés, figés hors gestion (2026-11-18) : ni glisser ni +. */
+  joursFiges?: boolean[]
   /** Droit d'écriture : un clic sur une carte (refusé avec un message si la semaine est verrouillée). */
   cliquable: boolean
   verrou: boolean
@@ -191,6 +194,7 @@ export function GrilleSemaine({
               ligne={l}
               postes={postes}
               gestes={gestes}
+              joursFiges={joursFiges}
               cliquable={cliquable}
               indices={
                 enGlisser
@@ -212,6 +216,7 @@ const LigneStaff = memo(function LigneStaff({
   ligne,
   postes,
   gestes,
+  joursFiges,
   cliquable,
   indices,
   rappels,
@@ -219,6 +224,7 @@ const LigneStaff = memo(function LigneStaff({
   ligne: DonneesLigne
   postes: Poste[]
   gestes: boolean
+  joursFiges?: boolean[]
   cliquable: boolean
   indices: Indice[] | null
   rappels: RappelsGrille
@@ -290,44 +296,49 @@ const LigneStaff = memo(function LigneStaff({
           </button>
         </Tip>
       </td>
-      {ligne.cases.map((c, j) => (
-        <Cellule
-          key={j}
-          id={`case:${s.id}:${j}`}
-          salarieId={s.id}
-          jour={j}
-          indice={indices?.[j] ?? null}
-          gestes={gestes}
-          vide={!c.shift && !c.statut}
-          onAjouter={rappels.ajouter}
-        >
-          {c.shift ? (
-            <CarteShiftDeplacable
-              id={`shift:${c.shift.id}`}
-              c={c.shift.c}
-              actif={gestes}
-              cliquable={cliquable}
-              onOuvrir={() => rappels.ouvrirShift(c.shift!.id)}
-              onDouble={cliquable ? () => rappels.basculer(s.id, j) : undefined}
-            />
-          ) : c.statut ? (
-            <CarteStatutDeplacable
-              id={`statut:${s.id}:${j}`}
-              s={c.statut}
-              actif={gestes}
-              cliquable={cliquable}
-              onOuvrir={() => rappels.ajouter(s.id, j)}
-              onDouble={
-                cliquable &&
-                !c.statut.fixe &&
-                (c.statut.genre === 'repos' || c.statut.reposPose)
-                  ? () => rappels.basculer(s.id, j)
-                  : undefined
-              }
-            />
-          ) : null}
-        </Cellule>
-      ))}
+      {ligne.cases.map((c, j) => {
+        const gestesJour = gestes && !joursFiges?.[j]
+        return (
+          <Cellule
+            key={j}
+            id={`case:${s.id}:${j}`}
+            salarieId={s.id}
+            jour={j}
+            indice={indices?.[j] ?? null}
+            gestes={gestesJour}
+            vide={!c.shift && !c.statut}
+            onAjouter={rappels.ajouter}
+          >
+            {c.shift ? (
+              <CarteShiftDeplacable
+                id={`shift:${c.shift.id}`}
+                c={c.shift.c}
+                actif={gestesJour}
+                cliquable={cliquable}
+                onOuvrir={() => rappels.ouvrirShift(c.shift!.id)}
+                onDouble={
+                  cliquable ? () => rappels.basculer(s.id, j) : undefined
+                }
+              />
+            ) : c.statut ? (
+              <CarteStatutDeplacable
+                id={`statut:${s.id}:${j}`}
+                s={c.statut}
+                actif={gestesJour}
+                cliquable={cliquable}
+                onOuvrir={() => rappels.ajouter(s.id, j)}
+                onDouble={
+                  cliquable &&
+                  !c.statut.fixe &&
+                  (c.statut.genre === 'repos' || c.statut.reposPose)
+                    ? () => rappels.basculer(s.id, j)
+                    : undefined
+                }
+              />
+            ) : null}
+          </Cellule>
+        )
+      })}
       <td className="border-b border-l px-2.5 py-1.5 align-middle group-hover/ligne:bg-muted/40">
         {bilan && <Heures s={s} b={bilan} />}
       </td>

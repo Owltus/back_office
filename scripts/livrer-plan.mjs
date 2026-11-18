@@ -436,6 +436,7 @@ export const TESTS_SUR_COPIE = [
   'supabase/tests/90_audit_fonctions_sql.test.sql',
   'supabase/tests/91_audit_rls.test.sql',
   'supabase/tests/92_audit_auth.test.sql',
+  'supabase/tests/93_audit_2026_11_18.test.sql',
 ]
 
 /**

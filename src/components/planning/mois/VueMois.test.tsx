@@ -620,6 +620,37 @@ describe('VueMois', { timeout: 20_000 }, () => {
     await waitFor(() => expect(service.supprimerShift).toHaveBeenCalledWith(7))
   })
 
+  // Jours passés (décision du 2026-11-18, la base refuse aussi, PL409) :
+  // figés pour l'écriture, libres pour la gestion. Aujourd'hui = mercredi 4.
+  it('clic sur un jour passé en écriture : rien ne s’ouvre, le message le dit', async () => {
+    droits = { pret: true, lire: true, ecrire: true, gerer: false }
+    monter()
+    await charge()
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /^Lucas Petit, mar\. 3 nov\. · Non attribué/,
+      }),
+    )
+    expect(
+      await screen.findByText(
+        'On ne touche pas au passé : ce jour est terminé. Seule la gestion du planning peut le corriger.',
+      ),
+    ).toBeTruthy()
+    expect(screen.queryByText('Planifier le jour')).toBeNull()
+  })
+
+  it('clic sur un jour passé en gestion : l’éditeur s’ouvre', async () => {
+    droits = { pret: true, lire: true, ecrire: true, gerer: true }
+    monter()
+    await charge()
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /^Lucas Petit, mar\. 3 nov\. · Non attribué/,
+      }),
+    )
+    expect(await screen.findByText('Planifier le jour')).toBeTruthy()
+  })
+
   it('clic sur un jour d’une semaine verrouillée : rien ne s’ouvre', async () => {
     droits = { pret: true, lire: true, ecrire: true, gerer: true }
     referentiel = { ...demo.referentiel, verrous: ['2026-11-16'] }

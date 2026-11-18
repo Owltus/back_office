@@ -130,7 +130,9 @@ select is(
                             -- aides de la page Planning (2026-10-27) : pures, ou lecture des verrous
                             'planning_aujourdhui','planning_competences_ok','planning_depuis','planning_etat','planning_heure_ok','planning_hhmm','planning_horaire_de','planning_journees_ok','planning_lundi','planning_minutes','planning_niveau','planning_presence','planning_semaine_type_ok','planning_verrouillee',
                             -- aide du trigger d'estampille de l'Affichage (2026-11-16)
-                            'affiche_peut_etre_auteur')
+                            'affiche_peut_etre_auteur',
+                            -- jour hôtelier des policies PDJ et Rapprochement (2026-11-18)
+                            'jour_hotelier')
       and not exists (select 1 from pg_proc p
                        where p.pronamespace = 'public'::regnamespace and p.proname = q.proname
                          and not p.prosecdef

@@ -435,6 +435,12 @@ describe('choixControles', () => {
   it('les tests sur copie ne visent que des fichiers qui existent', () => {
     for (const f of TESTS_SUR_COPIE) expect(existsSync(f)).toBe(true)
   })
+
+  it("l'audit du 2026-11-18 tourne aussi sur une copie de la prod", () => {
+    expect(TESTS_SUR_COPIE).toContain(
+      'supabase/tests/93_audit_2026_11_18.test.sql',
+    )
+  })
 })
 
 // Oracle : demande utilisateur du 2026-10-31 (« plus souple ») — un fichier

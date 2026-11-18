@@ -212,6 +212,16 @@ describe('AidePlanningContenu (aide du bouton ?)', () => {
     expect(texte).not.toMatch(/[«»—]/)
   })
 
+  it('dit la règle du passé de la base : figé en écriture, libre pour la gestion (2026-11-18)', () => {
+    const { container } = rendre()
+    const t = (container.textContent ?? '').replace(/\s+/g, ' ')
+    expect(t).toContain('Une semaine verrouillée est figée pour tout le monde.')
+    expect(t).toContain(
+      'Un jour passé est figé en écriture : seule la gestion peut encore le corriger.',
+    )
+    expect(t).not.toContain('les jours passés sont figés pour tout le monde')
+  })
+
   it('page en lecture seule : aucun champ ni bouton d’écriture', () => {
     rendre()
     expect(screen.queryAllByRole('textbox')).toHaveLength(0)

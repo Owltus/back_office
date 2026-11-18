@@ -44,6 +44,7 @@ const service = vi.hoisted(() => ({
 const etat = vi.hoisted(() => ({
   droits: { pret: true, lire: true, ecrire: false, gerer: false },
   generer: vi.fn(),
+  aujourdhui: '2026-10-27',
 }))
 
 vi.mock('#/lib/supabase.ts', () => ({ supabase: {} }))
@@ -96,7 +97,7 @@ vi.mock('#/components/planning/hooks/usePlanning.ts', async (original) => {
   return {
     ...reel,
     useDroitsPlanning: () => etat.droits,
-    useAujourdhui: () => '2026-10-27',
+    useAujourdhui: () => etat.aujourdhui,
     useSemaine: () => ({
       referentiel: (vue.donnees as DonneesSemaine).referentiel,
       donnees: vue.donnees,
@@ -136,6 +137,7 @@ beforeEach(() => {
     Promise.resolve({ poses: 3, dureeMs: 12, semaine: SEMAINE }),
   )
   for (const f of Object.values(service)) f.mockClear()
+  etat.aujourdhui = '2026-10-27'
   vue.donnees = DONNEES
   vue.semaine = SEMAINE
 })
@@ -156,6 +158,48 @@ function avecReglages(
 afterEach(cleanup)
 
 describe('VueSemaine', () => {
+  // Jours passés (décision du 2026-11-18, la base refuse aussi, PL409) :
+  // figés pour l'écriture, libres pour la gestion. Oracle : la règle recopiée
+  // à la main, mercredi 4 = aujourd'hui, donc lundi 2 et mardi 3 passés.
+  it('écriture : un jour passé n’a ni + ni éditeur, le message le dit', async () => {
+    etat.droits = { pret: true, lire: true, ecrire: true, gerer: false }
+    etat.aujourdhui = '2026-11-04'
+    const { container } = rendre()
+    const plusDuJour = (j: number) =>
+      [...container.querySelectorAll(`[data-case$=":${j}"]`)].flatMap((td) =>
+        within(td as HTMLElement).queryAllByRole('button', {
+          name: 'Ajouter un shift',
+        }),
+      )
+    expect(plusDuJour(0)).toHaveLength(0)
+    expect(plusDuJour(1)).toHaveLength(0)
+    expect(plusDuJour(2).length).toBeGreaterThan(0)
+    // Le shift du lundi : un clic ne l'ouvre pas, le message de la base s'affiche.
+    fireEvent.click(screen.getByRole('button', { name: /23:00–07:45/ }))
+    expect(
+      await screen.findByText(
+        'On ne touche pas au passé : ce jour est terminé. Seule la gestion du planning peut le corriger.',
+      ),
+    ).toBeTruthy()
+    expect(screen.queryByText('Modifier le shift')).toBeNull()
+  })
+
+  it('gestion : un jour passé se corrige encore', async () => {
+    etat.droits = { pret: true, lire: true, ecrire: true, gerer: true }
+    etat.aujourdhui = '2026-11-04'
+    const { container } = rendre()
+    const plusLundi = [
+      ...container.querySelectorAll('[data-case$=":0"]'),
+    ].flatMap((td) =>
+      within(td as HTMLElement).queryAllByRole('button', {
+        name: 'Ajouter un shift',
+      }),
+    )
+    expect(plusLundi.length).toBeGreaterThan(0)
+    fireEvent.click(screen.getByRole('button', { name: /23:00–07:45/ }))
+    expect(await screen.findByText('Modifier le shift')).toBeTruthy()
+  })
+
   it('affiche la semaine : en-tête, staff, carte du shift', () => {
     etat.droits = { pret: true, lire: true, ecrire: false, gerer: false }
     rendre()
