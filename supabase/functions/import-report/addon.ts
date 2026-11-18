@@ -16,6 +16,10 @@ import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2.115.0'
 // Table cible (cf. src/lib/pdj/service.ts — PDJ_ADDON_TABLE).
 const PDJ_ADDON_TABLE = 'pdj_addon_production'
 
+// Plafond d'un compteur d'Addon (nombre de réservations d'un code sur une
+// journée). L'hôtel a 80 chambres : 1 000 laisse une marge très large.
+const COMPTE_MAX = 1000
+
 // ---------------------------------------------------------------------------
 // Types.
 // ---------------------------------------------------------------------------
@@ -113,7 +117,7 @@ function breakfastServiceDate(businessDate: string): string {
 // métier BRUTE est le token date de CETTE ligne (col 4), PAS « Generated Date »
 // (qui est J+1). Les lignes code exposent [code, Total Count, Total Revenue, …] :
 // seules les colonnes 0..2 sont utiles.
-function parseAddonProduction(content: string): ParsedAddonProduction {
+export function parseAddonProduction(content: string): ParsedAddonProduction {
   // Retrait d'un BOM éventuel en tête (export PMS/Windows) : sinon il se colle au
   // premier champ et casse la détection.
   const clean = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content
@@ -170,14 +174,24 @@ function parseAddonProduction(content: string): ParsedAddonProduction {
     const parts = parseCsvLine(line, separator)
     const code = (parts[0] ?? '').replace(/"/g, '').trim()
     if (!code || !isBreakfastCode(code)) continue
-    const count = parseInt((parts[1] ?? '').replace(/"/g, '').trim(), 10)
-    const revenue = parseFloat(
-      (parts[2] ?? '').replace(/"/g, '').replace(',', '.').trim(),
-    )
+    // Bornes (audit run-2, étape 8) : un compteur est un ENTIER de 0 à
+    // COMPTE_MAX, une recette un nombre FINI et positif. Sinon la ligne est
+    // sautée et notée au journal ; le fichier, lui, n'est jamais refusé. Une
+    // cellule VIDE reste lue 0, comme avant.
+    const brutCompte = (parts[1] ?? '').replace(/"/g, '').trim()
+    const brutRecette = (parts[2] ?? '').replace(/"/g, '').replace(',', '.').trim()
+    const count = brutCompte === '' ? 0 : /^\d+$/.test(brutCompte) ? parseInt(brutCompte, 10) : NaN
+    const revenue = brutRecette === '' ? 0 : parseFloat(brutRecette)
+    if (!(count >= 0 && count <= COMPTE_MAX) || !Number.isFinite(revenue) || revenue < 0) {
+      console.warn(
+        `[ADDON] ligne sautée (compteur ou recette hors bornes) : ${code.toUpperCase().slice(0, 20)}`,
+      )
+      continue
+    }
     rows.push({
       code: code.toUpperCase(),
-      count: isNaN(count) ? 0 : count,
-      revenue: isNaN(revenue) ? 0 : revenue,
+      count,
+      revenue,
     })
   }
 

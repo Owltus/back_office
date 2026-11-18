@@ -65,11 +65,28 @@ function parseCsvLine(line: string, separator: string): string[] {
 // renvoie directement la chaîne : la `service_date` est une date CALENDAIRE issue
 // du nom (aucun fuseau à appliquer, PAS de J-1 pour la PDJ). Passer par un objet
 // Date en environnement UTC risquerait un décalage — on l'évite.
-function serviceDateFromFilename(filename: string): string | null {
-  const match = filename.match(/_(\d{8})/)
-  if (!match) return null
-  const s = match[1]
-  return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`
+//
+// Seule une VRAIE date du calendrier est acceptée (audit run-2, étape 8) : le
+// 31/02 ou un mois 13 ne sont plus écrits en base. On garde le premier groupe
+// « _AAAAMMJJ » qui forme une vraie date ; pour un nom ordinaire, c'est le
+// premier groupe, exactement comme avant.
+export function serviceDateFromFilename(filename: string): string | null {
+  for (const match of filename.matchAll(/_(\d{8})/g)) {
+    const s = match[1]
+    const a = parseInt(s.slice(0, 4), 10)
+    const m = parseInt(s.slice(4, 6), 10)
+    const j = parseInt(s.slice(6, 8), 10)
+    // Relecture des composantes : `Date` déborde (31/02 → 03/03) sans erreur.
+    const d = new Date(Date.UTC(a, m - 1, j))
+    if (
+      d.getUTCFullYear() === a &&
+      d.getUTCMonth() === m - 1 &&
+      d.getUTCDate() === j
+    ) {
+      return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`
+    }
+  }
+  return null
 }
 
 // '24-04-2026 02:54 PM' → '2026-04-24' (date seule, heure écartée). null sinon.

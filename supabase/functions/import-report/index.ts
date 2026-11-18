@@ -33,6 +33,17 @@ import {
   waitThenAutoSend,
 } from './waitAndSend.ts'
 import { cleServeur } from '../_shared/environnement.ts'
+import {
+  ageForecastMinutes,
+  decisionHotelCode,
+  generatedAtOf,
+  hotelCodeOf,
+  pourJournal,
+} from './entete.ts'
+
+/** Un vrai e-mail du PMS porte UNE pièce jointe CSV. Au-delà de ce plafond,
+ * l'e-mail est refusé AVANT tout import (audit run-2, étape 8). */
+const MAX_CSV = 4
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -233,6 +244,17 @@ Deno.serve(async (req) => {
   )
   if (csvs.length === 0)
     return json({ error: 'Aucune pièce jointe CSV' }, 422)
+  if (csvs.length > MAX_CSV) {
+    console.warn(`[IMPORT] e-mail refusé : ${csvs.length} pièces jointes CSV (au plus ${MAX_CSV}).`)
+    return json({ error: 'Trop de pièces jointes CSV' }, 422)
+  }
+
+  // HOTEL CODE (audit run-2, étape 8) — EN OBSERVATION. Lus une fois par
+  // requête. `EXPECTED_HOTEL_CODE` absent : aucun contrôle. Code absent du
+  // fichier : journal seul. Code différent : journal tant que
+  // `HOTEL_CODE_ENFORCE` n'est pas exactement « true », refus ensuite.
+  const hotelAttendu = Deno.env.get('EXPECTED_HOTEL_CODE')
+  const hotelEnforce = Deno.env.get('HOTEL_CODE_ENFORCE')
 
   // 4. Traiter chaque CSV : détecter puis importer. On borne le rayon (un e-mail
   //    = 1 CSV aujourd'hui, mais on gère N par robustesse / rapports futurs).
@@ -250,6 +272,48 @@ Deno.serve(async (req) => {
       hadError = true
       results.push({ filename, type: null, ok: false, note: 'type non reconnu' })
       continue
+    }
+
+    // Filet : une lecture du préambule qui lèverait (imprévu) ne doit JAMAIS
+    // empêcher l'import ; elle vaut alors « code absent ».
+    let code: string | null = null
+    try {
+      code = hotelCodeOf(content)
+    } catch (err) {
+      console.warn('[HOTEL] préambule illisible :', err instanceof Error ? err.message : String(err))
+    }
+    const hotel = decisionHotelCode(code, hotelAttendu, hotelEnforce)
+    if (hotel.etat === 'ok') {
+      console.log(`[HOTEL] hotel code OK ${pourJournal(code ?? '')} (${type}).`)
+    } else if (hotel.etat === 'absent') {
+      console.log(`[HOTEL] hotel code absent du fichier ${type} « ${logName} » (observation).`)
+    } else if (hotel.etat === 'different') {
+      console.warn(
+        `[HOTEL] hotel code différent : ${pourJournal(code ?? '')} au lieu de ${pourJournal((hotelAttendu ?? '').trim())} (${type} « ${logName} »)${hotel.refuser ? ', fichier REFUSÉ' : ', observation : importé quand même'}.`,
+      )
+      if (hotel.refuser) {
+        hadError = true
+        results.push({ filename, type, ok: false, note: 'hotel code différent' })
+        continue
+      }
+    }
+
+    // FRAÎCHEUR DU FORECAST (observation, jamais bloquante) : le fuseau de
+    // « Generated Date/Time » n'est pas connu, l'âge est calculé en le lisant
+    // comme une heure de Paris.
+    if (type === 'forecast') {
+      try {
+        const genere = generatedAtOf(content)
+        if (genere) {
+          console.log(
+            `[FORECAST] généré le ${genere.date} à ${genere.heure ?? '(heure absente)'} : âge ${ageForecastMinutes(genere, instant)} min (lu comme heure de Paris).`,
+          )
+        } else {
+          console.log('[FORECAST] date de génération absente du fichier.')
+        }
+      } catch (err) {
+        console.warn('[FORECAST] âge illisible :', err instanceof Error ? err.message : String(err))
+      }
     }
     try {
       const imported =

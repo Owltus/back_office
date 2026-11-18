@@ -112,7 +112,12 @@ function buildReportDate(year: number, month: number, day: number): ReportDate {
  * retombera sur le nom de fichier. Sourcer la date du CONTENU élimine toute
  * dépendance à l'heure de tirage / au fuseau du nom de fichier.
  */
-function extractReportDateFromCsv(csvText: string): ReportDate | null {
+//
+// Seule une VRAIE date du calendrier est retenue (audit run-2, étape 8) : une
+// cellule « 31-02-2026 » est ignorée (journal), la ligne suivante est lue, puis
+// le nom de fichier sert de repli comme pour une colonne absente. Une date
+// valide est lue exactement comme avant.
+export function extractReportDateFromCsv(csvText: string): ReportDate | null {
   const result = Papa.parse<string[]>(csvText, {
     header: false,
     skipEmptyLines: true,
@@ -134,11 +139,16 @@ function extractReportDateFromCsv(csvText: string): ReportDate | null {
   for (const row of data.slice(headerIdx + 1)) {
     const m = (row[col] ?? '').trim().match(/^(\d{2})-(\d{2})-(\d{4})$/)
     if (m) {
-      return buildReportDate(
-        parseInt(m[3], 10),
-        parseInt(m[2], 10),
-        parseInt(m[1], 10),
-      )
+      const annee = parseInt(m[3], 10)
+      const mois = parseInt(m[2], 10)
+      const jour = parseInt(m[1], 10)
+      if (!dateCalendaireUtc(annee, mois, jour)) {
+        console.warn(
+          `[DATE] REPORT DATE impossible ignorée : ${m[1]}-${m[2]}-${m[3]}`,
+        )
+        continue
+      }
+      return buildReportDate(annee, mois, jour)
     }
   }
   return null
