@@ -26,13 +26,22 @@ export function slugify(s: string): string {
     .replace(/^-+|-+$/g, '')
 }
 
-/** Nom de fichier sûr : caractères interdits retirés, espaces normalisés, 200 max. */
+/**
+ * Nom de fichier sûr : caractères interdits retirés, caractères de contrôle
+ * changés en espace, espaces normalisés, 200 max, sans point ni espace final
+ * (Windows les retire en silence ou refuse le nom).
+ */
 export function sanitizeFilename(name: string): string {
-  return name
-    .replace(/[<>:"/\\|?*]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 200)
+  return (
+    name
+      .replace(/[<>:"/\\|?*]/g, '')
+      // eslint-disable-next-line no-control-regex -- les retirer est le but
+      .replace(/[\u0000-\u001f\u007f]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 200)
+      .replace(/[. ]+$/, '')
+  )
 }
 
 /** Recherche insensible à la casse et aux accents. */

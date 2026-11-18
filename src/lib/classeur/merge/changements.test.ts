@@ -678,16 +678,55 @@ describe('C8 — la portée borne ce qui change', () => {
     ).toThrow(/Le chapitre Cuisine n'est pas dans ce classeur/)
   })
 
-  it('sans portée : le classeur, chaque uuid désigne son élément', () => {
+  it('sans portée, depuis le classeur : le classeur, chaque uuid désigne son élément', () => {
     const r = planDe([{ action: 'modifier', uuid: 'doc-4', content: 'x' }], {
       portee: null,
-      contexte: { type: 'chapitre', chapitreId: 10 },
+      contexte: CLASSEUR,
     })
+    expect(r.destination).toEqual({ cible: CLASSEUR, note: null })
+    expect(types(r.plan.actions)).toEqual(['modifierItem'])
+  })
+
+  // Audit du 2026-11-18 : retirer `_metadata` ne doit pas élargir la portée.
+  it('sans portée, depuis un chapitre : ce chapitre seul, jamais le classeur', () => {
+    const r = planDe(
+      [
+        { action: 'modifier', uuid: 'doc-4', content: 'x' },
+        { action: 'modifier', uuid: 'doc-1', content: 'Nouveau' },
+        { action: 'ajouter', kind: 'chapitre', label: 'Neuf' },
+        { action: 'supprimer', uuid: 'ch-20', label: 'Sécurité' },
+      ],
+      { portee: null, contexte: { type: 'chapitre', chapitreId: 10 } },
+    )
     expect(r.destination).toEqual({
-      cible: { type: 'classeur' },
-      note: 'Ce fichier concerne tout le classeur.',
+      cible: { type: 'chapitre', chapitreId: 10 },
+      note: null,
+    })
+    expect(r.plan.actions).toEqual([
+      expect.objectContaining({ type: 'modifierItem', id: 1 }),
+    ])
+    expect(r.plan.warnings).toHaveLength(3)
+    expect(r.plan.warnings[0]).toMatch(
+      /Le document Incendie : l'export d'un chapitre ne change que ce chapitre/,
+    )
+  })
+
+  it('sans portée, depuis un document : ce document seul', () => {
+    const r = planDe(
+      [
+        { action: 'modifier', uuid: 'doc-1', content: 'Nouveau' },
+        { action: 'modifier', uuid: 'doc-2', content: 'x' },
+        { action: 'supprimer', uuid: 'doc-3', title: 'Clés' },
+      ],
+      { portee: null, contexte: { type: 'document', documentId: 1 } },
+    )
+    expect(r.destination).toEqual({
+      cible: { type: 'document', documentId: 1 },
+      note: null,
     })
     expect(types(r.plan.actions)).toEqual(['modifierItem'])
+    expect(r.plan.actions[0]).toMatchObject({ id: 1 })
+    expect(r.plan.warnings).toHaveLength(2)
   })
 })
 

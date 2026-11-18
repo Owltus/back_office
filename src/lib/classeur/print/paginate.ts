@@ -300,8 +300,9 @@ function splitList(
 ): Chunk[] {
   const tag = list.tagName.toLowerCase()
   const items = getListItems(list)
-  const baseStart =
-    tag === 'ol' ? parseInt(list.getAttribute('start') || '1', 10) : 0
+  // Un `start` illisible (« abc ») donnait NaN, réécrit `start="NaN"`.
+  const lu = tag === 'ol' ? parseInt(list.getAttribute('start') || '1', 10) : 0
+  const baseStart = Number.isFinite(lu) ? lu : 1
   const hauteurs = items.map((it) => mesure(it))
   return grouper(hauteurs, 0, premier, plein).map((g) => {
     const overrides =

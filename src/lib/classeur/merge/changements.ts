@@ -41,6 +41,10 @@
  *      d'un chapitre ne touche que ce chapitre (ni autre chapitre, ni ordre
  *      des chapitres), celui d'un document que ce document. Un fichier d'un
  *      AUTRE classeur, ou d'un chapitre ou document absent d'ici, est refusé.
+ *      SANS portée (le LLM a retiré `_metadata`) : le fichier reste dans le
+ *      contexte du dialogue, le chapitre ou le document ouvert, et le
+ *      classeur seulement depuis le classeur (audit du 2026-11-18 : une
+ *      omission ne doit jamais ÉLARGIR ce qu'une réponse peut changer).
  *   C9 Refus de l'aperçu (`exclus`) : appliqués AU CHANGEMENT, avant le
  *      calcul des positions, pour que les renumérotations suivent.
  *
@@ -251,8 +255,9 @@ function memeCible(a: ContexteImport, b: ContexteImport): boolean {
 
 /**
  * C8 : ce que le fichier peut changer, lu dans sa portée. Sans portée (le
- * LLM a retiré `_metadata`), le classeur : chaque changement désigne son
- * élément par uuid, rien d'autre ne bouge. Jette pour un fichier d'ailleurs.
+ * LLM a retiré `_metadata`), le contexte d'où l'on importe : depuis un
+ * chapitre, ce chapitre ; depuis un document, ce document ; depuis le
+ * classeur, le classeur. Jamais plus large. Jette pour un fichier d'ailleurs.
  */
 export function destinationImport(
   local: EtatLocal,
@@ -272,8 +277,9 @@ export function destinationImport(
         ? `Ce fichier concerne ${quoi}.`
         : `Ce fichier concerne ${quoi}. ${RESTE_INTACT}`,
   })
-  if (portee === undefined || portee.type === 'classeur') {
-    if (portee !== undefined && portee.classeur_uuid !== classeur.uuid) {
+  if (portee === undefined) return { cible: contexte, note: null }
+  if (portee.type === 'classeur') {
+    if (portee.classeur_uuid !== classeur.uuid) {
       const nom = portee.classeur_name.trim()
       throw new Error(
         nom === ''

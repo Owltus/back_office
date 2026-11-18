@@ -5,6 +5,10 @@ import {
   CONTENT_WIDTH_MM,
   mmToPx,
 } from '#/lib/classeur/print/constants.ts'
+import {
+  assainirPages,
+  chargerAssainisseur,
+} from '#/lib/classeur/print/assainir.ts'
 import { paginate } from '#/lib/classeur/print/paginate.ts'
 import type { PageData } from '#/lib/classeur/print/paginate.ts'
 
@@ -72,30 +76,35 @@ export function usePagination(
       // Attendre que le DOM ait fini de peindre, que les Mermaid soient
       // rendus ET que les images soient chargées (une image non chargée
       // mesure 0 px : la page déborderait à l'affichage).
+      // DOMPurify (dernier filet, `assainir.ts`) se charge en même temps.
       requestAnimationFrame(() => {
-        void Promise.all([waitForMermaid(node), waitForImages(node)]).then(
-          () => {
-            const maxHeight = mmToPx(contentHeightMm)
-            let pageData: PageData[]
-            try {
-              pageData = paginate(node, maxHeight)
-            } catch (err) {
-              // Une mesure qui lève ne laisse jamais le marqueur « en
-              // cours » posé (impression bloquée sans fin, sans un mot) :
-              // le document est rendu d'un seul bloc, et on le dit.
-              console.error(
-                '[classeur] Pagination impossible : document rendu d’un seul bloc.',
-                err,
-              )
-              pageData = [{ html: node.innerHTML }]
-            }
+        void Promise.all([
+          chargerAssainisseur(),
+          waitForMermaid(node),
+          waitForImages(node),
+        ]).then(([assainir]) => {
+          const maxHeight = mmToPx(contentHeightMm)
+          let pageData: PageData[]
+          try {
+            pageData = paginate(node, maxHeight)
+          } catch (err) {
+            // Une mesure qui lève ne laisse jamais le marqueur « en
+            // cours » posé (impression bloquée sans fin, sans un mot) :
+            // le document est rendu d'un seul bloc, et on le dit.
+            console.error(
+              '[classeur] Pagination impossible : document rendu d’un seul bloc.',
+              err,
+            )
+            pageData = [{ html: node.innerHTML }]
+          }
+          // UN passage par pagination, jamais à chaque rendu.
+          pageData = assainirPages(pageData, assainir)
 
-            setPages(pageData)
-            setMeasuring(false)
-            hasPaginated.current = true
-            if (mienne === generation.current) setEnCours(false)
-          },
-        )
+          setPages(pageData)
+          setMeasuring(false)
+          hasPaginated.current = true
+          if (mienne === generation.current) setEnCours(false)
+        })
       })
     },
     [contentKey, contentHeightMm],

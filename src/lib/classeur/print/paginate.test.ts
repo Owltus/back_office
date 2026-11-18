@@ -210,6 +210,22 @@ describe('paginate', () => {
     expect(ol2?.querySelectorAll('li')).toHaveLength(2)
   })
 
+  it('un `start` illisible repart de 1, jamais `start="NaN"`', () => {
+    const lis = Array.from(
+      { length: 8 },
+      (_, i) => `<li data-h="50">item ${i + 1}</li>`,
+    ).join('')
+    const pages = paginate(
+      conteneur(`<ol start="abc">${lis}</ol>`),
+      300,
+      mesure,
+    )
+    expect(pages).toHaveLength(2)
+    expect(
+      fragment(pages[1].html).querySelector('ol')?.getAttribute('start'),
+    ).toBe('7')
+  })
+
   it('(6) une petite liste (4 éléments) est coupée plutôt que de laisser un trou', () => {
     // 4 × 30 = 120 occupés ; liste 4 × 50 = 200 > 180 restants. 3 tiendraient,
     // mais le 4e resterait seul : 2 + 2. Avant : moins de 6 éléments =

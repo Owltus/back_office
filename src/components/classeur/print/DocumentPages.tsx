@@ -9,11 +9,7 @@ import {
   ImageDocument,
 } from '#/components/classeur/print/ImageDocument.tsx'
 import { A4Page } from '#/components/classeur/print/A4Page.tsx'
-import {
-  estCheminImage,
-  estImageAInserer,
-  tailleDepuisTitre,
-} from '#/lib/classeur/images.ts'
+import { estCheminImage, estImageAInserer } from '#/lib/classeur/images.ts'
 import {
   CONTENT_HEIGHT_MM,
   DOCUMENT_CONTENT_HEIGHT_WITH_SUBTITLE_MM,
@@ -95,12 +91,14 @@ const markdownComponents: Components = {
   // Une adresse EXTERNE n'est pas chargée (audit du 2026-09-28) : elle
   // révélerait au site tiers qui lit le document et quand. La CSP de
   // production la bloque déjà ; on l'annonce plutôt qu'une image cassée.
+  // (Plus de branche `data:image/` / `blob:` : `urlTransform` de
+  // react-markdown vide déjà ces adresses, elle ne servait jamais.)
   img: ({ src, alt, title }) =>
     estImageAInserer(src) ? (
       <ImageAInserer alt={alt} title={title} />
     ) : estCheminImage(src) ? (
       <ImageDocument chemin={src} alt={alt} title={title} />
-    ) : typeof src !== 'string' || !/^(data:image\/|blob:)/i.test(src) ? (
+    ) : (
       <span
         role="img"
         aria-label={alt ?? 'Image externe non affichée'}
@@ -114,8 +112,6 @@ const markdownComponents: Components = {
       >
         Image externe non affichée{alt ? ` : ${alt}` : ''}
       </span>
-    ) : (
-      <img src={src} alt={alt ?? ''} data-taille={tailleDepuisTitre(title)} />
     ),
 }
 

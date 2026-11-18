@@ -52,4 +52,19 @@ describe('sanitizeFilename', () => {
     )
     expect(sanitizeFilename('x'.repeat(300))).toHaveLength(200)
   })
+
+  it('retire les caractères de contrôle et les points ou espaces de fin', () => {
+    expect(sanitizeFilename('Plan\u0000\u0007 du\n\t2e étage\u007f')).toBe(
+      'Plan du 2e étage',
+    )
+    expect(sanitizeFilename('Procédures...')).toBe('Procédures')
+    expect(sanitizeFilename('Notes . . ')).toBe('Notes')
+    expect(sanitizeFilename('rapport.json')).toBe('rapport.json')
+    expect(sanitizeFilename('...')).toBe('')
+  })
+
+  it('ne finit jamais par un point après la coupe à 200', () => {
+    const nom = sanitizeFilename(`${'a'.repeat(199)}.b`)
+    expect(nom).toBe('a'.repeat(199))
+  })
 })

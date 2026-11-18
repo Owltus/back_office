@@ -504,7 +504,7 @@ export function GalaxyChartRender({ graph, onSelectCode }: GalaxyChartProps) {
             return `${title}<br><span style="color:#94a3b8">Fournisseur</span> · relié à ${n} imputation${n > 1 ? 's' : ''}`
           }
           // Repli (mot ou autre) : format compact.
-          return `${title}<br><span style="color:#94a3b8">${d.typeLabel}</span> · ${d.value}×`
+          return `${title}<br><span style="color:#94a3b8">${escapeHtml(String(d.typeLabel))}</span> · ${escapeHtml(String(d.value))}×`
         },
       },
       series: [

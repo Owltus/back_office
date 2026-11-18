@@ -63,4 +63,21 @@ describe('usePagination — pagination qui lève', () => {
     })
     expect(getByTestId('pages').textContent).toBe('<p>A</p>|<p>B</p>')
   })
+
+  it('dernier filet : le HTML des pages est assaini une fois (audit du 2026-11-18)', async () => {
+    etat.paginate.mockReturnValue([
+      {
+        html: '<p data-ligne="1">A<img src="x" onerror="alert(1)"></p><script>alert(2)</script>',
+        remplissage: 0.4,
+        saut: 1,
+      },
+    ])
+    const { getByTestId } = render(<Document contenu="piege" />)
+    await waitFor(() => {
+      expect(getByTestId('etat').textContent).toBe('false/false')
+    })
+    const html = getByTestId('pages').textContent
+    expect(html).not.toMatch(/onerror|<script/i)
+    expect(html).toBe('<p data-ligne="1">A<img src="x"></p>')
+  })
 })
