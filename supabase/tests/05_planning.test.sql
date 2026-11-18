@@ -143,7 +143,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':J', (select j from t_ids)::text);
 $$;
 
-select plan(229);
+select plan(235);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -978,6 +978,46 @@ select is(pg_temp.essai('lecture', array[
 select is(pg_temp.essai('ecriture', array[
   pg_temp.q('select public.planning_valider_periode(array[:S1], :F::date + 6, :F::date, true)')]),
   'err=PL400', 'période : des bornes inversées sont refusées');
+
+-- ------------------------- annuler / rétablir : remettre des cases (2026-11-18) ---
+-- Oracle : la demande (Ctrl+Z remet la case comme avant ; jamais par-dessus
+-- le travail d'un collègue). La case de s2 mardi en F porte un shift proposé.
+create function pg_temp.case_s2(p_attendu text, p_voulu text) returns text
+language sql as $$
+  select pg_temp.q('select public.planning_restaurer_cases(jsonb_build_array(jsonb_build_object('
+    || '''lundi'', :F, ''salarie_id'', :S2, ''jour'', 1, '
+    || '''attendu'', ' || p_attendu || ', ''voulu'', ' || p_voulu || ')))')
+$$;
+create function pg_temp.shift_s2(p_epinglee text) returns text language sql as $$
+  select 'jsonb_build_object(''shift'', jsonb_build_object(''poste_id'', :PA, ''horaire_id'', '
+    || (select h from t_ids) || ', ''debut'', ''05:05'', ''fin'', ''13:50'', ''pause'', 45, ''epinglee'', '
+    || p_epinglee || '), ''absence'', null)'
+$$;
+select is(pg_temp.essai('ecriture', array[
+  pg_temp.case_s2(pg_temp.shift_s2('false'), 'jsonb_build_object(''shift'', null, ''absence'', null)'),
+  pg_temp.q('select count(*) from public.planning_affectations where lundi = :F and salarie_id = :S2 and jour = 1')]),
+  '0', 'annuler : la case est remise vide');
+select is(pg_temp.essai('ecriture', array[
+  pg_temp.case_s2(pg_temp.shift_s2('false'), pg_temp.shift_s2('true')),
+  pg_temp.q('select epinglee::text from public.planning_affectations where lundi = :F and salarie_id = :S2 and jour = 1')]),
+  'true', 'annuler : seule la validation change quand c''est la seule différence');
+select is(pg_temp.essai('ecriture', array[
+  pg_temp.q('delete from public.planning_affectations where lundi = :F and salarie_id = :S2 and jour = 1'),
+  pg_temp.case_s2('jsonb_build_object(''shift'', null, ''absence'', null)', pg_temp.shift_s2('false')),
+  pg_temp.q('select debut || ''-'' || fin || ''/'' || epinglee from public.planning_affectations where lundi = :F and salarie_id = :S2 and jour = 1')]),
+  '05:05-13:50/false', 'rétablir : le shift revient tel qu''il était');
+select is(pg_temp.essai('ecriture', array[
+  pg_temp.case_s2(pg_temp.shift_s2('true'), 'jsonb_build_object(''shift'', null, ''absence'', null)')]),
+  'err=PL409', 'annuler : refusé si la case a changé entre-temps');
+select is(pg_temp.essai('lecture', array[
+  pg_temp.case_s2(pg_temp.shift_s2('false'), 'jsonb_build_object(''shift'', null, ''absence'', null)')]),
+  'err=42501', 'annuler : la lecture ne change rien');
+select is(pg_temp.essai('ecriture', array[pg_temp.q(
+  'select public.planning_restaurer_cases(jsonb_build_array(jsonb_build_object(''lundi'', :L, ''salarie_id'', :S1, ''jour'', 0, '
+  || '''attendu'', jsonb_build_object(''shift'', jsonb_build_object(''poste_id'', :PA, ''horaire_id'', ' || (select h from t_ids)
+  || ', ''debut'', ''05:05'', ''fin'', ''13:50'', ''pause'', 45, ''epinglee'', true), ''absence'', null), '
+  || '''voulu'', jsonb_build_object(''shift'', null, ''absence'', null))))')]),
+  'err=PL423', 'annuler : une semaine verrouillée ne bouge pas');
 select is(pg_temp.essai('ecriture', array[
   pg_temp.q('select public.planning_valider_avec_repos(:P, :S3, null, true, jsonb_build_array(jsonb_build_object(''salarie_id'', :S3, ''jour'', 6)))'),
   pg_temp.q('select count(*) from public.planning_absences where salarie_id = :S3 and jour = :P::date + 6')]),

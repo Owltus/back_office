@@ -123,6 +123,8 @@ import {
 import type { ShiftCopie } from '#/components/planning/saisieRapide.ts'
 import { TEXTE_RAISON } from '#/lib/planning/eligibilite.ts'
 import { estEcole } from '#/lib/planning/semaine.ts'
+import { avecHistorique } from '#/lib/planning/annulation.ts'
+import { useAnnulerRetablir } from '#/components/planning/hooks/useAnnulerRetablir.ts'
 import { EditeurShift } from '#/components/planning/semaine/EditeurShift.tsx'
 import type { Edition } from '#/components/planning/semaine/EditeurShift.tsx'
 import { ajouterJours } from '#/lib/planning/temps.ts'
@@ -273,7 +275,9 @@ export function VueMois({
     touche?: { salarieId: number; jour: number },
   ) =>
     pendant(async () => {
-      const r = await ecriture(action, echec)
+      // Toute écriture de la grille est annulable (Ctrl+Z, 2026-11-18) : les
+      // semaines du mois affiché sont relues avant et après.
+      const r = await ecriture(() => avecHistorique(lundis, action), echec)
       if (!r.ok) {
         notifier(r.message ?? echec, 'danger')
         return
@@ -377,37 +381,39 @@ export function VueMois({
       const faites = new Map<string, SemaineOut>()
       let proposes = 0
       // Dans l'ordre : chaque semaine voit la précédente (repos de 11 h).
-      const ok = await parSemaine(
-        'Compléter le mois',
-        visees,
-        async (l) => {
-          if (ctrl.signal.aborted) throw new CalculArrete()
-          // Horizon glissant : chaque semaine est calculée avec la suivante
-          // esquissée ; celle-ci sera recalculée juste après si elle fait
-          // partie des semaines visées (ses propositions ne comptent pas).
-          const r = await generer(l, {
-            aujourdhui,
-            signal: ctrl.signal,
-            horizon: {
-              suivanteRecalculee: visees.includes(ajouterJours(l, 7)),
-            },
-          })
-          faites.set(l, r.semaine)
-          proposes += r.poses
-        },
-        // Horizon glissant : la semaine d'avant a été calculée en comptant
-        // sur le recalcul de celle-ci. Ses anciennes propositions ne tiennent
-        // peut-être plus avec elle (repos de 11 h, jours d'affilée) : elles
-        // sont retirées, le validé reste.
-        async (l, i) => {
-          if (!i || visees[i - 1] !== ajouterJours(l, -7)) return ''
-          try {
-            await vider(l, true)
-            return ` Les propositions de la semaine S${numeroSemaine(l)} ont été retirées : elles ne tenaient plus avec la semaine d'avant.`
-          } catch {
-            return ` Recalculez la semaine S${numeroSemaine(l)} : ses propositions ne tiennent peut-être plus avec la semaine d'avant.`
-          }
-        },
+      const ok = await avecHistorique(lundis, () =>
+        parSemaine(
+          'Compléter le mois',
+          visees,
+          async (l) => {
+            if (ctrl.signal.aborted) throw new CalculArrete()
+            // Horizon glissant : chaque semaine est calculée avec la suivante
+            // esquissée ; celle-ci sera recalculée juste après si elle fait
+            // partie des semaines visées (ses propositions ne comptent pas).
+            const r = await generer(l, {
+              aujourdhui,
+              signal: ctrl.signal,
+              horizon: {
+                suivanteRecalculee: visees.includes(ajouterJours(l, 7)),
+              },
+            })
+            faites.set(l, r.semaine)
+            proposes += r.poses
+          },
+          // Horizon glissant : la semaine d'avant a été calculée en comptant
+          // sur le recalcul de celle-ci. Ses anciennes propositions ne tiennent
+          // peut-être plus avec elle (repos de 11 h, jours d'affilée) : elles
+          // sont retirées, le validé reste.
+          async (l, i) => {
+            if (!i || visees[i - 1] !== ajouterJours(l, -7)) return ''
+            try {
+              await vider(l, true)
+              return ` Les propositions de la semaine S${numeroSemaine(l)} ont été retirées : elles ne tenaient plus avec la semaine d'avant.`
+            } catch {
+              return ` Recalculez la semaine S${numeroSemaine(l)} : ses propositions ne tiennent peut-être plus avec la semaine d'avant.`
+            }
+          },
+        ),
       ).finally(() => {
         arret.current = null
         setEnCompletion(false)
@@ -449,6 +455,20 @@ export function VueMois({
     })
   }
 
+  // Ctrl+Z / Ctrl+Y (2026-11-18) : annuler ou rétablir la dernière action de
+  // la grille. L'annulation elle-même ne s'inscrit pas dans l'historique.
+  useAnnulerRetablir({
+    actif: droits.ecrire && charge,
+    refus: () => (estOccupe() || arret.current ? MSG_CALCUL : null),
+    executer: (action, echec) =>
+      pendant(async () => {
+        const r = await ecriture(action, echec)
+        if (!r.ok) notifier(r.message ?? echec, 'danger')
+        return r
+      }),
+    notifier: (t, ton) => notifier(t, ton),
+  })
+
   const arreterCompletion = () => {
     arret.current?.abort()
     arreterCalcul()
@@ -462,7 +482,9 @@ export function VueMois({
     if (pasMaintenant()) return
     const visees = [...ouvertes]
     void pendant(async () => {
-      if (await parSemaine(libelle, visees, action))
+      if (
+        await avecHistorique(lundis, () => parSemaine(libelle, visees, action))
+      )
         notifier(fait + noteNonTouchees)
     })
   }

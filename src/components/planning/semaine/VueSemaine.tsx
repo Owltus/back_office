@@ -131,6 +131,8 @@ import {
 import type { ShiftCopie } from '#/components/planning/saisieRapide.ts'
 import { TEXTE_RAISON } from '#/lib/planning/eligibilite.ts'
 import { cn } from '#/lib/utils.ts'
+import { avecHistorique } from '#/lib/planning/annulation.ts'
+import { useAnnulerRetablir } from '#/components/planning/hooks/useAnnulerRetablir.ts'
 
 const MSG_OCCUPE = 'Calcul en cours : réessayez dans un instant.'
 const MSG_VERROU =
@@ -415,12 +417,15 @@ export function VueSemaine({
       echec: string,
       touche?: CaseJour,
     ) => {
-      const r = await pendant(() => ecrire(action, echec))
+      // Toute écriture de la grille est annulable (Ctrl+Z, 2026-11-18).
+      const r = await pendant(() =>
+        ecrire(() => avecHistorique([lundi], action), echec),
+      )
       if (!r.ok) notifier(r.message ?? `${echec}.`, 'danger')
       else if (touche) setAVerifier({ ...touche, n: Date.now() })
       return r
     },
-    [pendant, ecrire, notifier],
+    [pendant, ecrire, notifier, lundi],
   )
 
   // Après une écriture réussie, les données sont déjà relues : les alertes de
@@ -474,11 +479,13 @@ export function VueSemaine({
         try {
           // Horizon glissant : la semaine suivante est esquissée ; ses
           // shifts, validés ou proposés, restent des faits.
-          const r = await generer(lundi, {
-            ...options,
-            signal: ctrl.signal,
-            horizon: { suivanteRecalculee: false },
-          })
+          const r = await avecHistorique([lundi], () =>
+            generer(lundi, {
+              ...options,
+              signal: ctrl.signal,
+              horizon: { suivanteRecalculee: false },
+            }),
+          )
           const n = trous(r.semaine, aujourdhui)
           const passes = noteJoursPasses(
             joursPassesVides([r.semaine], (d) => d < aujourdhui),
@@ -502,6 +509,20 @@ export function VueSemaine({
       setEnGeneration(null)
     }
   }
+
+  // Ctrl+Z / Ctrl+Y (2026-11-18) : annuler ou rétablir la dernière action de
+  // la grille. L'annulation elle-même ne s'inscrit pas dans l'historique.
+  useAnnulerRetablir({
+    actif: droits.ecrire && pret,
+    refus: () =>
+      verrou ? MSG_VERROU : estOccupe() || arret.current ? MSG_OCCUPE : null,
+    executer: async (action, echec) => {
+      const r = await pendant(() => ecrire(action, echec))
+      if (!r.ok) notifier(r.message ?? `${echec}.`, 'danger')
+      return r
+    },
+    notifier: (t, ton) => notifier(t, ton),
+  })
 
   const arreterGeneration = () => {
     arret.current?.abort()

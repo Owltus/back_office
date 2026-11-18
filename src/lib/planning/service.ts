@@ -552,6 +552,14 @@ export async function validerPeriode(
   ) as number
 }
 
+/** Remet des cases dans un état donné, si elles sont encore dans l'état
+ * attendu (annuler / rétablir, `lib/planning/annulation.ts`). */
+export async function restaurerCases(cases: unknown[]): Promise<number> {
+  return verifier(
+    await supabase.rpc('planning_restaurer_cases', { p_cases: cases }),
+  ) as number
+}
+
 export async function vider(
   lundi: string,
   garderEpinglees: boolean,

@@ -56,6 +56,7 @@ export const AIDE_GESTES = [
   'Double-clic sur un shift ou un repos : le valider, ou le remettre en proposition',
   'Clic droit sur un nom : valider ou invalider tous ses shifts de la semaine',
   'Ctrl maintenu (Cmd sur Mac) : un clic sur un shift le copie, chaque clic suivant le colle, en proposition ; relâcher Ctrl arrête',
+  'Ctrl+Z : annuler la dernière action de la grille ; Ctrl+Y : la rétablir',
   'Posez et validez quelques shifts : Compléter fait le reste',
 ]
 

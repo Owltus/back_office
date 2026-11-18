@@ -669,6 +669,7 @@ export function AidePlanningContenu({
               'Clic sur un shift : tout modifier (horaire, poste, heures).',
               'Double-clic sur un shift ou un repos : le valider, ou le remettre en proposition.',
               'Glisser un shift : le déplacer. Avec Alt maintenu : le dupliquer.',
+              'Ctrl+Z (Cmd+Z sur Mac) : annuler la dernière action de la grille, une case posée comme un Compléter. Ctrl+Y : la rétablir. Rien n’est annulé si un collègue a changé ces cases entre-temps.',
             ]}
           />
         </Sous>
