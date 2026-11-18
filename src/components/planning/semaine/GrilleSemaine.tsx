@@ -235,7 +235,10 @@ const LigneStaff = memo(function LigneStaff({
   const loi = alertes.some((a) => a.nature === 'loi')
   return (
     <tr className="group/ligne">
-      <td className="sticky left-0 z-10 border-r border-b bg-card p-1 align-middle group-hover/ligne:bg-muted">
+      <td
+        className="sticky left-0 z-10 border-r border-b bg-card p-1 align-middle group-hover/ligne:bg-muted"
+        data-nom-salarie={s.id}
+      >
         <Tip
           side="right"
           label={

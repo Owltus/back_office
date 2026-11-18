@@ -30,6 +30,7 @@ import {
 } from '#/lib/planning/affichage.ts'
 import type { ShiftOut } from '#/lib/planning/semaine.ts'
 import {
+  autresShifts,
   codesUniques,
   etoileDeLaCase,
   heuresEtDuree,
@@ -203,6 +204,23 @@ export function MenuJour({
     (c) => c !== place && !dansEtoile.has(c.horaire.id),
   )
   const parId = new Map(liste.map((c) => [c.horaire.id, c]))
+  // Tous les autres horaires (saisie manuelle, 2026-11-18) : ce qu'ils
+  // enfreignent est dit sur la ligne, jamais bloqué.
+  const autres = u
+    ? autresShifts({
+        referentiel,
+        personne,
+        jour,
+        source,
+        shift,
+        // L'horaire actuel garde sa ligne « actuel » (ou sa coche).
+        deja: new Set([
+          ...u.codes.map((c) => c.horaire.id),
+          ...dansEtoile,
+          ...(shift?.type_shift_id != null ? [shift.type_shift_id] : []),
+        ]),
+      })
+    : []
   const choisir = (action: () => void) => () => {
     onFermer()
     action()
@@ -450,6 +468,37 @@ export function MenuJour({
             {g.horaires.map((h) => boutonCode(parId.get(h.id)!))}
           </div>
         ))}
+        {autres.length > 0 && (
+          <div role="group" aria-label="Autres shifts">
+            <div className="-mx-1 my-1 h-px bg-border" />
+            <div className="px-2 pt-1 pb-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+              Autres shifts
+            </div>
+            {autres.map((c) => (
+              <button
+                key={`a${c.horaire.id}`}
+                type="button"
+                role="menuitem"
+                aria-label={nomLigneCode({ ...c, changePoste: null })}
+                className={ITEM}
+                onClick={choisir(() => onHoraire(c.horaire, c.poste.id))}
+              >
+                <PastilleHoraire couleur={c.horaire.couleur} />
+                <span className="grid flex-1">
+                  <span className="text-sm whitespace-nowrap tabular-nums">
+                    {heuresEtDuree(c.horaire)}
+                  </span>
+                  {c.alerte && (
+                    <span className="text-xs text-amber-600 dark:text-amber-400">
+                      {c.alerte}
+                    </span>
+                  )}
+                </span>
+                <span className="size-4 shrink-0" />
+              </button>
+            ))}
+          </div>
+        )}
         {ecrire &&
           onSpecifique &&
           (() => {

@@ -459,3 +459,19 @@
     transition: none;
   }
 }
+
+/* Mode copie au Ctrl (2026-11-18) : touche enfoncée, les cases se pointent
+   en curseur de copie et s'éclairent au survol ; la case source est mise en
+   évidence par une règle posée par `IndicateurCopie` (`styleSource`). */
+.planning-copie [data-case],
+.planning-copie [data-case] *,
+.planning-copie [data-case-mois],
+.planning-copie [data-case-mois] * {
+  cursor: copy !important;
+}
+.planning-copie [data-case]:hover,
+.planning-copie [data-case-mois]:hover {
+  box-shadow: inset 0 0 0 2px
+    color-mix(in oklab, var(--color-primary) 70%, transparent);
+  background: color-mix(in oklab, var(--color-primary) 8%, transparent);
+}

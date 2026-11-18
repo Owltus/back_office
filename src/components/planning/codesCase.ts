@@ -532,6 +532,113 @@ export function codesUniques(
   return { codes, texte: r.texte, actuel: r.actuel }
 }
 
+// ------------------------------------------ autres shifts (saisie manuelle)
+
+/** Un horaire hors des habitudes de la personne, posable à la main. */
+export interface AutreShift {
+  horaire: Horaire
+  /** Poste sur lequel il sera posé. */
+  poste: Poste
+  /** Ce qu'il enfreint (repos, contrat), dit sans bloquer ; null : rien. */
+  alerte: string | null
+}
+
+/** Phrase de la limite de la semaine dépassée (saisie manuelle). */
+export const TEXTE_DEPASSE_SEMAINE = 'Dépasse le maximum de la semaine'
+
+/**
+ * « Autres shifts » du clic droit (demande utilisateur du 2026-11-18) : TOUS
+ * les horaires de l'établissement que la liste habituelle (`codesUniques`,
+ * `deja`) ne propose pas, un middle pour quelqu'un qui n'en fait jamais par
+ * exemple. La fiche et le poste ne filtrent plus rien ici : ils ne servent
+ * qu'à la génération automatique, qui reste inchangée.
+ *
+ * Ce qui enfreint le repos ou le contrat est DIT, jamais bloqué : la coupure
+ * de repos quotidien (même calcul que la règle unique), un repos fixé par la
+ * semaine type, la limite d'heures de la semaine. Ce qui n'est pas un shift
+ * reste fermé, comme dans le reste du menu : jour hors contrat, école, absence
+ * fixée par la semaine type (elles se changent dans la fiche).
+ *
+ * Poste : celui du shift de la case, sinon le poste de référence de la
+ * personne (titulaire), sinon le premier poste ouvert ; jamais un poste fermé.
+ */
+export function autresShifts({
+  referentiel,
+  personne,
+  jour,
+  source,
+  shift,
+  deja,
+}: {
+  referentiel: EntreeCase['referentiel']
+  personne: Salarie
+  jour: number
+  source: SourceCase
+  shift?: Pick<ShiftOut, 'id' | 'poste_id' | 'debut' | 'fin' | 'pause'> | null
+  /** Horaires déjà proposés plus haut dans le menu. */
+  deja: ReadonlySet<number>
+}): AutreShift[] {
+  const ouverts = referentiel.postes.filter((p) => !p.ferme)
+  const posteId = [
+    shift?.poste_id,
+    posteDeReference(personne, ouverts),
+    ouverts.at(0)?.id,
+  ].find((id) => id !== undefined && ouverts.some((p) => p.id === id))
+  const poste = ouverts.find((p) => p.id === posteId)
+  if (!poste) return []
+  // La règle unique, sans le filtre de la fiche ni du poste, et sans le repos
+  // fixe du jour (dit en alerte) : il ne reste que les vraies fermetures et la
+  // coupure de repos.
+  const reposFixe = personne.semaine_type.at(jour)?.mode === 'repos'
+  const libre: Salarie = {
+    ...personne,
+    shifts_autorises: [],
+    // Le jour lui-même : ni repos fixe (dit en alerte), ni horaire imposé ;
+    // une absence fixée reste une fermeture.
+    semaine_type: personne.semaine_type.map((j, i) =>
+      i === jour && j.mode !== 'absence' ? { mode: 'auto' as const } : j,
+    ),
+  }
+  const permis = codesDeLaCase({
+    referentiel: {
+      ...referentiel,
+      postes: referentiel.postes.map((p) =>
+        p.id === poste.id ? { ...p, horaires_autorises: [] } : p,
+      ),
+    },
+    personne: libre,
+    posteId: poste.id,
+    jour,
+    source,
+    sauf: shift?.id,
+  })
+  if (permis.raison !== null && permis.raison !== 'coupure-11h') return []
+  const bilan = source.semaine?.bilan.find((b) => b.salarie_id === personne.id)
+  const actuel = shift ? travailCase(shift) : 0
+  const alertesDe = (h: Horaire): string | null => {
+    const phrases = [
+      permis.ecartes.find((e) => e.horaire.id === h.id)?.texte,
+      reposFixe ? TEXTE_REPOS_FIXE : undefined,
+      bilan &&
+      !personne.forfait_jours &&
+      bilan.minutes - actuel + travailCase(h) > bilan.minutes_max
+        ? TEXTE_DEPASSE_SEMAINE
+        : undefined,
+    ].filter((p): p is string => !!p)
+    return phrases.length ? phrases.join(' · ') : null
+  }
+  return trierHoraires(
+    referentiel.horaires.filter((h) => !deja.has(h.id)),
+    MOMENTS_HOTEL,
+  ).map((h) => ({ horaire: h, poste, alerte: alertesDe(h) }))
+}
+
+/** Repos fixé par la semaine type : dit sur un autre shift posé à la main. */
+export const TEXTE_REPOS_FIXE = 'Repos fixé par sa semaine type'
+
+const travailCase = (h: Pick<Horaire, 'debut' | 'fin' | 'pause'>) =>
+  dureeHoraire(h.debut, h.fin) - h.pause
+
 /** Heures et temps de travail d'un horaire, comme sur la ligne d'un menu :
  * « 07:00–15:45 · 8h » (pause déduite). */
 export function heuresEtDuree(

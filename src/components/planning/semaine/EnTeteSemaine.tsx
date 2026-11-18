@@ -54,6 +54,8 @@ export const AIDE_GESTES = [
   'Journée étoile : un horaire de 7 h, une fois par semaine pour les 39 h',
   'Clic sur un shift : tout modifier',
   'Double-clic sur un shift ou un repos : le valider, ou le remettre en proposition',
+  'Clic droit sur un nom : valider ou invalider tous ses shifts de la semaine',
+  'Ctrl maintenu (Cmd sur Mac) : un clic sur un shift le copie, chaque clic suivant le colle, en proposition ; relâcher Ctrl arrête',
   'Posez et validez quelques shifts : Compléter fait le reste',
 ]
 

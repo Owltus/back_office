@@ -663,7 +663,9 @@ export function AidePlanningContenu({
         <Sous titre="Les gestes">
           <Liste
             items={[
-              'Clic droit sur une case : choisir un horaire, poser un repos ou une absence, valider.',
+              'Clic droit sur une case : choisir un horaire, poser un repos ou une absence, valider. Sous Autres shifts, tous les horaires de l’établissement : ce qui casse le repos ou dépasse le maximum de la semaine est signalé, jamais bloqué.',
+              'Clic droit sur un nom : valider ou invalider tous ses shifts de la semaine affichée, ou du mois en vue mois.',
+              'Ctrl maintenu (Cmd sur Mac) : un clic sur un shift le copie, chaque clic suivant le colle, en proposition. Relâcher Ctrl arrête.',
               'Clic sur un shift : tout modifier (horaire, poste, heures).',
               'Double-clic sur un shift ou un repos : le valider, ou le remettre en proposition.',
               'Glisser un shift : le déplacer. Avec Alt maintenu : le dupliquer.',

@@ -69,7 +69,7 @@ const PARTIES_FICHE: Record<PartieFiche, string> = {
   identite: 'Identité et contrat',
   ecole: 'École',
   postes: 'Compétences',
-  horaires: 'Horaires autorisés',
+  horaires: 'Horaires du planning automatique',
   semaine: 'Semaine type',
   absences: 'Absences',
   regles: 'Règles HCR appliquées',

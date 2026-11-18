@@ -239,8 +239,8 @@ export function SectionHoraires({
     }))
   return (
     <Section
-      titre="Horaires autorisés"
-      aide="Les horaires qu'elle fait, parmi ceux de ses postes : par exemple seulement le soir pour quelqu'un qui ne fait jamais le matin, ou la nuit seule pour quelqu'un qui ne fait que des nuits. Les horaires d'un poste se règlent dans Postes."
+      titre="Horaires du planning automatique"
+      aide="Les horaires que la génération automatique lui donne, parmi ceux de ses postes : par exemple seulement le soir pour quelqu'un qui ne fait jamais le matin, ou la nuit seule pour quelqu'un qui ne fait que des nuits. Les horaires d'un poste se règlent dans Postes."
     >
       {parPoste.length > 0 && (
         <ul
@@ -272,7 +272,7 @@ export function SectionHoraires({
         </ul>
       )}
       <TousOuCertains
-        etiquette="Horaires autorisés"
+        etiquette="Horaires du planning automatique"
         choisis={b.shifts_autorises}
         proposes={ouverts}
         onChange={(shifts_autorises) =>
@@ -287,7 +287,7 @@ export function SectionHoraires({
       >
         {(liste) => (
           <ChoixCodes
-            etiquette="Horaires autorisés"
+            etiquette="Horaires du planning automatique"
             horaires={deSesPostes}
             choisis={liste.choisis}
             onChange={liste.onChange}
@@ -295,6 +295,12 @@ export function SectionHoraires({
           />
         )}
       </TousOuCertains>
+      <p className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
+        <span className="font-medium text-foreground">Saisie manuelle :</span>{' '}
+        dans le planning, tous les horaires restent possibles (clic droit sur
+        une case, rubrique Autres shifts). Un horaire qui casse le repos ou
+        dépasse le maximum de la semaine est signalé, sans être bloqué.
+      </p>
       {morts.length > 0 && (
         <ul className="flex flex-col gap-1" aria-label="Horaires plus prévus">
           {morts.map((h) => {

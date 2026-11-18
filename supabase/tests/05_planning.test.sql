@@ -143,7 +143,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':J', (select j from t_ids)::text);
 $$;
 
-select plan(222);
+select plan(229);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -949,6 +949,35 @@ select is(pg_temp.essai('ecriture', array[
   pg_temp.q('select public.planning_valider_avec_repos(:P, null, null, false, ''[]'')'),
   pg_temp.q('select string_agg(jour || ''/'' || epinglee, '','' order by jour) from public.planning_affectations where lundi = :P and salarie_id = :S1')]),
   '0/true,1/false', 'passé : remettre en proposition ne touche pas un jour passé');
+
+-- ---------------- valider toute une période d'une personne (2026-11-18) ---
+-- Oracle : la demande utilisateur (clic droit sur le nom), mêmes règles que
+-- la validation d'une semaine ; une semaine verrouillée est sautée.
+select is(pg_temp.essai('ecriture', array[
+  pg_temp.q('select public.planning_valider_periode(array[:S1, :S2], :F::date, :L::date + 6, true)')]),
+  '1', 'période : valider ne compte que les propositions des semaines ouvertes');
+select is(pg_temp.essai('ecriture', array[
+  pg_temp.q('select public.planning_valider_periode(array[:S1, :S2], :F::date, :L::date + 6, true)'),
+  pg_temp.q('select string_agg(salarie_id || ''/'' || jour || ''/'' || epinglee, '','' order by salarie_id, jour) from public.planning_affectations where lundi = :F and salarie_id in (:S1, :S2)')]),
+  (select s1 || '/0/true,' || s2 || '/1/true' from t_ids),
+  'période : tous les shifts de la personne sont validés en une fois');
+select is(pg_temp.essai('ecriture', array[
+  pg_temp.q('select public.planning_valider_periode(array[:S1], :F::date, :L::date + 6, false)'),
+  pg_temp.q('select string_agg(lundi || ''/'' || epinglee, '','' order by lundi) from public.planning_affectations where salarie_id = :S1 and lundi in (:F, :L)')]),
+  (select f || '/false,' || l || '/true' from t_sem),
+  'période : invalider remet en proposition, la semaine verrouillée reste telle quelle');
+select is(pg_temp.essai('ecriture', array[
+  pg_temp.q('select public.planning_valider_periode(array[:S1], :P::date, :P::date + 6, false)')]),
+  '0', 'période : l''écriture ne remet pas un jour passé en proposition');
+select is(pg_temp.essai('gestion', array[
+  pg_temp.q('select public.planning_valider_periode(array[:S1], :P::date, :P::date + 6, false)')]),
+  '1', 'période : la gestion corrige le passé');
+select is(pg_temp.essai('lecture', array[
+  pg_temp.q('select public.planning_valider_periode(array[:S1], :F::date, :F::date + 6, true)')]),
+  'err=42501', 'période : la lecture ne valide rien');
+select is(pg_temp.essai('ecriture', array[
+  pg_temp.q('select public.planning_valider_periode(array[:S1], :F::date + 6, :F::date, true)')]),
+  'err=PL400', 'période : des bornes inversées sont refusées');
 select is(pg_temp.essai('ecriture', array[
   pg_temp.q('select public.planning_valider_avec_repos(:P, :S3, null, true, jsonb_build_array(jsonb_build_object(''salarie_id'', :S3, ''jour'', 6)))'),
   pg_temp.q('select count(*) from public.planning_absences where salarie_id = :S3 and jour = :P::date + 6')]),

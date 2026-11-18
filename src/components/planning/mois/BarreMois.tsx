@@ -200,6 +200,8 @@ export function BarreMois({
             'Clic droit : changer l’horaire, valider, passer en journée étoile',
             'Journée étoile : un horaire de 7 h, une fois par semaine pour les 39 h',
             'Double-clic sur un shift ou un repos : le valider, ou le remettre en proposition',
+            'Clic droit sur un nom : valider ou invalider tous ses shifts de la mois',
+            'Ctrl maintenu (Cmd sur Mac) : un clic sur un shift le copie, chaque clic suivant le colle, en proposition ; relâcher Ctrl arrête',
             'Glisser un shift : le déplacer, même vers une autre semaine (Alt : le dupliquer)',
             'Glisser un repos, une absence ou l’école : dans sa semaine',
             'S45 : ouvrir la semaine en vue semaine',

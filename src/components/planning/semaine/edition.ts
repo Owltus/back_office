@@ -340,6 +340,33 @@ export function poserSpecifique(
   )
 }
 
+/** Colle un shift copié au Ctrl (2026-11-18) : même chemin que le clic droit
+ * (une absence posée à la main est retirée, remise si le shift est refusé),
+ * mais le shift arrive EN PROPOSITION, qu'il soit créé ou remplacé. */
+export function poserCopie(
+  lundi: string,
+  o: CaseJour,
+  shift: ShiftOut | undefined,
+  absence: { fixe: boolean; motif_id?: number | null } | null,
+  c: {
+    poste_id: number
+    horaire_id: number | null
+    debut: string
+    fin: string
+    pause: number
+  },
+): () => Promise<void> {
+  return poserValeurs(
+    lundi,
+    o,
+    shift,
+    absence,
+    { horaire_id: c.horaire_id, debut: c.debut, fin: c.fin, pause: c.pause },
+    c.poste_id,
+    false,
+  )
+}
+
 function poserValeurs(
   lundi: string,
   o: CaseJour,
@@ -352,15 +379,20 @@ function poserValeurs(
     pause: number
   },
   posteId: number,
+  /** Validation du shift posé ; absente : validé (la base valide aussi le
+   * shift retouché). */
+  epinglee?: boolean,
 ): () => Promise<void> {
+  const avecValidation =
+    epinglee === undefined ? valeurs : { ...valeurs, epinglee }
   // Un code choisi dans une autre rubrique (casquette) change aussi le poste.
   if (shift)
     return () =>
       service.modifierShift(
         shift.id,
         shift.poste_id === posteId
-          ? valeurs
-          : { ...valeurs, poste_id: posteId },
+          ? avecValidation
+          : { ...avecValidation, poste_id: posteId },
       )
   return async () => {
     const date = ajouterJours(lundi, o.jour)
@@ -371,7 +403,7 @@ function poserValeurs(
         ...o,
         poste_id: posteId,
         ...valeurs,
-        epinglee: true,
+        epinglee: epinglee ?? true,
       })
     } catch (err) {
       if (retiree && absence.motif_id != null) {

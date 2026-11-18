@@ -18,6 +18,7 @@
 
 import { lireRegles } from '#/lib/planning/reglesEtablissement.ts'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { MouseEvent as EvenementSouris } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 
@@ -62,6 +63,7 @@ import {
   poserAbsences,
   supprimerShift,
   valider,
+  validerPeriode,
   verrouiller,
   vider,
 } from '#/lib/planning/service.ts'
@@ -104,9 +106,23 @@ import {
   absenceDe,
   reposAValider,
   reposDe,
+  poserCopie,
   poserHoraire as poserHoraireCase,
   poserSpecifique as poserSpecifiqueCase,
 } from '#/components/planning/semaine/edition.ts'
+import { MenuNomFlottant } from '#/components/planning/MenuNom.tsx'
+import type { OuvertureMenuNom } from '#/components/planning/MenuNom.tsx'
+import { IndicateurCopie } from '#/components/planning/IndicateurCopie.tsx'
+import { useCopieCtrl } from '#/components/planning/hooks/useCopieCtrl.ts'
+import {
+  clicDeCopie,
+  copieDe,
+  memeShift,
+  shiftsAChanger,
+} from '#/components/planning/saisieRapide.ts'
+import type { ShiftCopie } from '#/components/planning/saisieRapide.ts'
+import { TEXTE_RAISON } from '#/lib/planning/eligibilite.ts'
+import { estEcole } from '#/lib/planning/semaine.ts'
 import { EditeurShift } from '#/components/planning/semaine/EditeurShift.tsx'
 import type { Edition } from '#/components/planning/semaine/EditeurShift.tsx'
 import { ajouterJours } from '#/lib/planning/temps.ts'
@@ -170,6 +186,12 @@ export function VueMois({
     lundi: string
   } | null>(null)
   const [menu, setMenu] = useState<OuvertureMenu | null>(null)
+  // Clic droit sur un nom (2026-11-18) : valider ou invalider son mois.
+  const [menuNom, setMenuNom] = useState<{
+    ouverture: OuvertureMenuNom
+    x: number
+    y: number
+  } | null>(null)
   // « Compléter le mois » en cours : un second clic l'arrête (2026-11-02).
   const arret = useRef<AbortController | null>(null)
   const [enCompletion, setEnCompletion] = useState(false)
@@ -641,6 +663,129 @@ export function VueMois({
     )
   }
 
+  // ------------------------------------- valider le mois d'une personne
+
+  /** Clic droit sur un nom : valider ou invalider tous ses shifts du mois
+   * (ses contrats de la ligne), en une requête (2026-11-18). Les semaines
+   * verrouillées sont sautées ; les jours du mois seulement. */
+  const ouvrirNom = (contrats: number[], nom: string, x: number, y: number) => {
+    if (!droits.ecrire || pasMaintenant()) return
+    const duMois = jours.filter((d) => d.startsWith(mois))
+    if (!duMois.length) return
+    const periode = {
+      salaries: contrats,
+      du: duMois[0],
+      au: duMois[duMois.length - 1],
+    }
+    const vues = lundis.map((l) => ({
+      lundi: l,
+      verrouillee: !!etats.get(l)?.verrouillee,
+      affectations: semaines.get(l)?.affectations ?? [],
+    }))
+    const compte = (epinglee: boolean) =>
+      shiftsAChanger(vues, periode, epinglee, aujourdhui, droits.gerer)
+    setMenu(null)
+    setMenuNom({
+      x,
+      y,
+      ouverture: {
+        nom,
+        periode: `en ${MOIS_SEUL.format(new Date(`${mois}-01T00:00:00Z`))}`,
+        aValider: compte(true),
+        aInvalider: compte(false),
+        onValider: (epinglee) => {
+          if (pasMaintenant()) return
+          void executer(
+            lundis[0],
+            () =>
+              validerPeriode(
+                periode.salaries,
+                periode.du,
+                periode.au,
+                epinglee,
+              ),
+            epinglee
+              ? "La validation n'a pas été changée"
+              : "La remise en proposition n'a pas été faite",
+          )
+        },
+      },
+    })
+  }
+  const fermerMenuNom = useCallback(() => setMenuNom(null), [])
+
+  // ------------------------------------------- copie au Ctrl (2026-11-18)
+
+  const copie = useCopieCtrl(droits.ecrire && charge)
+  // Les semaines relues au moment où le collage s'écrit (les collages sont en
+  // file : le précédent a pu changer la case).
+  const semainesRef = useRef(semaines)
+  semainesRef.current = semaines
+
+  const coller = (salarieId: number, date: string, c: ShiftCopie) => {
+    const { lundi, jour } = reperer(date)
+    if (etats.get(lundi)?.verrouillee) return notifier(MSG_VERROU, 'attention')
+    if (arret.current) return notifier(MSG_CALCUL, 'attention')
+    if (jourFige(date, aujourdhui, droits.gerer))
+      return notifier(MSG_JOUR_PASSE, 'attention')
+    const motifs = referentiel?.motifs ?? []
+    const cible = caseDe(semaines, motifs, salarieId, date)
+    if (cible?.type === 'hors') return notifier(MSG_HORS, 'attention')
+    if (cible?.type === 'absence' && cible.fixe)
+      return notifier(
+        'Jour fixe de la semaine type : à changer dans la fiche.',
+        'attention',
+      )
+    if (cible?.type === 'absence' && cible.motif && estEcole(cible.motif))
+      return notifier(TEXTE_RAISON.ecole, 'attention')
+    void copie.enFile(async () => {
+      const c2 = caseDe(semainesRef.current, motifs, salarieId, date)
+      const shift = c2?.type === 'shift' ? c2.shift : undefined
+      if (shift && memeShift(shift, c)) return
+      await executer(
+        lundi,
+        poserCopie(
+          lundi,
+          { salarie_id: salarieId, jour },
+          shift,
+          c2?.type === 'absence'
+            ? { fixe: c2.fixe, motif_id: c2.motifId }
+            : null,
+          c,
+        ),
+        "Le shift n'a pas été collé",
+        { salarieId, jour },
+      )
+    })
+  }
+
+  /** Clic touche du mode copie enfoncée : le premier retient le shift de la
+   * case, les suivants le collent. Un clic sans la touche arrête le mode. */
+  const surClicCopie = (e: EvenementSouris) => {
+    if (!droits.ecrire) return
+    if (!clicDeCopie(e, copie.touche)) {
+      if (copie.memoire) copie.arreter()
+      return
+    }
+    const el = (e.target as HTMLElement).closest<HTMLElement>(
+      '[data-case-mois]',
+    )
+    if (!el) return
+    e.preventDefault()
+    e.stopPropagation()
+    const cle = el.dataset.caseMois ?? ''
+    const [sid, date] = cle.split('|')
+    const salarieId = Number(sid)
+    if (!copie.memoire) {
+      const c = caseDe(semaines, referentiel?.motifs ?? [], salarieId, date)
+      if (c?.type === 'shift')
+        copie.copier({ copie: copieDe(c.shift), source: cle })
+      return
+    }
+    if (cle === copie.memoire.source) return
+    coller(salarieId, date, copie.memoire.copie)
+  }
+
   // ------------------------------------------------------------ glisser
 
   const deposer = ({ vol, salarieId, date, copie }: Depot) => {
@@ -997,6 +1142,9 @@ export function VueMois({
             onDouble={droits.ecrire ? basculerValidation : undefined}
             onVerrou={droits.gerer ? setVerrouSemaine : undefined}
             onDeposer={deposer}
+            onNom={droits.ecrire ? ouvrirNom : undefined}
+            copie={copie.enfonce}
+            onClicCapture={surClicCopie}
           />
         </GardeDemarrage>
       )}
@@ -1006,6 +1154,19 @@ export function VueMois({
         onValider={poserLeSpecifique}
         onFermer={() => setSpecifique(null)}
       />
+      <IndicateurCopie
+        memoire={copie.memoire}
+        touche={copie.touche}
+        attribut="data-case-mois"
+      />
+      {menuNom && (
+        <MenuNomFlottant
+          ouverture={menuNom.ouverture}
+          x={menuNom.x}
+          y={menuNom.y}
+          onFermer={fermerMenuNom}
+        />
+      )}
       {menu && personneMenu && referentiel && reperesMenu && (
         <MenuJour
           ouverture={menu}

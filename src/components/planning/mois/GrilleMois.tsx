@@ -142,6 +142,9 @@ export function GrilleMois({
   onDouble,
   onDeposer,
   onVerrou,
+  onNom,
+  copie = false,
+  onClicCapture,
 }: {
   mois: string
   jours: string[]
@@ -168,6 +171,12 @@ export function GrilleMois({
   onDeposer: (d: Depot) => void
   /** Gestion : verrouiller ou déverrouiller une semaine d'un clic. */
   onVerrou?: (lundi: string) => void
+  /** Clic droit sur un nom : ses contrats de la ligne (2026-11-18). */
+  onNom?: (contrats: number[], nom: string, x: number, y: number) => void
+  /** Mode copie au Ctrl : curseur et survol des cases. */
+  copie?: boolean
+  /** Clic en phase de capture sur la grille (copie au Ctrl). */
+  onClicCapture?: (e: MouseEvent) => void
 }) {
   const { motifs, horaires, groupes } = referentiel
   // Règles de l'établissement (journée étoile des cartes).
@@ -318,7 +327,9 @@ export function GrilleMois({
         className={cn(
           'min-h-0 flex-1 overflow-auto rounded-xl border bg-card',
           enVol && 'planning-mois-en-glisser',
+          copie && 'planning-copie',
         )}
+        onClickCapture={onClicCapture}
       >
         <table
           className="w-full table-fixed border-separate border-spacing-0 text-sm"
@@ -514,6 +525,7 @@ export function GrilleMois({
                     onFiche={onFiche}
                     onJour={onJour}
                     onDouble={onDouble}
+                    onNom={onNom}
                   />
                 )),
               ],
@@ -572,6 +584,7 @@ function LigneMois({
   onFiche,
   onJour,
   onDouble,
+  onNom,
 }: {
   personne: Salarie
   /** Les contrats de la personne affichés sur cette ligne (2026-11-13 : un
@@ -597,6 +610,7 @@ function LigneMois({
     clicDroit: boolean,
   ) => void
   onDouble?: (salarieId: number, date: string) => void
+  onNom?: (contrats: number[], nom: string, x: number, y: number) => void
 }) {
   const moments = useMoments()
   // Le contrat de la personne ce jour-là : celui qui le couvre, sinon le
@@ -756,6 +770,7 @@ function LigneMois({
               {couverts.map((d) => (
                 <Segment
                   key={d}
+                  cle={`${sid(d)}|${d}`}
                   idDepot={`case:${sid(d)}:${d}`}
                   idGlisser={`statut:${sid(d)}:${d}`}
                   actif={
@@ -794,6 +809,7 @@ function LigneMois({
     cellules.push(
       <CaseJour
         key={date}
+        cle={`${sid(date)}|${date}`}
         idDepot={`case:${sid(date)}:${date}`}
         classe={cn(
           lundiCase && 'border-l border-l-foreground/25',
@@ -860,6 +876,19 @@ function LigneMois({
           <button
             type="button"
             onClick={() => onFiche(s.id)}
+            onContextMenu={
+              onNom
+                ? (e) => {
+                    e.preventDefault()
+                    onNom(
+                      contrats.map((c) => c.id),
+                      nom,
+                      e.clientX,
+                      e.clientY,
+                    )
+                  }
+                : undefined
+            }
             className="flex h-10 w-full items-center gap-1.5 truncate px-3 text-left text-xs font-semibold hover:text-primary"
           >
             <span className="truncate">{nom}</span>
@@ -892,12 +921,15 @@ function LigneMois({
 }
 
 function CaseJour({
+  cle,
   idDepot,
   classe,
   indice,
   onMenu,
   children,
 }: {
+  /** « salarie|date » : la case pour la copie au Ctrl. */
+  cle: string
   idDepot: string
   classe: string
   indice: Indice
@@ -916,6 +948,7 @@ function CaseJour({
         isOver && 'bg-primary/20',
       )}
       onContextMenu={onMenu}
+      data-case-mois={cle}
     >
       {children}
     </td>
@@ -969,6 +1002,7 @@ function Pastille({
 }
 
 function Segment({
+  cle,
   idDepot,
   idGlisser,
   actif,
@@ -979,6 +1013,7 @@ function Segment({
   onClick,
   onMenu,
 }: {
+  cle: string
   idDepot: string
   idGlisser: string
   actif: boolean
@@ -1004,6 +1039,7 @@ function Segment({
         aria-label={etiquette}
         onClick={onClick}
         onContextMenu={onMenu}
+        data-case-mois={cle}
         className={cn(
           'min-w-0 flex-1 touch-manipulation rounded-md select-none hover:bg-primary/10 hover:shadow-[inset_0_0_0_1px_var(--color-primary)]',
           classe,

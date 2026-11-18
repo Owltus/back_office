@@ -89,6 +89,7 @@ import {
 } from '#/components/planning/attention.ts'
 import { PanneauAlertes } from '#/components/planning/semaine/PanneauAlertes.tsx'
 import {
+  autresShifts,
   codesUniques,
   etoileDeLaCase,
   motifsDuJour,
@@ -100,6 +101,7 @@ import type { OuvertureSpecifique } from '#/components/planning/HoraireSpecifiqu
 import {
   absenceDe,
   indiceDe,
+  poserCopie,
   poserHoraire,
   poserSpecifique,
   reposAValider,
@@ -115,6 +117,20 @@ import type {
   ContenuStatut,
   EnVol,
 } from '#/components/planning/semaine/edition.ts'
+
+import { MenuNomContexte } from '#/components/planning/MenuNom.tsx'
+import type { OuvertureMenuNom } from '#/components/planning/MenuNom.tsx'
+import { IndicateurCopie } from '#/components/planning/IndicateurCopie.tsx'
+import { useCopieCtrl } from '#/components/planning/hooks/useCopieCtrl.ts'
+import {
+  clicDeCopie,
+  copieDe,
+  memeShift,
+  shiftsAChanger,
+} from '#/components/planning/saisieRapide.ts'
+import type { ShiftCopie } from '#/components/planning/saisieRapide.ts'
+import { TEXTE_RAISON } from '#/lib/planning/eligibilite.ts'
+import { cn } from '#/lib/utils.ts'
 
 const MSG_OCCUPE = 'Calcul en cours : réessayez dans un instant.'
 const MSG_VERROU =
@@ -237,6 +253,8 @@ export function VueSemaine({
   const [alertesOuvertes, setAlertesOuvertes] = useState(false)
   const [infractionsOuvertes, setInfractionsOuvertes] = useState(false)
   const [menu, setMenu] = useState<OuvertureMenu | null>(null)
+  // Clic droit sur un nom (2026-11-18) : valider ou invalider sa semaine.
+  const [menuNom, setMenuNom] = useState<OuvertureMenuNom | null>(null)
   // La fenêtre « Horaire spécifique » du clic droit (2026-11-03).
   const [specifique, setSpecifique] = useState<{
     o: CaseJour
@@ -714,6 +732,12 @@ export function VueSemaine({
   // ------------------------------------------------------- clic droit
 
   const ouvrirMenu = (e: EvenementSouris) => {
+    setMenu(null)
+    setMenuNom(null)
+    const nom = (e.target as HTMLElement).closest<HTMLElement>(
+      '[data-nom-salarie]',
+    )
+    if (nom) return ouvrirMenuNom(e, Number(nom.dataset.nomSalarie))
     const td = (e.target as HTMLElement).closest<HTMLElement>('[data-case]')
     const [sid, j] = (td?.dataset.case ?? '').split(':').map(Number)
     const p = td ? personne(sid) : undefined
@@ -733,6 +757,18 @@ export function VueSemaine({
     }
     const o = { salarie_id: sid, jour: j }
     const shift = shiftDe(affichee, o)
+    const codes = codesUniques(
+      rubriquesDeLaCase({
+        referentiel,
+        personne: p,
+        jour: j,
+        source,
+        shift,
+      }),
+      p,
+      referentiel.postes,
+      shift?.poste_id,
+    )
     // Journée étoile : les horaires de 7 h de son horaire (ou l'horaire de
     // 8 h, s'il en est déjà un), posés d'un clic comme un horaire.
     const etoile = shift
@@ -774,18 +810,23 @@ export function VueSemaine({
       nom: nomComplet(p),
       actuel: shift?.type_shift_id,
       actuelPoste: shift?.poste_id,
-      codes: codesUniques(
-        rubriquesDeLaCase({
-          referentiel,
-          personne: p,
-          jour: j,
-          source,
-          shift,
-        }),
-        p,
-        referentiel.postes,
-        shift?.poste_id,
-      ),
+      codes,
+      // Tous les autres horaires, permis à la main avec leur alerte
+      // (2026-11-18) ; la journée étoile garde les siens.
+      autres: autresShifts({
+        referentiel,
+        personne: p,
+        jour: j,
+        source,
+        shift,
+        deja: new Set([
+          ...codes.codes.map((c) => c.horaire.id),
+          ...(etoile?.versions ?? []).map((c) => c.horaire.id),
+          ...(etoile?.normales ?? []).map((c) => c.horaire.id),
+          // L'horaire actuel garde sa ligne « actuel » (ou sa coche).
+          ...(shift?.type_shift_id != null ? [shift.type_shift_id] : []),
+        ]),
+      }),
       validation: shift
         ? {
             active: shift.epinglee,
@@ -885,6 +926,106 @@ export function VueSemaine({
             },
           },
     })
+  }
+
+  /** Clic droit sur un nom : valider ou invalider tous ses shifts de la
+   * semaine, en une requête (2026-11-18). */
+  const ouvrirMenuNom = (e: EvenementSouris, sid: number) => {
+    const p = personne(sid)
+    if (!p || !affichee) return e.preventDefault()
+    let refus: string | null = null
+    if (verrou) refus = MSG_VERROU
+    else if (!pret || estOccupe()) refus = MSG_OCCUPE
+    if (refus) {
+      e.preventDefault()
+      notifier(refus, 'attention')
+      return
+    }
+    const periode = { salaries: [sid], du: dates[0], au: dates[6] }
+    const compte = (epinglee: boolean) =>
+      shiftsAChanger([affichee], periode, epinglee, aujourdhui, droits.gerer)
+    setMenuNom({
+      nom: nomComplet(p),
+      periode: `semaine ${numeroSemaine(lundi)}`,
+      aValider: compte(true),
+      aInvalider: compte(false),
+      onValider: (epinglee) =>
+        siOuverte(
+          () =>
+            void executer(
+              () =>
+                service.validerPeriode(
+                  periode.salaries,
+                  periode.du,
+                  periode.au,
+                  epinglee,
+                ),
+              epinglee
+                ? 'Validation impossible'
+                : 'Remise en proposition impossible',
+            ),
+        ),
+    })
+  }
+
+  // ------------------------------------------- copie au Ctrl (2026-11-18)
+
+  const copie = useCopieCtrl(gestes)
+  // La semaine relue au moment où le collage s'écrit (les collages sont en
+  // file : le précédent a pu changer la case).
+  const afficheeRef = useRef(affichee)
+  afficheeRef.current = affichee
+
+  const coller = (o: CaseJour, c: ShiftCopie) => {
+    if (!droits.ecrire || !pret) return
+    if (verrou) return notifier(MSG_VERROU, 'attention')
+    if (arret.current) return notifier(MSG_OCCUPE, 'attention')
+    if (joursFiges[o.jour]) return notifier(MSG_JOUR_PASSE, 'attention')
+    const st = statutDe(o.salarie_id, o.jour)
+    if (st?.genre === 'hors') return notifier(MSG_HORS_CONTRAT, 'attention')
+    if (st && (st.genre === 'absence' || st.genre === 'ecole') && st.fixe)
+      return notifier(MSG_FIXE, 'attention')
+    if (st?.genre === 'ecole') return notifier(TEXTE_RAISON.ecole, 'attention')
+    void copie.enFile(async () => {
+      const actuelle = afficheeRef.current
+      if (!actuelle) return
+      const shift = shiftDe(actuelle, o)
+      if (shift && memeShift(shift, c)) return
+      const absence = absenceDe(
+        actuelle.bilan.find((b) => b.salarie_id === o.salarie_id),
+        o.jour,
+      )
+      await executer(
+        poserCopie(lundi, o, shift, absence, c),
+        'Shift non collé',
+        o,
+      )
+    })
+  }
+
+  /** Clic touche du mode copie enfoncée : le premier retient le shift de la
+   * case, les suivants le collent. Un clic sans la touche arrête le mode
+   * (la touche a pu être relâchée hors de la fenêtre). */
+  const surClicCopie = (e: EvenementSouris) => {
+    if (!gestes) return
+    if (!clicDeCopie(e, copie.touche)) {
+      if (copie.memoire) copie.arreter()
+      return
+    }
+    const td = (e.target as HTMLElement).closest<HTMLElement>('[data-case]')
+    if (!td || !affichee) return
+    e.preventDefault()
+    e.stopPropagation()
+    const cle = td.dataset.case ?? ''
+    const [sid, j] = cle.split(':').map(Number)
+    const o = { salarie_id: sid, jour: j }
+    if (!copie.memoire) {
+      const shift = shiftDe(affichee, o)
+      if (shift) copie.copier({ copie: copieDe(shift), source: cle })
+      return
+    }
+    if (cle === copie.memoire.source) return
+    coller(o, copie.memoire.copie)
   }
 
   const poserLeSpecifique = (v: {
@@ -1016,7 +1157,10 @@ export function VueSemaine({
           >
             <ContextMenu
               onOpenChange={(o) => {
-                if (!o) setMenu(null)
+                if (!o) {
+                  setMenu(null)
+                  setMenuNom(null)
+                }
               }}
             >
               <ContextMenuTrigger
@@ -1024,7 +1168,13 @@ export function VueSemaine({
                 disabled={!droits.ecrire || !pret}
                 onContextMenu={droits.ecrire && pret ? ouvrirMenu : undefined}
               >
-                <div className="min-h-0 min-w-0 flex-1 overflow-auto rounded-xl border bg-card">
+                <div
+                  className={cn(
+                    'min-h-0 min-w-0 flex-1 overflow-auto rounded-xl border bg-card',
+                    copie.enfonce && 'planning-copie',
+                  )}
+                  onClickCapture={surClicCopie}
+                >
                   <GrilleSemaine
                     dates={dates}
                     aujourdhui={aujourdhui}
@@ -1044,13 +1194,22 @@ export function VueSemaine({
                   />
                 </div>
               </ContextMenuTrigger>
-              <MenuCase ouverture={menu} onHoraire={choisirHoraire} />
+              {menuNom ? (
+                <MenuNomContexte ouverture={menuNom} />
+              ) : (
+                <MenuCase ouverture={menu} onHoraire={choisirHoraire} />
+              )}
               <DialogHoraireSpecifique
                 ouverture={specifique?.ouverture ?? null}
                 onValider={poserLeSpecifique}
                 onFermer={() => setSpecifique(null)}
               />
             </ContextMenu>
+            <IndicateurCopie
+              memoire={copie.memoire}
+              touche={copie.touche}
+              attribut="data-case"
+            />
             <DragOverlay dropAnimation={null}>
               {enVol?.type === 'statut' && (
                 <CarteStatut s={enVol.statut} enVol />

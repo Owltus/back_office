@@ -532,6 +532,26 @@ export async function valider(
   ) as number
 }
 
+/** Valide (ou remet en proposition) TOUS les shifts d'une personne entre deux
+ * dates, en une requête (clic droit sur son nom, 2026-11-18). `salaries` :
+ * ses contrats affichés sur la ligne. Les semaines verrouillées sont sautées ;
+ * les repos ne changent pas. Rend le nombre de shifts changés. */
+export async function validerPeriode(
+  salaries: readonly number[],
+  du: string,
+  au: string,
+  epinglee: boolean,
+): Promise<number> {
+  return verifier(
+    await supabase.rpc('planning_valider_periode', {
+      p_salaries: [...salaries],
+      p_du: du,
+      p_au: au,
+      p_epinglee: epinglee,
+    }),
+  ) as number
+}
+
 export async function vider(
   lundi: string,
   garderEpinglees: boolean,

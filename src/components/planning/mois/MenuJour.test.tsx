@@ -97,10 +97,41 @@ describe('MenuJour : code actuel non permis', () => {
     })
     expect(ligne.getAttribute('aria-disabled')).toBe('true')
     expect(ligne.tagName).not.toBe('BUTTON')
-    // La raison n'est pas répétée sur une seconde ligne.
-    expect(screen.getAllByText(/Repos fixé par sa semaine type/)).toHaveLength(
-      1,
-    )
+    // La raison n'est pas répétée sur une seconde ligne (hors des autres
+    // shifts, qui la disent chacun en alerte, 2026-11-18).
+    const autres = screen.getByRole('group', { name: 'Autres shifts' })
+    expect(
+      screen
+        .getAllByText(/Repos fixé par sa semaine type/)
+        .filter((el) => !autres.contains(el)),
+    ).toHaveLength(1)
+    // L'horaire actuel n'est pas proposé une seconde fois.
+    expect(
+      within(autres).queryByRole('menuitem', { name: /^07:00–15:45/ }),
+    ).toBeNull()
+  })
+
+  it('autres shifts : un repos fixe est dit sur chaque ligne, jamais bloqué', () => {
+    const { onHoraire } = rendre({
+      ...referentiel,
+      salaries: referentiel.salaries.map((s) =>
+        s.id === 3
+          ? {
+              ...s,
+              semaine_type: s.semaine_type.map((j, i) =>
+                i === 2 ? { mode: 'repos' as const } : j,
+              ),
+            }
+          : s,
+      ),
+    })
+    const autres = screen.getByRole('group', { name: 'Autres shifts' })
+    const lignes = within(autres).getAllByRole('menuitem')
+    expect(lignes.length).toBeGreaterThan(0)
+    for (const l of lignes)
+      expect(l.textContent).toContain('Repos fixé par sa semaine type')
+    fireEvent.click(lignes[0])
+    expect(onHoraire).toHaveBeenCalledTimes(1)
   })
 
   it('place à pourvoir : le code choisi est posé sur le poste de la place', () => {

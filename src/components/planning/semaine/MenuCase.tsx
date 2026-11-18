@@ -39,6 +39,7 @@ import {
   texteEtoileDeja,
 } from '#/components/planning/codesCase.ts'
 import type {
+  AutreShift,
   CodesUniquesCase,
   EtoileCase,
 } from '#/components/planning/codesCase.ts'
@@ -58,6 +59,9 @@ export interface OuvertureMenu {
    * par poste), et pourquoi s'il n'y en a pas ; l'horaire actuel qui n'est plus
    * permis est montré grisé. */
   codes: CodesUniquesCase
+  /** Tous les autres horaires de l'établissement (saisie manuelle,
+   * 2026-11-18), avec ce qu'ils enfreignent, jamais bloqués. */
+  autres?: AutreShift[]
   validation?: {
     active: boolean
     onBasculer: () => void
@@ -106,6 +110,7 @@ export function MenuCase({
     vider,
     absences,
     specifique,
+    autres = [],
   } = ouverture
   const groupeMotifs = (libelle: string, liste: Motif[]) =>
     absences &&
@@ -302,6 +307,36 @@ export function MenuCase({
           })}
         </ContextMenuGroup>
       ))}
+      {autres.length > 0 && (
+        <>
+          <ContextMenuSeparator />
+          <ContextMenuGroup aria-label="Autres shifts">
+            <ContextMenuLabel className="pt-1 pb-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+              Autres shifts
+            </ContextMenuLabel>
+            {autres.map((c) => (
+              <ContextMenuItem
+                key={c.horaire.id}
+                aria-label={nomLigneCode({ ...c, changePoste: null })}
+                onSelect={() => onHoraire(c.horaire, c.poste.id)}
+              >
+                <PastilleHoraire couleur={c.horaire.couleur} />
+                <span className="grid flex-1 pl-1">
+                  <span className="text-sm whitespace-nowrap tabular-nums">
+                    {heuresEtDuree(c.horaire)}
+                  </span>
+                  {c.alerte && (
+                    <span className="text-xs text-amber-600 dark:text-amber-400">
+                      {c.alerte}
+                    </span>
+                  )}
+                </span>
+                <span className="size-3.5" />
+              </ContextMenuItem>
+            ))}
+          </ContextMenuGroup>
+        </>
+      )}
       {specifique && (
         <>
           <ContextMenuSeparator />

@@ -215,7 +215,7 @@ describe('FicheSalarie', () => {
   it('horaires : Tous dit combien, Seulement démarre tout coché et garde un horaire', async () => {
     ouvrir(LUCAS)
     const choix = await screen.findByRole('radiogroup', {
-      name: 'Horaires autorisés',
+      name: 'Horaires du planning automatique',
     })
     // M, MI, AM et leurs versions étoile (2026-11-02).
     expect(screen.getByText('Les 6 horaires de ses postes.')).toBeTruthy()
