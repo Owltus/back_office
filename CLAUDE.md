@@ -3447,6 +3447,64 @@ liens) : le lancer dans le conteneur Studio local, sans réseau
   que le mot de passe). `/profil` envoie `current_password` : l'option
   « Require current password when updating » est à activer dans le
   dashboard APRÈS la livraison de ce code (sans elle, le serveur l'ignore).
+  Fait le 17/11 au soir.
+
+## Audit security-audit-skill run-2 (2026-11-18)
+
+Audit approfondi (75 agents, couverture complète) :
+`~/security-audit-skill/back_office/run-2/`. Plan des corrections :
+`plan/securite-audit-run2-2026-11-18/` (décisions de l'utilisateur dans
+son index). Ce qui est en place :
+
+- **Marqueur d'envoi** : `daily_reports.auto_sent_at` n'est écrit que par
+  le contexte système (clé secrète). Un compte de l'app ne peut ni l'effacer
+  ni le forger.
+- **PDJ** : hors gestion, la chambre et la date d'une ligne IMPORTÉE sont
+  figées. Sinon on pouvait la remplacer par une ligne manuelle au-delà du
+  plafond de 2.
+- **Dernier admin** : trigger `protect_zz_dernier_admin` sur `profiles`
+  (changement de rôle et suppression), sous verrou. `set_user_grade` garde
+  son propre message. `profiles.created_at` est figé.
+- **Planning, jours passés (décision Q1)** :
+  - figés en ÉCRITURE (PL409, triggers `*_zpasse`), libres pour la GESTION ;
+  - les triggers `*_zpasse` passent après `_verrou`, pour que PL423 reste
+    prioritaire ;
+  - valider une proposition passée reste possible ;
+  - ⚠ le contexte système n'est PAS exempté : une reprise de données doit
+    poser `set_config('planning.admin','on',true)` ;
+  - `ferie_chome` reste une proposition.
+- **Fenêtres d'écriture** :
+  - parking et lits bébé : date de Paris (`private.planning_aujourdhui()`) ;
+  - PDJ et Rapprochement : JOUR HÔTELIER (`private.jour_hotelier()`, qui
+    bascule à 02:00 comme `DAY_CUTOFF_HOUR`, vérifié par un test de synchro) ;
+  - ⚠ caisse et cautions gardent `current_date` (décision utilisateur : on
+    ne touche pas à la caisse).
+- **Journal** : les suppressions de `pms_daily_metrics` sont journalisées.
+  Les destinataires du rapport ne sont lisibles que par la gestion repjour.
+- **Poste partagé** :
+  - la mémoire d'un onglet est liée à son compte (`marqueMemoire` dans
+    `queryPersist.ts`) ;
+  - un écouteur `storage` fait suivre les changements entre onglets ;
+  - le registre `src/lib/auth/oubliSession.ts` (factures, affiche, images,
+    restauration) est vidé à chaque changement de compte. Toute nouvelle
+    donnée gardée en mémoire de module doit s'y inscrire.
+- **Impression du Classeur** : un DOMPurify final passe sur le HTML des
+  pages (`print/assainir.ts`, appelé par `usePagination`). `blob:` reste
+  permis pour les images privées.
+- **Import LLM** : sans `_metadata.portee`, la réponse reste dans le chapitre
+  ou le document ouvert.
+- **Copie de la prod** : depuis le 18/11, `anonymiser.sql` donne à TOUS les
+  comptes copiés le mot de passe des comptes de test (`DevLocal2026x`). Plus
+  aucun haché de la prod ne reste sur le poste.
+- **Auth en prod (fait le 18/11 dans le dashboard, avec accord)** :
+  - Confirm email ON (les 6 comptes étaient déjà confirmés) ;
+  - Secure email change ON (il l'était déjà) ;
+  - TOTP désactivé ;
+  - `config.toml` est aligné. Il faut redémarrer la base locale pour qu'il
+    s'applique.
+- **Worker e-mail** : le contrôle aligné a été vérifié la nuit du 18/11 (4
+  e-mails, 0 refus). La suite se fait par étapes, une par nuit (étapes 8 à
+  10 du plan) : Hotel Code, analyseur RFC 8601, retrait de l'ancien contrôle.
 
 ## Faits base de données (vérifiés en lecture)
 

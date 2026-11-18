@@ -44,6 +44,16 @@ describe('vidage avant chargement', () => {
 })
 
 describe('ce qui est copié', () => {
+  it('les comptes copiés prennent le mot de passe des comptes de test (audit run-2 du 2026-11-18)', () => {
+    const sql = readFileSync('supabase/anonymiser.sql', 'utf8')
+    const seed = readFileSync('supabase/seed/generer.ts', 'utf8')
+    const motSeed = /MOT_DE_PASSE = '([^']+)'/.exec(seed)?.[1]
+    expect(motSeed).toBeTruthy()
+    expect(sql).toContain(
+      `set encrypted_password = extensions.crypt('${motSeed}'`,
+    )
+  })
+
   it('le planning du staff est copié tel quel, vrais noms compris (décision du 2026-10-27)', () => {
     // Aucune table du planning n'est exclue de la copie…
     expect(EXCLUES.some((t) => t.includes('planning'))).toBe(false)

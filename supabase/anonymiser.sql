@@ -55,6 +55,13 @@ set confirmation_token = '', recovery_token = '', email_change_token_new = '',
     email_change_token_current = '', phone_change_token = '',
     reauthentication_token = '', email_change = '';
 
+-- Audit run-2 du 2026-11-18 : les hachés des mots de passe de la prod ne
+-- restent pas sur le poste. Chaque compte copié prend le mot de passe des
+-- comptes de test (supabase/seed/generer.ts, MOT_DE_PASSE) : une fuite de la
+-- base locale ne donne plus rien à casser hors ligne.
+update auth.users
+set encrypted_password = extensions.crypt('DevLocal2026x', extensions.gen_salt('bf'));
+
 -- Numérotation : ordre tiré d'une empreinte SALÉE à chaque copie, pour qu'on
 -- ne puisse pas retrouver un client à partir d'une liste de noms.
 create temp table sel on commit drop as select gen_random_uuid()::text as s;

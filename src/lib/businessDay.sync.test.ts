@@ -20,10 +20,7 @@ import {
  * partir tout seul, ou l'inverse. Ce test compare les littéraux et échoue au
  * premier écart.
  */
-const EDGE = readFileSync(
-  'supabase/functions/_shared/businessDay.ts',
-  'utf-8',
-)
+const EDGE = readFileSync('supabase/functions/_shared/businessDay.ts', 'utf-8')
 
 describe('businessDay — les deux copies ne doivent pas diverger', () => {
   it('la fenêtre d automatisation est la même des deux côtés', () => {
@@ -37,6 +34,14 @@ describe('businessDay — les deux copies ne doivent pas diverger', () => {
 
   it('la bascule du jour hôtelier est la même des deux côtés', () => {
     expect(EDGE).toContain(`DAY_CUTOFF_HOUR = ${DAY_CUTOFF_HOUR}`)
+  })
+
+  it('la base compte le même jour hôtelier que l écran (audit run-2 du 2026-11-18)', () => {
+    const sql = readFileSync(
+      'supabase/migrations/20261118150000_fenetres_date_paris.sql',
+      'utf-8',
+    )
+    expect(sql).toContain(`interval '${DAY_CUTOFF_HOUR} hours'`)
   })
 
   it('la bascule du jour ouvre la fenêtre — invariant du candidat', () => {

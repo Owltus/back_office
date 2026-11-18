@@ -29,7 +29,7 @@
  * Idempotent : un fichier déjà présent et de même taille n'est pas recopié.
  */
 import { createRequire } from 'node:module'
-import { copyFileSync, mkdirSync, statSync } from 'node:fs'
+import { copyFileSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 const require = createRequire(import.meta.url)
@@ -57,7 +57,9 @@ for (const src of sources) {
   const dest = join(outDir, src.split(/[\\/]/).pop())
   let skip = false
   try {
-    skip = statSync(dest).size === statSync(src).size
+    // Contenu comparé octet par octet (audit run-2 du 2026-11-18) : une taille
+    // égale ne prouve pas qu'un fichier n'a pas changé.
+    skip = readFileSync(dest).equals(readFileSync(src))
   } catch {
     skip = false
   }

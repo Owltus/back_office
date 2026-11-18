@@ -41,7 +41,14 @@ password_requirements = "lower_upper_letters_digits"
 # par `[auth] enable_signup = false` (GOTRUE_DISABLE_SIGNUP).
 enable_signup = true
 # Les e-mails d'Auth partent dans Mailpit (http://127.0.0.1:54324).
-enable_confirmations = false
+# Audit run-2 du 2026-11-18 : confirmations ACTIVES, pour qu'un changement
+# d'adresse depuis une session ouverte ne s'applique pas tout seul. Sans effet
+# sur les comptes du seed (email_confirmed_at posé) ni sur ceux de create-user
+# (email_confirm: true). Prod : Authentication > Email > « Confirm email » ON.
+enable_confirmations = true
+# Changement d'adresse confirmé par l'ANCIENNE et la nouvelle adresse. L'app
+# ne change jamais l'adresse d'un compte. Prod : « Secure email change » ON.
+double_confirm_changes = true
 # Audit security-audit-skill du 2026-11-17 : le serveur refuse un changement
 # de mot de passe depuis une session ouverte il y a plus de 24 h
 # (reauthentication_needed). /profil vérifie d'abord le mot de passe actuel
@@ -50,6 +57,19 @@ enable_confirmations = false
 # MAIN dans le dashboard de la prod (Authentication > Email > Secure password
 # change) : ce fichier n'est pas livré.
 secure_password_change = true
+
+# Audit run-2 du 2026-11-18 : l'app n'a ni écran ni usage de la double
+# authentification (MFA refusée par l'utilisateur). Inscription et
+# vérification de facteurs FERMÉES : une session oubliée sur le poste partagé
+# ne peut pas ajouter un code TOTP et bloquer le titulaire. Prod :
+# Authentication > Multi-Factor, TOTP et téléphone désactivés.
+[auth.mfa.totp]
+enroll_enabled = false
+verify_enabled = false
+
+[auth.mfa.phone]
+enroll_enabled = false
+verify_enabled = false
 
 [analytics]
 enabled = false
