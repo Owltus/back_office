@@ -263,13 +263,13 @@ select is(pg_temp.essai('gestion', array[
   (select f::text || ' 06:30-15:15,' || l::text || ' 05:05-13:50' from t_sem),
   'horaire modifié : les shifts à venir suivent, le réalisé ne change pas');
 select is(pg_temp.essai('gestion', array[
-  'select public.planning_supprimer_horaire((select id from public.planning_horaires where nom = ''Matin test''))']),
+  'select public.planning_supprimer_horaire((select id from public.planning_horaires where nom = ''Matin test''), false)']),
   'err=PL409', 'horaire seul permis d''un poste : ne se supprime pas');
 -- Horaire d'un planning réalisé (2026-11-12) : refusé sans accord, puis, sur
 -- accord, ses shifts verrouillés gardent leurs heures en horaire spécifique.
 select is(pg_temp.essai('gestion', array[
   pg_temp.q('update public.planning_postes set horaires_autorises = horaires_autorises || (select id from public.planning_horaires where nom = ''Nuit test'') where id = :PA'),
-  'select public.planning_supprimer_horaire((select id from public.planning_horaires where nom = ''Matin test''))']),
+  'select public.planning_supprimer_horaire((select id from public.planning_horaires where nom = ''Matin test''), false)']),
   'err=PL409', 'horaire d''un planning réalisé : refusé sans accord');
 select is(pg_temp.essai('gestion', array[
   pg_temp.q('update public.planning_postes set horaires_autorises = horaires_autorises || (select id from public.planning_horaires where nom = ''Nuit test'') where id = :PA'),

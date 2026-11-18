@@ -55,7 +55,6 @@ const TABLES_ESTAMPILLEES = new Set([
   'classeur_intercalaires',
   'classeur_merge_history',
   'classeur_images',
-  'classeur_acces',
 ])
 
 type Filtre = (l: Ligne) => boolean

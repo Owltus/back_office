@@ -2003,7 +2003,6 @@ function genererClasseurs(
     'created_at',
     'updated_at',
     'created_by',
-    'acces_tous',
   ])
   const chapitres = table('public.classeur_chapters', [
     'id',
@@ -2079,14 +2078,6 @@ function genererClasseurs(
     'updated_at',
     'created_by',
   ])
-  const acces = table('public.classeur_acces', [
-    'classeur_id',
-    'user_id',
-    'niveau',
-    'created_at',
-    'updated_at',
-    'created_by',
-  ])
   for (const t of [
     classeurs,
     chapitres,
@@ -2104,12 +2095,7 @@ function genererClasseurs(
   let idIntercalaire = 0
   const cree = horodatage(f.debut - 20, 10)
 
-  const ajouterClasseur = (
-    id: number,
-    nom: string,
-    icone: string,
-    accesTous: string,
-  ): void => {
+  const ajouterClasseur = (id: number, nom: string, icone: string): void => {
     classeurs.lignes.push([
       id,
       a.uuid(),
@@ -2121,7 +2107,6 @@ function genererClasseurs(
       cree,
       cree,
       ADMIN,
-      accesTous,
     ])
   }
   const ajouterChapitre = (
@@ -2227,12 +2212,7 @@ function genererClasseurs(
     )
 
   // 1. Classeur d'essai (vitrine des fonctions d'un document).
-  ajouterClasseur(
-    1,
-    'Essai mise en page (lorem ipsum)',
-    'FlaskConical',
-    'lecture',
-  )
+  ajouterClasseur(1, 'Essai mise en page (lorem ipsum)', 'FlaskConical')
   ESSAI.forEach((ch, i) => {
     const idc = ajouterChapitre(1, ch.label, ch.icon, i + 1)
     ch.docs.forEach(([titre, desc, corps], k) =>
@@ -2286,12 +2266,7 @@ function genererClasseurs(
   }
 
   // 2. Procédures fictives : 6 chapitres de 5 documents.
-  ajouterClasseur(
-    2,
-    'Procédures de la réception (fictif)',
-    'ConciergeBell',
-    'lecture',
-  )
+  ajouterClasseur(2, 'Procédures de la réception (fictif)', 'ConciergeBell')
   PROCEDURES.forEach((ch, i) => {
     const idc = ajouterChapitre(2, ch.label, ch.icon, i + 1)
     ch.titres.forEach((titre, k) =>
@@ -2307,7 +2282,7 @@ function genererClasseurs(
   })
 
   // 3. Registre privé (accès « aucun » pour tous, exception pour un compte).
-  ajouterClasseur(3, 'Registre de sécurité (fictif)', 'Shield', 'aucun')
+  ajouterClasseur(3, 'Registre de sécurité (fictif)', 'Shield')
   {
     const idc = ajouterChapitre(
       3,
@@ -2359,7 +2334,6 @@ function genererClasseurs(
       ADMIN,
     ])
   }
-  acces.lignes.push([3, COMPTES[3].id, 'lecture', cree, cree, ADMIN])
 
   tables.push(
     classeurs,
@@ -2369,7 +2343,6 @@ function genererClasseurs(
     suivis,
     signatures,
     intercalaires,
-    acces,
   )
   for (const t of [
     'classeur_classeurs',

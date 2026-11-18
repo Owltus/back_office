@@ -114,10 +114,6 @@ insert into t_cl (cle, id) select right(name, 1), id from n;
 update public.classeur_classeurs c set visibilite = s.visibilite,
        created_by = (select uid from t_compte where compte = s.createur), deleted_at = null
   from t_spec s join t_cl l using (cle) where c.id = l.id;
--- Les exceptions par personne ne sont plus lues : on en pose une pour le prouver.
-delete from public.classeur_acces where classeur_id in (select id from t_cl);
-insert into public.classeur_acces (classeur_id, user_id, niveau)
-select l.id, c.uid, 'ecriture' from t_cl l, t_compte c where l.cle = 'C' and c.compte = 'lecture';
 
 -- Un chapitre + un élément de chaque famille + version, image, points, fichier.
 do $$
@@ -411,17 +407,13 @@ select is(pg_temp.essai_suite('gestion',
 -- refuse (428C9, identité « generated always ») — cf. les deux tests
 -- « identifiant choisi » plus haut. Idem pour `classeur_garde` (création hors
 -- gestion forcée à lecture / fin de liste) : le simulateur n'a pas cette garde.
--- S7 (ÉCART) : `upsert` du simulateur apparie sur `id` SEULEMENT et ignore
--- `onConflict` ; `definirAcces` (service.ts) fait un upsert sur
--- (classeur_id, user_id) SANS id : la base MET À JOUR la ligne existante, le
--- simulateur en insérerait une SECONDE.
-select is(pg_temp.essai_suite('gestion',
-  format($q$insert into public.classeur_acces (classeur_id, user_id, niveau) values (%s, '%s', 'aucun')
-            on conflict (classeur_id, user_id) do update set niveau = excluded.niveau$q$,
-         (select id from t_cl where cle = 'A'), (select uid from t_compte where compte = 'lecture')),
-  format($q$select count(*) from public.classeur_acces where classeur_id = %s and user_id = '%s' having count(*) = 1 and min(niveau) = 'aucun'$q$,
-         (select id from t_cl where cle = 'A'), (select uid from t_compte where compte = 'lecture'))),
-  'ok', 'S7 : upsert sur (classeur_id, user_id) met à jour, sans doublon (ÉCART : le simulateur dupliquerait)');
+-- S7 : la table des exceptions par personne est retirée (2026-11-18,
+-- `20261118170000_retrait_entrees_inutilisees`), avec la colonne acces_tous.
+select ok(to_regclass('public.classeur_acces') is null
+          and not exists (select 1 from information_schema.columns
+                           where table_schema = 'public' and table_name = 'classeur_classeurs'
+                             and column_name = 'acces_tous'),
+  'S7 : classeur_acces et acces_tous sont retirés');
 -- S8 (ÉCART de défaut) : aucune policy DELETE sur les éléments : une
 -- suppression physique rend 0 ligne même à la gestion (matrice « supprimer
 -- physiquement un document ») ; le simulateur supprime tant qu'on ne lui a

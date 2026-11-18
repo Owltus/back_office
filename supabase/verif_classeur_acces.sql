@@ -48,9 +48,6 @@ begin
   update public.classeur_classeurs set visibilite = 'prive', created_by = v_admin where id = v_b;
   insert into public.classeur_classeurs (name, icon, visibilite, created_by)
     values ('TEST GESTION', 'Folder', 'gestion', v_admin) returning id into v_g;
-  -- Une exception par personne n'ouvre plus rien (table plus lue).
-  delete from public.classeur_acces where classeur_id in (v_a, v_b);
-  insert into public.classeur_acces (classeur_id, user_id, niveau) values (v_b, v_ecri, 'ecriture');
 
   perform set_config('role', 'authenticated', true);
 
